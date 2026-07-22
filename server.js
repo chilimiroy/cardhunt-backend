@@ -1,6 +1,4 @@
-bash
 
-cat > /mnt/user-data/outputs/server.js << 'SERVEREOF'
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -284,8 +282,4 @@ app.listen(PORT, () => {
   console.log(`CardHunt API running on port ${PORT}`);
   console.log(`DB: ${db ? 'Supabase connected' : 'No database configured'}`);
 });
-SERVEREOF
-echo "✅ server.js created ($(wc -l < /mnt/user-data/outputs/server.js) lines)"
-Output
 
-✅ server.js created (283 lines)

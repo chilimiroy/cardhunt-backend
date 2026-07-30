@@ -174,7 +174,7 @@ app.get('/', async (req, res) => {
   res.json({
     status: 'ok',
     service: 'CardHunt API',
-    version: '5.1.0',
+    version: '5.3.0',
     db: dbState,
     data: dbCounts,
     sources: ['cardhunt_db','pokemontcg.io','tcgdex.net','yahoo-jp','ebay-api','tcgplayer'],
@@ -321,10 +321,35 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
     if (db) {
       try {
         const dbLang = lang === 'zh-cn' ? 'zh-cn' : lang === 'zh-tw' ? 'zh-tw' : lang;
+
+        // The ingestion stored TCGdex's own set ids ("me02.5"), while the
+        // frontend sends pokemontcg-style ids ("me2pt5"). Try every alias.
+        const aliases = new Set([setId]);
+        if (TCGDEX_SETS[setId]) aliases.add(TCGDEX_SETS[setId]);
+        for (const [k, v] of Object.entries(TCGDEX_SETS)) {
+          if (v === setId) aliases.add(k);
+        }
+        if (req.query.uiSetId && TCGDEX_JP[req.query.uiSetId]) {
+          TCGDEX_JP[req.query.uiSetId].forEach(x => aliases.add(x));
+        }
+        if (TCGDEX_ZH[setId]) aliases.add(TCGDEX_ZH[setId]);
+        // pt5 <-> .5 and zero-padding variants
+        aliases.add(setId.replace('pt5', '.5'));
+        aliases.add(setId.replace('.5', 'pt5'));
+        const numMatch = setId.match(/^([a-z]+)(\d+)(.*)$/i);
+        if (numMatch) {
+          const [, pre, num, suf] = numMatch;
+          aliases.add(`${pre}${String(num).padStart(2, '0')}${suf}`);
+          aliases.add(`${pre}${String(num).replace(/^0+/, '')}${suf}`);
+          aliases.add(`${pre}${String(num).padStart(2, '0')}${suf}`.replace('pt5', '.5'));
+        }
+        aliases.add(setId.toUpperCase());
+        aliases.add(setId.toLowerCase());
+
         const rows = await db.query(`
-          SELECT c.api_card_id, c.name, c.number, c.rarity, c.supertype,
-                 c.image_small, c.image_large, c.set_api_id, c.set_name, c.set_total,
-                 c.tcgplayer_data, c.cardmarket_data,
+          SELECT c.api_card_id, c.name, c.name_en, c.number, c.rarity, c.supertype,
+                 c.image_small, c.image_large, c.set_api_id, c.set_name, c.set_name_en,
+                 c.set_total, c.tcgplayer_data, c.cardmarket_data,
                  lp.price_usd, lp.source AS price_source, lp.recorded_at
           FROM cards c
           LEFT JOIN LATERAL (
@@ -334,11 +359,11 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
             ORDER BY (ph.source NOT LIKE 'estimate%') DESC, ph.recorded_at DESC
             LIMIT 1
           ) lp ON TRUE
-          WHERE c.set_api_id = $1
+          WHERE c.set_api_id = ANY($1)
             AND c.api_card_id LIKE $2
           ORDER BY NULLIF(regexp_replace(c.number, '\D', '', 'g'), '')::int NULLS LAST,
                    c.number
-        `, [setId, dbLang + '-%']);
+        `, [[...aliases], dbLang + '-%']);
 
         if (rows.rows.length) {
           const cards = rows.rows.map(r => {
@@ -347,10 +372,12 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
             return {
               id: r.api_card_id,
               name: r.name,
+              nameEn: r.name_en || null,
               number: r.number,
               rarity: r.rarity,
               supertype: r.supertype,
-              set: { id: r.set_api_id, name: r.set_name, total: r.set_total },
+              set: { id: r.set_api_id, name: r.set_name,
+                     nameEn: r.set_name_en || null, total: r.set_total },
               images: { small: r.image_small, large: r.image_large },
               tcgplayer: r.tcgplayer_data || (price > 0 ? { prices: { holofoil: {
                 market: price, low: +(price * 0.65).toFixed(2),
@@ -371,6 +398,7 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
             source: 'cardhunt_db',
             lang: dbLang,
             realPrices: realCount,
+            resolvedSetId: cards[0].set.id,
             printedTotal: cards[0] ? cards[0].set.total : cards.length
           };
           cSet(key, result);
@@ -518,10 +546,12 @@ app.get('/api/cards/:cardId', async (req, res) => {
       if (row.rows.length) {
         const c = row.rows[0];
         return res.json({ data: {
-          id: c.api_card_id, name: c.name, number: c.number, rarity: c.rarity,
+          id: c.api_card_id, name: c.name, nameEn: c.name_en || null,
+          number: c.number, rarity: c.rarity,
           supertype: c.supertype,
           images: { small: c.image_small, large: c.image_large },
-          set: { id: c.set_api_id, name: c.set_name, total: c.set_total },
+          set: { id: c.set_api_id, name: c.set_name,
+                 nameEn: c.set_name_en || null, total: c.set_total },
           tcgplayer: c.tcgplayer_data, cardmarket: c.cardmarket_data
         }});
       }
@@ -613,8 +643,9 @@ app.get('/api/price/:cardId', async (req, res) => {
           const prices = real.map(h => parseFloat(h.price_usd)).filter(v => v > 0);
           const result = {
             cardId: realId, requestedId: cardId,
-            name: c.name, rarity: c.rarity,
-            set: { id: c.set_api_id, name: c.set_name, total: c.set_total },
+            name: c.name, nameEn: c.name_en || null, rarity: c.rarity,
+            set: { id: c.set_api_id, name: c.set_name,
+                   nameEn: c.set_name_en || null, total: c.set_total },
             images: { small: c.image_small, large: c.image_large },
             rawNm: parseFloat(rawNm.toFixed(2)),
             source: best ? best.source : 'none',
@@ -834,7 +865,7 @@ app.get('/api/graded/:cardName', async (req, res) => {
 // DIAGNOSTIC — tells you exactly which sources are live
 // ══════════════════════════════════════════════════════════════
 app.get('/api/diagnostic', async (req, res) => {
-  const out = { version: '5.1.0', checks: {} };
+  const out = { version: '5.3.0', checks: {} };
 
   try {
     const r = await fetch(`${TCG_API}/sets?pageSize=1`, { headers: TCG_H });
@@ -1219,8 +1250,9 @@ app.get('/api/sets/lang/:lang', async (req, res) => {
       try {
         const rows = await db.query(`
           SELECT c.set_api_id AS id,
-                 MAX(c.set_name)  AS name,
-                 MAX(c.set_total) AS total,
+                 MAX(c.set_name)     AS name,
+                 MAX(c.set_name_en)  AS name_en,
+                 MAX(c.set_total)    AS total,
                  COUNT(*)         AS card_count,
                  COUNT(*) FILTER (
                    WHERE EXISTS (SELECT 1 FROM price_history ph
@@ -1238,6 +1270,7 @@ app.get('/api/sets/lang/:lang', async (req, res) => {
           const sets = rows.rows.map(r => ({
             id: r.id,
             name: r.name,
+            nameEn: r.name_en || null,
             total: parseInt(r.total) || parseInt(r.card_count),
             cardCount: parseInt(r.card_count),
             realPrices: parseInt(r.real_prices),
@@ -1303,7 +1336,7 @@ function tcgdexSeriesFor(setId) {
 // FULL DIAGNOSTIC — one call tells you what works and what doesn't
 // ══════════════════════════════════════════════════════════════
 app.get('/api/health/full', async (req, res) => {
-  const out = { version: '5.1.0', ts: new Date().toISOString(), checks: {} };
+  const out = { version: '5.3.0', ts: new Date().toISOString(), checks: {} };
 
   // pokemontcg.io
   try {

@@ -151,12 +151,77 @@ const GM = {
 };
 
 // ── HEALTH ────────────────────────────────────────────────────
-app.get('/', (req, res) => res.json({
-  status: 'ok', service: 'CardHunt API', version: '5.0.0',
-  sources: ['pokemontcg.io','tcgdex.net','ebay-api','ebay-sold','tcgplayer','pricecharting'],
-  db: db ? 'supabase connected' : 'no db',
-  cache: Object.keys(CACHE).length + ' entries'
-}));
+app.get('/', async (req, res) => {
+  let dbState = 'not configured';
+  let dbCounts = null;
+  if (db) {
+    try {
+      const t0 = Date.now();
+      const c = await db.query('SELECT COUNT(*)::int AS cards FROM cards');
+      const p = await db.query('SELECT COUNT(*)::int AS prices FROM price_history');
+      const real = await db.query(
+        "SELECT COUNT(*)::int AS n FROM price_history WHERE source NOT LIKE 'estimate%'");
+      dbState = `connected (${Date.now() - t0}ms)`;
+      dbCounts = {
+        cards: c.rows[0].cards,
+        priceRecords: p.rows[0].prices,
+        realPrices: real.rows[0].n
+      };
+    } catch (e) {
+      dbState = 'QUERY FAILED: ' + e.message;
+    }
+  }
+  res.json({
+    status: 'ok',
+    service: 'CardHunt API',
+    version: '5.1.0',
+    db: dbState,
+    data: dbCounts,
+    sources: ['cardhunt_db','pokemontcg.io','tcgdex.net','yahoo-jp','ebay-api','tcgplayer'],
+    cache: Object.keys(CACHE).length + ' entries'
+  });
+});
+
+// ── DB DEBUG — exactly what the database can see ─────────────
+app.get('/api/db/check', async (req, res) => {
+  if (!db) return res.json({ ok: false, reason: 'DATABASE_URL not set on this server' });
+  const out = { ok: true, checks: {} };
+  try {
+    const v = await db.query('SELECT version()');
+    out.checks.postgres = String(v.rows[0].version).split(' ').slice(0,2).join(' ');
+  } catch (e) { return res.json({ ok: false, reason: e.message }); }
+
+  try {
+    const t = await db.query(`
+      SELECT table_name FROM information_schema.tables
+      WHERE table_schema='public' ORDER BY table_name`);
+    out.checks.tables = t.rows.map(r => r.table_name);
+  } catch (e) { out.checks.tables = 'ERROR ' + e.message; }
+
+  try {
+    const c = await db.query(`
+      SELECT split_part(api_card_id,'-',1) AS lang, COUNT(*)::int AS n
+      FROM cards GROUP BY 1 ORDER BY n DESC`);
+    out.checks.cardsByLang = c.rows;
+  } catch (e) { out.checks.cardsByLang = 'ERROR ' + e.message; }
+
+  try {
+    const s = await db.query(
+      `SELECT api_card_id, name, set_api_id FROM cards
+       WHERE set_api_id = 'base1' ORDER BY api_card_id LIMIT 5`);
+    out.checks.sampleBase1 = s.rows;
+  } catch (e) { out.checks.sampleBase1 = 'ERROR ' + e.message; }
+
+  try {
+    const one = await db.query(
+      `SELECT api_card_id, name FROM cards WHERE api_card_id = 'en-base1-4'`);
+    out.checks.lookup_en_base1_4 = one.rows.length ? one.rows[0] : 'NOT FOUND';
+  } catch (e) { out.checks.lookup_en_base1_4 = 'ERROR ' + e.message; }
+
+  res.json(out);
+});
+
+
 
 // ── SETS ──────────────────────────────────────────────────────
 app.get('/api/sets', async (req, res) => {
@@ -438,7 +503,18 @@ app.get('/api/cards/:cardId', async (req, res) => {
   const { cardId } = req.params;
   try {
     if (db) {
-      const row = await db.query('SELECT * FROM cards WHERE api_card_id=$1', [cardId]);
+      const variants = [cardId];
+      const mm = String(cardId).match(/^([a-z-]+)-(.+)-(\w+)$/i);
+      if (mm) {
+        const [, lang, setId, num] = mm;
+        variants.push(`${lang}-${setId}-${String(num).replace(/^0+/, '')}`,
+                      `${lang}-${setId}-${String(num).padStart(3,'0')}`);
+      }
+      if (!/^[a-z]{2}(-[a-z]{2})?-/i.test(cardId)) {
+        for (const L of ['en','ja','zh-tw','zh-cn']) variants.push(`${L}-${cardId}`);
+      }
+      const row = await db.query(
+        'SELECT * FROM cards WHERE api_card_id = ANY($1) LIMIT 1', [[...new Set(variants)]]);
       if (row.rows.length) {
         const c = row.rows[0];
         return res.json({ data: {
@@ -496,14 +572,34 @@ app.get('/api/price/:cardId', async (req, res) => {
     // ══ 1. OUR DATABASE — real prices with full history ══
     if (db) {
       try {
+        // Card ids vary in zero-padding and language prefix, so try
+        // the obvious variants before falling back to a live lookup.
+        const variants = [cardId];
+        const m = String(cardId).match(/^([a-z-]+)-(.+)-(\w+)$/i);
+        if (m) {
+          const [, lang, setId, num] = m;
+          const bare = String(num).replace(/^0+/, '');
+          variants.push(
+            `${lang}-${setId}-${bare}`,
+            `${lang}-${setId}-${String(num).padStart(2,'0')}`,
+            `${lang}-${setId}-${String(num).padStart(3,'0')}`
+          );
+        }
+        // Also accept a bare pokemontcg-style id like "base1-4"
+        if (!/^[a-z]{2}(-[a-z]{2})?-/i.test(cardId)) {
+          for (const L of ['en','ja','zh-tw','zh-cn']) variants.push(`${L}-${cardId}`);
+        }
+
         const card = await db.query(
-          'SELECT * FROM cards WHERE api_card_id = $1', [cardId]);
+          'SELECT * FROM cards WHERE api_card_id = ANY($1) LIMIT 1',
+          [[...new Set(variants)]]);
         if (card.rows.length) {
           const c = card.rows[0];
+          const realId = c.api_card_id;
           const hist = await db.query(`
             SELECT price_usd, source, marketplace, recorded_at
             FROM price_history WHERE card_api_id = $1
-            ORDER BY recorded_at DESC LIMIT 60`, [cardId]);
+            ORDER BY recorded_at DESC LIMIT 60`, [realId]);
 
           const real = hist.rows.filter(h => !/^estimate/.test(h.source || ''));
           const best = real[0] || hist.rows[0];
@@ -516,7 +612,8 @@ app.get('/api/price/:cardId', async (req, res) => {
 
           const prices = real.map(h => parseFloat(h.price_usd)).filter(v => v > 0);
           const result = {
-            cardId, name: c.name, rarity: c.rarity,
+            cardId: realId, requestedId: cardId,
+            name: c.name, rarity: c.rarity,
             set: { id: c.set_api_id, name: c.set_name, total: c.set_total },
             images: { small: c.image_small, large: c.image_large },
             rawNm: parseFloat(rawNm.toFixed(2)),
@@ -538,16 +635,31 @@ app.get('/api/price/:cardId', async (req, res) => {
             _source: 'cardhunt_db'
           };
           cSet(`price_${cardId}`, result);
+          cSet(`price_${realId}`, result);
           return res.json(result);
         }
       } catch (e) { console.error('DB price query failed:', e.message); }
     }
 
     // ══ 2. FALLBACK — live pokemontcg.io ══
-    const r = await fetch(`${TCG_API}/cards/${cardId}`, { headers: TCG_H });
-    const d = await r.json();
-    const c = d.data;
-    if (!c) return res.status(404).json({ error: 'Not found' });
+    // Strip our language prefix; pokemontcg uses bare ids like "base1-4"
+    const bareId = String(cardId).replace(/^(en|ja|zh-tw|zh-cn)-/, '');
+    let c = null;
+    for (const tryId of [...new Set([bareId, cardId])]) {
+      try {
+        const r = await fetch(`${TCG_API}/cards/${tryId}`, { headers: TCG_H });
+        if (!r.ok) continue;
+        const txt = await r.text();
+        if (!txt) continue;
+        const d = JSON.parse(txt);
+        if (d && d.data) { c = d.data; break; }
+      } catch (e) { /* try next */ }
+    }
+    if (!c) return res.status(404).json({
+      error: 'Not found',
+      requestedId: cardId,
+      note: 'Not in the CardHunt database and not found on pokemontcg.io'
+    });
 
     const t = (c.tcgplayer && c.tcgplayer.prices) || {};
     let rawNm = 0, source = 'none';
@@ -722,7 +834,7 @@ app.get('/api/graded/:cardName', async (req, res) => {
 // DIAGNOSTIC — tells you exactly which sources are live
 // ══════════════════════════════════════════════════════════════
 app.get('/api/diagnostic', async (req, res) => {
-  const out = { version: '5.0.0', checks: {} };
+  const out = { version: '5.1.0', checks: {} };
 
   try {
     const r = await fetch(`${TCG_API}/sets?pageSize=1`, { headers: TCG_H });
@@ -1191,7 +1303,7 @@ function tcgdexSeriesFor(setId) {
 // FULL DIAGNOSTIC — one call tells you what works and what doesn't
 // ══════════════════════════════════════════════════════════════
 app.get('/api/health/full', async (req, res) => {
-  const out = { version: '5.0.0', ts: new Date().toISOString(), checks: {} };
+  const out = { version: '5.1.0', ts: new Date().toISOString(), checks: {} };
 
   // pokemontcg.io
   try {
@@ -1255,7 +1367,7 @@ app.get('/api/health/full', async (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`CardHunt API v5.0 on port ${PORT}  (database-first)`);
+  console.log(`CardHunt API v5.1 on port ${PORT}  (database-first)`);
   console.log(`DB: ${db ? 'Supabase connected' : 'none'}`);
   console.log(`Sources: pokemontcg.io + tcgdex.net`);
 });

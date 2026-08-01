@@ -174,7 +174,7 @@ app.get('/', async (req, res) => {
   res.json({
     status: 'ok',
     service: 'CardHunt API',
-    version: '5.4.0',
+    version: '5.5.0',
     db: dbState,
     data: dbCounts,
     sources: ['cardhunt_db','pokemontcg.io','tcgdex.net','yahoo-jp','ebay-api','tcgplayer'],
@@ -348,7 +348,8 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
 
         const rows = await db.query(`
           SELECT c.api_card_id, c.name, c.name_en, c.number, c.rarity, c.supertype,
-                 c.image_small, c.image_large, c.set_api_id, c.set_name, c.set_name_en,
+                 c.image_small, c.image_large, c.image_lang,
+                 c.set_api_id, c.set_name, c.set_name_en,
                  c.set_logo, c.set_series, c.set_release,
                  c.set_total, c.tcgplayer_data, c.cardmarket_data,
                  lp.price_usd, lp.source AS price_source, lp.recorded_at
@@ -382,6 +383,7 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
                      logo: r.set_logo || null, serie: r.set_series || null,
                      releaseDate: r.set_release || null },
               images: { small: r.image_small, large: r.image_large },
+              imageLang: r.image_lang || null,
               tcgplayer: r.tcgplayer_data || (price > 0 ? { prices: { holofoil: {
                 market: price, low: +(price * 0.65).toFixed(2),
                 mid: price, high: +(price * 1.7).toFixed(2) } } } : null),
@@ -868,7 +870,7 @@ app.get('/api/graded/:cardName', async (req, res) => {
 // DIAGNOSTIC — tells you exactly which sources are live
 // ══════════════════════════════════════════════════════════════
 app.get('/api/diagnostic', async (req, res) => {
-  const out = { version: '5.4.0', checks: {} };
+  const out = { version: '5.5.0', checks: {} };
 
   try {
     const r = await fetch(`${TCG_API}/sets?pageSize=1`, { headers: TCG_H });
@@ -1348,7 +1350,7 @@ function tcgdexSeriesFor(setId) {
 // FULL DIAGNOSTIC — one call tells you what works and what doesn't
 // ══════════════════════════════════════════════════════════════
 app.get('/api/health/full', async (req, res) => {
-  const out = { version: '5.4.0', ts: new Date().toISOString(), checks: {} };
+  const out = { version: '5.5.0', ts: new Date().toISOString(), checks: {} };
 
   // pokemontcg.io
   try {

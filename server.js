@@ -174,7 +174,7 @@ app.get('/', async (req, res) => {
   res.json({
     status: 'ok',
     service: 'CardHunt API',
-    version: '5.3.0',
+    version: '5.4.0',
     db: dbState,
     data: dbCounts,
     sources: ['cardhunt_db','pokemontcg.io','tcgdex.net','yahoo-jp','ebay-api','tcgplayer'],
@@ -320,7 +320,7 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
     // ══ 1. OUR DATABASE — 39k+ cards with real market prices ══
     if (db) {
       try {
-        const dbLang = lang === 'zh-cn' ? 'zh-cn' : lang === 'zh-tw' ? 'zh-tw' : lang;
+        const dbLang = lang;   // exact match only; zh-cn != zh-tw
 
         // The ingestion stored TCGdex's own set ids ("me02.5"), while the
         // frontend sends pokemontcg-style ids ("me2pt5"). Try every alias.
@@ -349,6 +349,7 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
         const rows = await db.query(`
           SELECT c.api_card_id, c.name, c.name_en, c.number, c.rarity, c.supertype,
                  c.image_small, c.image_large, c.set_api_id, c.set_name, c.set_name_en,
+                 c.set_logo, c.set_series, c.set_release,
                  c.set_total, c.tcgplayer_data, c.cardmarket_data,
                  lp.price_usd, lp.source AS price_source, lp.recorded_at
           FROM cards c
@@ -377,7 +378,9 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
               rarity: r.rarity,
               supertype: r.supertype,
               set: { id: r.set_api_id, name: r.set_name,
-                     nameEn: r.set_name_en || null, total: r.set_total },
+                     nameEn: r.set_name_en || null, total: r.set_total,
+                     logo: r.set_logo || null, serie: r.set_series || null,
+                     releaseDate: r.set_release || null },
               images: { small: r.image_small, large: r.image_large },
               tcgplayer: r.tcgplayer_data || (price > 0 ? { prices: { holofoil: {
                 market: price, low: +(price * 0.65).toFixed(2),
@@ -865,7 +868,7 @@ app.get('/api/graded/:cardName', async (req, res) => {
 // DIAGNOSTIC — tells you exactly which sources are live
 // ══════════════════════════════════════════════════════════════
 app.get('/api/diagnostic', async (req, res) => {
-  const out = { version: '5.3.0', checks: {} };
+  const out = { version: '5.4.0', checks: {} };
 
   try {
     const r = await fetch(`${TCG_API}/sets?pageSize=1`, { headers: TCG_H });
@@ -1252,6 +1255,9 @@ app.get('/api/sets/lang/:lang', async (req, res) => {
           SELECT c.set_api_id AS id,
                  MAX(c.set_name)     AS name,
                  MAX(c.set_name_en)  AS name_en,
+                 MAX(c.set_logo)     AS logo,
+                 MAX(c.set_series)   AS series,
+                 MAX(c.set_release)  AS release_date,
                  MAX(c.set_total)    AS total,
                  COUNT(*)         AS card_count,
                  COUNT(*) FILTER (
@@ -1276,10 +1282,15 @@ app.get('/api/sets/lang/:lang', async (req, res) => {
             realPrices: parseInt(r.real_prices),
             coverage: r.card_count > 0
               ? +((r.real_prices / r.card_count) * 100).toFixed(1) : 0,
-            logo: `https://assets.tcgdex.net/${lang === 'zh-cn' ? 'zh-tw' : lang}/` +
-                  `${tcgdexSeriesFor(r.id)}/${r.id}/logo.png`,
+            // Real logo captured at ingest time; build a URL only as a fallback
+            logo: r.logo ||
+                  `https://assets.tcgdex.net/${lang}/${tcgdexSeriesFor(r.id)}/${r.id}/logo.png`,
+            serie: r.series || 'Other',
+            releaseDate: r.release_date || null,
             lang
           }));
+          // Newest first when we know the dates
+          sets.sort((a, b) => String(b.releaseDate || '').localeCompare(String(a.releaseDate || '')));
           const result = { lang, count: sets.length, sets, source: 'cardhunt_db' };
           cSet(key, result);
           return res.json(result);
@@ -1290,7 +1301,8 @@ app.get('/api/sets/lang/:lang', async (req, res) => {
     // ══ 2. FALLBACK — live TCGdex ══
     const tdLang = ['ja','zh-tw','zh-cn','fr','de','it','es','pt','ko','th','id']
       .includes(lang) ? lang : 'en';
-    const fetchLang = tdLang === 'zh-cn' ? 'zh-cn' : tdLang;
+    // Simplified and Traditional Chinese are separate releases — never substitute
+    const fetchLang = tdLang;
 
     const r = await fetch(`${TCGDEX}/${fetchLang}/sets`);
     if (!r.ok) return res.status(502).json({ error: 'TCGdex ' + r.status, lang: fetchLang });
@@ -1336,7 +1348,7 @@ function tcgdexSeriesFor(setId) {
 // FULL DIAGNOSTIC — one call tells you what works and what doesn't
 // ══════════════════════════════════════════════════════════════
 app.get('/api/health/full', async (req, res) => {
-  const out = { version: '5.3.0', ts: new Date().toISOString(), checks: {} };
+  const out = { version: '5.4.0', ts: new Date().toISOString(), checks: {} };
 
   // pokemontcg.io
   try {

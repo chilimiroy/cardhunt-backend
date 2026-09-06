@@ -2,6 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 
+// eBay guards. Both standalone: server.js is deployed, and this project has
+// twice lost whole subsystems to a downloaded file landing on local work.
+//   ebayquota — may we spend a call? (count lives in Supabase, not memory)
+//   ebaycall  — everything else: one at a time, paced, kill switch, 429, logs
+const quota = require('./ebayquota');
+const ebay = require('./ebaycall');
+
 const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
@@ -776,7 +783,7 @@ let ebayToken = null, ebayTokenExp = 0, ebayTokenCredKey = '';
  *   unconfigured true  ONLY when the credentials are genuinely absent.
  *   error             what actually went wrong, in eBay's own words.
  */
-async function getEbayTokenDetailed() {
+async function getEbayTokenDetailed(opts) {
   const { id, secret } = ebayCreds();
   if (!id || !secret) {
     const missing = [!id && 'EBAY_CLIENT_ID', !secret && 'EBAY_CLIENT_SECRET']
@@ -792,44 +799,54 @@ async function getEbayTokenDetailed() {
   }
 
   const auth = Buffer.from(`${id}:${secret}`).toString('base64');
-  let r;
-  try {
-    r = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': `Basic ${auth}`
-      },
-      body: 'grant_type=client_credentials&scope=' +
-            encodeURIComponent('https://api.ebay.com/oauth/api_scope')
-    });
-  } catch (e) {
-    return { token: null, error: `could not reach api.ebay.com: ${e.message}` };
+
+  // Through ebaycall like every other eBay request, so the token exchange
+  // is queued, paced, kill-switched and — above all — COUNTED. TASK.md T1:
+  // the expires_in bug re-authenticated on every call and spent the daily
+  // quota on auth rather than searches, invisibly, because nothing counted
+  // token calls. `kind: 'token'` makes that spend visible in /api/ebay/quota.
+  const call = await ebay.fetchEbay(db, {
+    url: 'https://api.ebay.com/identity/v1/oauth2/token',
+    method: 'POST',
+    basic: auth,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=client_credentials&scope=' +
+          encodeURIComponent('https://api.ebay.com/oauth/api_scope'),
+    kind: 'token',
+    background: !!(opts && opts.background),
+    meta: { cardId: 'token-exchange' }
+  });
+
+  if (call.blocked) {
+    // A guard refusing is not a credential problem. Reporting it as one is
+    // the `null is not a diagnosis` failure that cost days.
+    return { token: null, blocked: call.blocked, error: call.error || call.reason,
+             reason: call.reason, remaining: call.remaining,
+             resetsInMinutes: call.resetsInMinutes };
+  }
+  if (!call.ok) {
+    // Keep the wording that made this diagnosable. "eBay rejected the token
+    // exchange: HTTP 401 — invalid_client: client authentication failed"
+    // names the failing step AND eBay's own reason; a bare HTTP code sends
+    // the reader back to checking environment variables that are correct.
+    // A host we could not reach never rejected anything. Prefixing it with
+    // "rejected the token exchange" points at the credentials when the fault
+    // is the network — the same misdirection that cost days last time.
+    if (call.transport || call.status === undefined) {
+      return { token: null, error: call.reason };
+    }
+    const detail = String(call.reason || '').replace(/^eBay returned /, '');
+    return { token: null, status: call.status,
+             error: `eBay rejected the token exchange: ${detail}` };
   }
 
-  const body = await r.text().catch(() => '');
-  if (!r.ok) {
-    // eBay returns {"error":"invalid_client","error_description":"..."}.
-    // Surfacing it is the difference between "our config is wrong" and
-    // "we cannot tell you". Never log `body` wholesale — it can echo
-    // request material; take only the two documented fields.
-    let detail = '';
-    try {
-      const j = JSON.parse(body);
-      detail = [j.error, j.error_description].filter(Boolean).join(': ');
-    } catch (e) { detail = body.slice(0, 200); }
-    return {
-      token: null,
-      error: `eBay rejected the token exchange: HTTP ${r.status}`
-        + (detail ? ` — ${detail}` : ''),
-      status: r.status
-    };
+  const d = call.data;
+  // A 200 carrying something unparseable is a different fault from a 200
+  // carrying valid JSON without the field — a proxy error page versus eBay
+  // changing its response. Reporting both as "no access_token" loses that.
+  if (call.nonJson) {
+    return { token: null, error: 'eBay returned a non-JSON token response' };
   }
-
-  let d;
-  try { d = JSON.parse(body); }
-  catch (e) { return { token: null, error: 'eBay returned a non-JSON token response' }; }
-
   if (!d || !d.access_token) {
     return { token: null, error: 'eBay returned 200 with no access_token' };
   }
@@ -1025,6 +1042,21 @@ async function resolveListingCard(cardId) {
   return r.rows[0] || null;
 }
 
+// ── Attribution ───────────────────────────────────────────────
+// eBay's terms: data shown must be identifiably eBay's, and nothing may
+// imply affiliation or endorsement. "Listings from eBay" states the source
+// without claiming a relationship; every eBay row also carries `url`
+// pointing at the item ON eBay, never at a reseller or an affiliate wrapper.
+const EBAY_ATTRIBUTION = {
+  ebay: {
+    label: 'Listings from eBay',
+    note: 'Live listing data from the eBay Browse API. Links open the item on eBay.',
+    // Explicitly NOT a partnership claim. See CLAUDE.md.
+    affiliated: false,
+    home: 'https://www.ebay.com'
+  }
+};
+
 // ── Cache ─────────────────────────────────────────────────────
 // Live listings go stale, but re-fetching on every render gets us
 // rate-limited — Yahoo is already throttled to one request per 3s in the
@@ -1033,11 +1065,30 @@ const LISTING_TTL = 15 * 60 * 1000;
 const listingCache = new Map();
 const listingKey = (cardId, grade) => `${cardId}|${String(grade).toUpperCase()}`;
 
+// eBay's terms require that prices and availability are not shown as more
+// current than they are. A 14-minute-old price served silently as "live" is
+// exactly the misrepresentation they mean, so every cached response carries
+// its own age and the client is told in words how old it is.
 function listingCacheGet(cardId, grade) {
   const e = listingCache.get(listingKey(cardId, grade));
   if (!e) return null;
-  if (Date.now() - e.ts > LISTING_TTL) { listingCache.delete(listingKey(cardId, grade)); return null; }
-  return { ...e.data, cached: true, cachedAgeSec: Math.round((Date.now() - e.ts) / 1000) };
+  const ageMs = Date.now() - e.ts;
+  if (ageMs > LISTING_TTL) { listingCache.delete(listingKey(cardId, grade)); return null; }
+  const ageSec = Math.round(ageMs / 1000);
+  return {
+    ...e.data,
+    cached: true,
+    cachedAgeSec: ageSec,
+    freshness: {
+      cached: true,
+      ageSeconds: ageSec,
+      maxAgeSeconds: Math.round(LISTING_TTL / 1000),
+      note: ageSec < 60
+        ? `cached ${ageSec}s ago`
+        : `cached ${Math.round(ageSec / 60)} min ago — prices and availability may have changed`
+    },
+    attribution: EBAY_ATTRIBUTION
+  };
 }
 function listingCacheSet(cardId, grade, data) {
   listingCache.set(listingKey(cardId, grade), { ts: Date.now(), data });
@@ -1076,7 +1127,12 @@ function normaliseListing(o) {
     // Live means buyable right now. An ended auction is a comparable, not an
     // offer, and the UI must not present the two as the same thing.
     live: o.live !== false,
-    country: o.country || null
+    country: o.country || null,
+    // Per-row attribution. eBay requires their data be identifiably theirs
+    // wherever it appears, and a row can be rendered far from the response
+    // envelope that carries the source list — so the row states it itself.
+    // `url` above already points at the item on eBay.
+    attribution: o.source === 'ebay' ? 'Listing from eBay' : null
   };
 }
 
@@ -1180,14 +1236,37 @@ async function sourceYahoo(card, grade, limit) {
   return { listings: deduped, scanned, live: liveCount, ended: endedCount };
 }
 
-async function sourceEbay(card, grade, limit) {
-  const auth = await getEbayTokenDetailed();
+async function sourceEbay(card, grade, limit, opts = {}) {
+  const background = !!opts.background;
+
+  // The kill switch is checked before the token, so EBAY_ENABLED=false
+  // costs nothing and reports `disabled` rather than a token failure.
+  if (!ebay.ebayEnabled()) {
+    const e = new Error('EBAY_ENABLED=false — all eBay calls are switched off');
+    e.ebayStatus = 'disabled';
+    throw e;
+  }
+
+  // A dry run builds the request and sends nothing, so it must not acquire a
+  // token either: a token exchange is itself a metered eBay call. Skipping it
+  // makes dryRun genuinely free AND usable without credentials, which is the
+  // point — it exists to debug the title gate, and that debugging should not
+  // require live keys or spend quota.
+  const dryRun = !!opts.dryRun;
+  const auth = dryRun ? { token: '<dry-run>' } : await getEbayTokenDetailed({ background });
   if (!auth.token) {
     // `unconfigured` now means what it says. A rejected token exchange or
     // an unreachable eBay is an ERROR — reporting it as "not set" sent us
     // to check environment variables that were correct all along.
-    const e = new Error(auth.error || 'eBay token unavailable');
+    // A guard refusal is a third thing again, and carries its own status so
+    // the UI can say "quota" instead of implying the marketplace is empty.
+    const e = new Error(auth.reason || auth.error || 'eBay token unavailable');
     if (auth.unconfigured) e.unconfigured = true;
+    if (auth.blocked) {
+      e.ebayStatus = auth.blocked;
+      e.remaining = auth.remaining;
+      e.resetsInMinutes = auth.resetsInMinutes;
+    }
     throw e;
   }
   const token = auth.token;
@@ -1198,11 +1277,35 @@ async function sourceEbay(card, grade, limit) {
   const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search'
     + '?q=' + encodeURIComponent(q)
     + '&category_ids=183454&limit=' + Math.min(limit * 3, 100) + '&sort=price';
-  const r = await fetch(url, {
-    headers: { 'Authorization': `Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US' }
+
+  const call = await ebay.fetchEbay(db, {
+    url, token, kind: 'search', background,
+    dryRun,
+    meta: { cardId: card.api_card_id, grade, query: q },
+    countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0)
   });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const d = await r.json();
+
+  // ?dryRun=1 — the exact request, nothing sent, no quota spent.
+  if (call.dryRun) {
+    return { listings: [], scanned: 0, dryRun: true, request: call.request,
+             parsedQuery: q,
+             gate: { name, number: card.number, setTotal: card.set_total,
+                     setId: card.set_api_id,
+                     setName: card.set_name_en || card.set_name, grade } };
+  }
+
+  if (call.blocked) {
+    // NEVER an empty list. An empty result that reads as "no stock" when the
+    // truth is "we refused to call" is this project's recurring failure.
+    const e = new Error(call.reason);
+    e.ebayStatus = call.blocked;
+    e.remaining = call.remaining;
+    e.resetsInMinutes = call.resetsInMinutes;
+    throw e;
+  }
+  if (!call.ok) throw new Error(call.reason);
+
+  const d = call.data || {};
   const items = d.itemSummaries || [];
 
   const listings = [];
@@ -1259,7 +1362,8 @@ const LISTING_SOURCES = [
   }
 ];
 
-async function gatherListings(card, grade, limit) {
+async function gatherListings(card, grade, limit, opts) {
+  opts = opts || {};
   const sources = {};
   for (const [id, reason] of Object.entries(UNAVAILABLE))
     sources[id] = { status: 'unavailable', reason };
@@ -1271,23 +1375,46 @@ async function gatherListings(card, grade, limit) {
   });
 
   const t0 = Date.now();
+  // eBay's own calls are serialised inside ebaycall, so a 12s timeout that
+  // starts when the request is MADE can expire while a call is still queued
+  // behind another. Give eBay longer; the queue is bounded by pacing, not
+  // by work.
   const results = await Promise.allSettled(
-    active.map(s => withTimeout(s.fetch(card, grade, limit), 12000, s.id))
+    active.map(s => withTimeout(s.fetch(card, grade, limit, opts),
+                                s.id === 'ebay' ? 25000 : 12000, s.id))
   );
 
+  const dryRuns = {};
   let listings = [];
   active.forEach((s, i) => {
     const r = results[i];
     if (r.status === 'fulfilled') {
+      if (r.value && r.value.dryRun) {
+        sources[s.id] = { status: 'dry-run', reason: 'request built, nothing sent' };
+        dryRuns[s.id] = { request: r.value.request, parsedQuery: r.value.parsedQuery,
+                          gate: r.value.gate };
+        return;
+      }
       const { listings: got } = r.value;
       sources[s.id] = { status: 'ok', count: got.length, scanned: r.value.scanned ?? null };
       if (r.value.live !== undefined) { sources[s.id].live = r.value.live; sources[s.id].ended = r.value.ended; }
       listings = listings.concat(got);
     } else {
       const err = r.reason || {};
-      sources[s.id] = err.unconfigured
-        ? { status: 'unconfigured', reason: err.message }
-        : { status: 'error', reason: String(err.message || err).slice(0, 160) };
+      // A guard refusing is not the same as a marketplace with no stock, and
+      // not the same as a missing credential. Each keeps its own status so
+      // the UI can say which — never an empty list that reads as "no results".
+      if (err.ebayStatus) {
+        sources[s.id] = { status: err.ebayStatus, reason: err.message };
+        if (err.remaining !== undefined && err.remaining !== null)
+          sources[s.id].remaining = err.remaining;
+        if (err.resetsInMinutes !== undefined && err.resetsInMinutes !== null)
+          sources[s.id].resetsInMinutes = err.resetsInMinutes;
+      } else if (err.unconfigured) {
+        sources[s.id] = { status: 'unconfigured', reason: err.message };
+      } else {
+        sources[s.id] = { status: 'error', reason: String(err.message || err).slice(0, 160) };
+      }
     }
   });
 
@@ -1298,7 +1425,9 @@ async function gatherListings(card, grade, limit) {
   listings.sort((a, b) =>
     (Number(b.live) - Number(a.live)) || (a.landed - b.landed) || (a.price - b.price));
   const liveCount = listings.filter(l => l.live).length;
-  return { listings, sources, tookMs: Date.now() - t0, liveCount };
+  const out = { listings, sources, tookMs: Date.now() - t0, liveCount };
+  if (Object.keys(dryRuns).length) out.dryRun = dryRuns;
+  return out;
 }
 
 function withTimeout(promise, ms, label) {
@@ -1328,13 +1457,22 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
   if (!card) return next();
 
   const key = card.api_card_id;
-  if (!req.query.refresh) {
+  const dryRun = req.query.dryRun === '1' || req.query.dryRun === 'true';
+
+  // A dry run must never be served from cache, or it reports a request that
+  // was not built for it.
+  if (!req.query.refresh && !dryRun) {
     const hit = listingCacheGet(key, grade);
     if (hit) return res.json(hit);
   }
 
   try {
-    const { listings, sources, tookMs, liveCount } = await gatherListings(card, grade, limit);
+    // A browser request is a live user waiting, so it is foreground: it may
+    // spend quota down to the reserve. Only ingestion and refresh are
+    // background, and they yield at the soft stop so this path keeps working.
+    const gathered = await gatherListings(card, grade, limit,
+      { background: false, dryRun });
+    const { listings, sources, tookMs, liveCount } = gathered;
     const payload = {
       cardId: card.api_card_id,
       requestedId: cardId,
@@ -1352,8 +1490,24 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
       sources,
       tookMs,
       cached: false,
+      cachedAgeSec: 0,
+      // eBay's terms: do not present data as more current than it is. This
+      // states the freshness contract in the response itself rather than
+      // leaving the client to assume "live".
+      freshness: {
+        cached: false,
+        ageSeconds: 0,
+        maxAgeSeconds: Math.round(LISTING_TTL / 1000),
+        note: 'fetched now'
+      },
+      attribution: EBAY_ATTRIBUTION,
       fetchedAt: new Date().toISOString()
     };
+    if (gathered.dryRun) {
+      payload.dryRun = gathered.dryRun;
+      payload.note = 'dryRun=1 — nothing was sent to eBay and no quota was spent';
+      return res.json(payload);          // deliberately NOT cached
+    }
     listingCacheSet(key, grade, payload);
     res.json(payload);
   } catch (err) {
@@ -1514,14 +1668,20 @@ app.get('/api/listings/:cardName', async (req, res) => {
       + '&category_ids=183454'
       + '&limit=' + limit
       + '&sort=price';
-    const r = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'X-EBAY-C-MARKETPLACE-ID': req.query.marketplace || 'EBAY_US'
-      }
+    // Guarded like every other eBay call. This legacy route was the last
+    // path that could still reach eBay unqueued and uncounted.
+    const call = await ebay.fetchEbay(db, {
+      url, token, kind: 'search', background: false,
+      meta: { cardId: cardName, grade, query: q, marketplace: req.query.marketplace || 'EBAY_US' },
+      countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0)
     });
-    if (!r.ok) return res.json({ listings: [], configured: true, error: 'eBay returned ' + r.status });
-    const d = await r.json();
+    if (call.blocked) {
+      return res.json({ listings: [], configured: true, status: call.blocked,
+                        reason: call.reason, remaining: call.remaining ?? null,
+                        resetsInMinutes: call.resetsInMinutes ?? null });
+    }
+    if (!call.ok) return res.json({ listings: [], configured: true, error: call.reason });
+    const d = call.data || {};
     const listings = (d.itemSummaries || []).map(it => ({
       title: it.title,
       price: parseFloat(it.price && it.price.value) || 0,
@@ -1675,16 +1835,24 @@ async function ebayActive(query, marketplace = 'EBAY_US', limit = 50) {
   const token = await scrEbayToken();
   if (!token) return { listings: [], source: 'ebay_api', configured: false };
 
-  await throttle('api.ebay.com');
   const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search'
     + '?q=' + encodeURIComponent(query)
     + '&category_ids=183454&limit=' + limit + '&sort=price';
-  const r = await fetch(url, {
-    headers: { 'Authorization':`Bearer ${token}`, 'X-EBAY-C-MARKETPLACE-ID': marketplace }
-  });
-  if (!r.ok) return { listings: [], source:'ebay_api', error:'HTTP '+r.status };
 
-  const d = await r.json();
+  // background: true — this is the harvest/diagnostic path, not a user
+  // waiting on a page. It yields at the soft stop so live requests keep
+  // working. ebaycall paces internally, so the old throttle() is redundant.
+  const call = await ebay.fetchEbay(db, {
+    url, token, kind: 'search', background: true,
+    meta: { cardId: 'ebayActive', query, marketplace },
+    countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0)
+  });
+  if (call.blocked) {
+    return { listings: [], source: 'ebay_api', status: call.blocked, reason: call.reason };
+  }
+  if (!call.ok) return { listings: [], source: 'ebay_api', error: call.reason };
+
+  const d = call.data || {};
   const listings = (d.itemSummaries || []).map(it => ({
     title: it.title,
     price: parseFloat(it.price && it.price.value) || 0,
@@ -2197,6 +2365,62 @@ app.post('/ebay/deletion', (req, res) => {
     }
   } catch (e) { /* still acknowledge */ }
   res.status(200).send();
+});
+
+// ══════════════════════════════════════════════════════════════
+// GET /api/ebay/quota  —  what we have spent today, by eBay's count
+//
+// The count lives in Supabase, not memory: Render's free tier restarts on
+// idle, and an in-memory counter would reset to zero on every cold start,
+// so the process could spend 5,000 calls several times over and believe it
+// had made a few hundred.
+//
+// ?probe=1 additionally asks eBay what our real limit is (costs ONE call).
+// If their figure is not 5,000, DAILY_LIMIT is wrong and every threshold
+// above it is calibrated to the wrong number — so this is worth running
+// once against live credentials before trusting any of it.
+//
+// READ-ONLY with respect to card data. It writes only the quota ledger,
+// which is the point of the ledger.
+// ══════════════════════════════════════════════════════════════
+app.get('/api/ebay/quota', async (req, res) => {
+  try {
+    const out = await quota.status(db);
+    out.enabled = ebay.ebayEnabled();
+    if (!out.enabled) out.killSwitch = 'EBAY_ENABLED=false — all eBay calls are switched off';
+
+    const br = ebay.breakerState();
+    out.rateLimitBreaker = br
+      ? { open: true, reason: br.reason, until: br.until ? br.until.toISOString() : null }
+      : { open: false };
+
+    if (req.query.probe === '1' || req.query.probe === 'true') {
+      const auth = await getEbayTokenDetailed();
+      if (!auth.token) {
+        out.probe = { ok: false, reason: auth.reason || auth.error };
+      } else {
+        const rl = await quota.fetchRateLimits(db, auth.token);
+        out.probe = rl;
+        if (rl.ok && Number.isFinite(rl.limit)) {
+          out.probe.matchesAssumedLimit = (rl.limit === quota.DAILY_LIMIT);
+          out.probe.assumedLimit = quota.DAILY_LIMIT;
+          if (rl.limit !== quota.DAILY_LIMIT) {
+            out.probe.WARNING = `eBay reports a limit of ${rl.limit}, but DAILY_LIMIT is `
+              + `${quota.DAILY_LIMIT}. Every threshold is calibrated to the wrong number — `
+              + `change DAILY_LIMIT in ebayquota.js and re-run ebayquota.test.js.`;
+          }
+        }
+      }
+    } else {
+      out.probe = { attempted: false,
+        note: 'add ?probe=1 to ask eBay for the real limit (costs one call)' };
+    }
+    res.json(out);
+  } catch (err) {
+    // A quota endpoint that fails must not read as "no quota used".
+    res.status(500).json({ error: err.message,
+      note: 'quota state could not be read — treat as unknown, not as zero' });
+  }
 });
 
 // Readiness check for the whole eBay setup.

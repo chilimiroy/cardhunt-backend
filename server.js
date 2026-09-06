@@ -2356,6 +2356,14 @@ app.get('/ebay/deletion', (req, res) => {
 });
 
 // POST — the actual notification. Acknowledge with 200 or eBay retries.
+// ── IF WE EVER STORE eBay USER DATA, THIS MUST ACTUALLY DELETE ──
+// Today the handler only acknowledges, and that is correct BECAUSE we hold
+// no eBay user data: listings are served from a 15-minute in-memory cache
+// and never written to price_history (see EBAY_ATTRIBUTION and the T2 notes
+// in CLAUDE.md). The moment any eBay-derived record is persisted against a
+// user, acknowledging without deleting becomes a breach of their terms
+// rather than an accurate no-op. The obligation is invisible in this code
+// precisely because there is nothing to delete — so it is written down here.
 app.post('/ebay/deletion', (req, res) => {
   try {
     const n = req.body && req.body.notification;

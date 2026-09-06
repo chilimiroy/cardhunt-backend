@@ -1,0 +1,42 @@
+﻿node_modules/
+
+# Local ingest and tooling — never deployed
+ingest.js
+sourcerank.js
+estimator.js
+jpreconcile.js
+yuyutei.js
+tcgdexprobe.js
+tcgdexharvest.js
+ebayprobe.js
+*.test.js
+jptest.js
+
+# Frontend is opened locally
+cardhunt_preview*.html
+yahoo.html
+
+# Scripts and scheduled-task plumbing
+*.ps1
+*.cmd
+.task-watch-state
+
+# Notes
+CLAUDE.md
+TASK.md
+PROGRESS.md
+*.bak-*
+
+# Data, logs, backups
+*.log
+*.pid
+*-purged-*.json
+*-nulled-*.json
+ingest-progress*.json
+pokedex-ja-en.json
+task-watch.log
+scratchpad/
+
+# Secrets
+.env
+*.env

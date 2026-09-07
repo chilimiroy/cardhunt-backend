@@ -8,6 +8,11 @@ const { Pool } = require('pg');
 //   ebaycall  — everything else: one at a time, paced, kill switch, 429, logs
 const quota = require('./ebayquota');
 const ebay = require('./ebaycall');
+// One query builder and one gate, shared with the frontend's deep links so a
+// link and an API call ask eBay the same question. cardmatch decides;
+// listingparse labels. See TASK.md T1/T1b.
+const cm = require('./cardmatch');
+const lp = require('./listingparse');
 
 const app = express();
 app.use(cors({ origin: '*' }));
@@ -718,12 +723,21 @@ app.get('/api/price/:cardId', async (req, res) => {
     const grades = {};
     Object.entries(GM).forEach(([g, m]) => { grades[g] = parseFloat((rawNm * m).toFixed(2)); });
 
-    if (db && rawNm > 0) {
-      db.query(
-        'INSERT INTO price_history (card_api_id,price_usd,source,grades_json) VALUES ($1,$2,$3,$4)',
-        [cardId, rawNm, source, JSON.stringify(grades)]
-      ).catch(() => {});
-    }
+    // ── DO NOT WRITE THIS INTO price_history ──────────────────
+    // A read endpoint must never write. This fired on every view of a card
+    // absent from our database, inserting a pokemontcg.io-derived price
+    // keyed by the RAW REQUESTED id (`sv3pt5-4`, not `en-sv03.5-004`) —
+    // so it accumulated rows under ids that match no card we hold.
+    //
+    // Milder than the /api/market/ incident, which matched on name and set
+    // with no collector number and overwrote Mega Gengar ex #284 at $1,056
+    // with $3.14 — the price of #125. Same pattern though, and the reason
+    // that one was invisible for so long: it fired on views, wrote through
+    // the endpoint that reads, and labelled itself a market price.
+    //
+    // price_history is written by the ingest pipeline ONLY, which matches on
+    // collector number and refuses to guess. If this fallback price is worth
+    // keeping, ingest it deliberately — do not let a page view persist it.
 
     const result = {
       cardId, name: c.name, rarity: c.rarity,
@@ -1272,8 +1286,22 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   const token = auth.token;
   // English name for eBay; a Japanese card's name_en is what buyers search.
   const name = card.name_en || card.name;
-  const q = [name, card.number ? `${card.number}` : '', jpf.isRawGrade(grade) ? '' : grade,
-             'pokemon card'].filter(Boolean).join(' ');
+
+  // ONE description of the card, built once and used by both the query and
+  // the gate. They were separate before, and the gate quietly held a
+  // setTotal and setName the query never sent — so eBay was asked for "any
+  // Charizard VMAX" and whatever came back was shown. Same shape as the
+  // estimator split: two implementations of one thing, drifting.
+  const matchCard = {
+    name, nameEn: card.name_en || null,
+    number: card.number,
+    setTotal: card.set_total,
+    setName: card.set_name_en || card.set_name
+  };
+
+  // cardmatch.buildQuery is the single query builder, shared with the
+  // frontend's deep links so a link and an API call ask the same question.
+  const q = cm.buildQuery(matchCard, grade);
   const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search'
     + '?q=' + encodeURIComponent(q)
     + '&category_ids=183454&limit=' + Math.min(limit * 3, 100) + '&sort=price';
@@ -1289,9 +1317,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   if (call.dryRun) {
     return { listings: [], scanned: 0, dryRun: true, request: call.request,
              parsedQuery: q,
-             gate: { name, number: card.number, setTotal: card.set_total,
-                     setId: card.set_api_id,
-                     setName: card.set_name_en || card.set_name, grade } };
+             gate: Object.assign({ setId: card.set_api_id, grade }, matchCard) };
   }
 
   if (call.blocked) {
@@ -1308,13 +1334,38 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   const d = call.data || {};
   const items = d.itemSummaries || [];
 
+  // ── The gate ──
+  // cardmatch.verify decides; listingparse labels. Every rejection carries a
+  // reason, so "no listings" and "everything was filtered out" can never look
+  // the same to the caller.
   const listings = [];
+  const dropped = [];
+  const disagreements = [];
+
   for (const it of items) {
-    // Same gate as pricing, English vocabulary. A lot excluded from a
-    // median must never surface here as a single card.
-    if (!jpf.enItemMatchesRequest({ title: it.title }, filterCard(card, name), grade)) continue;
+    const title = it.title || '';
+    const v = cm.verify(title, matchCard, grade);
+
+    // Cross-check: two independent readers of the same title that should
+    // agree. listingparse works from a parsed structure, cardmatch from the
+    // raw string. Where they disagree, one of them is wrong — that technique
+    // has found more in this project than any other, so record it rather
+    // than letting it pass silently.
+    let parsed = null;
+    try {
+      parsed = lp.parseListingTitle(title);
+      const c = lp.compare(parsed, matchCard, grade);
+      if (c && c.match !== v.ok) {
+        disagreements.push({ title,
+          cardmatch: v.ok ? 'kept' : 'dropped: ' + v.reason,
+          listingparse: c.match ? 'match' : 'no match: ' + (c.disagree || []).join('; ') });
+      }
+    } catch (e) { /* the parser must never break the gate */ }
+
+    if (!v.ok) { dropped.push({ title, reason: v.reason }); continue; }
+
     const price = parseFloat(it.price && it.price.value) || 0;
-    if (price <= 0) continue;
+    if (price <= 0) { dropped.push({ title, reason: 'no usable price' }); continue; }
     const shipOpt = it.shippingOptions && it.shippingOptions[0];
     const shipping = (shipOpt && shipOpt.shippingCost && shipOpt.shippingCost.value != null)
       ? parseFloat(shipOpt.shippingCost.value) : null;
@@ -1331,10 +1382,28 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       imageUrl: it.image && it.image.imageUrl,
       country: it.itemLocation && it.itemLocation.country,
       listingType: (it.buyingOptions || []).includes('AUCTION') ? 'auction' : 'fixed',
-      live: true
+      live: true,
+      // ── Labels, never gates ──
+      // 1st Edition, Shadowless and Unlimited Base Set Charizards all read
+      // 4/102 and sell at wildly different prices. A $400 and a $4,000
+      // Charizard both matching "4/102 PSA 10" is CORRECT — but only if the
+      // row says which is which. So these are surfaced and never rejected on:
+      // the parser's job is to label, not to decide.
+      edition: parsed ? parsed.edition : null,
+      variant: parsed ? parsed.variant : null,
+      parsedRarity: parsed ? parsed.rarity : null,
+      parsedYear: parsed ? parsed.year : null,
+      matchConfidence: v.confidence || null
     }));
   }
-  return { listings, scanned: items.length };
+
+  // kept AND dropped, always. "12 listings, 40 rejected" and "no listings"
+  // describe completely different situations and must never look alike.
+  return { listings, scanned: items.length,
+           kept: listings.length, rejected: dropped.length,
+           dropped: dropped.slice(0, 40),
+           parserDisagreements: disagreements.slice(0, 20),
+           query: q };
 }
 
 // Documented-unavailable sources. They stay in the registry so the response
@@ -1398,6 +1467,23 @@ async function gatherListings(card, grade, limit, opts) {
       const { listings: got } = r.value;
       sources[s.id] = { status: 'ok', count: got.length, scanned: r.value.scanned ?? null };
       if (r.value.live !== undefined) { sources[s.id].live = r.value.live; sources[s.id].ended = r.value.ended; }
+
+      // "12 listings, 40 rejected" — a source that scanned 52 titles and kept
+      // 12 has NOT behaved like one that found nothing, and the response has
+      // to be able to tell them apart.
+      if (r.value.rejected !== undefined) {
+        sources[s.id].rejected = r.value.rejected;
+        sources[s.id].summary = `${r.value.kept} kept, ${r.value.rejected} rejected` +
+          (r.value.scanned ? ` of ${r.value.scanned} scanned` : '');
+        if (r.value.dropped && r.value.dropped.length) {
+          sources[s.id].droppedSample = r.value.dropped.slice(0, 12);
+        }
+        if (r.value.query) sources[s.id].query = r.value.query;
+        // Two readers of one title that should agree. Surfaced, not swallowed.
+        if (r.value.parserDisagreements && r.value.parserDisagreements.length) {
+          sources[s.id].parserDisagreements = r.value.parserDisagreements;
+        }
+      }
       listings = listings.concat(got);
     } else {
       const err = r.reason || {};
@@ -2429,6 +2515,25 @@ app.get('/api/ebay/quota', async (req, res) => {
     res.status(500).json({ error: err.message,
       note: 'quota state could not be read — treat as unknown, not as zero' });
   }
+});
+
+// ══════════════════════════════════════════════════════════════
+// GET /cardmatch.js  —  the query builder, for the browser
+//
+// The frontend's deep links and this server's eBay query must ask eBay the
+// SAME question about the same card. They did not: the server dropped the
+// set size and set name that the frontend included, so an API call and a
+// deep link disagreed about what was being searched for.
+//
+// Serving the actual module — not a copy — is what keeps them identical.
+// cardmatch.js assigns window.CardMatch when loaded in a browser.
+// ══════════════════════════════════════════════════════════════
+app.get('/cardmatch.js', (req, res) => {
+  res.type('application/javascript');
+  res.set('Cache-Control', 'public, max-age=300');
+  res.sendFile(require('path').join(__dirname, 'cardmatch.js'), err => {
+    if (err && !res.headersSent) res.status(500).send('// cardmatch.js unavailable');
+  });
 });
 
 // Readiness check for the whole eBay setup.

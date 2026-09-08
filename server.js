@@ -1296,7 +1296,13 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     name, nameEn: card.name_en || null,
     number: card.number,
     setTotal: card.set_total,
-    setName: card.set_name_en || card.set_name
+    setName: card.set_name_en || card.set_name,
+    // The release year separates a card from its own reprint. Celebrations
+    // (2021) reprints Base Set (1999) cards with the ORIGINAL 4/102
+    // numbering and the words "Base Set" in the title, so number, set size
+    // and set name all agree — and a live search returned 24 "matches"
+    // spanning $536 to $249,999. All 45,780 cards carry a release date.
+    setYear: card.set_release ? new Date(card.set_release).getUTCFullYear() : null
   };
 
   // cardmatch.buildQuery is the single query builder, shared with the

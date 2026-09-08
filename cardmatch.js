@@ -73,6 +73,52 @@ const SLAB_WORDS = /\b(psa|bgs|cgc|sgc|tag|ace|ags|ars|gma|hga|graded|slab|slabb
 // Multi-card listings, sealed product, and anything that is not one card
 const NOT_A_SINGLE_CARD = /\b(lot|lots|bundle|set of|collection|binder|album|booster|box|pack|packs|tin|etb|elite trainer|sealed|case|proxy|proxies|custom|fake|repl(ica)?|proxy|orica|proxi|metal card|gold card replica|sticker|jumbo|oversized|playmat|sleeve|deck box|toploader)\b/i;
 
+// ── Set names that contain lot vocabulary ─────────────────────
+// "Classic Collection" is a SET, not a bundle, and `collection` above
+// rejected every one of them. Measured on a live search for Base Set
+// Charizard: "2021 Pokemon Celebrations Base Set Classic Collection
+// Charizard 4/102 PSA 10" was dropped as "not a single card".
+//
+// This is the `looksLikeJunk` failure again — a guard written against bad
+// data eating good data, silently, with the count buried. So these phrases
+// are removed from the title BEFORE the lot test rather than the test
+// being weakened for everyone.
+const SET_NAME_PHRASES = /\b(classic collection|trainer gallery|galarian gallery|shiny vault|hidden fates|celebrations|legendary collection|champions? path)\b/gi;
+
+// ── Reprint sets that reuse another set's numbering ───────────
+// The English form of the master-ball mirror problem, and it is worse than
+// the original because the price gap is larger.
+//
+// Celebrations Classic Collection (2021) reprints Base Set cards with the
+// ORIGINAL numbering: a Celebrations Charizard is genuinely "4/102" and
+// genuinely says "Base Set" on the card. Number, set size and set name all
+// match the 1999 card, so every check we had said yes.
+//
+// Live measurement, Base Set Charizard 4/102 PSA 10: 24 listings kept,
+// spanning $536.75 to $249,999.95 — a 465x range. 19 of the 24 were
+// Celebrations reprints at ~$550; the genuine 1999 cards ran $8,000 to
+// $250,000. Presenting those as one market is exactly the failure the
+// product exists to prevent.
+//
+// Keyed by the marker word, with the set it belongs to. A listing naming
+// the marker is that reprint; if our card is not from that set, refuse.
+const REPRINT_MARKERS = [
+  { re: /\bcelebrations?\b/i,        set: /celebrat/i,           label: 'Celebrations' },
+  { re: /\bclassic collection\b/i,   set: /classic collection/i, label: 'Classic Collection' },
+  { re: /\blegendary collection\b/i, set: /legendary/i,          label: 'Legendary Collection' }
+];
+
+// Every 4-digit year a title states. ALL of them, not the first: a title
+// can carry both the print year and a grading year ("1999 ... graded 2021"),
+// and taking only the first would reject a correct card on a grading date.
+function yearsIn(title) {
+  const out = [];
+  const re = /\b(19[89]\d|20[0-4]\d)\b/g;
+  let m;
+  while ((m = re.exec(String(title)))) out.push(parseInt(m[1], 10));
+  return out;
+}
+
 // ── Query building ────────────────────────────────────────────
 // Include the N/M pair and the set name. Both were missing, which is
 // why "Charizard VMAX 74 PSA 10" returned whatever eBay felt like.
@@ -116,10 +162,37 @@ function verify(title, card, grade, opts) {
   const lower = t.toLowerCase();
   const want = parseGrade(grade);
 
-  // 1. Not a single card at all
-  if (NOT_A_SINGLE_CARD.test(t)) {
+  // 1. Not a single card at all.
+  //    Legitimate set names containing lot vocabulary are removed first, so
+  //    "Classic Collection" is not read as a bundle.
+  const tForLot = t.replace(SET_NAME_PHRASES, ' ');
+  if (NOT_A_SINGLE_CARD.test(tForLot)) {
     return { ok: false, reason: 'not a single card: ' +
-      (t.match(NOT_A_SINGLE_CARD) || [])[0] };
+      (tForLot.match(NOT_A_SINGLE_CARD) || [])[0] };
+  }
+
+  // 1b. A reprint set that reuses this card's numbering.
+  //     Checked BEFORE the number, because the number will match — that is
+  //     the whole problem. See REPRINT_MARKERS.
+  const ourSet = String(card.setName || '');
+  for (const rp of REPRINT_MARKERS) {
+    if (rp.re.test(t) && !rp.set.test(ourSet)) {
+      return { ok: false, reason:
+        `title is a ${rp.label} reprint, which reuses this numbering — ` +
+        `wanted ${ourSet || 'the original set'}` };
+    }
+  }
+
+  // 1c. Year conflict. Only ever rejects on stated evidence: a title with no
+  //     year is not rejected, because absence is not a mismatch. If a title
+  //     states years and NONE of them is within a year of the set's release,
+  //     it is a different printing.
+  if (card.setYear) {
+    const ys = yearsIn(t);
+    if (ys.length && !ys.some(y => Math.abs(y - card.setYear) <= 1)) {
+      return { ok: false, reason:
+        `title says ${ys.join('/')}, this set is from ${card.setYear} — a different printing` };
+    }
   }
 
   // 2. Grade must match exactly — grader AND number
@@ -240,8 +313,8 @@ function filterListings(listings, card, grade) {
 
 const API = {
   buildQuery, verify, filterListings,
-  normNum, numberPairsIn, gradesIn, parseGrade,
-  GRADERS, SLAB_WORDS, NOT_A_SINGLE_CARD
+  normNum, numberPairsIn, gradesIn, parseGrade, yearsIn,
+  GRADERS, SLAB_WORDS, NOT_A_SINGLE_CARD, SET_NAME_PHRASES, REPRINT_MARKERS
 };
 
 // ── Dual mode: Node require() AND a browser <script> ──────────

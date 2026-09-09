@@ -168,7 +168,17 @@ function buildQuery(card, grade, opts) {
     }
   }
 
-  if (card.setName) bits.push(card.setName);
+  // Only a Latin-script set name goes into the query. A Japanese card whose
+  // set_name_en is null falls back to its Japanese set name, and
+  //   "Charizard ex 201/165 ポケモンカード151 PSA 10 pokemon"
+  // returned ZERO results from eBay US — measured, not assumed. eBay carries
+  // Japanese cards, but its sellers write the set in English or omit it.
+  //
+  // Dropping the token is the right move under "broad query, strict gate":
+  // an unusable term guarantees nothing comes back, while the gate can still
+  // reject whatever a broader search returns. The gate keeps the set name
+  // regardless — this only affects what is ASKED.
+  if (card.setName && /[A-Za-z]/.test(String(card.setName))) bits.push(card.setName);
 
   const g = parseGrade(grade);
   if (g.kind === 'graded') bits.push(g.grader + ' ' + g.grade);

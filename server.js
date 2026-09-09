@@ -1361,7 +1361,21 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     try {
       parsed = lp.parseListingTitle(title);
       const c = lp.compare(parsed, matchCard, grade);
-      if (c && c.match !== v.ok) {
+
+      // Only compare on dimensions BOTH readers actually examine.
+      // listingparse.compare() checks number, set size, grade and
+      // lot/sealed/custom — it has no name check at all, by design, because
+      // its name/set split is approximate. So when cardmatch rejects on the
+      // card name, a reprint marker, a year or a set name, listingparse has
+      // no opinion rather than a contrary one, and reporting that as a
+      // disagreement buries the real ones: the first live run produced 40,
+      // every one of them structural.
+      //
+      // A signal that is always noisy gets ignored, which is worse than not
+      // having it.
+      const cardmatchOnlyReason = !v.ok && /does not name|reprint|different printing|but not the set|neither the card number nor the set|names the set but not|wants (VMAX|VSTAR|V-UNION|EX|GX)|is a (VMAX|VSTAR|V-UNION)/i.test(v.reason || '');
+
+      if (c && c.match !== v.ok && !cardmatchOnlyReason) {
         disagreements.push({ title,
           cardmatch: v.ok ? 'kept' : 'dropped: ' + v.reason,
           listingparse: c.match ? 'match' : 'no match: ' + (c.disagree || []).join('; ') });

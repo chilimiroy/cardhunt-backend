@@ -1302,7 +1302,12 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     // numbering and the words "Base Set" in the title, so number, set size
     // and set name all agree — and a live search returned 24 "matches"
     // spanning $536 to $249,999. All 45,780 cards carry a release date.
-    setYear: card.set_release ? new Date(card.set_release).getUTCFullYear() : null
+    setYear: card.set_release ? new Date(card.set_release).getUTCFullYear() : null,
+    // Korean prints share Japanese set codes and numbering, so a Korean
+    // Charizard ex is genuinely 201/165 from SV2a. A live search for the
+    // Japanese card returned 6 Korean listings among 25. Card ids are
+    // {lang}-{setId}-{number}, so the language is already in the id.
+    lang: String(card.api_card_id || '').split('-')[0] || null
   };
 
   // cardmatch.buildQuery is the single query builder, shared with the

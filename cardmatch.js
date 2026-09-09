@@ -134,6 +134,35 @@ const REPRINT_MARKERS = [
   { re: /\blegendary collection\b/i, set: /legendary/i,          label: 'Legendary Collection' }
 ];
 
+// Han, Hiragana, Katakana, Hangul.
+const CJK = /[぀-ヿ㐀-䶿一-鿿가-힯]/;
+
+// ── Language stated in a title ────────────────────────────────
+// Korean and Japanese prints share set codes and numbering: a Korean
+// Charizard ex is genuinely "201/165" from "SV2a". A live search for the
+// JAPANESE card kept 25 listings of which 6 were Korean, $459-$632 against
+// $620-$715 for the Japanese ones.
+//
+// Smaller than the Celebrations gap, and still the wrong card. CLAUDE.md:
+// "Never substitute across languages. Cross-language matching is for
+// FINDING equivalents, never for DISPLAYING them."
+//
+// Read only from what the title states. Most say nothing, and those are
+// kept — inference is for absent data, and rejecting silence would empty
+// the results.
+const LANG_MARKERS = [
+  { lang: 'ko', re: /\b(korean|korea|kor)\b/i },
+  { lang: 'ja', re: /\b(japanese|japan|jpn|jp)\b/i },
+  { lang: 'zh', re: /\b(chinese|china|traditional chinese|simplified chinese)\b/i },
+  { lang: 'en', re: /\b(english|eng)\b/i }
+];
+
+function languageIn(title) {
+  const out = [];
+  for (const m of LANG_MARKERS) if (m.re.test(title)) out.push(m.lang);
+  return out;
+}
+
 // Every 4-digit year a title states. ALL of them, not the first: a title
 // can carry both the print year and a grading year ("1999 ... graded 2021"),
 // and taking only the first would reject a correct card on a grading date.
@@ -178,7 +207,9 @@ function buildQuery(card, grade, opts) {
   // an unusable term guarantees nothing comes back, while the gate can still
   // reject whatever a broader search returns. The gate keeps the set name
   // regardless — this only affects what is ASKED.
-  if (card.setName && /[A-Za-z]/.test(String(card.setName))) bits.push(card.setName);
+  // Omit a CJK set name specifically — not merely one lacking Latin letters,
+  // which would also drop "151", a perfectly searchable English set name.
+  if (card.setName && !CJK.test(String(card.setName))) bits.push(card.setName);
 
   const g = parseGrade(grade);
   if (g.kind === 'graded') bits.push(g.grader + ' ' + g.grade);
@@ -216,6 +247,18 @@ function verify(title, card, grade, opts) {
       return { ok: false, reason:
         `title is a ${rp.label} reprint, which reuses this numbering — ` +
         `wanted ${ourSet || 'the original set'}` };
+    }
+  }
+
+  // 1bb. Language conflict. Korean prints share Japanese set codes and
+  //      numbering, so number + set size + grade all agree on a card that is
+  //      simply not ours. Only ever rejects on a STATED language.
+  if (card.lang) {
+    const want = String(card.lang).slice(0, 2).toLowerCase();
+    const said = languageIn(t);
+    if (said.length && !said.includes(want)) {
+      return { ok: false, reason:
+        `title says ${said.join('/')}, this card is ${want} — a different language printing` };
     }
   }
 
@@ -353,7 +396,7 @@ function filterListings(listings, card, grade) {
 
 const API = {
   buildQuery, verify, filterListings,
-  normNum, numberPairsIn, gradesIn, parseGrade, yearsIn,
+  normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, languageIn,
   GRADERS, SLAB_WORDS, NOT_A_SINGLE_CARD, SET_NAME_PHRASES, REPRINT_MARKERS
 };
 

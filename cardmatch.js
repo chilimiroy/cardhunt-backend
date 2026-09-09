@@ -55,14 +55,40 @@ function parseGrade(g) {
   return { kind: 'graded', grader: m[1].toUpperCase(), grade: m[2] };
 }
 
+// ── Speculative grades ────────────────────────────────────────
+// Sellers advertise RAW cards by the grade they hope one would earn:
+//   "1999 Base Set Charizard 4/102 (PSA 10 Contender)"   — $8,000, ungraded
+//   "BGS 9.5 ... QUAD TRUE GEM MINT (PSA 10 Pot?)"       — a BGS 9.5
+// Both were found in live searches. Reading "PSA 10" out of those and
+// showing an ungraded card in a PSA 10 list is a wrong answer of exactly
+// the kind this module exists to prevent — a genuine PSA 10 Base Set
+// Charizard runs $250,000 against $8,000 for a raw one.
+//
+// The phrase is removed BEFORE grades are read, so the speculation is not
+// mistaken for the grade. A real "PSA 10 GEM MINT" is untouched.
+const SPECULATIVE_GRADE =
+  /\b(?:contender|candidate|potential|pot\.?\??|worthy|quality|ready|hopeful|gradeable|gradable|would\s+grade|could\s+grade|looks?\s+(?:like\s+)?a?)\b/gi;
+
+function stripSpeculative(title) {
+  // Only inside a bracketed aside or immediately after a grade token, which
+  // is how sellers write it. Stripping the words everywhere would eat
+  // "Gem Mint Quality" style phrasing on genuine slabs.
+  return String(title)
+    .replace(/\(([^)]*)\)/g, (whole, inner) =>
+      SPECULATIVE_GRADE.test(inner) ? ' ' : whole)
+    .replace(new RegExp('\\b(' + GRADERS.join('|') + ')\\s*[-:]?\\s*(?:10|[1-9](?:\\.5)?)\\s*(?:' +
+      'contender|candidate|potential|pot\\.?\\??|worthy|ready|hopeful)\\b', 'gi'), ' ');
+}
+
 // Find every grader+number in a title. Boundary-checked, so BGS 9 does
 // not match "BGS 9.5" — a half grade sells well above a whole one.
 function gradesIn(title) {
   const out = [];
+  const t = stripSpeculative(title);
   for (const co of GRADERS) {
     const re = new RegExp('\\b' + co + '\\s*[-:]?\\s*(10|[1-9](?:\\.5)?)(?![\\d.])', 'gi');
     let m;
-    while ((m = re.exec(title))) out.push({ grader: co, grade: m[1] });
+    while ((m = re.exec(t))) out.push({ grader: co, grade: m[1] });
   }
   return out;
 }
@@ -213,10 +239,14 @@ function verify(title, card, grade, opts) {
         found.map(f => f.grader + ' ' + f.grade).join(', ') };
     }
   } else {
-    // Raw: reject anything that says it is slabbed
-    if (SLAB_WORDS.test(t)) {
+    // Raw: reject anything that says it is slabbed — but a card advertised
+    // as "(PSA 10 Contender)" IS raw, and rejecting it here as well as from
+    // the graded search would leave it findable in neither. Strip the
+    // speculation first, exactly as the graded branch does.
+    const tRaw = stripSpeculative(t);
+    if (SLAB_WORDS.test(tRaw)) {
       return { ok: false, reason: 'wants raw, title indicates a graded slab: ' +
-        (t.match(SLAB_WORDS) || [])[0] };
+        (tRaw.match(SLAB_WORDS) || [])[0] };
     }
   }
 

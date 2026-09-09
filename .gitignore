@@ -1,6 +1,6 @@
-﻿node_modules/
+node_modules/
 
-# Local ingest and tooling — never deployed
+# Local ingest and tooling � never deployed
 ingest.js
 sourcerank.js
 estimator.js
@@ -13,7 +13,6 @@ ebayprobe.js
 jptest.js
 
 # Frontend is opened locally
-cardhunt_preview*.html
 yahoo.html
 
 # Scripts and scheduled-task plumbing

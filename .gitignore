@@ -12,6 +12,7 @@ yuyutei.js
 tcgdexprobe.js
 tcgdexharvest.js
 ebayprobe.js
+yahoogate.js
 gradeprices.js
 *.test.js
 jptest.js

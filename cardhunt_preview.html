@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CardHunt</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- MODULE URLS STAY ABSOLUTE, deliberately.
+     This page is served from https://cardhunt-backend.onrender.com/app AND
+     still opens as a local file, which is the offline fallback and how it is
+     debugged. Under file:// a root-relative "/cardmatch.js" resolves to the
+     filesystem root, not to the API, so every module would 404 and the page
+     would silently fall back to its inline tables. The absolute URL is the
+     only form that works from BOTH origins; same-origin tidiness is not
+     worth breaking the fallback for. Served from /app these are cross-origin
+     to nothing — same host — so CORS costs nothing either. -->
 <!-- The SAME cardmatch.js the server uses, served by the API. Not a copy:
      a pasted duplicate is how the query and the gate drifted apart.
      MUST stay async: the API sleeps on Render's free tier and a cold start
@@ -4013,6 +4022,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260917-f31af08-dirty &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260918-3ab0529-dirty &middot; click to hide</div>
 </body>
 </html>

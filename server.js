@@ -189,6 +189,7 @@ app.get('/', async (req, res) => {
     status: 'ok',
     service: 'CardHunt API',
     version: '5.6.0',
+    app: '/app',      // the frontend, served from here
     db: dbState,
     data: dbCounts,
     sources: ['cardhunt_db','pokemontcg.io','tcgdex.net','yahoo-jp','ebay-api','tcgplayer'],
@@ -2581,6 +2582,35 @@ app.get('/api/ebay/quota', async (req, res) => {
     res.status(500).json({ error: err.message,
       note: 'quota state could not be read — treat as unknown, not as zero' });
   }
+});
+
+// ══════════════════════════════════════════════════════════════
+// GET /app  —  the frontend itself
+//
+// A URL cannot be stale. This page existed only as a local file, and 41
+// copies in Downloads plus a five-week-stale one adopted as the base cost
+// more time than any bug here. /app is now the answer to "let me check the
+// frontend"; the local file stays as the offline fallback.
+//
+// ONE file by name, never express.static(__dirname) — the project root holds
+// ingest-progress-*.json, logs, backups, CLAUDE.md and ingest.js. A blanket
+// static mount would publish every one of them.
+//
+// no-cache/must-revalidate because a browser holding an old copy is exactly
+// the problem this route exists to solve. The modules keep their 5-minute
+// cache: the build stamp reveals a mismatch and they are fetched per load.
+// ══════════════════════════════════════════════════════════════
+app.get('/app', (req, res) => {
+  res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.type('html');
+  res.sendFile(require('path').join(__dirname, 'cardhunt_preview.html'), err => {
+    // Say WHY it is unavailable. A bare 500 here would read as "the server
+    // is broken" when the real cause is a file that never left the repo.
+    if (err && !res.headersSent) {
+      res.status(500).send('cardhunt_preview.html not readable on the server: '
+        + err.message);
+    }
+  });
 });
 
 // ══════════════════════════════════════════════════════════════

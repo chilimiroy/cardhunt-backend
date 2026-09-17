@@ -18,6 +18,18 @@
 // filtered out" must never look the same.
 // ══════════════════════════════════════════════════════════════
 
+// ── Scope ─────────────────────────────────────────────────────
+// Everything below is inside this function on purpose. A <script src> does
+// NOT get a scope of its own: it shares the page's, so a top-level `const`
+// here collides with the page's own. `const API` did exactly that, in all
+// three served modules at once, and a collision throws before the first
+// statement runs — the module 200s, defines nothing, and every
+// `window.X && ...` guard quietly uses the old inline code instead.
+//
+// Nothing is re-indented: the wrapper is the change, and a reindented body
+// would hide it in the diff. Add nothing outside these parentheses.
+(function (root) {
+
 // ── Collector numbers ─────────────────────────────────────────
 // "004" and "4" are the same card. "TG12" and "12" are not.
 function normNum(n) {
@@ -555,4 +567,6 @@ const API = {
 // one implementation, loaded two ways. A copy pasted into the HTML would
 // defeat the entire point.
 if (typeof module !== 'undefined' && module.exports) module.exports = API;
-if (typeof window !== 'undefined') window.CardMatch = API;
+if (root) root.CardMatch = API;
+
+})(typeof window !== 'undefined' ? window : null);

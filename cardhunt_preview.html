@@ -3998,6 +3998,21 @@ function cleanSeries(name) {
     <button onclick="saveAlert()" class="btn p" style="width:100%;padding:14px;font-size:15px;font-weight:700;justify-content:center">🔔 Create Alert</button>
   </div>
 </div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260907-cardmatch &middot; click to hide</div>
+<!-- BUILD STAMP — bump on EVERY frontend change, date + short SHA.
+     "BUILD 20260907-cardmatch" sat on a file edited weeks later, so the page
+     could not answer "am I looking at the current version" and we guessed
+     wrong several times.
+     Take the SHA from `git describe --always --dirty`, not `rev-parse`: the
+     "-dirty" suffix is the whole point when the fix is not committed yet.
+     Today's module fix changed what the page RUNS while HEAD stayed at
+     f31af08 — without the suffix the broken build and the fixed one would
+     have carried an identical stamp, which is the exact confusion this
+     banner exists to end.
+     The SHA names the commit this file was built ON TOP OF: it is written
+     before the commit that carries it, so the stamp is one commit behind its
+     own landing. That is fine for the question it answers — what is deployed
+     is either this commit or this commit plus the stamp bump. What is never
+     fine is a stamp older than the content. -->
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260917-f31af08-dirty &middot; click to hide</div>
 </body>
 </html>

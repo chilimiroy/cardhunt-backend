@@ -16,6 +16,18 @@
 //   estimatePrice({ rarity, cardId, name, number, setTotal, setRelease })
 // ══════════════════════════════════════════════════════════════
 
+// ── Scope ─────────────────────────────────────────────────────
+// Everything below is inside this function on purpose. A <script src> does
+// NOT get a scope of its own: it shares the page's, so a top-level `const`
+// here collides with the page's own. `const API` did exactly that, in all
+// three served modules at once, and a collision throws before the first
+// statement runs — the module 200s, defines nothing, and every
+// `window.X && ...` guard quietly uses the old inline code instead.
+//
+// Nothing is re-indented: the wrapper is the change, and a reindented body
+// would hide it in the diff. Add nothing outside these parentheses.
+(function (root) {
+
 // Raw NM market averages, calibrated against TCGPlayer and eBay
 const BASE_PRICE = {
   'Hyper Rare': 95,
@@ -151,4 +163,6 @@ const API = {
 // exactly as cardmatch.js is shared. A copy pasted into the HTML would
 // restore the split this module exists to end.
 if (typeof module !== 'undefined' && module.exports) module.exports = API;
-if (typeof window !== 'undefined') window.Estimator = API;
+if (root) root.Estimator = API;
+
+})(typeof window !== 'undefined' ? window : null);

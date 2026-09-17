@@ -6,8 +6,20 @@
 <title>CardHunt</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <!-- The SAME cardmatch.js the server uses, served by the API. Not a copy:
-     a pasted duplicate is how the query and the gate drifted apart. -->
-<script src="https://cardhunt-backend.onrender.com/cardmatch.js"></script>
+     a pasted duplicate is how the query and the gate drifted apart.
+     MUST stay async: the API sleeps on Render's free tier and a cold start
+     takes 30-60s, which a blocking script turns into 30-60s of dead HTML.
+     cardQuery() guards on window.CardMatch and falls back, so late (or never)
+     is fine; blocking is not. A warm server hides this in testing. -->
+<script async src="https://cardhunt-backend.onrender.com/cardmatch.js"></script>
+<!-- The SAME estimator server.js and ingest.js use. mockP() below guards on
+     window.Estimator and falls back, so async is safe here too — and just as
+     mandatory: a blocking tag would hang the page on a cold start. -->
+<script async src="https://cardhunt-backend.onrender.com/estimator.js"></script>
+<!-- Grade multipliers and the measured-vs-estimated labelling, shared with
+     the API. gradeMult() reads it at call time and falls back to the inline
+     GM table, so async is safe. -->
+<script async src="https://cardhunt-backend.onrender.com/gradeprice.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
 :root{--t:#00B8A0;--td:#008C7A;--tl:#E6F9F6;--bg:#F7F8FA;--w:#fff;--bd:#E8E8EC;--tx:#0F0F14;--mu:#6B6B80;--fa:#A8A8B8;--gr:#22C55E;--re:#EF4444;--am:#F59E0B;--pu:#7C3AED;--r:14px;--rs:10px;--sh:0 1px 3px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.04);--sh2:0 4px 24px rgba(0,0,0,.10);--sh3:0 8px 32px rgba(0,0,0,.14)}
@@ -1234,11 +1246,38 @@ var RP = {
   'Common': 0.15,
   'Promo': 5
 };
+// The multiplier table now lives in gradeprice.js, with the code that
+// labels its output as an estimate. This copy is the cold-start fallback
+// only — gradeMult() prefers the module. Do not edit these numbers here;
+// T2 replaces them per card with medians measured from real listings.
 const GM={'Raw NM':1,'Raw LP':0.75,'Raw MP':0.5,'Raw HP':0.35,'PSA 5':0.8,'PSA 6':1.1,'PSA 7':1.4,'PSA 8':2.0,'PSA 9':3.5,'PSA 10':7.0,'CGC 8':1.8,'CGC 9':3.0,'CGC 9.5':4.5,'CGC 10':6.5,'BGS 8':1.6,'BGS 9':2.8,'BGS 9.5':4.2};
+// Read at call time, never captured: the module arrives asynchronously and
+// a value snapshotted at parse time would be the fallback forever.
+function gradeMult(g){
+  var t = (typeof window !== 'undefined' && window.GradePrice
+           && window.GradePrice.GRADE_MULTIPLIERS) || GM;
+  return t[g] || 1;
+}
+
 const GRADES=['Raw NM','Raw LP','Raw MP','PSA 5','PSA 6','PSA 7','PSA 8','PSA 9','PSA 10','CGC 8','CGC 9','CGC 9.5','CGC 10','BGS 8','BGS 9','BGS 9.5'];
 const PD={'1M':{l:['W1','W2','W3','W4'],f:[.78,.83,.9,.97]},'3M':{l:['Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'],f:[.73,.78,.84,.81,.88,.93,.97,.99,1]},'6M':{l:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'],f:[.81,.88,.93,.97,.99,1,1.03,1.01,1.04,1.05,1.02,1,1]},'1Y':{l:['J','F','M','A','M','J','J','A','S','O','N','D','J','F','M','A','M','J'],f:[.67,.7,.71,.73,.78,.84,.81,.88,.93,.97,.99,1,1.02,1.03,1,.99,1,1]},'All':{l:['2020','2021','2022','2023','2024','2025'],f:[.21,.51,.71,.82,1,1.03]}};
 
 function mockP(rarity, cardId, cardName, cardNumber, setTotal, setRelease) {
+  // This function WAS the estimator, and it was the only one with a vintage
+  // multiplier: server.js and ingest.js had none, so the same 1999 card was
+  // priced up to 9x apart depending on which screen asked. estimator.js is
+  // the one implementation now; this delegates to it.
+  //
+  // The body below runs only when the module has not loaded (cold start, or
+  // offline). Like cardQuery's fallback it is deliberately the old, degraded
+  // behaviour — improve estimator.js, never this.
+  if (typeof window !== 'undefined' && window.Estimator && window.Estimator.estimatePrice) {
+    return window.Estimator.estimatePrice({
+      rarity: normRarity(rarity), cardId: cardId, name: cardName,
+      number: cardNumber, setTotal: setTotal, setRelease: setRelease
+    });
+  }
+
   var r = normRarity(rarity);
 
   // Only infer from position when rarity is genuinely ABSENT. A card that
@@ -1723,7 +1762,7 @@ async function doSearchLegacy(q, lang) {
 
     srCards = allCards;
     var gradeLabel = gc ? gc+' '+gv : 'Raw NM';
-    var mult = GM[gradeLabel] || 1;
+    var mult = gradeMult(gradeLabel);
     var langLabel = {all:'All languages',en:'English',ja:'Japanese',zh:'Chinese'}[searchLang] || 'All';
 
     document.getElementById('results-title').textContent = '"' + q + '"';
@@ -2061,7 +2100,7 @@ async function openCard(id){
     updateCardPrices('Raw NM',base);
     var gptRows='';
     GRADES.forEach(function(g){
-      var m2=GM[g]||1,avg=+(base*m2).toFixed(2),low=+(avg*.78).toFixed(2),hi=+(avg*1.28).toFixed(2);
+      var m2=gradeMult(g),avg=+(base*m2).toFixed(2),low=+(avg*.78).toFixed(2),hi=+(avg*1.28).toFixed(2);
       gptRows+='<div class="gpt-r'+(g==='Raw NM'?' on':'')+'" id="gpt-'+g.replace(/[\s.]/g,'-')+'" onclick="selGrade(\''+g+'\','+avg+')">'
         +'<span style="font-weight:600">'+g+'</span>'
         +'<span style="font-weight:700">$'+avg.toLocaleString()+'</span>'
@@ -2069,10 +2108,17 @@ async function openCard(id){
         +'<span style="color:var(--mu)">$'+hi.toLocaleString()+'</span>'
         +'</div>';
     });
-    document.getElementById('cd-gpt').innerHTML=gptRows;
+    // Every row above is raw price x a multiplier. Real premiums run from
+    // ~3x on a modern common to 40x+ on a vintage chase card, so this table
+    // is at its worst exactly where the money is. It says what it is until a
+    // measured median replaces the row (see applyMeasuredGrade).
+    document.getElementById('cd-gpt').innerHTML=gptRows
+      + '<div style="font-size:10px;color:var(--fa);padding:6px 2px 0">'
+      + 'Estimated from the raw price &mdash; not measured from sales. '
+      + 'Open a grade to see what is actually listed.</div>';
     var gradeChips='';
     GRADES.forEach(function(g,gi){
-      gradeChips+='<button class="gchip'+(gi===0?' on':'')+'" onclick="selGrade(\''+g+'\','+( +(base*(GM[g]||1)).toFixed(2))+'  )">'+g+'</button>';
+      gradeChips+='<button class="gchip'+(gi===0?' on':'')+'" onclick="selGrade(\''+g+'\','+( +(base*gradeMult(g)).toFixed(2))+'  )">'+g+'</button>';
     });
     document.getElementById('cd-grades').innerHTML=gradeChips;
     var tcg=c.tcgplayer&&c.tcgplayer.prices?c.tcgplayer.prices:{};
@@ -2258,6 +2304,11 @@ function gradeTerms(grade, platform) {
 function toMatchCard(card, opts) {
   opts = opts || {};
   return {
+    // Card ids are {lang}-{setId}-{number}, which is how cardmatch knows an
+    // English card from a Japanese one — and therefore which languages a
+    // deep link should exclude.
+    cardId: card.id || card.cardId || null,
+    lang: card.lang || null,
     name: (opts.useLocalName && card.name) ? card.name : (card.nameEn || card.name || ''),
     nameEn: null,
     number: card.number,
@@ -2273,12 +2324,15 @@ function toMatchCard(card, opts) {
 // The inline fallback below runs only if the module failed to load (the API
 // is asleep, or offline). It is deliberately the OLD behaviour: degraded and
 // slightly looser, but never a second maintained implementation. If you find
-// yourself improving it, improve cardmatch.js instead.
+// yourself improving it, improve cardmatch.js instead. In particular it does
+// NOT reproduce forLink's negative keywords — a link built without the module
+// is a broader link, which is the honest degradation.
 function cardQuery(card, opts) {
   opts = opts || {};
   if (typeof window !== 'undefined' && window.CardMatch && window.CardMatch.buildQuery) {
     return window.CardMatch.buildQuery(toMatchCard(card, opts), opts.grade || null,
-                                       { suffix: opts.suffix !== false });
+                                       { suffix: opts.suffix !== false,
+                                         forLink: !!opts.forLink });
   }
   var bits = [];
   var name = (opts.useLocalName && card.name) ? card.name : (card.nameEn || card.name || '');
@@ -2302,7 +2356,9 @@ var PLATFORMS = [
       // appending it afterwards put it after the "pokemon" suffix and made the
       // deep link a different query from the one the API sends.
       // `exclude` stays here: it is an eBay URL feature, not part of the query.
-      var q = cardQuery(card, { includeSet: true, grade: grade });
+      // forLink adds eBay's negative keywords: a link has no verify() gate
+      // behind it, so the exclusions are the only filtering it gets.
+      var q = cardQuery(card, { includeSet: true, grade: grade, forLink: true });
       var url = 'https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(q)
         + '&_sacat=183454'          // Pokémon Individual Cards
         + '&LH_BIN=1'               // Buy It Now — comparable prices
@@ -2314,7 +2370,7 @@ var PLATFORMS = [
   {
     id: 'ebay_sold', label: 'eBay — sold', region: 'Global',
     build: function (card, grade) {
-      var q = cardQuery(card, { includeSet: true, grade: grade });
+      var q = cardQuery(card, { includeSet: true, grade: grade, forLink: true });
       return 'https://www.ebay.com/sch/i.html?_nkw=' + encodeURIComponent(q)
         + '&_sacat=183454&LH_Complete=1&LH_Sold=1&_sop=13';
     }
@@ -2443,15 +2499,18 @@ function renderListingFinder(card) {
 
   // Estimated value at the chosen grade
   var base = getBase(card);
-  var mult = (typeof GM !== 'undefined' && GM[LF.grade]) ? GM[LF.grade] : 1;
+  var mult = gradeMult(LF.grade);
   var est = base * mult;
   if (base > 0) {
-    html += '<div style="padding:12px 18px;background:var(--bg);border-bottom:1px solid var(--bd);'
-      + 'display:flex;justify-content:space-between;align-items:center">';
-    html += '<div><div style="font-size:11px;color:var(--mu)">Typical ' + LF.grade + '</div>'
+    html += '<div id="cd-gradeval" style="padding:12px 18px;background:var(--bg);'
+      + 'border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;'
+      + 'align-items:center">';
+    html += '<div><div style="font-size:11px;color:var(--mu)">Typical ' + LF.grade
+      + ' &middot; <span style="color:var(--am);font-weight:700">estimate</span></div>'
       + '<div style="font-size:20px;font-weight:800">' + fmtCurrency(est) + '</div></div>';
     html += '<div style="font-size:11px;color:var(--fa);text-align:right;max-width:200px">'
-      + 'Use this as a reference — the links below show what is actually listed right now.</div>';
+      + 'Raw price &times;' + mult + ', not measured from sales. The listings below are real.'
+      + '</div>';
     html += '</div>';
   }
 
@@ -2569,6 +2628,51 @@ function liveSourceNote(d){
     + (d.tookMs ? ' \u00b7 ' + d.tookMs + 'ms' : '') + '</div>';
 }
 
+// T2. The API returns an aggregate computed from the listings that just
+// passed the gate: median landed price, sold kept apart from active, edition
+// kept apart from edition, sample size attached. When it is worth showing it
+// replaces the multiplier estimate above — and when it is not (one listing,
+// two listings) it appears beside the estimate as evidence rather than
+// pretending to be a market price. The judgement lives in gradeprice.js so
+// the API and the page cannot disagree about what counts as measured.
+function applyMeasuredGrade(d){
+  var host = document.getElementById('cd-gradeval');
+  if (!host || !d || !d.gradePrice) return;
+  if (!(window.GradePrice && window.GradePrice.priceFor)) return;
+  var card = LF.card || S.currentCard;
+  if (!card) return;
+
+  var base = getBase(card);
+  var p = window.GradePrice.priceFor(d.gradePrice, d.grade, base, gradeMult(d.grade));
+  if (!p) return;
+
+  var ed = p.edition ? ' &middot; ' + liveEsc(p.edition) : '';
+  var extra = '';
+  if (p.estimated) {
+    if (p.observed) {
+      extra = '<div style="font-size:11px;color:var(--fa);text-align:right;max-width:220px">'
+        + 'Seen now: ' + fmtCurrency(p.observed.median) + ' &mdash; '
+        + liveEsc(p.observed.label) + '</div>';
+    }
+    if (!extra) return;              // nothing measured, leave the estimate alone
+    host.lastElementChild.outerHTML = extra;
+    return;
+  }
+
+  var range = (p.low != null && p.high != null && p.low !== p.high)
+    ? fmtCurrency(p.low) + '&ndash;' + fmtCurrency(p.high) : '';
+  host.innerHTML =
+      '<div><div style="font-size:11px;color:var(--mu)">' + liveEsc(d.grade)
+    + ' &middot; <span style="color:var(--gr);font-weight:700">measured</span>' + ed + '</div>'
+    + '<div style="font-size:20px;font-weight:800">' + fmtCurrency(p.value) + '</div>'
+    + '<div style="font-size:10px;color:var(--fa)">' + liveEsc(p.label)
+    + (p.landed ? ' &middot; landed' : ' &middot; shipping not stated by every seller')
+    + (p.premium ? ' &middot; ' + p.premium + '&times; raw' : '') + '</div></div>'
+    + '<div style="font-size:11px;color:var(--fa);text-align:right;max-width:200px">'
+    + (range ? range + '<br>' : '')
+    + 'The estimate was ' + fmtCurrency(base * gradeMult(d.grade)) + '.</div>';
+}
+
 async function renderLiveListings(card, grade){
   var host = document.getElementById('cd-live');
   if (!host || !card) return;
@@ -2610,6 +2714,7 @@ async function renderLiveListings(card, grade){
       + 'No listing matched this exact card at this grade. A listing is only shown when its '
       + 'title confirms both the card and the set &mdash; a near miss is worse than nothing.'
       + '</div>' + liveSourceNote(d) + '</div>';
+    applyMeasuredGrade(d);
     return;
   }
 
@@ -2631,6 +2736,7 @@ async function renderLiveListings(card, grade){
   }
   html += liveSourceNote(d) + '</div>';
   host.innerHTML = html;
+  applyMeasuredGrade(d);
 }
 
 function setListingGrade(g) {
@@ -2643,13 +2749,19 @@ function buildMockListings(card,price,tab){
   S.ltab=tab;if(!card)return;
   const grade=S.activeGrade,isGraded=grade.match(/^(PSA|CGC|BGS)/);
   const grStr=isGraded?grade.split(' ')[0]:'',grNum=isGraded?grade.split(' ')[1]:'';
-  const encQ=encodeURIComponent(`${card.name} ${card.set?.name||''} ${grade}`.trim());
+  // These used to compose their own query ("name set grade") — a third
+  // implementation alongside cardmatch and the API, which is exactly how the
+  // deep links and the gate drifted apart before. They go through cardQuery
+  // now; only the eBay ones get forLink, since "-lot" is eBay syntax and
+  // every other marketplace reads it as literal text.
+  const ebayQ=encodeURIComponent(cardQuery(card,{includeSet:true,grade:grade,forLink:true}));
+  const encQ=encodeURIComponent(cardQuery(card,{includeSet:true,grade:grade}));
   const nameQ=encodeURIComponent(card.name);
   if(tab==='sold'){
     document.getElementById('cd-listings').innerHTML=`<div style="padding:20px 18px;display:flex;flex-direction:column;gap:10px">
       <div style="font-size:13px;font-weight:700;margin-bottom:4px">Recent sales — ${card.name} ${grade}</div>
       ${[
-        {s:'se',l:'eBay Sold',sub:'View completed sold listings',url:'https://www.ebay.com/sch/i.html?_nkw=${encQ}&LH_Complete=1&LH_Sold=1&_sacat=183454'},
+        {s:'se',l:'eBay Sold',sub:'View completed sold listings',url:`https://www.ebay.com/sch/i.html?_nkw=${ebayQ}&LH_Complete=1&LH_Sold=1&_sacat=183454`},
         {s:'s130',l:'130point',sub:'Aggregated eBay sold price history',url:`https://130point.com/sales/?s=${encQ}`},
         {s:'stc',l:'PriceCharting',sub:'Raw & graded price history charts',url:`https://www.pricecharting.com/search-products?q=${nameQ}&type=prices`},
       ].map(r=>`<a href="${r.url}" target="_blank" rel="noopener" class="lrow" style="text-decoration:none;color:inherit">
@@ -2672,7 +2784,7 @@ function buildMockListings(card,price,tab){
   }
   // LIVE — real working links
   const LDATA=[
-    {s:'se',l:'eBay',title:`${card.name} ${card.set?.name||''} #${card.number} — ${grade} ONLY`,sub:`eBay marketplace · ${isGraded?grStr+' graded':'Raw card'} · Fixed price listings`,pct:.86,sh:'+$12',d:'-14%',dc:'bd2',url:`https://www.ebay.com/sch/i.html?_nkw=${encQ}&_sacat=183454&LH_BIN=1&LH_ItemCondition=3000`},
+    {s:'se',l:'eBay',title:`${card.name} ${card.set?.name||''} #${card.number} — ${grade} ONLY`,sub:`eBay marketplace · ${isGraded?grStr+' graded':'Raw card'} · Fixed price listings`,pct:.86,sh:'+$12',d:'-14%',dc:'bd2',url:`https://www.ebay.com/sch/i.html?_nkw=${ebayQ}&_sacat=183454&LH_BIN=1&LH_ItemCondition=3000`},
     {s:'stc',l:'TCGPlayer',title:`${card.name} — ${card.set?.name||''}`,sub:'TCGPlayer marketplace · Verified sellers · Buyer protection',pct:1.02,sh:'Free ship',d:'~avg',dc:'',url:`https://www.tcgplayer.com/search/pokemon/product?q=${encodeURIComponent(card.name+' '+grade)}&view=grid`},
     {s:'sme',l:'Mercari',title:`${card.name} ${grade} ${card.set?.name||''}`,sub:'Mercari US · Private sellers · Offers available',pct:.91,sh:'+$8',d:'-9%',dc:'bd2',url:`https://www.mercari.com/search/?keyword=${encQ}`},
     {s:'sam',l:'Amazon',title:`Pokémon ${card.name} ${grade}`,sub:'Amazon marketplace · Prime eligible · Fulfilled',pct:1.18,sh:'Free Prime',d:'+18%',dc:'bh',url:`https://www.amazon.com/s?k=${encodeURIComponent('Pokemon '+card.name+' '+grade)}&i=toys-and-games`},
@@ -3166,9 +3278,17 @@ function renderAlertsList(){
       html += '&#10003; Triggered '+timeAgo(a.triggeredAt)+' &middot; Now $'+(a.currentPrice||0).toFixed(0);
       html += ' ('+Math.abs(diffPct)+'% '+(diff<0?'below':'above')+' target)</div>';
       // LIVE LISTING LINKS
-      var q = encodeURIComponent((a.cardName||a.card_name||'')+' '+(a.grade||''));
+      // An alert carries a name, a set and a grade but no collector number,
+      // so this is the weakest query on the page — still, it goes through
+      // the one builder rather than concatenating its own.
+      var aCard = { id:a.cardId||null, name:(a.cardName||a.card_name||''),
+                    number:null, set:{ name:a.setName||'' } };
+      var aOpts = { includeSet:true, grade:a.grade||null };
+      var q = encodeURIComponent(cardQuery(aCard, aOpts));
+      var qEbay = encodeURIComponent(cardQuery(aCard,
+                    { includeSet:true, grade:a.grade||null, forLink:true }));
       html += '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">';
-      html += '<a href="https://www.ebay.com/sch/i.html?_nkw='+q+'&_sacat=183454&LH_BIN=1&_sop=15" target="_blank" style="font-size:11px;padding:4px 10px;background:#FEF3C7;color:#92400E;border-radius:6px;text-decoration:none;font-weight:600">eBay &#8594;</a>';
+      html += '<a href="https://www.ebay.com/sch/i.html?_nkw='+qEbay+'&_sacat=183454&LH_BIN=1&_sop=15" target="_blank" style="font-size:11px;padding:4px 10px;background:#FEF3C7;color:#92400E;border-radius:6px;text-decoration:none;font-weight:600">eBay &#8594;</a>';
       html += '<a href="https://www.tcgplayer.com/search/pokemon/product?q='+q+'" target="_blank" style="font-size:11px;padding:4px 10px;background:#E6F1FB;color:#1D4ED8;border-radius:6px;text-decoration:none;font-weight:600">TCGPlayer &#8594;</a>';
       html += '<a href="https://www.mercari.com/search/?keyword='+q+'" target="_blank" style="font-size:11px;padding:4px 10px;background:#FCE7F3;color:#9D174D;border-radius:6px;text-decoration:none;font-weight:600">Mercari &#8594;</a>';
       html += '<a href="https://www.pricecharting.com/search-products?q='+q+'" target="_blank" style="font-size:11px;padding:4px 10px;background:#F0FDF4;color:#14532D;border-radius:6px;text-decoration:none;font-weight:600">PriceCharting &#8594;</a>';
@@ -3512,30 +3632,11 @@ function rarityShort(r) {
 }
 
 // PRICE DATA
-var RP = {
-  // Base prices for Raw NM - real market averages (mockP applies card-specific variation)
-  'Hyper Rare': 60,              // Gold cards - avg $40-$200+
-  'Special Illustration Rare': 80, // SIR - avg $30-$300+ depending on character
-  'Illustration Rare': 22,        // IR - avg $8-$80
-  'Rare Secret': 45,              // Secret rare - avg $20-$150
-  'Rare Rainbow': 35,             // Rainbow rare - avg $15-$100
-  'Rare Ultra': 18,               // Ultra rare - avg $8-$50
-  'ACE SPEC Rare': 25,            // ACE SPEC - avg $10-$60
-  'Double Rare': 9,               // ex cards - avg $4-$25
-  'Rare Holo VMAX': 14,           // VMAX - avg $5-$40
-  'Rare Holo VSTAR': 11,          // VSTAR - avg $4-$25
-  'Rare Holo V': 6,               // V cards - avg $2-$15
-  'Rare Holo GX': 5,              // GX - avg $2-$20
-  'Rare Holo EX': 9,              // EX era - avg $3-$30
-  'Rare Holo': 4,                 // Regular holo - avg $1-$12
-  'Amazing Rare': 14,             // Amazing Rare - avg $5-$35
-  'Radiant Rare': 7,              // Radiant - avg $2-$20
-  'Trainer Gallery Rare Holo': 9, // TG holos - avg $3-$25
-  'Rare': 2,                      // Rare - avg $0.5-$8
-  'Uncommon': 0.35,               // Uncommon
-  'Common': 0.12,                 // Common
-  'Promo': 4                      // Promo - varies widely
-};
+// The second `var RP` that used to sit here was an older copy of the table
+// above, and being second it won: every price on the page came from Common
+// 0.12 / Rare Holo 4 while the calibrated table (Common 0.15 / Rare Holo 4.5,
+// the values estimator.js carries) sat dead. Its GM/GRADES/PD siblings were
+// commented out when this block was superseded; the RP line was missed.
 //var GM={'Raw NM':1,'Raw LP':0.75,'Raw MP':0.5,'Raw HP':0.35,'PSA 5':0.8,'PSA 6':1.1,'PSA 7':1.4,'PSA 8':2.0,'PSA 9':3.5,'PSA 10':7.0,'CGC 8':1.8,'CGC 9':3.0,'CGC 9.5':4.5,'CGC 10':6.5,'BGS 8':1.6,'BGS 9':2.8,'BGS 9.5':4.2};
 //var GRADES=['Raw NM','Raw LP','Raw MP','PSA 5','PSA 6','PSA 7','PSA 8','PSA 9','PSA 10','CGC 8','CGC 9','CGC 9.5','CGC 10','BGS 8','BGS 9','BGS 9.5'];
 //var PD={'1M':{l:['W1','W2','W3','W4'],f:[.78,.83,.9,.97]},'3M':{l:['Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'],f:[.73,.78,.84,.81,.88,.93,.97,.99,1]},'6M':{l:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'],f:[.81,.88,.93,.97,.99,1,1.03,1.01,1.04,1.05,1.02,1,1]},'1Y':{l:['J','F','M','A','M','J','J','A','S','O','N','D','J','F','M','A','M','J'],f:[.67,.7,.71,.73,.78,.84,.81,.88,.93,.97,.99,1,1.02,1.03,1,.99,1,1]},'All':{l:['2020','2021','2022','2023','2024','2025'],f:[.21,.51,.71,.82,1,1.03]}};

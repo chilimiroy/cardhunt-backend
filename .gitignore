@@ -1,14 +1,18 @@
 node_modules/
 
+# estimator.js used to be here. server.js now requires it AND serves it at
+# /estimator.js, so ignoring it meant a deployed server that crashed on boot
+# with MODULE_NOT_FOUND. A file the server requires is not local tooling.
+
 # Local ingest and tooling — never deployed
 ingest.js
 sourcerank.js
-estimator.js
 jpreconcile.js
 yuyutei.js
 tcgdexprobe.js
 tcgdexharvest.js
 ebayprobe.js
+gradeprices.js
 *.test.js
 jptest.js
 

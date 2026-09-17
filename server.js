@@ -12,6 +12,8 @@ const ebay = require('./ebaycall');
 // link and an API call ask eBay the same question. cardmatch decides;
 // listingparse labels. See TASK.md T1/T1b.
 const cm = require('./cardmatch');
+const estimator = require('./estimator');
+const gp = require('./gradeprice');
 const lp = require('./listingparse');
 
 const app = express();
@@ -279,34 +281,18 @@ function normRarity(r) {
   return 'Common';
 }
 
-const RP = {
-  'Hyper Rare':95,'Special Illustration Rare':110,'Illustration Rare':26,
-  'Rare Secret':52,'Rare Rainbow':38,'Rare Shiny':30,'Rare Ultra':21,
-  'ACE SPEC Rare':24,'Double Rare':11,'Rare Holo VMAX':15,'Rare Holo VSTAR':12,
-  'Rare Holo V':7,'Rare Holo GX':6,'Rare Holo EX':10,'Rare Holo':4.5,
-  'Amazing Rare':15,'Radiant Rare':8,'Trainer Gallery Rare Holo':10,
-  'Rare':2.2,'Uncommon':0.4,'Common':0.15,'Promo':5
-};
-
-function estimatePrice(rarity, cardId, cardName) {
-  const r = normRarity(rarity);
-  const base = RP[r] || 1.0;
-  let seed = 0;
-  const str = (cardId||'') + '|' + (cardName||'');
-  for (let i = 0; i < str.length; i++) seed = (seed * 31 + str.charCodeAt(i)) & 0x7FFFFFFF;
-  let band;
-  if (r === 'Hyper Rare' || r === 'Special Illustration Rare') band = 0.55 + (seed % 190)/100;
-  else if (['Illustration Rare','Rare Secret','Rare Rainbow'].includes(r)) band = 0.55 + (seed % 150)/100;
-  else if (['Rare Ultra','ACE SPEC Rare','Double Rare'].includes(r)) band = 0.5 + (seed % 180)/100;
-  else band = 0.6 + (seed % 110)/100;
-  const nm = (cardName||'').toLowerCase();
-  if (nm.includes('charizard')) band *= 2.6;
-  else if (nm.includes('pikachu')) band *= 1.9;
-  else if (nm.includes('mewtwo') || nm.includes('mew ')) band *= 1.7;
-  else if (nm.includes('umbreon') || nm.includes('eevee')) band *= 1.6;
-  else if (nm.includes('lugia') || nm.includes('rayquaza')) band *= 1.5;
-  else if (nm.includes('gengar') || nm.includes('dragonite')) band *= 1.35;
-  return parseFloat((base * band).toFixed(2));
+// Estimates come from estimator.js — the single implementation, shared with
+// ingest.js and (over /estimator.js) the frontend. The table that used to sit
+// here had no vintage multiplier while the frontend's had a 9x one, so the
+// card page and the set page priced the same 1999 card differently depending
+// on which had answered last.
+//
+// setRelease is what makes the difference, so every caller must pass it.
+function estimatePrice(rarity, cardId, cardName, setRelease, number, setTotal) {
+  return estimator.estimatePrice({
+    rarity: normRarity(rarity), cardId, name: cardName,
+    number, setTotal, setRelease
+  });
 }
 
 function extractPrice(card) {
@@ -370,6 +356,7 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
             SELECT price_usd, source, recorded_at
             FROM price_history ph
             WHERE ph.card_api_id = c.api_card_id
+              AND ph.grade IS NULL          -- the ungraded card, not a slab
             ORDER BY (ph.source NOT LIKE 'estimate%') DESC, ph.recorded_at DESC
             LIMIT 1
           ) lp ON TRUE
@@ -480,10 +467,11 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
     }
 
     const tdLang = ['ja','zh-tw','fr','de','it','es','pt','ko'].includes(lang) ? lang : 'en';
-    let tdCards = null, tdName = null, tdPrinted = 0, tdResolved = null;
+    let tdCards = null, tdName = null, tdPrinted = 0, tdResolved = null, tdRelease = null;
     const probe = await tcgdexResolve(req.query.uiSetId || setId, setId, tdLang);
     if (probe) {
       tdName = probe.data.name;
+      tdRelease = probe.data.releaseDate || null;
       tdPrinted = (probe.data.cardCount &&
         (probe.data.cardCount.official || probe.data.cardCount.total)) || probe.data.cards.length;
       tdCards = probe.data.cards;
@@ -499,11 +487,11 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
           ? normRarity(pi.rarity || c.rarity)
           : (inferRarity(num, printed, c.name) || normRarity(pi.rarity || c.rarity));
         const price = (pi.price && pi.price > 0)
-          ? pi.price : estimatePrice(rarity, `${setId}-${num}`, c.name);
+          ? pi.price : estimatePrice(rarity, `${setId}-${num}`, c.name, tdRelease, num, printed);
         return {
           id: `${setId}-${num}`, name: c.name, number: num, rarity,
           supertype: pi.supertype || null,
-          set: { id: setId, name: tdName, total: printed },
+          set: { id: setId, name: tdName, total: printed, releaseDate: tdRelease },
           images: {
             small: c.image ? `${c.image}/low.png` : (pi.images ? pi.images.small : ''),
             large: c.image ? `${c.image}/high.png` : (pi.images ? pi.images.large : '')
@@ -531,7 +519,8 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
       if (!c.rarity) rarity = inferRarity(c.number, setTotal, c.name) || rarity;
       return Object.assign({}, c, {
         rarity,
-        _price: p ? p.price : estimatePrice(rarity, c.id, c.name),
+        _price: p ? p.price : estimatePrice(rarity, c.id, c.name,
+                    c.set && c.set.releaseDate, c.number, c.set && c.set.total),
         _priceSource: p ? p.source : 'estimate',
         _priceIsReal: !!p
       });
@@ -558,18 +547,49 @@ app.get('/api/cards/:cardId', async (req, res) => {
       if (!/^[a-z]{2}(-[a-z]{2})?-/i.test(cardId)) {
         for (const L of ['en','ja','zh-tw','zh-cn']) variants.push(`${L}-${cardId}`);
       }
-      const row = await db.query(
-        'SELECT * FROM cards WHERE api_card_id = ANY($1) LIMIT 1', [[...new Set(variants)]]);
+      // The same LATERAL join the set endpoint uses, and for the same
+      // reason: prices live in price_history, not on the card row. Without
+      // it this endpoint returned a card with no price at all, the frontend
+      // fell through to its own estimator, and a card worth $45 on the set
+      // page showed $0.66 on its own page. Two screens, one card, two
+      // numbers — from one missing join.
+      const row = await db.query(`
+        SELECT c.*, lp.price_usd, lp.source AS price_source, lp.recorded_at
+        FROM cards c
+        LEFT JOIN LATERAL (
+          SELECT price_usd, source, recorded_at
+          FROM price_history ph
+          WHERE ph.card_api_id = c.api_card_id
+            AND ph.grade IS NULL            -- the ungraded card, not a slab
+          ORDER BY (ph.source NOT LIKE 'estimate%') DESC, ph.recorded_at DESC
+          LIMIT 1
+        ) lp ON TRUE
+        WHERE c.api_card_id = ANY($1) LIMIT 1`, [[...new Set(variants)]]);
       if (row.rows.length) {
         const c = row.rows[0];
+        const price = c.price_usd ? parseFloat(c.price_usd) : 0;
+        const isEstimate = !c.price_source || /^estimate/.test(c.price_source);
         return res.json({ data: {
           id: c.api_card_id, name: c.name, nameEn: c.name_en || null,
           number: c.number, rarity: c.rarity,
           supertype: c.supertype,
           images: { small: c.image_small, large: c.image_large },
+          imageLang: c.image_lang || null,
+          // releaseDate is not decoration: the estimator's vintage multiplier
+          // reads it, and withholding it priced a 1999 card as a 2024 one.
           set: { id: c.set_api_id, name: c.set_name,
-                 nameEn: c.set_name_en || null, total: c.set_total },
-          tcgplayer: c.tcgplayer_data, cardmarket: c.cardmarket_data
+                 nameEn: c.set_name_en || null, total: c.set_total,
+                 logo: c.set_logo || null, serie: c.set_series || null,
+                 releaseDate: c.set_release || null },
+          tcgplayer: c.tcgplayer_data || (price > 0 ? { prices: { holofoil: {
+            market: price, low: +(price * 0.65).toFixed(2),
+            mid: price, high: +(price * 1.7).toFixed(2) } } } : null),
+          cardmarket: c.cardmarket_data || null,
+          _price: price,
+          _priceSource: c.price_source || 'estimate',
+          _priceIsReal: !isEstimate,
+          _priceDate: c.recorded_at,
+          _source: 'cardhunt_db'
         }});
       }
     }
@@ -645,7 +665,7 @@ app.get('/api/price/:cardId', async (req, res) => {
           const realId = c.api_card_id;
           const hist = await db.query(`
             SELECT price_usd, source, marketplace, recorded_at
-            FROM price_history WHERE card_api_id = $1
+            FROM price_history WHERE card_api_id = $1 AND grade IS NULL
             ORDER BY recorded_at DESC LIMIT 60`, [realId]);
 
           const real = hist.rows.filter(h => !/^estimate/.test(h.source || ''));
@@ -972,7 +992,8 @@ app.get('/api/history/:cardId', async (req, res) => {
              AVG(price_usd) AS avg_price, MIN(price_usd) AS low,
              MAX(price_usd) AS high, COUNT(*) AS sales
       FROM price_history
-      WHERE card_api_id=$1 AND recorded_at >= NOW() - INTERVAL '1 year'
+      WHERE card_api_id=$1 AND grade IS NULL
+        AND recorded_at >= NOW() - INTERVAL '1 year'
       GROUP BY 1 ORDER BY 1`, [req.params.cardId]);
     res.json({ data: rows.rows });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -1146,7 +1167,18 @@ function normaliseListing(o) {
     // wherever it appears, and a row can be rendered far from the response
     // envelope that carries the source list — so the row states it itself.
     // `url` above already points at the item on eBay.
-    attribution: o.source === 'ebay' ? 'Listing from eBay' : null
+    attribution: o.source === 'ebay' ? 'Listing from eBay' : null,
+    // ── Labels, carried through ──
+    // sourceEbay works these out from the seller's title and they were being
+    // dropped right here: this function returns a fixed shape, and edition
+    // was not in it. So "1st Edition" never reached the row that exists to
+    // say which Charizard this is — and T2 cannot separate editions it
+    // cannot see. Labels, never gates: nothing below is rejected on.
+    edition: o.edition || null,
+    variant: o.variant || null,
+    parsedRarity: o.parsedRarity || null,
+    parsedYear: o.parsedYear || null,
+    matchConfidence: o.matchConfidence || null
   };
 }
 
@@ -1597,6 +1629,14 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
       liveCount,
       cheapest: listings.length ? listings[0].landed : null,
       cheapestLive: (listings.find(l => l.live) || {}).landed ?? null,
+      // T2: what this grade is actually worth, measured from the listings
+      // that just passed the gate — sold apart from active, edition apart
+      // from edition, and the sample size attached. The multiplier table
+      // stays as a labelled fallback; it is no longer the only answer.
+      //
+      // Computed, not stored: this is a read endpoint. `gradeprices.js`
+      // persists aggregates, and it is the only thing that writes them.
+      gradePrice: gp.aggregate(listings, { grade }),
       listings: listings.slice(0, limit),
       sources,
       tookMs,
@@ -2275,6 +2315,7 @@ app.get('/api/sets/lang/:lang', async (req, res) => {
                  COUNT(*) FILTER (
                    WHERE EXISTS (SELECT 1 FROM price_history ph
                                  WHERE ph.card_api_id = c.api_card_id
+                                   AND ph.grade IS NULL
                                    AND ph.source NOT LIKE 'estimate%')
                  ) AS real_prices,
                  (ARRAY_AGG(c.image_small ORDER BY c.api_card_id))[1] AS sample_image
@@ -2553,6 +2594,22 @@ app.get('/api/ebay/quota', async (req, res) => {
 // Serving the actual module — not a copy — is what keeps them identical.
 // cardmatch.js assigns window.CardMatch when loaded in a browser.
 // ══════════════════════════════════════════════════════════════
+app.get('/gradeprice.js', (req, res) => {
+  res.type('application/javascript');
+  res.set('Cache-Control', 'public, max-age=300');
+  res.sendFile(require('path').join(__dirname, 'gradeprice.js'), err => {
+    if (err && !res.headersSent) res.status(500).send('// gradeprice.js unavailable');
+  });
+});
+
+app.get('/estimator.js', (req, res) => {
+  res.type('application/javascript');
+  res.set('Cache-Control', 'public, max-age=300');
+  res.sendFile(require('path').join(__dirname, 'estimator.js'), err => {
+    if (err && !res.headersSent) res.status(500).send('// estimator.js unavailable');
+  });
+});
+
 app.get('/cardmatch.js', (req, res) => {
   res.type('application/javascript');
   res.set('Cache-Control', 'public, max-age=300');

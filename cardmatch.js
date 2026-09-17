@@ -96,8 +96,33 @@ function gradesIn(title) {
 // Words meaning "this is in a slab", used to reject slabs from raw searches
 const SLAB_WORDS = /\b(psa|bgs|cgc|sgc|tag|ace|ags|ars|gma|hga|graded|slab|slabbed|gem\s*mint|gem\s*mt|pristine|black\s*label)\b/i;
 
-// Multi-card listings, sealed product, and anything that is not one card
-const NOT_A_SINGLE_CARD = /\b(lot|lots|bundle|set of|collection|binder|album|booster|box|pack|packs|tin|etb|elite trainer|sealed|case|proxy|proxies|custom|fake|repl(ica)?|proxy|orica|proxi|metal card|gold card replica|sticker|jumbo|oversized|playmat|sleeve|deck box|toploader)\b/i;
+// Multi-card listings, sealed product, and anything that is not one card.
+// Sellers list merchandise under card searches because that is where the
+// buyers are: a "Charizard Keychain" answers a Charizard search and is not
+// a card at all. Grouped by what the thing is, so a new case has one place
+// to go.
+//
+// Bare `collection` is deliberately NOT here — it is half the set names in
+// the game (see SET_NAME_PHRASES below, which exists because it was). Only
+// the phrasings that actually mean a bundle: "collection of", "collection
+// box", "premium collection".
+const NOT_A_SINGLE_CARD = new RegExp([
+  // multiples
+  'lot|lots|bundle|set of|collection of|\\d+\\s*cards?\\b|joblot|job lot|mystery',
+  // sealed product
+  'booster|box|pack|packs|tin|etb|elite trainer|sealed|case|blister',
+  'display|carton|crate|collection box|premium collection|build & battle',
+  // merchandise, not cards
+  'key\\s*chain|keychain|keyring|key\\s*ring|coin|pin\\b|badge|plush|figure|figurine',
+  'statue|mug|shirt|t-shirt|hoodie|poster|banner|flag|towel|bag|wallet|phone case',
+  'lamp|light|clock|puzzle|lego|funko|nanoblock|model kit|stand\\b|display case',
+  // accessories
+  'sleeve|sleeves|playmat|play mat|deck box|binder|album|portfolio|toploader',
+  'top loader|penny sleeve|card saver|magnetic|screwdown|storage|organizer',
+  // not genuine cards
+  'proxy|proxies|orica|custom|fake|replica|repro|reprint card|metal card|gold plated',
+  'gold card|jumbo|oversized|oversize|sticker|tattoo|stamp\\b|cardboard cutout'
+].join('|'), 'i');
 
 // ── Set names that contain lot vocabulary ─────────────────────
 // "Classic Collection" is a SET, not a bundle, and `collection` above
@@ -150,17 +175,47 @@ const CJK = /[぀-ヿ㐀-䶿一-鿿가-힯]/;
 // Read only from what the title states. Most say nothing, and those are
 // kept — inference is for absent data, and rejecting silence would empty
 // the results.
-const LANG_MARKERS = [
-  { lang: 'ko', re: /\b(korean|korea|kor)\b/i },
-  { lang: 'ja', re: /\b(japanese|japan|jpn|jp)\b/i },
-  { lang: 'zh', re: /\b(chinese|china|traditional chinese|simplified chinese)\b/i },
-  { lang: 'en', re: /\b(english|eng)\b/i }
-];
+const LANG_WORDS = {
+  ja: /\b(japanese|japan|jpn|jp\b|nihongo)\b/i,
+  ko: /\b(korean|korea|kor\b)\b/i,
+  zh: /\b(chinese|china|traditional chinese|simplified chinese|t-chinese|s-chinese)\b/i,
+  de: /\b(german|deutsch)\b/i,
+  fr: /\b(french|francais|français)\b/i,
+  it: /\b(italian|italiano)\b/i,
+  es: /\b(spanish|espanol|español)\b/i,
+  pt: /\b(portuguese|portugues)\b/i,
+  ru: /\b(russian)\b/i,
+  id: /\b(indonesian)\b/i,
+  th: /\b(thai)\b/i
+};
 
-function languageIn(title) {
-  const out = [];
-  for (const m of LANG_MARKERS) if (m.re.test(title)) out.push(m.lang);
-  return out;
+// What language does this title claim? null when it says nothing, and
+// silence is accepted — most English sellers never write "English".
+// Script is evidence too: a title in kana is a Japanese listing whether or
+// not it says so.
+function languageOf(title) {
+  const t = String(title || '');
+  if (/\bkorean?\b/i.test(t)) return 'ko';
+  for (const code of Object.keys(LANG_WORDS)) {
+    if (LANG_WORDS[code].test(t)) return code;
+  }
+  if (/[\uac00-\ud7af]/.test(t)) return 'ko';      // hangul
+  if (/[\u3040-\u30ff]/.test(t)) return 'ja';      // kana
+  if (CJK.test(t)) return 'zh';
+  if (/\benglish\b/i.test(t)) return 'en';
+  return null;                                      // unstated
+}
+
+// Our card's own language. server.js passes `lang` explicitly; the frontend
+// has only the card id, and ids are {lang}-{setId}-{number}, so the language
+// is already in the id. Read in one place rather than at each call site.
+function cardLanguage(card) {
+  if (card.lang) return String(card.lang).slice(0, 2).toLowerCase();
+  if (card.language) return String(card.language).slice(0, 2).toLowerCase();
+  const id = String(card.cardId || card.api_card_id || card.id || '');
+  const m = id.match(/^(en|ja|zh-tw|zh-cn|ko)-/);
+  if (m) return m[1].slice(0, 2);
+  return null;
 }
 
 // Every 4-digit year a title states. ALL of them, not the first: a title
@@ -173,6 +228,34 @@ function yearsIn(title) {
   while ((m = re.exec(String(title)))) out.push(parseInt(m[1], 10));
   return out;
 }
+
+// ── Sequel sets ───────────────────────────────────────────────
+// "Base Set 2" CONTAINS "Base Set", so a substring test says the set name
+// matches and a 4/130 Base Set 2 card is kept on a 4/102 Base Set search.
+// Same family as the Celebrations problem above, one level subtler: the
+// set name really is there, followed by the digit that makes it a
+// different set.
+function namesAConflictingSet(title, setName) {
+  if (!setName) return null;
+  const flat = String(title).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ');
+  const want = String(setName).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!want || want.length < 3) return null;
+
+  const at = flat.indexOf(want);
+  if (at < 0) return null;
+
+  // What follows our set name? A trailing numeral means a sequel set.
+  const after = flat.slice(at + want.length).trim();
+  const seq = after.match(/^(2|3|ii|iii)\b/);
+  if (seq) return setName + ' ' + seq[1].toUpperCase();
+
+  return null;
+}
+
+// eBay's search keyword field is capped at 300 characters; anything past
+// that is dropped without a word. Only deep links are affected — the API
+// query carries no negative keywords and comes nowhere near it.
+const EBAY_KEYWORD_LIMIT = 300;
 
 // ── Query building ────────────────────────────────────────────
 // Include the N/M pair and the set name. Both were missing, which is
@@ -216,7 +299,51 @@ function buildQuery(card, grade, opts) {
 
   if (opts.suffix !== false) bits.push('pokemon');
 
-  return bits.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  let q = bits.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+
+  // ── Deep links ──
+  // An API search is gated by verify() afterwards, so the query can be
+  // broad. A deep link has no gate at all: it hands eBay a string and the
+  // user sees whatever comes back. Negative keywords are the only filter
+  // available there, so a link spends them on exactly the junk the gate
+  // would otherwise have rejected.
+  //
+  // eBay syntax, eBay links only. Every other marketplace reads a leading
+  // "-" as literal text and returns nothing.
+  if (opts.forLink) {
+    // Three tiers, spent in this order because eBay's keyword field is
+    // capped (see EBAY_KEYWORD_LIMIT): a PSA 9 sitting in a PSA 10 list is
+    // the expensive mistake, a Japanese print is the next one, and a
+    // keychain is merely noise. If the budget runs out, noise is what goes.
+    const gradeMinus = [];
+    if (g.kind === 'graded') {
+      for (const n of ['10', '9', '8', '7', '6', '5']) {
+        if (n !== g.grade) gradeMinus.push('-"' + g.grader + ' ' + n + '"');
+      }
+    } else {
+      gradeMinus.push('-psa', '-bgs', '-cgc', '-sgc', '-graded', '-slab');
+    }
+
+    const langMinus = [];
+    const lang = cardLanguage(card);
+    if (lang === 'en') langMinus.push('-japanese', '-korean', '-chinese', '-german', '-french');
+    else if (lang === 'ja') langMinus.push('-korean', '-chinese');
+
+    const junkMinus = ['-lot', '-bundle', '-box', '-pack', '-sealed', '-etb',
+                       '-proxy', '-custom', '-keychain', '-coin', '-sleeve',
+                       '-playmat', '-binder', '-jumbo', '-sticker'];
+
+    // A card name and set name can be long: "Rayquaza VMAX (Alternate Art
+    // Secret) TG20/TG30 Sword & Shield—Brilliant Stars Trainer Gallery
+    // PSA 10" plus the full list measured 305 characters, and eBay would
+    // have silently dropped the tail — which is where the grade exclusions
+    // were. Fit what fits, best first.
+    for (const term of gradeMinus.concat(langMinus, junkMinus)) {
+      if (q.length + 1 + term.length <= EBAY_KEYWORD_LIMIT) q += ' ' + term;
+    }
+  }
+
+  return q;
 }
 
 // ── Verification ──────────────────────────────────────────────
@@ -253,12 +380,17 @@ function verify(title, card, grade, opts) {
   // 1bb. Language conflict. Korean prints share Japanese set codes and
   //      numbering, so number + set size + grade all agree on a card that is
   //      simply not ours. Only ever rejects on a STATED language.
-  if (card.lang) {
-    const want = String(card.lang).slice(0, 2).toLowerCase();
-    const said = languageIn(t);
-    if (said.length && !said.includes(want)) {
+  const wantLang = cardLanguage(card);
+  if (wantLang) {
+    const said = languageOf(t);
+    if (said && said !== wantLang) {
       return { ok: false, reason:
-        `title says ${said.join('/')}, this card is ${want} — a different language printing` };
+        `title says ${said}, this card is ${wantLang} — a different language printing` };
+    }
+    // An English search must reject CJK script even when no language word
+    // appears: a title written in kana is not selling the English card.
+    if (wantLang === 'en' && CJK.test(t)) {
+      return { ok: false, reason: 'wanted English, title is in CJK script' };
     }
   }
 
@@ -355,6 +487,12 @@ function verify(title, card, grade, opts) {
         pairs.map(p => p.raw).join(', ') + `, wanted ${wantNum}` +
         (wantTot ? '/' + wantTot : '') };
     }
+    // The number is ours — but "Base Set 2" also contains "Base Set"
+    const conflict = namesAConflictingSet(t, card.setName);
+    if (conflict) {
+      return { ok: false, reason:
+        `number matches but the title names ${conflict}, not ${card.setName}` };
+    }
     return { ok: true, reason: null, confidence: 'number+total',
              matched: { number: exact.raw, grade: grade } };
   }
@@ -368,6 +506,11 @@ function verify(title, card, grade, opts) {
   const setNamed = setName.length > 3 && titleFlat.includes(setName);
 
   if (bareNum && setNamed) {
+    const conflict2 = namesAConflictingSet(t, card.setName);
+    if (conflict2) {
+      return { ok: false, reason:
+        `title names ${conflict2}, not ${card.setName}` };
+    }
     return { ok: true, reason: null, confidence: 'number+setname',
              matched: { number: wantNum, set: card.setName, grade: grade } };
   }
@@ -396,8 +539,10 @@ function filterListings(listings, card, grade) {
 
 const API = {
   buildQuery, verify, filterListings,
-  normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, languageIn,
-  GRADERS, SLAB_WORDS, NOT_A_SINGLE_CARD, SET_NAME_PHRASES, REPRINT_MARKERS
+  normNum, numberPairsIn, gradesIn, parseGrade, yearsIn,
+  languageOf, cardLanguage, namesAConflictingSet,
+  GRADERS, SLAB_WORDS, NOT_A_SINGLE_CARD, SET_NAME_PHRASES, REPRINT_MARKERS,
+  EBAY_KEYWORD_LIMIT
 };
 
 // ── Dual mode: Node require() AND a browser <script> ──────────

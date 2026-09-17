@@ -1072,8 +1072,25 @@ function listingIdCandidates(cardId) {
 
 async function resolveListingCard(cardId) {
   if (!db) return null;
+  // set_release and set_name_en are NOT optional extras — they are the two
+  // gates' only inputs, and omitting them is how both were installed and
+  // dead at the same time:
+  //
+  //   set_release -> matchCard.setYear. Without it setYear is null, the
+  //   `if (card.setYear)` guard in cardmatch never passes, and the year
+  //   discriminator cannot fire on ANY live route. It silently kept a 2021
+  //   Celebrations reprint against a 1999 Base Set card — which is the
+  //   $536-to-$249,999 spread the discriminator was written for. Nothing
+  //   reported it, because a gate that is never reached looks exactly like
+  //   a gate that finds nothing.
+  //
+  //   set_name_en -> the set name we ASK eBay for. Falling back to set_name
+  //   sends a Japanese set name to eBay US, which answers with nothing.
+  //
+  // Whatever this query stops selecting, those gates stop working.
   const r = await db.query(
-    `SELECT api_card_id, name, name_en, number, rarity, set_api_id, set_name, set_total, image_small
+    `SELECT api_card_id, name, name_en, number, rarity, set_api_id, set_name,
+            set_name_en, set_total, set_release, image_small
      FROM cards WHERE api_card_id = ANY($1) LIMIT 1`, [listingIdCandidates(cardId)]);
   return r.rows[0] || null;
 }
@@ -1222,7 +1239,15 @@ function filterCard(card, nameOverride) {
     // English listings state the set by NAME ("Champion's Path"), never by
     // the code. Without this, an eBay title using the common `#74 <set name>`
     // form could not be verified and was dropped. See jpTitleMatchesNumber.
-    setName: card.set_name_en || card.set_name
+    setName: card.set_name_en || card.set_name,
+    // The same two fields sourceEbay's matchCard carries. They were on the
+    // eBay path only, so the language and year gates protected one of the
+    // two marketplaces and Yahoo kept whatever jpfilter allowed — and
+    // jpfilter has no concept of either (grep: zero hits for korean, hangul,
+    // setYear, reprint). Korean prints share JAPANESE set codes, so Yahoo JP
+    // is where they actually turn up.
+    setYear: card.set_release ? new Date(card.set_release).getUTCFullYear() : null,
+    lang: String(card.api_card_id || '').split('-')[0] || null
   };
 }
 
@@ -1241,6 +1266,11 @@ async function sourceYahoo(card, grade, limit) {
 
   const out = [];
   let scanned = 0, liveCount = 0, endedCount = 0;
+  // A gate that has never fired is indistinguishable from one that cannot,
+  // so every printing rejection is counted and a sample is returned rather
+  // than silently dropped. This is the only way anyone will notice if the
+  // Korean listings stop being caught again.
+  const rejectedPrinting = [];
 
   for (const feed of feeds) {
     const r = await fetch(feed.url, { headers: {
@@ -1264,6 +1294,26 @@ async function sourceYahoo(card, grade, limit) {
 
     for (const it of items) {
       if (!jpf.jpItemMatchesRequest(it, fc, grade)) continue;
+
+      // The printing gate, the SAME one eBay runs. jpfilter checks that the
+      // title names this card; it has no opinion on whether the title names
+      // a different PRINTING of it, and a Korean SV2a card is genuinely
+      // 201/165 with the right name and the right number.
+      //
+      // Two options matter here and both are about not repeating
+      // `looksLikeJunk`, which rejected ~80 valid prices per set:
+      //   cjkIsChinese:false — Yahoo JP titles ARE CJK. Inferring "Chinese"
+      //     from script alone would reject a kanji-heavy Japanese title,
+      //     i.e. most of the feed.
+      //   scriptIsLanguageEvidence:false — the "wanted English, title is
+      //     CJK" rule. Yahoo only ever runs for ja- cards so it cannot fire
+      //     today, but leaving it armed on a Japanese source is a trap for
+      //     whoever widens `applies`.
+      // Hangul and an explicit 韓国 stay evidence, which is the point.
+      const conflict = cm.printingConflict(it.title || '', fc,
+        { cjkIsChinese: false, scriptIsLanguageEvidence: false });
+      if (conflict) { rejectedPrinting.push({ title: it.title, reason: conflict }); continue; }
+
       const yen = parseInt(it.price || it.bidOrBuy || it.currentPrice || 0);
       if (!(yen >= 100 && yen <= 2000000)) continue;
       const base = jpf.yahooItemToListing(it, yen);
@@ -1280,7 +1330,9 @@ async function sourceYahoo(card, grade, limit) {
 
   const seen = new Set();
   const deduped = out.filter(l => (l.url && !seen.has(l.url)) ? seen.add(l.url) : false);
-  return { listings: deduped, scanned, live: liveCount, ended: endedCount };
+  return { listings: deduped, scanned, live: liveCount, ended: endedCount,
+           printingRejected: rejectedPrinting.length,
+           printingDropped: rejectedPrinting.slice(0, 12) };
 }
 
 async function sourceEbay(card, grade, limit, opts = {}) {
@@ -1525,6 +1577,17 @@ async function gatherListings(card, grade, limit, opts) {
       const { listings: got } = r.value;
       sources[s.id] = { status: 'ok', count: got.length, scanned: r.value.scanned ?? null };
       if (r.value.live !== undefined) { sources[s.id].live = r.value.live; sources[s.id].ended = r.value.ended; }
+
+      // Printing rejections (reprint / language / year) from a source that
+      // does not use the `rejected` shape below. Reported even when zero:
+      // "0 rejected" says the gate ran, which is a different statement from
+      // the field being absent because it never ran at all.
+      if (r.value.printingRejected !== undefined) {
+        sources[s.id].printingRejected = r.value.printingRejected;
+        if (r.value.printingDropped && r.value.printingDropped.length) {
+          sources[s.id].printingDropped = r.value.printingDropped;
+        }
+      }
 
       // "12 listings, 40 rejected" — a source that scanned 52 titles and kept
       // 12 has NOT behaved like one that found nothing, and the response has

@@ -201,19 +201,41 @@ const LANG_WORDS = {
   th: /\b(thai)\b/i
 };
 
+// The same evidence, written the way a Japanese marketplace writes it.
+// LANG_WORDS is built on \b word boundaries, and there is no word boundary
+// between CJK characters — so not one entry above can ever match a Yahoo JP
+// title. A Korean card sold there says 韓国版, never "Korean". Without these
+// the language gate could be installed on the Yahoo path and STILL never
+// fire, which is the exact failure this pass exists to end.
+const LANG_CJK_WORDS = {
+  ko: /韓国|한국/,
+  zh: /中国語|繁体字|簡体字|中文/,
+  en: /英語版/,
+  ja: /日本語版/
+};
+
 // What language does this title claim? null when it says nothing, and
 // silence is accepted — most English sellers never write "English".
 // Script is evidence too: a title in kana is a Japanese listing whether or
 // not it says so.
-function languageOf(title) {
+// opts.cjkIsChinese — Japanese IS written in CJK, so on a Japanese
+// marketplace "contains CJK" is not evidence of Chinese; it is evidence of
+// nothing. Pass false there. Hangul and kana stay evidence either way
+// because neither is ambiguous. Defaults true, so every existing caller is
+// unchanged.
+function languageOf(title, opts) {
+  opts = opts || {};
   const t = String(title || '');
   if (/\bkorean?\b/i.test(t)) return 'ko';
   for (const code of Object.keys(LANG_WORDS)) {
     if (LANG_WORDS[code].test(t)) return code;
   }
+  for (const code of Object.keys(LANG_CJK_WORDS)) {
+    if (LANG_CJK_WORDS[code].test(t)) return code;
+  }
   if (/[\uac00-\ud7af]/.test(t)) return 'ko';      // hangul
   if (/[\u3040-\u30ff]/.test(t)) return 'ja';      // kana
-  if (CJK.test(t)) return 'zh';
+  if (opts.cjkIsChinese !== false && CJK.test(t)) return 'zh';
   if (/\benglish\b/i.test(t)) return 'en';
   return null;                                      // unstated
 }
@@ -358,6 +380,66 @@ function buildQuery(card, grade, opts) {
   return q;
 }
 
+// ── Is this title a different PRINTING of the same card? ──────
+//
+// Reprint set, language and year. All three describe the same trap: number,
+// set size and grade agree, the title looks right, and it is a different
+// card. Base Set Charizard 4/102 PSA 10 returned 24 "matches" from $536 to
+// $249,999 — 19 of them 2021 Celebrations. A Japanese SV2a search kept 25 of
+// which 6 were Korean.
+//
+// One implementation, because eBay and Yahoo JP both need it. Everything
+// here rejects on STATED evidence only: a title that says nothing is kept.
+//
+// opts.cjkIsChinese  — false on a Japanese marketplace, where CJK script is
+//                      the local alphabet rather than evidence of Chinese.
+// opts.scriptIsLanguageEvidence
+//                    — false to skip the "wanted English, title is CJK"
+//                      rule. Meaningless on a JP-only source and harmful if
+//                      it ever fired there.
+//
+// Returns a reason string, or null when the title is not excluded.
+function printingConflict(title, card, opts) {
+  opts = opts || {};
+  const t = String(title || '');
+
+  // Reprint set that reuses this card's numbering. Checked BEFORE the
+  // number, because the number WILL match — that is the whole problem.
+  const ourSet = String(card.setName || '');
+  for (const rp of REPRINT_MARKERS) {
+    if (rp.re.test(t) && !rp.set.test(ourSet)) {
+      return `title is a ${rp.label} reprint, which reuses this numbering — ` +
+             `wanted ${ourSet || 'the original set'}`;
+    }
+  }
+
+  // Language. Korean prints share Japanese set codes and numbering, so a
+  // Korean Charizard ex is genuinely 201/165 from SV2a.
+  const wantLang = cardLanguage(card);
+  if (wantLang) {
+    const said = languageOf(t, { cjkIsChinese: opts.cjkIsChinese });
+    if (said && said !== wantLang) {
+      return `title says ${said}, this card is ${wantLang} — a different language printing`;
+    }
+    // An English search must reject CJK script even when no language word
+    // appears: a title written in kana is not selling the English card.
+    if (opts.scriptIsLanguageEvidence !== false && wantLang === 'en' && CJK.test(t)) {
+      return 'wanted English, title is in CJK script';
+    }
+  }
+
+  // Year. A title with no year is NOT rejected — absence is not a mismatch.
+  // Scans ALL stated years so "1999 ... graded 2021" survives.
+  if (card.setYear) {
+    const ys = yearsIn(t);
+    if (ys.length && !ys.some(y => Math.abs(y - card.setYear) <= 1)) {
+      return `title says ${ys.join('/')}, this set is from ${card.setYear} — a different printing`;
+    }
+  }
+
+  return null;
+}
+
 // ── Verification ──────────────────────────────────────────────
 // Returns { ok, reason, confidence, matched:{} }
 function verify(title, card, grade, opts) {
@@ -377,46 +459,14 @@ function verify(title, card, grade, opts) {
       (tForLot.match(NOT_A_SINGLE_CARD) || [])[0] };
   }
 
-  // 1b. A reprint set that reuses this card's numbering.
-  //     Checked BEFORE the number, because the number will match — that is
-  //     the whole problem. See REPRINT_MARKERS.
-  const ourSet = String(card.setName || '');
-  for (const rp of REPRINT_MARKERS) {
-    if (rp.re.test(t) && !rp.set.test(ourSet)) {
-      return { ok: false, reason:
-        `title is a ${rp.label} reprint, which reuses this numbering — ` +
-        `wanted ${ourSet || 'the original set'}` };
-    }
-  }
-
-  // 1bb. Language conflict. Korean prints share Japanese set codes and
-  //      numbering, so number + set size + grade all agree on a card that is
-  //      simply not ours. Only ever rejects on a STATED language.
-  const wantLang = cardLanguage(card);
-  if (wantLang) {
-    const said = languageOf(t);
-    if (said && said !== wantLang) {
-      return { ok: false, reason:
-        `title says ${said}, this card is ${wantLang} — a different language printing` };
-    }
-    // An English search must reject CJK script even when no language word
-    // appears: a title written in kana is not selling the English card.
-    if (wantLang === 'en' && CJK.test(t)) {
-      return { ok: false, reason: 'wanted English, title is in CJK script' };
-    }
-  }
-
-  // 1c. Year conflict. Only ever rejects on stated evidence: a title with no
-  //     year is not rejected, because absence is not a mismatch. If a title
-  //     states years and NONE of them is within a year of the set's release,
-  //     it is a different printing.
-  if (card.setYear) {
-    const ys = yearsIn(t);
-    if (ys.length && !ys.some(y => Math.abs(y - card.setYear) <= 1)) {
-      return { ok: false, reason:
-        `title says ${ys.join('/')}, this set is from ${card.setYear} — a different printing` };
-    }
-  }
+  // 1b/1bb/1c. Reprint set, language and year — the three ways a title can
+  //     name a genuinely different PRINTING of a card whose number, set size
+  //     and grade all agree. Factored into printingConflict() because a
+  //     second marketplace needs exactly these and must not grow its own
+  //     copy: two implementations of one gate is how the estimator, the
+  //     query builder and the title gate each drifted in this project.
+  const printing = printingConflict(t, card, opts);
+  if (printing) return { ok: false, reason: printing };
 
   // 2. Grade must match exactly — grader AND number
   const found = gradesIn(t);
@@ -552,7 +602,7 @@ function filterListings(listings, card, grade) {
 const API = {
   buildQuery, verify, filterListings,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn,
-  languageOf, cardLanguage, namesAConflictingSet,
+  languageOf, cardLanguage, namesAConflictingSet, printingConflict,
   GRADERS, SLAB_WORDS, NOT_A_SINGLE_CARD, SET_NAME_PHRASES, REPRINT_MARKERS,
   EBAY_KEYWORD_LIMIT
 };

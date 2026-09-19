@@ -1508,6 +1508,17 @@ async function sourceEbay(card, grade, limit, opts = {}) {
 
     if (!v.ok) { dropped.push({ title, reason: v.reason }); continue; }
 
+    // eBay's own condition field, which the gate never read. A $1,114.99
+    // slab sat in a Raw NM list because its title said "PCG 9" — not a
+    // grader we know, and not one we can add, since PCG is how sellers
+    // write "Pokémon Card Game". eBay had already labelled the item
+    // Graded. Structured marketplace data beats a word in a title, and it
+    // was there all along. Raw direction only — see conditionSaysGraded.
+    if (jpf.isRawGrade(grade) && cm.conditionSaysGraded(it.condition)) {
+      dropped.push({ title, reason: `wants raw, eBay states condition: ${it.condition}` });
+      continue;
+    }
+
     const price = parseFloat(it.price && it.price.value) || 0;
     if (price <= 0) { dropped.push({ title, reason: 'no usable price' }); continue; }
     const shipOpt = it.shippingOptions && it.shippingOptions[0];

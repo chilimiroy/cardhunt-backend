@@ -756,6 +756,35 @@ function verify(title, card, grade, opts) {
   return { ok: false, reason: 'title names the set but not the card number' };
 }
 
+// ── The marketplace's own condition field ─────────────────────
+// Found in the browser, verifying the AiGrade fix: eBay returned
+//   "Pokemon 2022 Giratina V 186/196 Alternate Art Ultra Rare Lost Origin
+//    PCG 9"  —  $1,114.99, condition "Graded"
+// in a RAW NM search. The title gate could not reject it: `PCG` is not a
+// grading company we know, and it must not be added — PCG is how sellers
+// write "Pokémon Card Game", so the token would eat ordinary titles.
+//
+// eBay had already said it. The condition field is structured data from
+// the marketplace, stronger evidence than any word in a seller's title,
+// and nothing read it. The same class as the missing `set_release`
+// column: the evidence was there and the gate never saw it.
+//
+// Applied in ONE direction only. "eBay says graded, the user asked raw" is
+// a flat contradiction. The reverse — "eBay says ungraded, the title says
+// PSA 10" — is a sloppy seller far more often than a fake, and rejecting
+// on it would drop genuine slabs. Absence of evidence is not evidence.
+//
+// Matched on the leading "grad" so the localised forms (Gradata, Gradée)
+// count, while every negative form — "Ungraded", "Non gradée", "Non
+// gradata" — is excluded explicitly rather than by hoping the prefix
+// misses it.
+function conditionSaysGraded(condition) {
+  const c = String(condition || '').trim();
+  if (!c) return false;
+  if (/^(un|non|not|no)\b/i.test(c) || /^ungrad/i.test(c)) return false;
+  return /^grad/i.test(c);
+}
+
 // Filter a list of listings, returning kept and dropped-with-reasons.
 // The caller can then say "12 listings, 40 rejected" rather than "none".
 function filterListings(listings, card, grade) {
@@ -770,7 +799,7 @@ function filterListings(listings, card, grade) {
 
 const API = {
   buildQuery, verify, filterListings,
-  normNum, numberPairsIn, gradesIn, parseGrade, yearsIn,
+  normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
   languageOf, cardLanguage, namesAConflictingSet, printingConflict,
   GRADERS, GRADERS_UNAMBIGUOUS, GRADERS_AMBIGUOUS, SLAB_GENERIC,
   SLAB_WORDS, NOT_A_SINGLE_CARD, NOT_A_SINGLE_CARD_TERMS,

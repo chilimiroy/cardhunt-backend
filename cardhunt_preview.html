@@ -2262,33 +2262,69 @@ async function fetchMarketPrice(card, grade) {
 
 function renderMarketData(m) {
   if (!m) return;
-  // Headline market value
-  if (m.marketValue > 0) {
+
+  // ── /api/market CANNOT identify one card ──────────────────────
+  // Its aggregate comes from tcgplayerPrice(cardName, setName), which
+  // matches on NAME AND SET ONLY — no collector number. Where a name
+  // repeats in a set, which chase cards almost always do, it returns an
+  // arbitrary variant. Ascended Heroes has Mega Hawlucha ex three times:
+  // #116 Double Rare $0.70, #268 Rare Ultra $5.90, #283 SIR $56.34 — and
+  // /api/market returns $230.48 for ALL THREE, which is none of them.
+  //
+  // This used to be written into price_history and that was stopped (see
+  // server.js). The value is still SERVED, and the card page was still
+  // pasting it over the headline, badged "high confidence" — so the same
+  // defect survived on the display path with nothing to show for it. The
+  // set tile read $0.70 and the card page read $230.48 for the same click.
+  //
+  // A number-matched price is the stronger signal and must win. Inference
+  // is for absent data only.
+  var cc = S.currentCard;
+  var haveNumberMatched = !!(cc && (cc._priceIsReal === true
+    || (cc._priceSource && !/^estimate/.test(cc._priceSource))));
+
+  if (m.marketValue > 0 && !haveNumberMatched) {
+    // No per-card price for this exact card. The aggregate may stand in,
+    // but it is NOT this card's measured price and must not claim to be.
     var mkt = document.getElementById('cd-mkt');
-    if (mkt) mkt.textContent = fmtCurrency(m.marketValue);
+    if (mkt) mkt.innerHTML = fmtCurrency(m.marketValue)
+      + '<span style="font-size:11px;color:var(--fa);margin-left:6px;font-weight:600"'
+      + ' title="Matched on card name and set only — not on collector number.'
+      + ' Where a name repeats in a set this may be a different variant.">name match</span>';
     S.activeGradeBase = m.marketValue;
     updateValueBar(m.marketValue);
   }
-  // Lowest active listing
+  // Lowest active listing. Also a name query, and ebayActive runs no title
+  // gate, so this is "cheapest thing called this in this set", not this
+  // card. Say which, rather than presenting it as the card's own floor —
+  // the gated per-card listings are in the panel below.
   if (m.lowestActive > 0) {
     var lo = document.getElementById('cd-low');
     var ls = document.getElementById('cd-lowsrc');
     if (lo) lo.textContent = fmtCurrency(m.lowestActive);
-    if (ls) ls.textContent = m.activeCount + ' active on eBay';
+    if (ls) ls.textContent = m.activeCount + ' active on eBay · by name, ungated';
   }
   // Most recent sold
   if (m.recentSales && m.recentSales.length) {
     var sd = document.getElementById('cd-sold');
     var sdd = document.getElementById('cd-soldd');
     if (sd) sd.textContent = fmtCurrency(m.recentSales[0].price);
-    if (sdd) sdd.textContent = m.recentSales[0].date || 'recent sale';
+    if (sdd) sdd.textContent = (m.recentSales[0].date || 'recent sale') + ' · by name';
   }
-  // Confidence badge
+  // Confidence badge. m.confidence describes the NAME-MATCHED aggregate, so
+  // it may only describe the headline when the aggregate IS the headline.
+  // Reporting "high confidence" over a number-matched price was the badge
+  // vouching for a number it had not been asked about.
   var badgeHost = document.getElementById('cd-chg');
-  if (badgeHost && m.confidence && m.confidence !== 'none') {
+  if (badgeHost && haveNumberMatched) {
+    badgeHost.innerHTML = '<span style="color:var(--gr)">&#9679; matched on collector '
+      + 'number</span> <span style="color:var(--fa);font-size:11px">'
+      + liveEsc(String((cc && cc._priceSource) || 'database')) + '</span>';
+  } else if (badgeHost && m.confidence && m.confidence !== 'none') {
     var col = m.confidence === 'high' ? 'var(--gr)' : m.confidence === 'medium' ? 'var(--am)' : 'var(--mu)';
     badgeHost.innerHTML = '<span style="color:' + col + '">&#9679; ' + m.confidence
-      + ' confidence</span> <span style="color:var(--fa);font-size:11px">' + (m.basis || '') + '</span>';
+      + ' confidence</span> <span style="color:var(--fa);font-size:11px">' + (m.basis || '')
+      + ' (name match)</span>';
   }
   // Graded prices from PriceCharting
   if (m.graded) {

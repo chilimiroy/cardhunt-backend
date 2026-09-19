@@ -2366,10 +2366,31 @@ function renderMarketData(m) {
       }
     }
   }
-  // Real listings replace the mock rows
-  if (m.listings && m.listings.length) renderRealListings(m.listings, m.recentSales);
+  // ── NOT the listings panel ────────────────────────────────────
+  // This used to call renderRealListings(m.listings) and write into
+  // #cd-listings — the same element renderListingFinder() owns. Two writers,
+  // one element, and whichever request came back last won.
+  //
+  // renderListingFinder fetches /api/listings/:cardId, which is gated by
+  // cardmatch on number, set size, grade, reprint, language and year, and
+  // reports "73 kept, 2 rejected of 75 scanned". `m.listings` is
+  // act.listings from /api/market, which is ebayActive() on a NAME query
+  // with no title gate at all — it carries no rejection count because
+  // nothing ever rejected anything.
+  //
+  // Measured on Giratina V #130: the gated endpoint returned 73 listings,
+  // every one Giratina V 130/196, and the panel displayed
+  // "2022 Pokémon Magnezone V #056 Lost Origin" at the top, because the
+  // ungated list overwrote it. A wrong card shown as this card's cheapest
+  // offer is the failure the whole gate exists to prevent.
+  //
+  // If /api/listings fails, renderListingFinder says so and the deep links
+  // below still work — that is the designed fallback, and it does not
+  // involve showing someone a different card.
 }
 
+// Renders a list of eBay rows into #cd-listings. NOT wired to
+// /api/market — see above. Kept for a caller that has GATED rows to render.
 function renderRealListings(listings, sales) {
   var host = document.getElementById('cd-listings');
   if (!host) return;
@@ -4161,6 +4182,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260919-0c56d21-dirty &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260919-338d99e-dirty &middot; click to hide</div>
 </body>
 </html>

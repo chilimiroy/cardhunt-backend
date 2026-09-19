@@ -403,13 +403,27 @@ function languageOf(title, opts) {
 // Our card's own language. server.js passes `lang` explicitly; the frontend
 // has only the card id, and ids are {lang}-{setId}-{number}, so the language
 // is already in the id. Read in one place rather than at each call site.
+// The id prefix, read in ONE place. This regex existed here, in
+// server.js's matchCard and in server.js's filterCard — three copies of
+// "what language is this card", which is the same shape of duplication
+// that left SLAB_WORDS without AiGrade and the year gate fed null.
+//
+// server.js used `String(id).split('-')[0]`, which is looser in a way that
+// matters: `'base1-4'` yields `'base1'`, cardLanguage slices that to
+// `'ba'`, and the gate then compares every title against a language that
+// does not exist. Only a known prefix counts; everything else is null, and
+// null is reported by the caller rather than skipping the check in silence.
+const CARD_ID_LANG = /^(en|ja|zh-tw|zh-cn|ko)-/;
+function languageFromCardId(id) {
+  const m = String(id || '').match(CARD_ID_LANG);
+  return m ? m[1].slice(0, 2) : null;
+}
+
 function cardLanguage(card) {
+  if (!card) return null;
   if (card.lang) return String(card.lang).slice(0, 2).toLowerCase();
   if (card.language) return String(card.language).slice(0, 2).toLowerCase();
-  const id = String(card.cardId || card.api_card_id || card.id || '');
-  const m = id.match(/^(en|ja|zh-tw|zh-cn|ko)-/);
-  if (m) return m[1].slice(0, 2);
-  return null;
+  return languageFromCardId(card.cardId || card.api_card_id || card.id);
 }
 
 // Every 4-digit year a title states. ALL of them, not the first: a title
@@ -600,9 +614,49 @@ function printingConflict(title, card, opts) {
   return null;
 }
 
+// ── What the gate actually had to work with ───────────────────
+// Every discriminator in printingConflict reads a field off the card, and
+// each one is skipped — silently, by design — when that field is absent:
+//
+//   card.setYear   null -> the year check never runs
+//   cardLanguage() null -> the language check never runs
+//   card.setName   ''   -> the reprint check has nothing to compare
+//
+// The skip is correct. Rejecting on absent data is how `looksLikeJunk`
+// destroyed ~80 valid prices per set. What is NOT correct is that the skip
+// is invisible: the year gate sat dead on every live route for weeks
+// because `resolveListingCard` did not SELECT `set_release`, and a gate
+// that cannot fire looks exactly like a gate that found nothing.
+//
+// So verify() now says what it checked. `unchecked` names the
+// discriminators that had no input — a caller can report it, a test can
+// assert on it, and "the language check never ran" becomes a statement the
+// system can make about itself rather than a thing someone has to notice.
+function printingEvidence(card) {
+  card = card || {};
+  const language = cardLanguage(card);
+  const year = card.setYear || null;
+  const setName = card.setName ? String(card.setName) : null;
+  const unchecked = [];
+  if (!language) unchecked.push('language');
+  if (!year) unchecked.push('year');
+  if (!setName) unchecked.push('reprint set');
+  return { language, year, setName, unchecked };
+}
+
 // ── Verification ──────────────────────────────────────────────
-// Returns { ok, reason, confidence, matched:{} }
+// Returns { ok, reason, confidence, matched:{}, evidence:{} }
+//
+// `evidence` is attached here, at the single exit, rather than inside
+// verifyCore — which returns from fourteen different branches, and the one
+// that forgot would be the one that mattered.
 function verify(title, card, grade, opts) {
+  const r = verifyCore(title, card, grade, opts) || { ok: false, reason: 'no verdict' };
+  r.evidence = printingEvidence(card);
+  return r;
+}
+
+function verifyCore(title, card, grade, opts) {
   opts = opts || {};
   const t = String(title || '');
   if (!t) return { ok: false, reason: 'no title' };
@@ -800,7 +854,8 @@ function filterListings(listings, card, grade) {
 const API = {
   buildQuery, verify, filterListings,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
-  languageOf, cardLanguage, namesAConflictingSet, printingConflict,
+  printingEvidence,
+  languageOf, cardLanguage, languageFromCardId, namesAConflictingSet, printingConflict,
   GRADERS, GRADERS_UNAMBIGUOUS, GRADERS_AMBIGUOUS, SLAB_GENERIC,
   SLAB_WORDS, NOT_A_SINGLE_CARD, NOT_A_SINGLE_CARD_TERMS,
   SET_NAME_PHRASES, GENUINE_ART_PHRASES, REPRINT_MARKERS, boundedTerm,

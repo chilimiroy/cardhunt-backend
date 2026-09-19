@@ -1264,6 +1264,23 @@ function normaliseListing(o) {
 // set_total / set_api_id. Convert in ONE place — passing the raw row leaves
 // setTotal undefined, and since the filter fails closed that silently
 // rejects every listing rather than returning wrong ones.
+// ── The language the gate will read, derived ONCE ─────────────
+// Both card builders did this inline, with the same comment copied above
+// each: `String(card.api_card_id || '').split('-')[0] || null`. Two copies
+// of one derivation is how the year gate ended up installed on one path
+// and dead on the other.
+//
+// The parsing itself lives in cardmatch, beside cardLanguage, which held a
+// third copy of the same regex. This is a one-line adapter, not a fourth.
+//
+// A catalogue row always has an api_card_id, so null here means the caller
+// handed the gate something that did not come from the catalogue. That is a
+// defect, and `sources[x].gateWarning` says so rather than the language
+// check quietly not running.
+function gateLanguage(card) {
+  return cm.languageFromCardId(card && card.api_card_id);
+}
+
 function filterCard(card, nameOverride) {
   return {
     name: nameOverride || card.name,
@@ -1281,7 +1298,7 @@ function filterCard(card, nameOverride) {
     // setYear, reprint). Korean prints share JAPANESE set codes, so Yahoo JP
     // is where they actually turn up.
     setYear: card.set_release ? new Date(card.set_release).getUTCFullYear() : null,
-    lang: String(card.api_card_id || '').split('-')[0] || null
+    lang: gateLanguage(card)
   };
 }
 
@@ -1366,6 +1383,11 @@ async function sourceYahoo(card, grade, limit) {
   const deduped = out.filter(l => (l.url && !seen.has(l.url)) ? seen.add(l.url) : false);
   return { listings: deduped, scanned, live: liveCount, ended: endedCount,
            printingRejected: rejectedPrinting.length,
+           // Same reporting as the eBay path: what the gate had, not only
+           // what it did. Yahoo is the marketplace where Korean prints
+           // actually appear, so a missing language here is the expensive
+           // one.
+           gate: cm.printingEvidence(fc),
            printingDropped: rejectedPrinting.slice(0, 12) };
 }
 
@@ -1426,7 +1448,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     // Charizard ex is genuinely 201/165 from SV2a. A live search for the
     // Japanese card returned 6 Korean listings among 25. Card ids are
     // {lang}-{setId}-{number}, so the language is already in the id.
-    lang: String(card.api_card_id || '').split('-')[0] || null
+    lang: gateLanguage(card)
   };
 
   // cardmatch.buildQuery is the single query builder, shared with the
@@ -1554,10 +1576,16 @@ async function sourceEbay(card, grade, limit, opts = {}) {
 
   // kept AND dropped, always. "12 listings, 40 rejected" and "no listings"
   // describe completely different situations and must never look alike.
+  //
+  // `gate` says what the gate HAD, not only what it did. A discriminator
+  // with no input is skipped silently and correctly — and is then
+  // indistinguishable from one that ran and found nothing, which is how the
+  // year check sat dead on every live route. Reported even when complete.
   return { listings, scanned: items.length,
            kept: listings.length, rejected: dropped.length,
            dropped: dropped.slice(0, 40),
            parserDisagreements: disagreements.slice(0, 20),
+           gate: cm.printingEvidence(matchCard),
            query: q };
 }
 
@@ -1627,6 +1655,25 @@ async function gatherListings(card, grade, limit, opts) {
       // does not use the `rejected` shape below. Reported even when zero:
       // "0 rejected" says the gate ran, which is a different statement from
       // the field being absent because it never ran at all.
+      // What the printing gate had to work with. Always present, so
+      // "the language check ran and found nothing" can be told apart from
+      // "the language check never ran" — the distinction that hid a dead
+      // year gate for weeks.
+      //
+      // `gateWarning` is the assertable failure. Every catalogue row's id
+      // starts with its language, so a missing one means the card handed to
+      // the gate did not come from the catalogue. The gate still runs on
+      // everything else and nothing is rejected over it — this reports,
+      // it does not refuse.
+      if (r.value.gate) {
+        sources[s.id].gate = r.value.gate;
+        if (r.value.gate.unchecked.includes('language')) {
+          sources[s.id].gateWarning =
+            'no language on the card — the language check did NOT run. ' +
+            'Card ids are {lang}-{setId}-{number}; this card reached the gate without one.';
+        }
+      }
+
       if (r.value.printingRejected !== undefined) {
         sources[s.id].printingRejected = r.value.printingRejected;
         if (r.value.printingDropped && r.value.printingDropped.length) {

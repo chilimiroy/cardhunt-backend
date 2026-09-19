@@ -13,6 +13,21 @@ tcgdexprobe.js
 tcgdexharvest.js
 ebayprobe.js
 yahoogate.js
+
+# setaudit.js is DELIBERATELY TRACKED, unlike every probe above it.
+# Those need a database URL or a residential IP; setaudit is read-only over
+# the public API, so it runs from anywhere, including CI and another machine.
+# It is the tool that proved the API was clean while the frontend was not, and
+# that argument is only reproducible if the tool ships with the code.
+#
+# What actually keeps it tracked is that it IS tracked: .gitignore does not
+# apply to files already in the index. This negation only helps against a
+# sweeping pattern added ABOVE it -- git is last-match-wins, so a broad rule
+# added further down still wins. Verified with `git check-ignore --no-index`,
+# which is the form that ignores index state; without --no-index it reports
+# a tracked file as unmatched and tells you nothing.
+# setlist.test.js asserts the file is tracked, which is the durable guard.
+!setaudit.js
 gradeprices.js
 *.test.js
 jptest.js

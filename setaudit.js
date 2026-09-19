@@ -8,6 +8,14 @@
 // This tests every set through the REAL endpoints rather than reading
 // code, and reports where each one breaks. Read-only.
 //
+// TRACKED IN GIT, unlike ingest.js / tcgdexprobe.js / ebayprobe.js /
+// yahoogate.js, which are all gitignored. Those need a database URL or a
+// residential IP. This one talks to the public API and nothing else, so it
+// runs from any machine, and it is the tool that established the API was
+// clean while the frontend was not (2026-09-19). That argument is only
+// reproducible if the tool ships with the code. See the note beside
+// `!setaudit.js` in .gitignore; setlist.test.js asserts it stays tracked.
+//
 //   node setaudit.js en            every English set
 //   node setaudit.js en --broken   only the failures
 //   node setaudit.js all --limit=40

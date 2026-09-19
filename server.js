@@ -1095,6 +1095,36 @@ async function resolveListingCard(cardId) {
   return r.rows[0] || null;
 }
 
+// The number-matched price for one card id, or null.
+//
+// Same LATERAL join /api/cards/:cardId and the set endpoint use — one
+// derivation of "what is this card worth", not a third. `grade IS NULL` means
+// the ungraded card rather than a slab, and the ORDER BY prefers a real price
+// over an estimate before falling back to recency.
+async function numberMatchedPrice(cardId) {
+  if (!db || !cardId) return null;
+  const r = await db.query(`
+    SELECT c.api_card_id, c.name, c.number, c.set_name, lp.price_usd,
+           lp.source AS price_source, lp.recorded_at
+    FROM cards c
+    LEFT JOIN LATERAL (
+      SELECT price_usd, source, recorded_at
+      FROM price_history ph
+      WHERE ph.card_api_id = c.api_card_id
+        AND ph.grade IS NULL
+      ORDER BY (ph.source NOT LIKE 'estimate%') DESC, ph.recorded_at DESC
+      LIMIT 1
+    ) lp ON TRUE
+    WHERE c.api_card_id = ANY($1) LIMIT 1`, [listingIdCandidates(cardId)]);
+  if (!r.rows.length) return null;
+  const c = r.rows[0];
+  const price = c.price_usd ? parseFloat(c.price_usd) : 0;
+  const isEstimate = !c.price_source || /^estimate/.test(c.price_source);
+  return { cardId: c.api_card_id, name: c.name, number: c.number,
+           setName: c.set_name, price, source: c.price_source || 'estimate',
+           isReal: !isEstimate && price > 0, recordedAt: c.recorded_at };
+}
+
 // ── Attribution ───────────────────────────────────────────────
 // eBay's terms: data shown must be identifiably eBay's, and nothing may
 // imply affiliation or endorsement. "Listings from eBay" states the source
@@ -2295,6 +2325,53 @@ app.get('/api/market/:cardName', async (req, res) => {
     // rather than guess. A read endpoint must not inject a weaker signal
     // into the authoritative table. Serve the aggregate, store nothing.
     // ──────────────────────────────────────────────────────────
+
+    // ── ...AND DO NOT SERVE IT AS THIS CARD'S PRICE EITHER ────
+    // Not writing the aggregate was only half the fix. It was still RETURNED
+    // as `marketValue` with `confidence: 'high'`, and the card page pasted it
+    // over the number-matched price. Ascended Heroes carries Pikachu ex at
+    // #057 $3.37 and #276 $959.68; this endpoint answered $3.17 for both,
+    // because tcgplayerPrice() searches "{name} {set}" and takes results[0].
+    //
+    // `cardId` was accepted here and never used. Now it decides: a
+    // number-matched price outranks a name-matched one, always. The
+    // aggregate is still returned, under `nameMatched`, so nothing that
+    // read it has lost anything — but it can no longer be mistaken for this
+    // card's own price.
+    //
+    // `matchedOn` states which path produced `marketValue`, so this is
+    // diagnosable from the response instead of by reading frontend code.
+    const cardId = req.query.cardId || '';
+    let nm = null;
+    try { nm = await numberMatchedPrice(cardId); }
+    catch (e) { nm = null; }   // never fail the read over the upgrade
+
+    if (nm && nm.isReal) {
+      data.nameMatched = {
+        marketValue: data.marketValue,
+        confidence: data.confidence,
+        basis: data.basis,
+        warning: 'matched on card name and set only — where a name repeats in '
+               + 'a set this may be a different variant'
+      };
+      data.marketValue = nm.price;
+      data.confidence  = 'high';
+      data.basis       = nm.source + ' (collector number ' + nm.number + ')';
+      data.matchedOn   = 'collector number';
+      data.cardId      = nm.cardId;
+      data.priceDate   = nm.recordedAt;
+    } else {
+      // Say so. A response that cannot identify the card must not imply it
+      // did — that is the whole failure this endpoint is known for.
+      data.matchedOn = 'name+set';
+      data.cardId    = nm ? nm.cardId : (cardId || null);
+      data.matchWarning = cardId
+        ? 'no number-matched price for ' + cardId + ' — marketValue is matched '
+          + 'on card name and set only and may be a different variant'
+        : 'no cardId supplied — marketValue is matched on card name and set '
+          + 'only and may be a different variant';
+    }
+
     res.json(data);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

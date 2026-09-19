@@ -118,23 +118,72 @@ const SLAB_WORDS = /\b(psa|bgs|cgc|sgc|tag|ace|ags|ars|gma|hga|graded|slab|slabb
 // the game (see SET_NAME_PHRASES below, which exists because it was). Only
 // the phrasings that actually mean a bundle: "collection of", "collection
 // box", "premium collection".
-const NOT_A_SINGLE_CARD = new RegExp([
+// ── The terms. PLAIN WORDS ONLY — no regex, no boundaries ─────
+//
+// This list was once a single /\b(lot|box|tin|...)\b/i. Someone split it
+// into an array of alternations joined with '|' for readability, and the
+// two \b at the ends of the old pattern went with it: only four terms that
+// happened to carry an inline \b survived.
+//
+// So `tin` matched inside Gira*tin*a and Des*tin*ed Rivals, `lot` inside
+// Lotad, `case` inside Casey, `box` inside Boxer. Eight of twenty-five real
+// card names were rejected, and Lost Origin's Giratinas and the whole of
+// Destined Rivals returned "all 75 scanned were rejected — not a single
+// card: tin". Every suite passed throughout, because not one of them tested
+// a card name containing a junk word as a substring.
+//
+// The boundaries are now applied in code, below, once, to every term. Add
+// plain words here; they cannot lose their boundaries because they never
+// carry them.
+const NOT_A_SINGLE_CARD_TERMS = [
   // multiples
-  'lot|lots|bundle|set of|collection of|\\d+\\s*cards?\\b|joblot|job lot|mystery',
+  'lot', 'lots', 'bundle', 'set of', 'collection of', 'joblot', 'job lot', 'mystery',
   // sealed product
-  'booster|box|pack|packs|tin|etb|elite trainer|sealed|case|blister',
-  'display|carton|crate|collection box|premium collection|build & battle',
+  'booster', 'box', 'boxes', 'pack', 'packs', 'tin', 'tins', 'etb', 'elite trainer',
+  'sealed', 'case', 'cases', 'blister',
+  'display', 'carton', 'crate', 'collection box', 'premium collection', 'build & battle',
   // merchandise, not cards
-  'key\\s*chain|keychain|keyring|key\\s*ring|coin|pin\\b|badge|plush|figure|figurine',
-  'statue|mug|shirt|t-shirt|hoodie|poster|banner|flag|towel|bag|wallet|phone case',
-  'lamp|light|clock|puzzle|lego|funko|nanoblock|model kit|stand\\b|display case',
+  'key chain', 'keychain', 'keyring', 'key ring', 'coin', 'coins', 'pin', 'pins',
+  'badge', 'plush', 'figure', 'figurine',
+  'statue', 'mug', 'shirt', 't-shirt', 'hoodie', 'poster', 'banner', 'flag', 'towel',
+  'bag', 'wallet', 'phone case',
+  'lamp', 'light', 'clock', 'puzzle', 'lego', 'funko', 'nanoblock', 'model kit',
+  'stand', 'display case',
   // accessories
-  'sleeve|sleeves|playmat|play mat|deck box|binder|album|portfolio|toploader',
-  'top loader|penny sleeve|card saver|magnetic|screwdown|storage|organizer',
+  'sleeve', 'sleeves', 'playmat', 'play mat', 'deck box', 'binder', 'binders',
+  'album', 'portfolio', 'toploader', 'toploaders',
+  'top loader', 'penny sleeve', 'card saver', 'magnetic', 'screwdown', 'storage',
+  'organizer',
   // not genuine cards
-  'proxy|proxies|orica|custom|fake|replica|repro|reprint card|metal card|gold plated',
-  'gold card|jumbo|oversized|oversize|sticker|tattoo|stamp\\b|cardboard cutout'
-].join('|'), 'i');
+  'proxy', 'proxies', 'orica', 'custom', 'fake', 'replica', 'repro', 'reprint card',
+  'metal card', 'gold plated',
+  'gold card', 'jumbo', 'oversized', 'oversize', 'sticker', 'stickers', 'tattoo',
+  'stamp', 'cardboard cutout'
+];
+
+// The one entry that is genuinely a pattern rather than a word: "50 cards",
+// "50cards". It carries its own boundaries deliberately and is kept apart
+// from the word list so the word list stays free of regex.
+const NOT_A_SINGLE_CARD_PATTERNS = ['\\d+\\s*cards?\\b'];
+
+// Escape a literal term, then wrap it in word boundaries.
+//
+// \b is applied only where the adjacent character is actually a word
+// character. Every term above qualifies on both sides today, but a future
+// term like "+1" would make a leading \b mean the opposite of what was
+// intended, and that is precisely the class of silent breakage this whole
+// comment exists about.
+function boundedTerm(term) {
+  const esc = String(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                          .replace(/\s+/g, '\\s+');
+  return (/^[A-Za-z0-9]/.test(term) ? '\\b' : '')
+       + '(?:' + esc + ')'
+       + (/[A-Za-z0-9]$/.test(term) ? '\\b' : '');
+}
+
+const NOT_A_SINGLE_CARD = new RegExp(
+  NOT_A_SINGLE_CARD_TERMS.map(boundedTerm).concat(NOT_A_SINGLE_CARD_PATTERNS).join('|'),
+  'i');
 
 // ── Set names that contain lot vocabulary ─────────────────────
 // "Classic Collection" is a SET, not a bundle, and `collection` above
@@ -603,7 +652,8 @@ const API = {
   buildQuery, verify, filterListings,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn,
   languageOf, cardLanguage, namesAConflictingSet, printingConflict,
-  GRADERS, SLAB_WORDS, NOT_A_SINGLE_CARD, SET_NAME_PHRASES, REPRINT_MARKERS,
+  GRADERS, SLAB_WORDS, NOT_A_SINGLE_CARD, NOT_A_SINGLE_CARD_TERMS,
+  SET_NAME_PHRASES, REPRINT_MARKERS,
   EBAY_KEYWORD_LIMIT
 };
 

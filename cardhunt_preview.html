@@ -1225,15 +1225,36 @@ async function loadAllSets() {
   count();
   renderSets();
 
-  const live = await loadLangSets('en');
-  if (live && live.length) {
-    count();
-    renderSets();
-  } else {
-    // Say so rather than quietly serving ids that half the app cannot resolve.
-    console.warn('[sets] /api/sets/lang/en unavailable — showing the embedded '
-      + EN_SETS.length + ' sets with pokemontcg.io ids. Some sets will show '
-      + 'estimates and no listings until the API responds.');
+  // Render's free tier sleeps and a cold start takes 30-60s, so the FIRST
+  // visitor is the one most likely to get nothing here — and being left on
+  // the embedded pokemontcg-id list is exactly the broken state this change
+  // exists to end. Retry while the server wakes instead of stranding them
+  // there until they happen to reload.
+  const WAITS = [0, 3000, 6000, 12000, 20000];
+  for (let i = 0; i < WAITS.length; i++) {
+    if (WAITS[i]) await new Promise(r => setTimeout(r, WAITS[i]));
+    const live = await loadLangSets('en', i > 0);   // force past the cached miss
+    if (live && live.length) {
+      count();
+      renderSets();
+      if (i) console.info('[sets] database set list loaded on attempt ' + (i + 1));
+      return;
+    }
+  }
+
+  // Say so rather than quietly serving ids that half the app cannot resolve.
+  console.warn('[sets] /api/sets/lang/en did not respond — showing the embedded '
+    + EN_SETS.length + ' sets with pokemontcg.io ids. Some sets will show '
+    + 'estimates and no listing links until the API is reachable.');
+  const out = document.getElementById('sets-out');
+  if (out && !document.getElementById('sets-fallback-note')) {
+    const n = document.createElement('div');
+    n.id = 'sets-fallback-note';
+    n.style.cssText = 'background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;'
+      + 'padding:10px 16px;margin-bottom:16px;font-size:12px;color:#92400E;line-height:1.6';
+    n.textContent = 'Showing a built-in set list because the API did not respond. '
+      + 'Some sets will show estimated prices and no listing links. Reload once it wakes.';
+    out.parentNode.insertBefore(n, out);
   }
 }
 
@@ -4140,6 +4161,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260919-f4a2bca-dirty &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260919-0c56d21-dirty &middot; click to hide</div>
 </body>
 </html>

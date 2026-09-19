@@ -66,7 +66,23 @@ const RARITY_WORDS = [
 ];
 
 // ── Grading ───────────────────────────────────────────────────
-const GRADERS = ['PSA','BGS','CGC','SGC','TAG','ACE','AGS','ARS','GMA','HGA'];
+// The COMPANY ROSTER comes from cardmatch. This was a second hand-typed
+// copy of the same ten names, and when AiGrade was added to cardmatch this
+// reader would have carried on reading "AiGrade 9.5" as no grade at all —
+// then reported a disagreement with cardmatch on every such title. A
+// cross-check whose two sides hold different lists of companies measures
+// the lists, not the titles.
+//
+// The PARSING stays independent, which is the part the cross-check exists
+// to test. Only the data is shared.
+const cmGraders = require('./cardmatch');
+const GRADERS = cmGraders.GRADERS_UNAMBIGUOUS.concat(cmGraders.GRADERS_AMBIGUOUS);
+
+// Companies whose bare name is also ordinary card vocabulary — ACE SPEC is
+// a rarity, TAG TEAM a mechanic, MNT sellers' shorthand for Mint. The bare
+// branch below must not fire on those, or every ACE SPEC card is read as
+// an ACE-graded slab.
+const GRADERS_BARE_UNSAFE = new Set(cmGraders.GRADERS_AMBIGUOUS);
 
 // Marketing noise carrying no identifying value
 const NOISE = /\b(pokemon|pokémon|tcg|card|cards|game|nintendo|genuine|authentic|mint|near|nm|lp|excellent|rare|holo|foil|graded|slab|slabbed|gem|gemmint|pristine|beautiful|stunning|investment|invest|rare!|wow|look|l@@k|htf|hard to find|vintage|collectible|collection|lot|free\s*ship\w*|fast\s*ship\w*|us\s*seller|new|sealed|psa\s*ready|pack\s*fresh|centered|centering|swirl|no\s*swirl|error)\b/gi;
@@ -112,10 +128,12 @@ function parseListingTitle(title) {
 
   // ── Grader + grade ──
   for (const co of GRADERS) {
-    const re = new RegExp('\\b' + co + '\\s*[-:]?\\s*(10|[1-9](?:\\.5)?)(?![\\d.])', 'i');
+    const re = new RegExp('\\b' + co.replace(/\s+/g, '\\s+') +
+                          '\\s*[-:]?\\s*(10|[1-9](?:\\.5)?)(?![\\d.])', 'i');
     const hit = t.match(re);
     if (hit) { out.grader = co; out.grade = hit[1]; t = t.replace(hit[0], ' '); break; }
-    const bare = new RegExp('\\b' + co + '\\b', 'i');
+    if (GRADERS_BARE_UNSAFE.has(co)) continue;
+    const bare = new RegExp('\\b' + co.replace(/\s+/g, '\\s+') + '\\b', 'i');
     if (!out.grader && bare.test(t)) { out.grader = co; t = t.replace(bare, ' '); }
   }
   // Grade words, meaningful only alongside a grader

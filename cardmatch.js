@@ -53,8 +53,82 @@ function numberPairsIn(title) {
   return out;
 }
 
+// ── A term, with boundaries, applied in ONE place ─────────────
+// Used by the grader list below AND by NOT_A_SINGLE_CARD further down.
+// It lives up here rather than beside the junk terms because both lists
+// need it, and because the one thing this file has proved twice is that a
+// boundary written by hand at each site is a boundary that goes missing.
+//
+// \b is applied only where the adjacent character is actually a word
+// character. Every term today qualifies on both sides, but a future term
+// like "+1" would make a leading \b mean the opposite of what was
+// intended, and that is precisely the class of silent breakage the long
+// comment above NOT_A_SINGLE_CARD_TERMS is about.
+function boundedTerm(term) {
+  const esc = String(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                          .replace(/\s+/g, '\\s+');
+  return (/^[A-Za-z0-9]/.test(term) ? '\\b' : '')
+       + '(?:' + esc + ')'
+       + (/[A-Za-z0-9]$/.test(term) ? '\\b' : '');
+}
+
 // ── Grades ────────────────────────────────────────────────────
-const GRADERS = ['PSA', 'BGS', 'CGC', 'SGC', 'TAG', 'ACE', 'AGS', 'ARS', 'GMA', 'HGA'];
+// Real grading companies, each one checked to exist before it was added.
+// A token here that is not a company turns every title containing it into
+// a "slab" and hides the card from every raw search — so this list is
+// additive only on evidence, never on a guess.
+//
+// AiGrade was missing, and "Giratina V 186/196 Lost Origin AiGrade 9.5" —
+// a $987 slab — therefore passed a RAW NM search. The slab word list below
+// is now DERIVED from these arrays rather than typed out a second time, so
+// a company can no longer be half-installed: added to one list, absent
+// from the other, with nothing reporting the difference.
+//
+// Deliberately NOT here: GEM (it is in every "Gem Mint" title), RARE (a
+// rarity), MINT, TCG. None is a grading company and each would eat
+// ordinary card vocabulary.
+const GRADERS_UNAMBIGUOUS = [
+  'PSA',        // Professional Sports Authenticator
+  'BGS',        // Beckett Grading Services
+  'BVG',        // Beckett Vintage Grading
+  'BCCG',       // Beckett Collectors Club Grading
+  'CGC',        // Certified Guaranty Company
+  'CSG',        // Certified Sports Guaranty — closed 2023, its slabs still trade
+  'SGC',        // Sportscard Guaranty Corporation
+  'AGS',        // Automated Grading Systems
+  'ARS',        // ARS Grading
+  'GMA',        // Gem Mint Authentication
+  'HGA',        // Hybrid Grading Approach
+  'ISA',        // International Sports Authentication
+  'KSA',        // KSA Certification
+  'PCA',        // PCA Grading
+  'AIGRADE',    // AiGrade — the one this list was missing
+  'AI GRADE'    // the same company, spaced. \s+ via boundedTerm
+];
+
+// Companies whose name is ALSO ordinary card vocabulary. They grade, so
+// "TAG 10" is a slab and must be read as one — but the bare token is not
+// evidence of anything:
+//
+//   TAG TEAM   a card mechanic (Pikachu & Zekrom GX TAG TEAM)
+//   ACE SPEC   a card mechanic, and a rarity
+//   MNT        sellers' shorthand for Mint, written on RAW cards ("NM-MNT")
+//
+// Bare `tag` and `ace` were in the slab word list, which meant every TAG
+// TEAM and every ACE SPEC card was rejected from every raw search.
+// Measured before this fix: "Pokemon Pikachu & Zekrom GX TAG TEAM 33/181
+// Team Up Ultra Rare NM" -> "wants raw, title indicates a graded slab:
+// TAG". `looksLikeJunk` again — a guard written against bad data eating
+// good data, with no symptom but a short list.
+//
+// These count as slab evidence only WITH a grade number beside them.
+const GRADERS_AMBIGUOUS = ['TAG', 'ACE', 'MNT'];
+
+const GRADERS = GRADERS_UNAMBIGUOUS.concat(GRADERS_AMBIGUOUS);
+
+// A grade number as sellers write it: 10, 9, 9.5 — and not the 9 inside
+// "9.5", which sells well above a whole grade.
+const GRADE_NUM = '\\s*[-:]?\\s*(?:10|[1-9](?:\\.5)?)(?![\\d.])';
 
 function parseGrade(g) {
   if (!g) return { kind: 'raw', condition: null };
@@ -88,7 +162,8 @@ function stripSpeculative(title) {
   return String(title)
     .replace(/\(([^)]*)\)/g, (whole, inner) =>
       SPECULATIVE_GRADE.test(inner) ? ' ' : whole)
-    .replace(new RegExp('\\b(' + GRADERS.join('|') + ')\\s*[-:]?\\s*(?:10|[1-9](?:\\.5)?)\\s*(?:' +
+    .replace(new RegExp('(?:' + GRADERS.map(boundedTerm).join('|') + ')' +
+      '\\s*[-:]?\\s*(?:10|[1-9](?:\\.5)?)\\s*(?:' +
       'contender|candidate|potential|pot\\.?\\??|worthy|ready|hopeful)\\b', 'gi'), ' ');
 }
 
@@ -98,15 +173,35 @@ function gradesIn(title) {
   const out = [];
   const t = stripSpeculative(title);
   for (const co of GRADERS) {
-    const re = new RegExp('\\b' + co + '\\s*[-:]?\\s*(10|[1-9](?:\\.5)?)(?![\\d.])', 'gi');
+    const re = new RegExp(boundedTerm(co) + '\\s*[-:]?\\s*(10|[1-9](?:\\.5)?)(?![\\d.])', 'gi');
     let m;
     while ((m = re.exec(t))) out.push({ grader: co, grade: m[1] });
   }
   return out;
 }
 
-// Words meaning "this is in a slab", used to reject slabs from raw searches
-const SLAB_WORDS = /\b(psa|bgs|cgc|sgc|tag|ace|ags|ars|gma|hga|graded|slab|slabbed|gem\s*mint|gem\s*mt|pristine|black\s*label)\b/i;
+// ── "This card is in a slab" ──────────────────────────────────
+// Used to reject slabs from a RAW search. DERIVED from the grader lists
+// above: it used to be a hand-typed second copy of them, and AiGrade was
+// in neither while ARS and HGA were in only one. Two lists of the same
+// thing, and the drift is invisible until a $987 slab turns up in a raw
+// search.
+//
+// Generic slab vocabulary, kept as plain words for the same reason the
+// junk terms are: the boundaries are applied by boundedTerm, once.
+// "gemmint" and "gemmt" are listed separately because the old pattern
+// spelled them `gem\s*mint` — optional space — and dropping that would
+// have quietly narrowed the filter.
+const SLAB_GENERIC = ['graded', 'slab', 'slabbed', 'gem mint', 'gemmint',
+                      'gem mt', 'gemmt', 'pristine', 'black label'];
+
+const SLAB_WORDS = new RegExp('(?:' + [].concat(
+  // An unambiguous company name is slab evidence on its own.
+  GRADERS_UNAMBIGUOUS.map(boundedTerm),
+  // An ambiguous one only with a grade beside it — see GRADERS_AMBIGUOUS.
+  GRADERS_AMBIGUOUS.map(co => boundedTerm(co) + GRADE_NUM),
+  SLAB_GENERIC.map(boundedTerm)
+).join('|') + ')', 'i');
 
 // Multi-card listings, sealed product, and anything that is not one card.
 // Sellers list merchandise under card searches because that is where the
@@ -157,6 +252,17 @@ const NOT_A_SINGLE_CARD_TERMS = [
   // not genuine cards
   'proxy', 'proxies', 'orica', 'custom', 'fake', 'replica', 'repro', 'reprint card',
   'metal card', 'gold plated',
+  // fan-made. "Giratina V 186/196 Shiny Holo Lost Origin *Fan Art*" was kept
+  // at $8.50 against a card worth $800-1000.
+  //
+  // `art` alone must NEVER be a term — Alt Art, Full Art and Illustration
+  // Rare are the genuine chase cards, and this card is one of them. Even
+  // 'art card' is a hazard, because sellers write "Alt Art Card": the
+  // genuine phrasings are removed by GENUINE_ART_PHRASES below BEFORE this
+  // list is applied, exactly as SET_NAME_PHRASES protects "Classic
+  // Collection" from `collection`.
+  'fan art', 'fanart', 'fan made', 'fanmade', 'art card',
+  'unofficial', 'not official', 'handmade', 'homemade', 'inspired by',
   'gold card', 'jumbo', 'oversized', 'oversize', 'sticker', 'stickers', 'tattoo',
   'stamp', 'cardboard cutout'
 ];
@@ -166,20 +272,8 @@ const NOT_A_SINGLE_CARD_TERMS = [
 // from the word list so the word list stays free of regex.
 const NOT_A_SINGLE_CARD_PATTERNS = ['\\d+\\s*cards?\\b'];
 
-// Escape a literal term, then wrap it in word boundaries.
-//
-// \b is applied only where the adjacent character is actually a word
-// character. Every term above qualifies on both sides today, but a future
-// term like "+1" would make a leading \b mean the opposite of what was
-// intended, and that is precisely the class of silent breakage this whole
-// comment exists about.
-function boundedTerm(term) {
-  const esc = String(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-                          .replace(/\s+/g, '\\s+');
-  return (/^[A-Za-z0-9]/.test(term) ? '\\b' : '')
-       + '(?:' + esc + ')'
-       + (/[A-Za-z0-9]$/.test(term) ? '\\b' : '');
-}
+// The boundaries are applied by boundedTerm, defined once near the top of
+// this file because the grader list needs it too.
 
 const NOT_A_SINGLE_CARD = new RegExp(
   NOT_A_SINGLE_CARD_TERMS.map(boundedTerm).concat(NOT_A_SINGLE_CARD_PATTERNS).join('|'),
@@ -196,6 +290,23 @@ const NOT_A_SINGLE_CARD = new RegExp(
 // are removed from the title BEFORE the lot test rather than the test
 // being weakened for everyone.
 const SET_NAME_PHRASES = /\b(classic collection|trainer gallery|galarian gallery|shiny vault|hidden fates|celebrations|legendary collection|champions? path)\b/gi;
+
+// ── Genuine art phrasing, protected the same way ──────────────
+// 'art card' is on the junk list because a fan-made "Art Card" is not a
+// Pokémon card. But "Alt Art Card" and "Alternate Art Card" are how
+// sellers write the most valuable cards in the modern game, and
+// `\bart card\b` matches inside both — which would have rejected the very
+// Giratina this pass exists to price.
+//
+// So the genuine phrasings are removed from the title BEFORE the junk
+// test, exactly as SET_NAME_PHRASES is. Removing the phrase is safer than
+// weakening the term: "Fan Art Card" still carries a bare "art card"
+// afterwards and is still refused.
+//
+// This is used ONLY for the lot/junk test. Nothing else sees the stripped
+// title — the number, grade and set checks all read the original.
+const GENUINE_ART_PHRASES =
+  /\b(?:alt(?:ernate)?\s*art|full\s*art|special\s+illustration|illustration\s+rare|character\s+(?:rare|art)|secret\s+art|art\s+rare|special\s+art)\b/gi;
 
 // ── Reprint sets that reuse another set's numbering ───────────
 // The English form of the master-ball mirror problem, and it is worse than
@@ -501,8 +612,17 @@ function verify(title, card, grade, opts) {
 
   // 1. Not a single card at all.
   //    Legitimate set names containing lot vocabulary are removed first, so
-  //    "Classic Collection" is not read as a bundle.
-  const tForLot = t.replace(SET_NAME_PHRASES, ' ');
+  //    "Classic Collection" is not read as a bundle — and genuine art
+  //    phrasing likewise, so "Alt Art Card" is not read as a fan-made
+  //    "art card".
+  //
+  //    Removed to a `~` rather than to a space: a space lets the two
+  //    halves of what is left become neighbours, and the one pattern in
+  //    the junk list is `\d+\s*cards?`. "186/196 Alternate Art Card"
+  //    stripped to spaces reads "186/196   Card" — which that pattern
+  //    matches, rejecting a genuine alt art as a 196-card lot. A
+  //    non-space, non-word character cannot be spanned by \s* or \b.
+  const tForLot = t.replace(SET_NAME_PHRASES, ' ~ ').replace(GENUINE_ART_PHRASES, ' ~ ');
   if (NOT_A_SINGLE_CARD.test(tForLot)) {
     return { ok: false, reason: 'not a single card: ' +
       (tForLot.match(NOT_A_SINGLE_CARD) || [])[0] };
@@ -652,8 +772,9 @@ const API = {
   buildQuery, verify, filterListings,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn,
   languageOf, cardLanguage, namesAConflictingSet, printingConflict,
-  GRADERS, SLAB_WORDS, NOT_A_SINGLE_CARD, NOT_A_SINGLE_CARD_TERMS,
-  SET_NAME_PHRASES, REPRINT_MARKERS,
+  GRADERS, GRADERS_UNAMBIGUOUS, GRADERS_AMBIGUOUS, SLAB_GENERIC,
+  SLAB_WORDS, NOT_A_SINGLE_CARD, NOT_A_SINGLE_CARD_TERMS,
+  SET_NAME_PHRASES, GENUINE_ART_PHRASES, REPRINT_MARKERS, boundedTerm,
   EBAY_KEYWORD_LIMIT
 };
 

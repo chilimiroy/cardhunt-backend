@@ -25,10 +25,12 @@ const target = args[0];
 const grade  = (args.find(a => a.startsWith('--grade=')) || '--grade=Raw NM').replace('--grade=', '');
 const nameF  = (args.find(a => a.startsWith('--name=')) || '').replace('--name=', '').toLowerCase();
 const live   = args.includes('--live');
+const showKept = args.includes('--kept');   // print survivors, to spot false positives
 const limit  = parseInt((args.find(a => a.startsWith('--limit=')) || '').replace('--limit=', '')) || 12;
 
 if (!target) {
-  console.log('  usage: node linkaudit.js <setId|cardId> [--grade="PSA 10"] [--name=X] [--live]');
+  console.log('  usage: node linkaudit.js <setId|cardId> [--grade="PSA 10"] [--name=X] [--live] [--kept]');
+  console.log('         --kept prints surviving listings, flagging likely false positives');
   process.exit(1);
 }
 
@@ -84,6 +86,56 @@ async function auditCard(cardId, cardName, cardNumber) {
 
   const mark = c.code === 'ok' ? ' ok  ' : `  ${c.code}   `;
   console.log(`${mark}${String(cardNumber).padEnd(5)} ${String(cardName).slice(0,26).padEnd(28)} ${c.why}`);
+
+  // The inverse view. Rejections are easy to inspect; the expensive
+  // mistakes are the ones that got through.
+  if (showKept && d.listings && d.listings.length) {
+    const nums = new Set(), langs = new Set();
+    d.listings.forEach(l => {
+      const t = String(l.title || '');
+      // Does the kept title actually carry this card's number?
+      const pair = t.match(/\b([A-Za-z]{0,4}\d{1,4})\s*\/\s*([A-Za-z]{0,4}\d{1,4})\b/);
+      const num  = pair ? pair[1].replace(/^0+/, '') : null;
+      const want = String(cardNumber).replace(/^0+/, '');
+      const numOk = num ? num === want : null;
+      if (num) nums.add(pair[0]);
+
+      const flags = [];
+      if (numOk === false) flags.push('NUMBER ' + pair[0]);
+      if (numOk === null)  flags.push('no number in title');
+      if (/\b(towel|plush|mug|shirt|hoodie|poster|keychain|sticker|pin badge|figure|statue|sleeve|playmat|binder|toploader)\w*/i.test(t))
+        flags.push('MERCH');
+      if (/\b(custom|proxy|orica|fan art|unofficial|handmade|art card|not official|replica|repro)\w*/i.test(t))
+        flags.push('FAKE');
+      if (/\b(lot|bundle|x\s*\d+|\d+\s*card)\w*/i.test(t)) flags.push('MULTI');
+      if (/[\u3040-\u30ff\uac00-\ud7af]/.test(t)) flags.push('CJK');
+
+      // `!!` is a keyword finding — something in the title that should have
+      // been caught. `~~` is the outlier check: nothing in the title is
+      // wrong, the price simply cannot be this card's. Different findings,
+      // different marks, because the fix for each is different.
+      const mk = flags.length ? '  !! ' : (l.suspect ? '  ~~ ' : '     ');
+      console.log(`${mk}   $${String(l.landed ?? l.price).padEnd(9)} ${t.slice(0, 68)}`);
+      if (flags.length) console.log(`            ^ ${flags.join(', ')}`);
+      if (l.suspect) console.log(`            ~ ${l.suspect}: ${l.suspectReason || ''}`);
+    });
+    if (nums.size > 1) {
+      console.log(`         numbers seen across kept listings: ${[...nums].join(', ')}`);
+    }
+    // The headline is what a user acts on, so print it beside the rows it
+    // was drawn from — and say what the outlier check did, including when
+    // it declined to run. "Not applied, median below $15" is a decision,
+    // not a silence.
+    const o = d.outliers;
+    if (o && o.priced) {
+      console.log(`         cheapest $${d.cheapest} · cheapest buyable $${d.cheapestLive}` +
+                  `  (flagged rows excluded)`);
+      console.log(o.applied
+        ? `         outliers: median $${Number(o.median).toFixed(2)} of ${o.priced}` +
+          ` priced · spread ${o.spread}x · ${o.flagged} flagged`
+        : `         outliers: not applied — ${o.reason}`);
+    }
+  }
   if (c.code !== 'ok') {
     if (query) console.log(`        query: ${query}`);
     const drops = (d.sources && d.sources.ebay && d.sources.ebay.droppedSample) || [];

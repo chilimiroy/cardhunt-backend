@@ -61,6 +61,15 @@ function landedOf(l) {
 function usable(l) {
   if (!(Number(l.price) > 0)) return false;
   if (l.live && l.listingType === 'auction') return false;
+  // A listing the outlier check called implausible is not evidence of what
+  // this grade is worth. $2.08 against an $817 median is a proxy, a
+  // mislabelled listing or a scam in every case, and averaging it in would
+  // publish a measured price built partly on the thing we just flagged.
+  // Only `implausible` — `unusually-cheap` may well be a real bargain, and
+  // a median absorbs one of those without harm. Rows with no `suspect`
+  // field (the outlier check did not run, or nothing was flagged) are
+  // unaffected, so every existing caller behaves exactly as before.
+  if (l.suspect === 'implausible') return false;
   return true;
 }
 

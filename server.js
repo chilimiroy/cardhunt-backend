@@ -15,6 +15,10 @@ const cm = require('./cardmatch');
 const estimator = require('./estimator');
 const gp = require('./gradeprice');
 const lp = require('./listingparse');
+// The gap no keyword can close: a title indistinguishable from a genuine one
+// at 1/400th of the price. The card's own listings are the only evidence.
+// See TASK.md T2 and outlier.js.
+const outlier = require('./outlier');
 
 const app = express();
 app.use(cors({ origin: '*' }));
@@ -1655,14 +1659,33 @@ async function gatherListings(card, grade, limit, opts) {
     }
   });
 
+  // ── After the gate, before the sort ───────────────────────────
+  // Every listing here has passed cardmatch: right card, right number,
+  // right set, right grade. Giratina V #186 still came back spanning
+  // $2.08 to $1,114.99 — 536x on one card at one grade — because the
+  // cheap title is word for word the shape of a genuine one. There is
+  // nothing in it to match against.
+  //
+  // So the card's own listings judge it. FLAGGED, never removed: a
+  // genuine bargain exists, and this project has twice destroyed good
+  // data with a filter written against bad data. The row stays, carries
+  // its reason, and sorts last.
+  const judged = outlier.flagOutliers(listings);
+  listings = judged.listings;
+
   // Cheapest LANDED cost first. Rows whose shipping the source did not state
   // sort on price alone and say so, rather than pretending shipping is zero.
   // Buyable first, then cheapest landed cost. An ended auction never
   // outranks something you can actually purchase.
+  //
+  // Suspect rank comes FIRST — ahead of buyable, ahead of price. The point
+  // of a cheapest-first list is that the top row can be acted on.
   listings.sort((a, b) =>
+    (outlier.suspectRank(a) - outlier.suspectRank(b)) ||
     (Number(b.live) - Number(a.live)) || (a.landed - b.landed) || (a.price - b.price));
   const liveCount = listings.filter(l => l.live).length;
-  const out = { listings, sources, tookMs: Date.now() - t0, liveCount };
+  const out = { listings, sources, tookMs: Date.now() - t0, liveCount,
+                outliers: judged.stats };
   if (Object.keys(dryRuns).length) out.dryRun = dryRuns;
   return out;
 }
@@ -1710,6 +1733,11 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
     const gathered = await gatherListings(card, grade, limit,
       { background: false, dryRun });
     const { listings, sources, tookMs, liveCount } = gathered;
+    // The headline figures skip anything the outlier check flagged. This is
+    // the number a buyer acts on, and "$2.08" for a card that trades at
+    // $800 is not an answer — it is the wrong card, a proxy or a scam.
+    // The flagged rows are still returned, last, with their reason.
+    const trusted = listings.filter(outlier.trustworthy);
     const payload = {
       cardId: card.api_card_id,
       requestedId: cardId,
@@ -1721,8 +1749,13 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
       grade,
       count: listings.length,
       liveCount,
-      cheapest: listings.length ? listings[0].landed : null,
-      cheapestLive: (listings.find(l => l.live) || {}).landed ?? null,
+      cheapest: trusted.length ? trusted[0].landed : null,
+      cheapestLive: (trusted.find(l => l.live) || {}).landed ?? null,
+      // What the outlier check did, and why — reported even when it did not
+      // run. "Not applied: median $0.99 is below $15" is a different fact
+      // from "applied, nothing flagged", and a UI that cannot tell them
+      // apart cannot explain itself.
+      outliers: gathered.outliers,
       // T2: what this grade is actually worth, measured from the listings
       // that just passed the gate — sold apart from active, edition apart
       // from edition, and the sample size attached. The multiplier table
@@ -1853,18 +1886,27 @@ app.get('/api/search', async (req, res) => {
         if (cached) {
           payload.listings = cached.listings;
           payload.sources = cached.sources;
+          payload.cheapest = cached.cheapest;
+          payload.cheapestLive = cached.cheapestLive;
+          payload.outliers = cached.outliers;
           payload.listingsCached = true;
         } else {
-          const { listings, sources, tookMs, liveCount } =
-            await gatherListings(card, grade, 25);
+          const gathered = await gatherListings(card, grade, 25);
+          const { listings, sources, tookMs, liveCount } = gathered;
+          // Same rule as /api/listings, from the same helper. These two
+          // paths compute the same thing and must not answer differently —
+          // the Raw NM bug (22 listings one way, 0 the other) was found
+          // exactly here.
+          const trusted = listings.filter(outlier.trustworthy);
           const lp = {
             cardId: card.api_card_id, requestedId: top.cardId,
             card: { name: card.name, nameEn: card.name_en || null, number: card.number,
                     rarity: card.rarity, set: card.set_name, setTotal: card.set_total,
                     image: card.image_small || null },
             grade, count: listings.length, liveCount,
-            cheapest: listings.length ? listings[0].landed : null,
-            cheapestLive: (listings.find(l => l.live) || {}).landed ?? null,
+            cheapest: trusted.length ? trusted[0].landed : null,
+            cheapestLive: (trusted.find(l => l.live) || {}).landed ?? null,
+            outliers: gathered.outliers,
             listings: listings.slice(0, 25), sources, tookMs,
             cached: false, fetchedAt: new Date().toISOString()
           };
@@ -1872,7 +1914,9 @@ app.get('/api/search', async (req, res) => {
           payload.listings = lp.listings;
           payload.sources = sources;
           payload.liveCount = liveCount;
+          payload.cheapest = lp.cheapest;
           payload.cheapestLive = lp.cheapestLive;
+          payload.outliers = lp.outliers;
           payload.listingsCached = false;
         }
       }

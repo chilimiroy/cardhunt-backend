@@ -2693,9 +2693,20 @@ function renderListingFinder(card) {
   var regions = {};
   links.forEach(function(l){ (regions[l.region] = regions[l.region] || []).push(l); });
 
-  html += '<div style="padding:14px 18px">';
-  html += '<div style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em;margin-bottom:10px">'
-    + 'SEARCH EVERY MARKETPLACE &mdash; ' + LF.grade.toUpperCase() + '</div>';
+  html += '<div style="padding:14px 18px;border-top:3px solid var(--bd)">';
+  html += '<div style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em;margin-bottom:4px">'
+    + 'UNFILTERED SEARCHES &mdash; ' + LF.grade.toUpperCase() + '</div>';
+  // These are not the same kind of thing as the rows above, and until now
+  // they sat beside them looking equally trustworthy. A deep link hands the
+  // marketplace a string and shows whatever it feels like returning —
+  // towels, fan art, the wrong card, a 100-card lot. Nothing verifies it,
+  // because nothing can: the results never come back to us.
+  html += '<div style="font-size:11px;color:var(--mu);margin-bottom:10px;line-height:1.6">'
+    + 'These open a search on the marketplace itself. <strong>The results are not '
+    + 'checked by us</strong> &mdash; a search box returns whatever it matches, '
+    + 'including merchandise, fan art and other cards with the same name. '
+    + 'The listings above are the ones confirmed to be this exact card.'
+    + '</div>';
 
   ['Global','US','EU','JP','Local','Reference'].forEach(function(reg){
     if (!regions[reg]) return;
@@ -2716,8 +2727,10 @@ function renderListingFinder(card) {
 
   html += '<div style="margin-top:12px;padding:10px 12px;background:var(--bg);border-radius:8px;'
     + 'font-size:11px;color:var(--mu);line-height:1.6">'
-    + 'Each link opens a live search filtered to this exact card and grade, '
-    + 'sorted cheapest first. Prices are whatever the marketplace shows right now.'
+    + 'Each link carries this card’s collector number and set, and the eBay links '
+    + 'also spend eBay’s negative keywords against lots, proxies and the wrong '
+    + 'grades — the only filtering a link can have. What comes back is the '
+    + 'marketplace’s answer, not ours.'
     + '</div>';
   html += '</div>';
 
@@ -2752,6 +2765,21 @@ function liveEndsIn(iso){
   return h ? 'ends in ' + h + 'h ' + m + 'm' : 'ends in ' + m + 'm';
 }
 
+// A row the API flagged as too cheap to be this card. It is NOT removed —
+// a genuine bargain exists, and dropping it silently would be its own
+// failure — but it is greyed, it carries the reason, and the server has
+// already sorted it last and kept it out of the headline price.
+//
+// Giratina V #186 came back spanning $2.08 to $1,114.99 on one card at one
+// grade. The $2.08 title is word for word the shape of a genuine one, so
+// no keyword could ever reject it; only its own peers can say it is wrong.
+function liveSuspectNote(l){
+  if (!l.suspect) return '';
+  return '<div style="font-size:10px;color:#B45309;margin-top:2px">'
+    + (l.suspect === 'implausible' ? '&#9888; ' : '&#8505; ')
+    + liveEsc(l.suspectReason || 'unusually cheap for this card') + '</div>';
+}
+
 function liveRow(l){
   var landed = fmtCurrency(Number(l.landed));
   var ship = l.shippingKnown
@@ -2763,7 +2791,8 @@ function liveRow(l){
   var bids = (l.bids != null && l.bids > 0) ? ' \u00b7 ' + l.bids + ' bid' + (l.bids === 1 ? '' : 's') : '';
   return '<a href="' + liveEsc(l.url) + '" target="_blank" rel="noopener" '
     + 'style="display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--bd);'
-    + 'text-decoration:none;color:inherit">'
+    + 'text-decoration:none;color:inherit'
+    + (l.suspect ? ';opacity:.55;background:rgba(245,158,11,.06)' : '') + '">'
     + (l.imageUrl
         ? '<img src="' + liveEsc(l.imageUrl) + '" loading="lazy" alt="" '
           + 'style="width:36px;height:50px;object-fit:cover;border-radius:4px;background:var(--bd);flex-shrink:0">'
@@ -2775,10 +2804,34 @@ function liveRow(l){
     + '<div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
     + liveEsc(l.title) + '</div>'
     + '<div style="font-size:10px;color:var(--mu)">' + liveEsc(l.condition) + ' \u00b7 '
-    + liveEsc(when) + bids + (l.seller ? ' \u00b7 ' + liveEsc(l.seller) : '') + '</div></div>'
+    + liveEsc(when) + bids + (l.seller ? ' \u00b7 ' + liveEsc(l.seller) : '') + '</div>'
+    + liveSuspectNote(l) + '</div>'
     + '<div style="text-align:right;flex-shrink:0">'
     + '<div style="font-size:14px;font-weight:800">' + landed + '</div>'
     + '<div style="font-size:10px;color:var(--mu)">' + liveEsc(ship) + orig + '</div></div></a>';
+}
+
+// What the outlier check did — including when it did NOT run. "Not applied,
+// the median is below $15" and "applied, nothing flagged" are different
+// facts, and a panel that shows the same thing for both cannot explain
+// itself. Team Rocket's Grimer genuinely sits at $0.99 and must never be
+// flagged; this line is how a reader can see that was a decision.
+function liveOutlierNote(d){
+  var o = d.outliers;
+  if (!o || !o.priced) return '';
+  if (!o.applied) {
+    return '<div style="font-size:10px;color:var(--fa);margin-top:6px">'
+      + 'Price check not applied &mdash; ' + liveEsc(o.reason || 'not enough to compare')
+      + '</div>';
+  }
+  return '<div style="font-size:10px;color:var(--fa);margin-top:6px">'
+    + 'Price check: median ' + fmtCurrency(Number(o.median)) + ' across '
+    + o.priced + ' listings'
+    + (o.flagged
+        ? ' · <span style="color:#B45309">' + o.flagged
+          + ' flagged as too cheap to be this card</span>. They are shown, ranked last.'
+        : ' · none flagged')
+    + '</div>';
 }
 
 function liveSourceNote(d){
@@ -2873,9 +2926,12 @@ async function renderLiveListings(card, grade){
   if (!LF.card || LF.card.id !== cardId || LF.grade !== grade) return;
 
   var rows = d.listings || [];
+  // "Checked" is the whole difference between this block and the search
+  // links below it, and the panel has to say which is which.
   var head = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd)">'
     + '<div style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em;margin-bottom:8px">'
-    + 'FOR SALE NOW &mdash; ' + liveEsc(String(grade).toUpperCase()) + '</div>';
+    + 'FOR SALE NOW &mdash; ' + liveEsc(String(grade).toUpperCase())
+    + ' <span style="color:var(--gr)">&#10003; checked</span></div>';
 
   if (!rows.length) {
     host.innerHTML = head
@@ -2889,13 +2945,21 @@ async function renderLiveListings(card, grade){
 
   var live = rows.filter(function(l){ return l.live; });
   var ended = rows.filter(function(l){ return !l.live; });
+  var flagged = rows.filter(function(l){ return l.suspect; });
   var html = head;
   if (d.cheapestLive != null) {
     html += '<div style="font-size:20px;font-weight:800;margin-bottom:2px">'
       + fmtCurrency(Number(d.cheapestLive)) + '</div>'
       + '<div style="font-size:11px;color:var(--mu);margin-bottom:10px">'
       + 'cheapest buyable, landed \u00b7 ' + live.length + ' listing'
-      + (live.length === 1 ? '' : 's') + '</div>';
+      + (live.length === 1 ? '' : 's')
+      // The headline skips flagged rows, so it has to say so \u2014 otherwise
+      // "cheapest" reads as a promise it is not making.
+      + (flagged.length
+          ? ' \u00b7 ' + flagged.length + ' cheaper listing'
+            + (flagged.length === 1 ? '' : 's') + ' flagged below, not counted here'
+          : '')
+      + '</div>';
   }
   if (live.length) html += live.map(liveRow).join('');
   if (ended.length) {
@@ -2903,7 +2967,7 @@ async function renderLiveListings(card, grade){
       + 'text-transform:uppercase;letter-spacing:.4px">Recently ended &mdash; comparables, not offers</div>'
       + ended.slice(0, 6).map(liveRow).join('');
   }
-  html += liveSourceNote(d) + '</div>';
+  html += liveOutlierNote(d) + liveSourceNote(d) + '</div>';
   host.innerHTML = html;
   applyMeasuredGrade(d);
 }
@@ -2925,7 +2989,20 @@ function buildMockListings(card,price,tab){
   // every other marketplace reads it as literal text.
   const ebayQ=encodeURIComponent(cardQuery(card,{includeSet:true,grade:grade,forLink:true}));
   const encQ=encodeURIComponent(cardQuery(card,{includeSet:true,grade:grade}));
-  const nameQ=encodeURIComponent(card.name);
+  // `nameQ` was the card name ALONE, and it was handed to PriceCharting and
+  // to Amazon. A bare "Giratina" search on a general marketplace returns
+  // towels, plushes and fakes — which is precisely what was reported, and
+  // it came from these three rows rather than from the gated listings.
+  // Every query on this page now goes through cardQuery, so it carries the
+  // collector number and the set. Nothing here is gated — a deep link hands
+  // the marketplace a string and shows whatever comes back — so the query
+  // is the only filtering these get, and it must be the good one.
+  const nameQ=encQ;
+  // Yahoo JP is searched with the Japanese name and the Japanese spelling
+  // of the grade ("PSA10", no space) — the same composition the platform
+  // list uses, through the same builder.
+  const yahooQ=cardQuery(card,{useLocalName:true})
+             + (gradeTerms(grade,'yahoo').text ? ' '+gradeTerms(grade,'yahoo').text : '');
   if(tab==='sold'){
     document.getElementById('cd-listings').innerHTML=`<div style="padding:20px 18px;display:flex;flex-direction:column;gap:10px">
       <div style="font-size:13px;font-weight:700;margin-bottom:4px">Recent sales — ${card.name} ${grade}</div>
@@ -2954,10 +3031,15 @@ function buildMockListings(card,price,tab){
   // LIVE — real working links
   const LDATA=[
     {s:'se',l:'eBay',title:`${card.name} ${card.set?.name||''} #${card.number} — ${grade} ONLY`,sub:`eBay marketplace · ${isGraded?grStr+' graded':'Raw card'} · Fixed price listings`,pct:.86,sh:'+$12',d:'-14%',dc:'bd2',url:`https://www.ebay.com/sch/i.html?_nkw=${ebayQ}&_sacat=183454&LH_BIN=1&LH_ItemCondition=3000`},
-    {s:'stc',l:'TCGPlayer',title:`${card.name} — ${card.set?.name||''}`,sub:'TCGPlayer marketplace · Verified sellers · Buyer protection',pct:1.02,sh:'Free ship',d:'~avg',dc:'',url:`https://www.tcgplayer.com/search/pokemon/product?q=${encodeURIComponent(card.name+' '+grade)}&view=grid`},
+    {s:'stc',l:'TCGPlayer',title:`${card.name} — ${card.set?.name||''}`,sub:'TCGPlayer marketplace · Verified sellers · Buyer protection',pct:1.02,sh:'Free ship',d:'~avg',dc:'',url:`https://www.tcgplayer.com/search/pokemon/product?q=${encQ}&view=grid`},
     {s:'sme',l:'Mercari',title:`${card.name} ${grade} ${card.set?.name||''}`,sub:'Mercari US · Private sellers · Offers available',pct:.91,sh:'+$8',d:'-9%',dc:'bd2',url:`https://www.mercari.com/search/?keyword=${encQ}`},
-    {s:'sam',l:'Amazon',title:`Pokémon ${card.name} ${grade}`,sub:'Amazon marketplace · Prime eligible · Fulfilled',pct:1.18,sh:'Free Prime',d:'+18%',dc:'bh',url:`https://www.amazon.com/s?k=${encodeURIComponent('Pokemon '+card.name+' '+grade)}&i=toys-and-games`},
-    {s:'syj',l:'Yahoo JP',title:`${card.name} ポケモンカード ${grStr}${grNum}`,sub:'Yahoo Auctions Japan · Ships internationally · ~5–8 days',pct:null,sh:'~$12 intl',d:'-11%',dc:'bd2',url:`https://auctions.yahoo.co.jp/search/search?p=${encodeURIComponent(card.name+' '+grStr+grNum)}&auccat=2084005070`},
+    // Amazon sells Pokémon TOWELS, and "Pokemon Giratina Raw NM" asked for
+    // them. The collector number and set are what make a general
+    // marketplace answer about a card at all.
+    {s:'sam',l:'Amazon',title:`Pokémon ${card.name} ${grade}`,sub:'Amazon marketplace · Prime eligible · Fulfilled',pct:1.18,sh:'Free Prime',d:'+18%',dc:'bh',url:`https://www.amazon.com/s?k=${encQ}&i=toys-and-games`},
+    // Japanese sellers list under the Japanese name, so this one keeps the
+    // local name — but it goes through the builder too, for the number.
+    {s:'syj',l:'Yahoo JP',title:`${card.name} ポケモンカード ${grStr}${grNum}`,sub:'Yahoo Auctions Japan · Ships internationally · ~5–8 days',pct:null,sh:'~$12 intl',d:'-11%',dc:'bd2',url:`https://auctions.yahoo.co.jp/search/search?p=${encodeURIComponent(yahooQ)}&auccat=2084005070`},
     {s:'s130',l:'130point',title:`${card.name} ${grade} — Price analytics`,sub:'130point.com · Aggregated eBay sold price data',pct:.97,sh:'Data',d:'history',dc:'',url:`https://130point.com/sales/?s=${encQ}`},
   ];
   document.getElementById('cd-listings').innerHTML=LDATA.map(row=>{
@@ -4182,6 +4264,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260919-338d99e-dirty &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260919-8cdfafa-outliers &middot; click to hide</div>
 </body>
 </html>

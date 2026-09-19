@@ -1078,10 +1078,12 @@ function setLang(l, el){
   for (var i=0;i<tabs.length;i++) tabs[i].classList.remove('on');
   if (el) el.classList.add('on');
 
-  if (l === 'en' && (!S.enSets || !S.enSets.length)) { loadAllSets(); return; }
-
   // Already have the real list — render it straight away
   if (LANG_SETS[l] && LANG_SETS[l].length) { renderSets(); return; }
+
+  // English takes the same route as every other language. It used to call
+  // loadAllSets() and browse /api/sets, whose ids half the app cannot resolve.
+  if (l === 'en') { loadAllSets(); return; }
 
   if (l !== 'en') {
     var out = document.getElementById('sets-out');
@@ -1185,24 +1187,53 @@ function renderSets(){
   }
 }
 
+// English browses the SAME list as every other language: /api/sets/lang/en.
+//
+// It used to browse /api/sets instead, and that was the bug. Two set lists,
+// one app: /api/sets serves 176 sets with pokemontcg.io ids (sv3pt5, base6,
+// swsh35), while the cards, prices and listings are all keyed on our own ids
+// from /api/sets/lang/en (214 sets: sv03.5, lc, swsh3.5). The server aliases
+// many of the old ids, which is why it looked fine — but 33 of the 176 had no
+// alias, and each one broke in one of two ways:
+//
+//   * 14 returned ZERO cards, so openSet fell through to tcgdexFetchSet and
+//     rendered the whole set as mockP() estimates. That is Base Set Charizard
+//     reading $7.67 instead of $882.02 — a real price collapsing to a few
+//     dollars, depending on the SET rather than the card.
+//   * 19 returned pokemontcg.io cards whose ids are "base6-1", not
+//     "en-lc-1", so /api/listings could not resolve them and no links appeared.
+//
+// And 92 sets that ARE in the database could not be reached from the UI at
+// all, because they were not in the browsed list.
+//
+// loadLangSets already does this correctly for ja/zh-tw/zh-cn. English was the
+// one language with its own path — the same "two implementations of one
+// thing" shape as the four estimators and the two query builders.
 async function loadAllSets() {
-  // Use embedded EN sets data as primary source (always works, no fetch needed)
-  S.enSets = EN_SETS;
   const sub = document.getElementById('sets-sub');
-  if (sub) sub.textContent = S.enSets.length+' English · '+JP.length+' Japanese · '+ZH_TW.length+' Chinese Traditional · '+ZH_CN.length+' Chinese Simplified';
+  const count = function(){
+    if (sub) sub.textContent = ((LANG_SETS.en && LANG_SETS.en.length) || S.enSets.length)
+      + ' English · '+JP.length+' Japanese · '+ZH_TW.length+' Chinese Traditional · '
+      + ZH_CN.length+' Chinese Simplified';
+  };
+
+  // Show the embedded list immediately so the page is never blank, then
+  // replace it with the database's. EN_SETS is the OFFLINE FALLBACK only —
+  // its ids are pokemontcg.io's and must never be what we browse when the
+  // API is reachable.
+  S.enSets = EN_SETS;
+  count();
   renderSets();
-  // Also try live API in background to pick up any newer sets
-  try {
-    const r = await apiFetch('/api/sets');
-    const d = await r.json();
-    if (d.data && d.data.length > S.enSets.length) {
-      S.enSets = d.data;
-      if (sub) sub.textContent = S.enSets.length+' English · '+JP.length+' Japanese · '+ZH_TW.length+' Chinese Traditional · '+ZH_CN.length+' Chinese Simplified';
-      renderSets();
-    }
-  } catch(err) {
-    // Live update failed - embedded data already showing, no action needed
-    console.log('Live sets update unavailable, using embedded data');
+
+  const live = await loadLangSets('en');
+  if (live && live.length) {
+    count();
+    renderSets();
+  } else {
+    // Say so rather than quietly serving ids that half the app cannot resolve.
+    console.warn('[sets] /api/sets/lang/en unavailable — showing the embedded '
+      + EN_SETS.length + ' sets with pokemontcg.io ids. Some sets will show '
+      + 'estimates and no listings until the API responds.');
   }
 }
 
@@ -1844,7 +1875,10 @@ async function openSet(setId, apiSetId){
   }
 
   function mergePremium(list){
-    if (apiSetId === 'me2pt5' && typeof ME2PT5_PREMIUM !== 'undefined') {
+    // Both spellings: the browsed list now carries our own set id (me02.5)
+    // where it used to carry pokemontcg.io's (me2pt5). Matching only the old
+    // one would have switched this merge off without a symptom.
+    if ((apiSetId === 'me2pt5' || apiSetId === 'me02.5') && typeof ME2PT5_PREMIUM !== 'undefined') {
       var have = {};
       list.forEach(function(c){ have[c.number] = true; });
       ME2PT5_PREMIUM.forEach(function(p){ if (!have[p.number]) list.push(p); });
@@ -1948,8 +1982,19 @@ function setSourceNote(source, lang, realCount, total){
     msg = 'Live: images from TCGdex, prices from TCGPlayer via pokemontcg.io.';
     bg = '#FFFBEB'; bd = '#FDE68A'; fg = '#92400E';
   } else if (source === 'pokemontcg') {
-    msg = 'Live TCGPlayer market prices via pokemontcg.io.';
+    msg = 'Live TCGPlayer market prices via pokemontcg.io. Not our database, so '
+        + 'these cards have foreign ids and listing links may not resolve.';
     bg = '#FFFBEB'; bd = '#FDE68A'; fg = '#92400E';
+  } else if (source === 'tcgdex') {
+    // The silent one. English + 'tcgdex' used to fall off the end of this
+    // chain and return, so a whole set of mockP() estimates was displayed
+    // with no indication that the database path had not run. A fallback
+    // firing correctly is indistinguishable from a data bug unless it says
+    // which path ran.
+    msg = 'This set is not in the CardHunt database, so every price here is an '
+        + 'ESTIMATE from rarity and set age — not a measured market price. '
+        + 'Catalogue and images are live from TCGdex.';
+    bg = '#FEF2F2'; bd = '#FECACA'; fg = '#991B1B';
   } else { return; }
 
   var note = document.createElement('div');
@@ -2031,7 +2076,16 @@ function applyFilters(){
 function updateCardPrices(grade,base){ return updatePrices(grade,base); }
 function updatePrices(grade,base){
   const low=+(base*.74).toFixed(2),sold=+(base*(0.9+Math.random()*.1)).toFixed(2),chg=((Math.random()-.3)*16).toFixed(1);
-  document.getElementById('cd-mkt').textContent=`$${base.toFixed(2)}`;
+  // Say whether the headline number is measured or derived. The set tile has
+  // always shown `est`; the card page showed the same number bare, so the one
+  // screen a buyer actually decides on was the one that did not say.
+  const cc = S.currentCard;
+  const priceIsReal = !!(cc && (cc._priceIsReal === true
+    || (cc._priceSource && !/^estimate/.test(cc._priceSource))));
+  document.getElementById('cd-mkt').innerHTML = '$' + base.toFixed(2)
+    + (priceIsReal ? '' : '<span style="font-size:11px;color:var(--fa);margin-left:6px;'
+        + 'font-weight:600" title="Estimated from rarity and set age — no market '
+        + 'data for this card yet">est</span>');
   document.getElementById('cd-chg').textContent=`${chg>0?'↑':'↓'} ${Math.abs(chg)}% this month`;
   document.getElementById('cd-chg').className=`pbs ${chg>0?'up':'dn'}`;
   document.getElementById('cd-low').textContent=`$${low.toFixed(2)}`;
@@ -2090,13 +2144,41 @@ async function openCard(id){
   document.getElementById('cd-gpt').innerHTML='';
   document.getElementById('cd-listings').innerHTML='<div style="padding:48px;text-align:center;color:var(--mu)"><div class="spin" style="width:34px;height:34px;border:3px solid var(--bd);border-top-color:var(--t);border-radius:50%;animation:sp .75s linear infinite;margin:0 auto 12px"></div></div>';
   try{
-    // Check card cache first
-    var c = CARD_CACHE[id];
+    // Check card cache first — but ONLY if what is cached came from our
+    // database.
+    //
+    // setCacheSet() writes every card the set page rendered into CARD_CACHE,
+    // whichever path produced it, and CARD_CACHE has no expiry. So one visit
+    // to a set that fell through to TCGdex estimates (or to pokemontcg.io)
+    // pinned an estimate for that card for the rest of the session, and the
+    // card page then showed a few dollars for a card worth hundreds while
+    // /api/cards/:id had the real price all along. The set page was right and
+    // the card page was wrong, from the same click.
+    //
+    // A cached object with no price source is not a card we can price, so it
+    // is only good enough to fall back TO, never to serve in preference to
+    // the database.
+    var cached = CARD_CACHE[id];
+    var cachedIsReal = !!(cached && (cached._priceIsReal === true
+      || (cached._priceSource && !/^estimate/.test(cached._priceSource))));
+
+    var c = cachedIsReal ? cached : null;
     if (!c) {
-      var r=await apiFetch('/api/cards/'+id);
-      var d=await r.json();
-      c=d.data;
-      if(c) CARD_CACHE[id] = c;
+      try {
+        var r=await apiFetch('/api/cards/'+id);
+        var d=await r.json();
+        c=d.data;
+        if(c) CARD_CACHE[id] = c;
+      } catch(e) {
+        console.warn('[card] /api/cards/'+id+' failed: '+e.message);
+      }
+      // The API could not answer — show what we have rather than nothing, and
+      // say in the console which one is on screen.
+      if (!c && cached) {
+        c = cached;
+        console.warn('[card] showing a cached ' + (cached._priceSource || 'estimate')
+          + ' for ' + id + ' — the database price was not reachable');
+      }
     }
     if(!c)return;
     S.currentCard=c;
@@ -4022,6 +4104,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260918-3ab0529-dirty &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260919-f4a2bca-dirty &middot; click to hide</div>
 </body>
 </html>

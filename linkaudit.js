@@ -108,7 +108,17 @@ async function auditCard(cardId, cardName, cardNumber) {
       if (/\b(custom|proxy|orica|fan art|unofficial|handmade|art card|not official|replica|repro)\w*/i.test(t))
         flags.push('FAKE');
       if (/\b(lot|bundle|x\s*\d+|\d+\s*card)\w*/i.test(t)) flags.push('MULTI');
-      if (/[\u3040-\u30ff\uac00-\ud7af]/.test(t)) flags.push('CJK');
+      // CJK in a kept title means "wrong-language card" only for a card
+      // that is not itself Japanese. This flag was written when every
+      // source was eBay US and every kept title was English; a Japanese
+      // shop listing a Japanese card in Japanese then lit up as a false
+      // positive on EVERY row, which is how a signal becomes noise and
+      // gets ignored. Hangul stays evidence for any card \u2014 Korean prints
+      // share Japanese set codes, which is the whole reason the language
+      // gate exists.
+      const cardIsJa = /^(ja|zh)-/.test(String(cardId));
+      if (/[\uac00-\ud7af]/.test(t)) flags.push('HANGUL');
+      else if (!cardIsJa && /[\u3040-\u30ff]/.test(t)) flags.push('CJK');
 
       // `!!` is a keyword finding — something in the title that should have
       // been caught. `~~` is the outlier check: nothing in the title is

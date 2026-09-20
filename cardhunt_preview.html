@@ -2804,7 +2804,15 @@ function liveRow(l){
     + '<div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
     + liveEsc(l.title) + '</div>'
     + '<div style="font-size:10px;color:var(--mu)">' + liveEsc(l.condition) + ' \u00b7 '
-    + liveEsc(when) + bids + (l.seller ? ' \u00b7 ' + liveEsc(l.seller) : '') + '</div>'
+    + liveEsc(when) + bids + (l.seller ? ' \u00b7 ' + liveEsc(l.seller) : '')
+    // A shop's asking price is not a sale and not a bid. The row says so
+    // itself: it can be read far from anything else that would explain it,
+    // and a retail ask sitting unlabelled beside auction rows is exactly
+    // the blending this project already did once with stored prices.
+    + (l.priceKind === 'shop-ask'
+        ? ' \u00b7 <span style="color:#B45309;font-weight:600">shop asking price</span>'
+        : '')
+    + '</div>'
     + liveSuspectNote(l) + '</div>'
     + '<div style="text-align:right;flex-shrink:0">'
     + '<div style="font-size:14px;font-weight:800">' + landed + '</div>'
@@ -4264,6 +4272,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260919-8cdfafa-outliers &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260920-628cf4d-yuyutei &middot; click to hide</div>
 </body>
 </html>

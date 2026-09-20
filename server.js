@@ -1229,6 +1229,15 @@ function normaliseListing(o) {
     // envelope that carries the source list — so the row states it itself.
     // `url` above already points at the item on eBay.
     attribution: o.source === 'ebay' ? 'Listing from eBay' : null,
+    // What KIND of number this is. A shop's asking price, an auction's
+    // current bid and a realised sale are three different things, and this
+    // project has already averaged across that distinction once.
+    //
+    // On the row, for the same reason `attribution` is: a row gets
+    // rendered far from the response envelope that names its source, and
+    // by then "which kind of price is this" has no other answer.
+    // null means an ordinary marketplace listing price.
+    priceKind: o.priceKind || null,
     // ── Labels, carried through ──
     // sourceEbay works these out from the seller's title and they were being
     // dropped right here: this function returns a fixed shape, and edition
@@ -1432,12 +1441,15 @@ async function sourceYuyutei(card, grade, limit, opts = {}) {
       // an unknown is zero understates every row. shippingKnown: false.
       shipping: null,
       condition: 'Raw',
-      seller: 'yuyu-tei',
       url: e.url,
       country: 'JP',
       listingType: 'fixed',
       live: true,
-      parsedRarity: yt.ytRarity(e.rarity)
+      parsedRarity: yt.ytRarity(e.rarity),
+      priceKind: 'shop-ask',
+      // Stock is the shop's own figure and is worth showing: "1 in stock"
+      // is a different proposition from "12 in stock" at the same price.
+      seller: e.stock != null ? `yuyu-tei · ${e.stock} in stock` : 'yuyu-tei'
     }));
   }
 

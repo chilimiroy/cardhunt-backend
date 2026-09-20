@@ -2890,6 +2890,58 @@ app.get('/cardmatch.js', (req, res) => {
   });
 });
 
+// ══════════════════════════════════════════════════════════════
+// GET /api/probe/sources[?id=yuyutei][&refresh=1]
+//
+// "Does this source answer RENDER?" — the first question about any new
+// source, because Yahoo Auctions returns 200 to a home IP and 403 here,
+// and every scraper in this project worked all through development for
+// that reason alone.
+//
+// The SAME module runs from a laptop (`node sourceprobe.js`), so the two
+// answers are comparable and a difference between them means the IP
+// rather than the code.
+//
+// The caller picks which REGISTERED source to probe and nothing else.
+// There is no URL parameter: an endpoint that fetches a caller-supplied
+// URL is an SSRF hole into everything this server can reach, including
+// the platform's own metadata service.
+//
+// Results are cached for 30 minutes. This is uninvited traffic to other
+// people's shops, and a probe endpoint that can be hammered is an
+// excellent way to earn the block it is testing for. `refresh=1` forces
+// one fresh request.
+// ══════════════════════════════════════════════════════════════
+const sourceprobe = require('./sourceprobe');
+
+app.get('/api/probe/sources', async (req, res) => {
+  const refresh = req.query.refresh === '1' || req.query.refresh === 'true';
+  const id = req.query.id ? String(req.query.id) : null;
+  try {
+    const results = id ? [await sourceprobe.probe(id, { refresh })]
+                       : await sourceprobe.probeAll({ refresh });
+    res.json({
+      from: process.env.RENDER ? 'render' : 'local',
+      // Say what the statuses mean in the response itself. A bare
+      // "blocked" invites the reader to supply their own explanation, and
+      // the explanation that matters here is specific.
+      statusMeans: {
+        ok: 'answered this IP with the content we need',
+        blocked: 'this IP is refused — 403/401/429, or a challenge page',
+        shape: 'answered, but not carrying what we need',
+        http: 'some other non-2xx',
+        unreachable: 'never reached the server: DNS, TLS or timeout',
+        unconfigured: 'a credential this source needs is absent — NOT a refusal'
+      },
+      compareWith: 'node sourceprobe.js — the same probe from a residential IP',
+      probedAt: new Date().toISOString(),
+      results
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Readiness check for the whole eBay setup.
 //
 // `ready: true` used to mean only "two environment variables are

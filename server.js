@@ -1029,6 +1029,15 @@ app.get('/api/history/:cardId', async (req, res) => {
 // single card.
 // ══════════════════════════════════════════════════════════════
 const jpf = require('./jpfilter');
+// The Yuyu-tei parser, shared with the local ingest tool rather than copied
+// into the server. It answers Render (probed both ways, 2026-09-20), needs
+// no database and no credential — so "local tooling" no longer describes it,
+// and .gitignore says why it is now tracked.
+const yt = require('./yuyutei');
+// Rates with their provenance attached. jpfilter still converts Yahoo yen at
+// a hardcoded JPY_PER_USD = 157; the live ECB rate is 157.98 today, so the
+// two differ by ~0.6% — small now, frozen forever if nothing prints it.
+const fx = require('./fx');
 
 const LISTING_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
                  + '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -1299,6 +1308,164 @@ function filterCard(card, nameOverride) {
     // is where they actually turn up.
     setYear: card.set_release ? new Date(card.set_release).getUTCFullYear() : null,
     lang: gateLanguage(card)
+  };
+}
+
+// ══════════════════════════════════════════════════════════════
+// YUYU-TEI — a Japanese shop that answers RENDER
+//
+// Probed from both ends on 2026-09-20: 200 and 1,172,188 bytes from a home
+// IP, 200 and 1,172,188 bytes from Render. Byte-identical. Yahoo Auctions
+// blocking datacentre IPs said nothing about this host, and nobody had
+// asked it.
+//
+// That matters more than it sounds. Every Japanese listing until now came
+// from a source the deployed server cannot reach, so Japanese had deep
+// links and a stored median and nothing live. This is a whole set per
+// fetch — number, printed total, rarity, price, stock AND a per-card URL —
+// from a parser that already produced 9,294 stored rows.
+//
+// ⚠ ASKING PRICES, NOT SALES. A shop's sell price carries a retail margin:
+// measured at a median 1.40x over Yahoo across 94 overlapping SV8a cards.
+// And 56.4% of all stored Yuyu-tei rows sit at or below ¥50, which is the
+// shop's minimum shelf price rather than a valuation. Tagged
+// `priceKind: 'shop-ask'` on every row so nothing can average it into a
+// number describing realised sales.
+// ══════════════════════════════════════════════════════════════
+
+// The set index — our set id -> yuyu-tei's code — is ONE fetch for the
+// whole catalogue and changes only when a set is released. The set page
+// is 1.17MB, which is far too much to pull per card view.
+//
+// Both are cached with their fetch time, and the age travels with the
+// data: "never present stored data as live" applies to a 55-minute-old
+// shop page exactly as it applies to a stored Yahoo median.
+const YT_INDEX_TTL = 24 * 60 * 60 * 1000;
+const YT_SET_TTL   = 60 * 60 * 1000;
+let ytIndex = null;                       // { at, map }
+const ytSetCache = new Map();             // code -> { at, entries }
+
+async function ytSetIndex() {
+  if (ytIndex && Date.now() - ytIndex.at < YT_INDEX_TTL) return ytIndex.map;
+  const map = await yt.fetchSetIndex();
+  ytIndex = { at: Date.now(), map };
+  return map;
+}
+
+async function ytSetEntries(code) {
+  const hit = ytSetCache.get(code);
+  if (hit && Date.now() - hit.at < YT_SET_TTL) {
+    return { entries: hit.entries, ageSec: Math.round((Date.now() - hit.at) / 1000) };
+  }
+  const entries = await yt.fetchSet(code);
+  ytSetCache.set(code, { at: Date.now(), entries });
+  return { entries, ageSec: 0 };
+}
+
+async function sourceYuyutei(card, grade, limit, opts = {}) {
+  // Graded slabs are not what a singles shop sells. Saying so is better
+  // than returning an empty list that reads as "no stock".
+  if (!jpf.isRawGrade(grade)) {
+    return { listings: [], scanned: 0, kept: 0, rejected: 0, dropped: [],
+             gate: cm.printingEvidence(filterCard(card)),
+             note: 'a singles shop lists ungraded cards only — nothing to match at ' + grade };
+  }
+
+  const setKey = String(card.set_api_id || '').toUpperCase();
+  const index = await ytSetIndex();
+  const entry = index.get(setKey);
+  if (!entry) {
+    // A set this shop does not carry is not a failure, and must not look
+    // like one. Yuyu-tei covered 108 of 138 Japanese sets in the price run.
+    return { listings: [], scanned: 0, kept: 0, rejected: 0, dropped: [],
+             gate: cm.printingEvidence(filterCard(card)),
+             note: `yuyu-tei does not list set ${card.set_api_id}` };
+  }
+
+  if (opts.dryRun) {
+    return { listings: [], dryRun: true,
+             request: { url: yt.YT_BASE + '/sell/poc/s/' + entry.code, method: 'GET' },
+             parsedQuery: `set page ${entry.code} (${entry.label})`,
+             gate: cm.printingEvidence(filterCard(card)) };
+  }
+
+  const { entries, ageSec } = await ytSetEntries(entry.code);
+
+  // Everything at this collector number, then the variant rule: a
+  // master-ball mirror shares the number and is a different product at up
+  // to 5x the price. matchesOurCard already refuses a wrong printed total
+  // and runs jpfilter's lot vocabulary over the product name.
+  const atNumber = entries.filter(e => yt.matchesOurCard(e, card));
+  const chosen = yt.pickVariants(atNumber, card.name);
+
+  const fc = filterCard(card);
+  const dropped = [];
+  const listings = [];
+
+  for (const e of chosen) {
+    // The SHOP's own text, so the gate reads their words and not ours.
+    const title = yt.entryTitle(e);
+
+    // The same printing gate the Yahoo path runs, with the same two
+    // options — Japanese IS written in CJK, so inferring Chinese from
+    // script would reject most of the feed, and the "wanted English,
+    // title is CJK" rule is meaningless on a JP-only source.
+    const conflict = cm.printingConflict(title, fc,
+      { cjkIsChinese: false, scriptIsLanguageEvidence: false });
+    if (conflict) { dropped.push({ title, reason: conflict }); continue; }
+
+    if (!(e.yen > 0)) { dropped.push({ title, reason: 'no usable price' }); continue; }
+    if (e.stock === 0) { dropped.push({ title, reason: 'out of stock' }); continue; }
+
+    const conv = await fx.toUsd(e.yen, 'JPY');
+    if (!conv) { dropped.push({ title, reason: 'could not convert JPY' }); continue; }
+
+    listings.push(normaliseListing({
+      source: 'yuyutei',
+      sourceLabel: 'Yuyu-tei',
+      title,
+      price: conv.usd,
+      currency: 'USD',
+      priceOriginal: e.yen,
+      currencyOriginal: 'JPY',
+      // Domestic JP shipping is not stated on the set page, and pretending
+      // an unknown is zero understates every row. shippingKnown: false.
+      shipping: null,
+      condition: 'Raw',
+      seller: 'yuyu-tei',
+      url: e.url,
+      country: 'JP',
+      listingType: 'fixed',
+      live: true,
+      parsedRarity: yt.ytRarity(e.rarity)
+    }));
+  }
+
+  return {
+    listings,
+    // `scanned` means "titles the gate examined", the same as it does on
+    // every other source. The whole set page is 482 cards and 481 of them
+    // are different cards — reporting that as scanned would read as a
+    // 99.8% rejection rate that never happened, and "kept 1 of 482" is
+    // exactly the sort of number someone later quotes as a gate failure.
+    // The funnel is reported in full instead, so each narrowing is
+    // attributable.
+    scanned: chosen.length,
+    kept: listings.length, rejected: dropped.length,
+    pageEntries: entries.length,
+    atNumber: atNumber.length,
+    dropped: dropped.slice(0, 40),
+    gate: cm.printingEvidence(fc),
+    query: `set page ${entry.code} (${entry.label}) — ${entries.length} cards on the page, ` +
+           `${atNumber.length} at #${card.number}, ${chosen.length} after the variant rule`,
+    // A shop asking price is a different KIND of number from an auction
+    // median or a realised sale, and blending the three is a mistake this
+    // project has already made once.
+    priceKind: 'shop-ask',
+    priceKindNote: 'shop asking prices — a retail margin over the JP market, ~1.40x Yahoo medians',
+    // The page may be up to an hour old. Say so rather than letting the
+    // row read as live.
+    fetchAgeSec: ageSec
   };
 }
 
@@ -1608,6 +1775,13 @@ const LISTING_SOURCES = [
     skipReason: 'Japanese-language marketplace — card is not Japanese'
   },
   {
+    id: 'yuyutei', label: 'Yuyu-tei', fetch: sourceYuyutei,
+    // A Japanese shop listing Japanese cards, keyed on OUR set id — the
+    // same restriction as Yahoo, for the same reason.
+    applies: card => String(card.api_card_id).startsWith('ja-'),
+    skipReason: 'Japanese shop — card is not Japanese'
+  },
+  {
     id: 'ebay', label: 'eBay', fetch: sourceEbay,
     applies: card => !!(card.name_en || card.name),
     skipReason: 'no English name to search with'
@@ -1650,6 +1824,27 @@ async function gatherListings(card, grade, limit, opts) {
       const { listings: got } = r.value;
       sources[s.id] = { status: 'ok', count: got.length, scanned: r.value.scanned ?? null };
       if (r.value.live !== undefined) { sources[s.id].live = r.value.live; sources[s.id].ended = r.value.ended; }
+
+      // A shop's asking price, an auction median and a realised sale are
+      // three different kinds of number. They already got blended once in
+      // this project; the row and the source both say which this is.
+      if (r.value.priceKind) {
+        sources[s.id].priceKind = r.value.priceKind;
+        sources[s.id].priceKindNote = r.value.priceKindNote || null;
+      }
+      // How old the fetched page was. A cached shop page is not live, and
+      // the response has to say so rather than let the row imply it.
+      if (r.value.fetchAgeSec !== undefined) sources[s.id].fetchAgeSec = r.value.fetchAgeSec;
+      // The narrowing, step by step: how many cards were on the page, how
+      // many carried this collector number, how many survived the variant
+      // rule. Without it "1 of 482" is unreadable.
+      if (r.value.pageEntries !== undefined) {
+        sources[s.id].pageEntries = r.value.pageEntries;
+        sources[s.id].atNumber = r.value.atNumber;
+      }
+      // "This shop does not carry that set" is a fact, not a failure, and
+      // an empty list with no explanation reads as "no stock".
+      if (r.value.note) sources[s.id].note = r.value.note;
 
       // Printing rejections (reprint / language / year) from a source that
       // does not use the `rejected` shape below. Reported even when zero:
@@ -2928,6 +3123,7 @@ app.get('/api/probe/sources', async (req, res) => {
       statusMeans: {
         ok: 'answered this IP with the content we need',
         blocked: 'this IP is refused — 403/401/429, or a challenge page',
+        auth: 'the SERVICE refused the credential — the IP reached it fine',
         shape: 'answered, but not carrying what we need',
         http: 'some other non-2xx',
         unreachable: 'never reached the server: DNS, TLS or timeout',

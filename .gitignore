@@ -8,7 +8,20 @@ node_modules/
 ingest.js
 sourcerank.js
 jpreconcile.js
-yuyutei.js
+
+# yuyutei.js was here, on the same reasoning as the probes above: local
+# tooling. That reasoning was "needs a database URL or a residential IP"
+# and yuyu-tei needs NEITHER. Probed 2026-09-20 from both ends: 200 and
+# 1,172,188 bytes from a home IP, the same 200 and the same 1,172,188
+# bytes from Render. server.js now requires it to serve live Japanese
+# listings.
+#
+# This is the estimator.js mistake, recorded at the top of this file: a
+# file the server requires is not local tooling, and ignoring it means a
+# deployed server that crashes on boot with MODULE_NOT_FOUND. The parser
+# is SHARED with the local ingest rather than copied, because two
+# implementations of one parser is how every other pair in this project
+# drifted apart.
 tcgdexprobe.js
 tcgdexharvest.js
 ebayprobe.js

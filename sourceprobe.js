@@ -116,10 +116,14 @@ const byId = new Map(SOURCES.map(s => [s.id, s]));
 //   ok          200, and the expected markers are present
 //   shape       200, but the body is not what we need (consent wall,
 //               "access denied" served with a 200, an empty SPA shell)
-//   blocked     403/401/429, or a challenge page — the Yahoo answer
+//   blocked     403/401/429, or a challenge page — the Yahoo Auctions
+//               answer, and the one that means "not from a datacentre"
+//   auth        the SERVICE refused a credential. The IP reached it fine,
+//               which is a completely different fact from `blocked`
 //   http        any other non-2xx
 //   unreachable DNS, TLS, timeout — never reached the server at all
-//   unconfigured a credential this source needs is absent
+//   unconfigured a credential this source needs is absent — not a refusal
+
 // A challenge page is recognised STRUCTURALLY, never by a bare word.
 //
 // The first version of this matched /cloudflare/ anywhere in the body and
@@ -141,6 +145,30 @@ function looksLikeChallenge(body) {
 }
 
 function classify(res, body, src) {
+  // ── A refused CREDENTIAL is not a refused IP ──
+  // Render's first Yahoo Shopping probe returned 403 and this file called
+  // it `blocked`, which in here means "this IP is refused" — the Yahoo
+  // Auctions answer. That was about to be written into CLAUDE.md as fact
+  // and would have killed a working source.
+  //
+  // Measured from a laptop, no credential needed to find it out:
+  //   no appid     -> 401 "Authentication parameters ... incompleted"
+  //   bogus appid  -> 403 "Your Request was Forbidden"
+  // Render returned the second, exactly. So the endpoint answers a
+  // datacentre IP perfectly well and the KEY is what it refused.
+  //
+  // A source that needs a credential therefore reports `auth`, carrying
+  // the service's own words. "A confident wrong answer costs more than an
+  // admitted unknown."
+  if (src.credential && (res.status === 401 || res.status === 403)) {
+    const val = process.env[src.credential] || '';
+    const msg = (body.match(/"Message"\s*:\s*"([^"]{0,160})"/) || [])[1]
+             || body.slice(0, 120).replace(/\s+/g, ' ').trim();
+    return { status: 'auth',
+             detail: `HTTP ${res.status} — the service refused the credential, not the IP. ` +
+                     `It said: "${msg}". ${src.credential} is set and ${val.length} ` +
+                     `characters long.` };
+  }
   if (res.status === 403 || res.status === 401 || res.status === 429) {
     return { status: 'blocked', detail: `HTTP ${res.status}` };
   }
@@ -278,7 +306,7 @@ if (require.main === module) {
     const results = arg ? [await probe(arg, { refresh: true })]
                         : await probeAll({ refresh: true });
     for (const r of results) {
-      const mark = { ok: ' ok ', blocked: 'BLOCK', shape: 'SHAPE',
+      const mark = { ok: ' ok ', blocked: 'BLOCK', auth: 'AUTH ', shape: 'SHAPE',
                      http: 'HTTP ', unreachable: 'UNREA', unconfigured: 'UNCFG',
                      unknown: ' ??? ' }[r.status] || '  ?  ';
       console.log(`  ${mark}  ${String(r.id).padEnd(15)} ${r.detail}`);

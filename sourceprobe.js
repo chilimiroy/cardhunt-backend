@@ -139,6 +139,24 @@ const SOURCES = [
     why: 'the generation between the two, for completeness'
   },
   {
+    // ── The discriminator that needs NO credential ──
+    // V3 with no appid at all. From a served region Yahoo answers 401
+    // "Authentication parameters in your request incompleted." — it looked
+    // for a credential and found none.
+    //
+    // If a region Yahoo refuses answers 403 to THIS request, then the
+    // refusal happens before any credential is examined, and the 403 the
+    // real 96-character Client ID receives says nothing about the key.
+    // Two requests, no secrets, and the geo/credential question is settled
+    // either way.
+    id: 'yahoo_v3_nokey',
+    label: 'Yahoo Shopping V3 · deliberately NO credential',
+    url: 'https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch'
+       + '?query=' + encodeURIComponent('ポケモンカード') + '&results=5',
+    expect: [/hits|totalResultsAvailable/i],
+    why: '401 here means "looked for a key"; 403 means "refused before looking"'
+  },
+  {
     // ── Where does this process appear to be? ──
     // Not a card source. It is here because "the source refuses us" and
     // "the source does not serve this region" are answers that look

@@ -151,6 +151,16 @@ const SOURCES = [
     // either way.
     id: 'yahoo_v3_nokey',
     label: 'Yahoo Shopping V3 · deliberately NO credential',
+    // This row's 401 is a RESULT, not a failure: it is the whole basis for
+    // saying the refusal is about the key rather than the region. Reported
+    // as `blocked` it reads as one more thing Yahoo refuses, which is the
+    // exact misreading that produced the geo-block conclusion.
+    diagnostic: {
+      401: 'EXPECTED — Yahoo looked for a credential and found none, so it '
+         + 'examines keys from this IP. The refusal is NOT geographic.',
+      403: 'Refused WITHOUT being sent a credential — the refusal happens '
+         + 'before any key is read, so a 403 on the real key means nothing.'
+    },
     url: 'https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch'
        + '?query=' + encodeURIComponent('ポケモンカード') + '&results=5',
     expect: [/hits|totalResultsAvailable/i],
@@ -273,6 +283,14 @@ function looksGeoBlocked(body) {
 }
 
 function classify(res, body, src) {
+  // A diagnostic entry is not a source and is not being judged usable. Its
+  // status codes MEAN something specific, stated with the entry, and the
+  // reading is printed rather than left to whoever reads the table.
+  if (src.diagnostic && src.diagnostic[res.status]) {
+    return { status: 'diagnostic',
+             detail: `HTTP ${res.status} — ${src.diagnostic[res.status]}` };
+  }
+
   const geo = looksGeoBlocked(body);
   if (geo) {
     return { status: 'geoblocked',
@@ -520,7 +538,7 @@ if (require.main === module) {
       results = await probeAll({ refresh: true });
     }
     for (const r of results) {
-      const mark = { ok: ' ok ', blocked: 'BLOCK', auth: 'AUTH ', geoblocked: 'GEO  ', shape: 'SHAPE',
+      const mark = { ok: ' ok ', blocked: 'BLOCK', auth: 'AUTH ', geoblocked: 'GEO  ', diagnostic: 'DIAG ', shape: 'SHAPE',
                      http: 'HTTP ', unreachable: 'UNREA', unconfigured: 'UNCFG',
                      unknown: ' ??? ' }[r.status] || '  ?  ';
       console.log(`  ${mark}  ${String(r.id).padEnd(15)} ${r.detail}`);

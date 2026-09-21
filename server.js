@@ -3125,8 +3125,21 @@ app.get('/api/probe/sources', async (req, res) => {
   const refresh = req.query.refresh === '1' || req.query.refresh === 'true';
   const id = req.query.id ? String(req.query.id) : null;
   try {
-    const results = id ? [await sourceprobe.probe(id, { refresh })]
-                       : await sourceprobe.probeAll({ refresh });
+    // `?id=yahoo` runs every yahoo_* variant, because the comparison IS
+    // the measurement: one variant's status means little, the table means
+    // everything. Exact ids still match exactly.
+    let results;
+    if (id) {
+      const ids = sourceprobe.idsMatching(id);
+      if (!ids.length) {
+        return res.status(404).json({ error: `no registered source matches "${id}"`,
+                                      registered: sourceprobe.ids() });
+      }
+      results = [];
+      for (const one of ids) results.push(await sourceprobe.probe(one, { refresh }));
+    } else {
+      results = await sourceprobe.probeAll({ refresh });
+    }
     res.json({
       from: process.env.RENDER ? 'render' : 'local',
       // Say what the statuses mean in the response itself. A bare

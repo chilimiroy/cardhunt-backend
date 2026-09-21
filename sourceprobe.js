@@ -55,19 +55,88 @@ const SOURCES = [
     expect: [/card-product/, /円/],
     why: 'already parsed and trusted; per-card URLs make it a LISTINGS source, not just prices'
   },
+  // ── The Yahoo family ──────────────────────────────────────────
+  // A 96-character Client ID, confirmed against the developer portal and
+  // matching Render exactly, still gets 403 "Your Request was Forbidden"
+  // on V3 with the appid query parameter. So the key is not the problem
+  // and the question becomes WHICH request Yahoo wants.
+  //
+  // Yahoo documents TWO ways to send a Client ID
+  // (developer.yahoo.co.jp/appendix/request/), and the probe was using
+  // neither of them faithfully:
+  //
+  //   "User-Agent: <元のUser-Agent文字列>; Yahoo AppID: <あなたのClient ID>"
+  //   "appid=<あなたのClient ID>"
+  //
+  // It sent a plain Chrome UA with appid in the query — the second method,
+  // with a User-Agent that announces a browser rather than an application.
+  // Each combination is its own registry entry so one run produces a
+  // table, and so that a result can be attributed to ONE difference rather
+  // than to "the Yahoo probe".
+  //
+  // 旧仕様 (V1) is included even though it is reported discontinued.
+  // "Discontinued" and "refuses this key" are different answers and the
+  // endpoint's own words distinguish them for the price of one request.
   {
     id: 'yahoo_shopping',
-    label: 'Yahoo! Shopping API (JP)',
-    // Deliberately probed WITHOUT the credential when there is none. A
-    // documented API that cannot be reached from Render is worth knowing
-    // before the Client ID arrives, and Yahoo's own error body names the
-    // parameters it validates — which is more than the docs are worth.
+    label: 'Yahoo Shopping V3 · appid query · browser UA',
     url: 'https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch'
        + '?query=' + encodeURIComponent('ポケモンカード') + '&results=5',
     credential: 'YAHOO_SHOPPING_CLIENT_ID',
-    credentialParam: 'appid',
+    credentialMode: 'query',
     expect: [/hits|totalResultsAvailable/i],
-    why: 'the Auctions Web API was withdrawn in 2020; Shopping is a different, live service'
+    why: 'the shape the probe has been sending — the 403 baseline'
+  },
+  {
+    id: 'yahoo_v3_ua',
+    label: 'Yahoo Shopping V3 · Yahoo AppID in User-Agent',
+    url: 'https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch'
+       + '?query=' + encodeURIComponent('ポケモンカード') + '&results=5',
+    credential: 'YAHOO_SHOPPING_CLIENT_ID',
+    credentialMode: 'ua',
+    expect: [/hits|totalResultsAvailable/i],
+    why: "Yahoo's other documented method, which this project has never sent"
+  },
+  {
+    id: 'yahoo_v3_both',
+    label: 'Yahoo Shopping V3 · appid query AND Yahoo AppID UA',
+    url: 'https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch'
+       + '?query=' + encodeURIComponent('ポケモンカード') + '&results=5',
+    credential: 'YAHOO_SHOPPING_CLIENT_ID',
+    credentialMode: 'both',
+    expect: [/hits|totalResultsAvailable/i],
+    why: 'in case the UA is what is being judged and the query is what is read'
+  },
+  {
+    id: 'yahoo_v3_plain',
+    label: 'Yahoo Shopping V3 · appid query · no browser UA',
+    url: 'https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch'
+       + '?query=' + encodeURIComponent('ポケモンカード') + '&results=5',
+    credential: 'YAHOO_SHOPPING_CLIENT_ID',
+    credentialMode: 'query',
+    ua: 'cardhunt/1.0',
+    expect: [/hits|totalResultsAvailable/i],
+    why: 'isolates the browser User-Agent as a cause, changing nothing else'
+  },
+  {
+    id: 'yahoo_v1',
+    label: 'Yahoo Shopping V1 (旧仕様) · appid query',
+    url: 'https://shopping.yahooapis.jp/ShoppingWebService/V1/itemSearch'
+       + '?query=' + encodeURIComponent('ポケモンカード') + '&hits=5',
+    credential: 'YAHOO_SHOPPING_CLIENT_ID',
+    credentialMode: 'query',
+    expect: [/Result|totalResultsAvailable/i],
+    why: 'reported withdrawn — its own words settle discontinued vs refused'
+  },
+  {
+    id: 'yahoo_v2',
+    label: 'Yahoo Shopping V2 · appid query',
+    url: 'https://shopping.yahooapis.jp/ShoppingWebService/V2/itemSearch'
+       + '?query=' + encodeURIComponent('ポケモンカード') + '&hits=5',
+    credential: 'YAHOO_SHOPPING_CLIENT_ID',
+    credentialMode: 'query',
+    expect: [/Result|totalResultsAvailable/i],
+    why: 'the generation between the two, for completeness'
   },
   {
     id: 'pricecharting',
@@ -195,6 +264,7 @@ function classify(res, body, src) {
 async function probeOne(src) {
   const t0 = Date.now();
   let url = src.url;
+  let ua = src.ua || UA;
 
   if (src.credential) {
     const val = process.env[src.credential];
@@ -205,8 +275,20 @@ async function probeOne(src) {
                detail: `${src.credential} is not set`,
                credential: src.credential, why: src.why, ms: 0 };
     }
-    url += (url.includes('?') ? '&' : '?') + src.credentialParam + '=' +
-           encodeURIComponent(val);
+    // Yahoo's two documented methods, sent exactly as documented. `both`
+    // is not a hedge — it is a third case to measure, because an API can
+    // read one and judge the other.
+    const mode = src.credentialMode || 'query';
+    if (mode === 'query' || mode === 'both') {
+      url += (url.includes('?') ? '&' : '?') + (src.credentialParam || 'appid') +
+             '=' + encodeURIComponent(val);
+    }
+    if (mode === 'ua' || mode === 'both') {
+      // "User-Agent: <original>; Yahoo AppID: <Client ID>", and the bare
+      // form when there is no original. Verbatim from
+      // developer.yahoo.co.jp/appendix/request/.
+      ua = src.ua === '' ? `Yahoo AppID: ${val}` : `${ua}; Yahoo AppID: ${val}`;
+    }
   }
 
   const ctl = new AbortController();
@@ -214,7 +296,7 @@ async function probeOne(src) {
   try {
     const res = await fetch(url, {
       signal: ctl.signal,
-      headers: { 'User-Agent': UA,
+      headers: { 'User-Agent': ua,
                  'Accept': 'text/html,application/xhtml+xml,application/json',
                  'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3' }
     });
@@ -283,10 +365,33 @@ async function probe(id, opts) {
     return redactResult(Object.assign({}, hit.result,
       { cached: true, cachedAgeSec: Math.round((Date.now() - hit.at) / 1000) }));
   }
+  await paceFor(src);
   const result = await probeOne(src);
   result.probedAt = new Date().toISOString();
   cache.set(id, { at: Date.now(), result });
   return redactResult(Object.assign({}, result, { cached: false, cachedAgeSec: 0 }));
+}
+
+// ── Pacing ────────────────────────────────────────────────────
+// Yahoo's documented limit is 1 query/second, and there are six Yahoo
+// variants in the registry. Fired back to back they would return 429 —
+// and a 429 read as "this variant is refused" would send the next person
+// to debug an authentication problem that does not exist. One second
+// between requests to the same host, so every reading is of the thing
+// being measured.
+const MIN_HOST_INTERVAL_MS = 1100;
+const lastHostHit = new Map();
+
+function hostOf(url) {
+  try { return new URL(url).host; } catch { return url; }
+}
+
+async function paceFor(src) {
+  const host = hostOf(src.url);
+  const last = lastHostHit.get(host) || 0;
+  const wait = MIN_HOST_INTERVAL_MS - (Date.now() - last);
+  if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  lastHostHit.set(host, Date.now());
 }
 
 async function probeAll(opts) {
@@ -295,7 +400,17 @@ async function probeAll(opts) {
   return out;
 }
 
-module.exports = { probe, probeAll, SOURCES, ids: () => SOURCES.map(s => s.id) };
+// Every registered source whose id starts with this prefix — so
+// `node sourceprobe.js yahoo` runs the whole family and prints the table
+// the comparison actually needs.
+function idsMatching(prefix) {
+  const exact = SOURCES.find(s => s.id === prefix);
+  if (exact) return [exact.id];
+  return SOURCES.filter(s => s.id.startsWith(prefix)).map(s => s.id);
+}
+
+module.exports = { probe, probeAll, SOURCES, idsMatching,
+                   ids: () => SOURCES.map(s => s.id) };
 
 // ── CLI ───────────────────────────────────────────────────────
 if (require.main === module) {
@@ -303,8 +418,16 @@ if (require.main === module) {
     const arg = process.argv[2];
     const where = process.env.RENDER ? 'RENDER' : 'this machine (home IP)';
     console.log(`\n  SOURCE PROBE — from ${where}\n  ${'-'.repeat(72)}`);
-    const results = arg ? [await probe(arg, { refresh: true })]
-                        : await probeAll({ refresh: true });
+    let results;
+    if (arg) {
+      const ids = idsMatching(arg);
+      if (!ids.length) { console.log(`  no registered source matches "${arg}"
+`); return; }
+      results = [];
+      for (const id of ids) results.push(await probe(id, { refresh: true }));
+    } else {
+      results = await probeAll({ refresh: true });
+    }
     for (const r of results) {
       const mark = { ok: ' ok ', blocked: 'BLOCK', auth: 'AUTH ', shape: 'SHAPE',
                      http: 'HTTP ', unreachable: 'UNREA', unconfigured: 'UNCFG',

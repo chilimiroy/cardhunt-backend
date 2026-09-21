@@ -139,6 +139,23 @@ const SOURCES = [
     why: 'the generation between the two, for completeness'
   },
   {
+    // ── Where does this process appear to be? ──
+    // Not a card source. It is here because "the source refuses us" and
+    // "the source does not serve this region" are answers that look
+    // identical from inside the request, and telling them apart has now
+    // cost this project twice — first with Yahoo Auctions' datacentre
+    // block, then with a Yahoo Shopping 403 that turned out to be Yahoo
+    // JAPAN's EEA/UK withdrawal notice.
+    //
+    // One request, and the next such question is answered in seconds.
+    id: 'whereami',
+    label: 'Egress IP and region of THIS process',
+    url: 'https://ifconfig.co/json',
+    ua: 'curl/8.0',
+    expect: [/"country"/],
+    why: 'a geo refusal is invisible unless you know where the request appears to come from'
+  },
+  {
     id: 'pricecharting',
     label: 'PriceCharting',
     url: 'https://www.pricecharting.com/search-products?q=charizard+base+set&type=prices',
@@ -213,7 +230,38 @@ function looksLikeChallenge(body) {
   return m ? m[0].replace(/<title>\s*/i, '') : null;
 }
 
+// ── A refused REGION is not a refused credential either ──────
+// Yahoo JAPAN withdrew from the EEA and the UK, and serves anyone it
+// places there a notice page instead of the service:
+//
+//   【お知らせ】欧州経済領域（EEA）およびイギリスからご利用のお客様へ
+//
+// Render's V1/V2 probes came back 403 carrying exactly that page, and this
+// file reported "the service refused the credential" — because the source
+// has a credential and the status was 403. The same confident wrong answer
+// as calling the Yahoo Shopping 403 an IP block, one layer along, and it
+// would have sent the next person to re-issue a Client ID that was never
+// the problem.
+//
+// Checked BEFORE the credential branch, because it is a statement about
+// the request's ORIGIN and no credential can change it.
+const GEO_BLOCK = /(欧州経済領域|EEA（|from the European Economic Area|not available in your (country|region)|service is unavailable in your)/i;
+
+function looksGeoBlocked(body) {
+  const t = (body.match(/<title>([^<]*)<\/title>/) || [])[1] || '';
+  if (GEO_BLOCK.test(t)) return t.trim();
+  const m = body.slice(0, 4000).match(GEO_BLOCK);
+  return m ? m[0] : null;
+}
+
 function classify(res, body, src) {
+  const geo = looksGeoBlocked(body);
+  if (geo) {
+    return { status: 'geoblocked',
+             detail: `HTTP ${res.status} — the SERVICE refuses this REGION, ` +
+                     `whatever credential is sent. It served: "${geo.slice(0, 90)}"` };
+  }
+
   // ── A refused CREDENTIAL is not a refused IP ──
   // Render's first Yahoo Shopping probe returned 403 and this file called
   // it `blocked`, which in here means "this IP is refused" — the Yahoo
@@ -429,7 +477,7 @@ if (require.main === module) {
       results = await probeAll({ refresh: true });
     }
     for (const r of results) {
-      const mark = { ok: ' ok ', blocked: 'BLOCK', auth: 'AUTH ', shape: 'SHAPE',
+      const mark = { ok: ' ok ', blocked: 'BLOCK', auth: 'AUTH ', geoblocked: 'GEO  ', shape: 'SHAPE',
                      http: 'HTTP ', unreachable: 'UNREA', unconfigured: 'UNCFG',
                      unknown: ' ??? ' }[r.status] || '  ?  ';
       console.log(`  ${mark}  ${String(r.id).padEnd(15)} ${r.detail}`);

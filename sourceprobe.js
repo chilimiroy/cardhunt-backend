@@ -301,8 +301,7 @@ function classify(res, body, src) {
              || body.slice(0, 120).replace(/\s+/g, ' ').trim();
     return { status: 'auth',
              detail: `HTTP ${res.status} — the service refused the credential, not the IP. ` +
-                     `It said: "${msg}". ${src.credential} is set and ${val.length} ` +
-                     `characters long.` };
+                     `It said: "${msg}". ${src.credential} is ${describeSecret(val)}.` };
   }
   if (res.status === 403 || res.status === 401 || res.status === 429) {
     return { status: 'blocked', detail: `HTTP ${res.status}` };
@@ -392,6 +391,32 @@ async function probeOne(src) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+// ── Describing a secret without disclosing it ─────────────────
+// "96 characters, and the portal says 96" is weak evidence: any two
+// different 96-character strings match on length. The value on Render and
+// the value in the portal can agree on length and still differ by one
+// character, and that is indistinguishable from a wrong key.
+//
+// A truncated SHA-256 identifies the exact string and reveals nothing
+// usable — 12 hex characters cannot be reversed into a 96-character
+// credential. Whoever holds the portal value runs the same one-liner and
+// compares:
+//
+//   node -e "console.log(require('crypto').createHash('sha256').update('PASTE').digest('hex').slice(0,12))"
+//
+// Also reported: leading or trailing whitespace, and any non-ASCII
+// character. Both survive a copy-paste, both change the bytes sent, and
+// neither is visible in a settings field.
+function describeSecret(val) {
+  const s = String(val == null ? '' : val);
+  if (!s) return 'not set';
+  const sha = require('crypto').createHash('sha256').update(s).digest('hex').slice(0, 12);
+  const bits = [`${s.length} characters`, `sha256:${sha}`];
+  if (s !== s.trim()) bits.push('HAS LEADING/TRAILING WHITESPACE');
+  if (/[^\x20-\x7e]/.test(s)) bits.push('CONTAINS NON-ASCII CHARACTERS');
+  return bits.join(', ');
 }
 
 // ── Redaction ─────────────────────────────────────────────────

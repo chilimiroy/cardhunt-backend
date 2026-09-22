@@ -3619,11 +3619,34 @@ function updateHeroStats() {
 function renderHomeSetRow() {
   var host = document.getElementById('home-setrow');
   if (!host) return;
-  var data = (typeof getSetsData === 'function') ? getSetsData() : [];
+  var l = S.lang || 'en';
+
+  // ── Only ever the LIVE list ──
+  // getSetsData() falls back to EN_SETS when LANG_SETS is empty, and
+  // EN_SETS carries pokemontcg.io ids and pokemontcg.io logo URLs.
+  // loadAllSets() runs only when the Sets SCREEN is opened, so on a fresh
+  // Home visit this row drew 121 fallback sets whose ids openSet() cannot
+  // resolve — the two-set-lists bug reappearing on a second screen, which
+  // is precisely what commit 0c4da73 was written to end. Caught in the
+  // browser: the row rendered, and its subtitle said "121 sets".
+  //
+  // So it reads LANG_SETS directly, starts the real load itself, and says
+  // what it is doing in the meantime.
+  var data = (typeof LANG_SETS !== 'undefined' && LANG_SETS[l]) ? LANG_SETS[l] : null;
   if (!data || !data.length) {
+    if (!S._homeSetsRequested) {
+      S._homeSetsRequested = true;
+      if (l === 'en') {
+        if (typeof loadAllSets === 'function') loadAllSets();
+      } else if (typeof loadLangSets === 'function') {
+        loadLangSets(l).then(function () { renderHomeSetRow(); updateHeroStats(); });
+      }
+    }
     host.innerHTML = '<div style="padding:16px;border:1px dashed var(--bd);border-radius:var(--r);'
-      + 'color:var(--mu);font-size:12px">Set list still loading &mdash; '
-      + 'Render\'s free tier sleeps, so the first visit can take up to a minute.</div>';
+      + 'color:var(--mu);font-size:12px">Loading the set list&hellip; '
+      + 'Render\'s free tier sleeps, so the first visit can take up to a minute. '
+      + 'Nothing is shown from the offline fallback here, because its set ids '
+      + 'cannot be opened.</div>';
     return;
   }
   var list = data.slice().sort(function (a, b) {
@@ -4590,6 +4613,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-f823589-setrow &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-188b054-livesets &middot; click to hide</div>
 </body>
 </html>

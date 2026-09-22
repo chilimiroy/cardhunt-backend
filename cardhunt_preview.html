@@ -3492,6 +3492,22 @@ async function cardSummary(cardId) {
   return out;
 }
 
+// ── The listing average is per CARD AND GRADE, never per card ──
+//
+// Found in the browser, not by a test. My alerts held a Charizard at PSA 10
+// and Latest searches held the same card at Raw NM, and BOTH rendered
+// $51,743.85 — the PSA 10 median — while the true Raw NM median was $105
+// across 25 listings. A 493x error, on the row a buyer reads.
+//
+// The cause is the one this file keeps recording: a single cached number
+// standing in for the answer to two different questions. The cache was
+// keyed on cardId alone, so whichever section fetched first wrote its
+// grade's median into the other's tile.
+//
+// So the key carries the grade, and the DOM slot carries it too.
+const LISTING_AVG_CACHE = {};
+function listingAvgKey(cardId, grade) { return cardId + '@@' + (grade || 'Raw NM'); }
+
 // Second call, deliberately separate: /api/listings spends eBay quota, so
 // the tile paints from /api/cards first and fills this in when it arrives.
 async function cardListingAvg(cardId, grade) {
@@ -3542,15 +3558,26 @@ function cardSummaryTile(s, opts) {
   }
 
   // The listing average, stated as what it is — or stated as absent.
+  //
+  // Read from the grade-keyed cache, NEVER from the card summary. The card
+  // summary has no grade, so a value stored on it is an answer to a
+  // question it cannot identify — which is how a PSA 10 median came to be
+  // printed as a Raw NM one, 493x out.
+  const avgGrade = opts.grade || 'Raw NM';
+  const avgKey = listingAvgKey(s.cardId, avgGrade);
+  const cached = LISTING_AVG_CACHE[avgKey];
   let avg;
-  if (s.listingAvg != null) {
-    avg = '<span style="color:var(--tx);font-weight:600">' + fmtCurrency(s.listingAvg) + '</span>'
-        + '<span style="color:var(--fa)"> median of ' + s.listingCount + '</span>';
-  } else if (s.listingNote) {
-    avg = '<span style="color:var(--mu)">' + liveEsc(s.listingNote) + '</span>';
+  if (cached && cached.avg != null) {
+    avg = '<span style="color:var(--tx);font-weight:600">' + fmtCurrency(cached.avg) + '</span>'
+        + '<span style="color:var(--fa)"> median of ' + cached.count + '</span>';
+  } else if (cached && cached.note) {
+    avg = '<span style="color:var(--mu)">' + liveEsc(cached.note) + '</span>';
   } else {
     avg = '<span style="color:var(--fa)">checking listings&hellip;</span>';
   }
+  // The slot names the grade it is waiting for, so a fill for a different
+  // grade cannot find it.
+  avg = '<span data-avg="' + liveEsc(avgKey) + '">' + avg + '</span>';
 
   return '<div class="ct" style="flex-shrink:0;width:172px;' + (opts.border || 'border:1px solid var(--bd)') + '">'
     + '<div class="cti" style="position:relative;height:200px;padding:8px" ' + open + '>' + img + (opts.badges || '') + '</div>'
@@ -3565,16 +3592,19 @@ function cardSummaryTile(s, opts) {
 }
 
 // Fill in the listing average once it arrives, without repainting the tile.
+// Keyed by card AND grade at every step — the cache, the lookup and the DOM
+// slot — so a PSA 10 median can never land in a Raw NM row.
 async function fillListingAvg(hostSel, cardId, grade) {
-  const res = await cardListingAvg(cardId, grade);
-  const s = CARD_SUMMARY_CACHE[cardId];
-  if (s) { s.listingAvg = res.avg; s.listingCount = res.count; s.listingNote = res.note; }
-  document.querySelectorAll(hostSel + ' [data-avg="' + cardId + '"]').forEach(function (el) {
+  const key = listingAvgKey(cardId, grade);
+  const res = LISTING_AVG_CACHE[key] || await cardListingAvg(cardId, grade);
+  LISTING_AVG_CACHE[key] = res;
+  document.querySelectorAll(hostSel + ' [data-avg="' + key + '"]').forEach(function (el) {
     el.innerHTML = res.avg != null
       ? '<span style="color:var(--tx);font-weight:600">' + fmtCurrency(res.avg) + '</span>'
         + '<span style="color:var(--fa)"> median of ' + res.count + '</span>'
       : '<span style="color:var(--mu)">' + liveEsc(res.note || 'no gated listings') + '</span>';
   });
+  return res;
 }
 
 // ── LATEST SEARCHES ───────────────────────────────────────────
@@ -3626,17 +3656,14 @@ function renderLatestSearches() {
       cardId: c.cardId, name: c.name, setName: c.setName, img: c.img,
       market: null, marketIsReal: false, listingAvg: null, listingCount: 0, listingNote: null
     };
-    return cardSummaryTile(s, {})
-      .replace('<span style="color:var(--fa)">checking listings&hellip;</span>',
-               '<span data-avg="' + liveEsc(c.cardId) + '">'
-               + '<span style="color:var(--fa)">checking listings&hellip;</span></span>');
+    return cardSummaryTile(s, { grade: 'Raw NM' });
   }).join('');
 
   list.forEach(function (c) {
     cardSummary(c.cardId).then(function (s) {
       var host2 = document.getElementById('latest-searches');
       if (host2 && s && s.market != null) {
-        var el = host2.querySelector('[data-avg="' + c.cardId + '"]');
+        var el = host2.querySelector('[data-avg="' + listingAvgKey(c.cardId, 'Raw NM') + '"]');
         var cr = el && el.closest('.ci') && el.closest('.ci').querySelector('.cr');
         if (cr && !cr.getAttribute('data-filled')) {
           cr.setAttribute('data-filled', '1');
@@ -3723,10 +3750,7 @@ function updateAlertsBar() {
       cardId: a.cardId, name: a.cardName, setName: a.setName, img: a.img,
       market: null, marketIsReal: false, listingAvg: null, listingCount: 0, listingNote: null
     };
-    html += cardSummaryTile(s, { border: 'border:' + border, badges: badges, extra: extra })
-      .replace('<span style="color:var(--fa)">checking listings&hellip;</span>',
-               '<span data-avg="' + liveEsc(a.cardId) + '">'
-               + '<span style="color:var(--fa)">checking listings&hellip;</span></span>');
+    html += cardSummaryTile(s, { border: 'border:' + border, badges: badges, extra: extra, grade: a.grade });
   });
   bar.innerHTML = html + addTile;
 
@@ -3747,7 +3771,7 @@ function updateAlertsBarPrices() {
   ALERTS.forEach(function (a) {
     var s = CARD_SUMMARY_CACHE[a.cardId];
     if (!s || s.market == null) return;
-    var tile = bar.querySelector('[data-avg="' + a.cardId + '"]');
+    var tile = bar.querySelector('[data-avg="' + listingAvgKey(a.cardId, a.grade) + '"]');
     if (!tile) return;
     var cr = tile.closest('.ci') && tile.closest('.ci').querySelector('.cr');
     if (cr && !cr.getAttribute('data-filled')) {
@@ -4551,6 +4575,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-ed88c81-latest &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-bba3e11-avgkey &middot; click to hide</div>
 </body>
 </html>

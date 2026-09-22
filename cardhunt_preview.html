@@ -3615,8 +3615,20 @@ function updateHeroStats() {
       // Pull the rest in so the total is the whole catalogue rather than
       // whichever language happened to be browsed. Counting only what is
       // loaded reported 220 sets and called it the total.
-      if (typeof loadLangSets === "function" && !S._heroLangs) {
-        loadLangSets(l).then(function () { updateHeroStats(); });
+      //
+      // Requested ONCE per language, tracked here rather than inferred from
+      // whether the list arrived. loadLangSets() returns immediately while a
+      // request is already in flight, so `.then(updateHeroStats)` re-entered
+      // instantly and asked again — a tight loop that froze the renderer.
+      // Found by the browser going unresponsive, not by any test.
+      S._heroAsked = S._heroAsked || {};
+      if (typeof loadLangSets === "function" && !S._heroAsked[l]) {
+        S._heroAsked[l] = true;
+        loadLangSets(l).then(function (res) {
+          // Only redraw when something actually arrived. A null result
+          // must not schedule another pass.
+          if (res && res.length) updateHeroStats();
+        });
       }
       return;
     }
@@ -4631,6 +4643,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-8c46c11-herostats &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-f8ba9f9-heroloop &middot; click to hide</div>
 </body>
 </html>

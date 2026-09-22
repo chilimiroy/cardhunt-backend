@@ -114,6 +114,15 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(186px,1fr));gap:12px}
 .stile{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:all .18s;box-shadow:var(--sh)}.stile:hover{box-shadow:var(--sh2);transform:translateY(-2px)}
 .slogo{height:94px;display:flex;align-items:center;justify-content:center;padding:10px 14px;background:linear-gradient(135deg,#f5f5fb,#ebebf4)}.slogo img{max-height:72px;max-width:148px;object-fit:contain}
+/* Home "Choose TCG set": TWO ROWS high, scrolling sideways. grid-auto-flow
+   column with two rows is what makes a horizontal scroller wrap downward
+   first and then across, which is what "two rows high" means here. */
+.setrow2{display:grid;grid-auto-flow:column;grid-template-rows:repeat(2,auto);
+  gap:12px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin;
+  grid-auto-columns:150px}
+.setrow2 .stile{width:150px;margin:0}
+@media(max-width:640px){.setrow2{grid-auto-columns:128px}.setrow2 .stile{width:128px}}
+
 /* The set has no logo — TCGdex holds none for 0/138 Japanese, 0/84 Chinese
    and 63/220 English sets. A styled NAME tile, so the absence reads as a
    deliberate design and not as a broken image. Before this, the server
@@ -250,14 +259,28 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
         <span class="htag" onclick="tagSearch('Mew CGC 10')">✨ Mew CGC 10</span>
       </div>
       <div class="hero-stats">
-        <div class="hstat"><strong>350+</strong>Sets tracked</div>
-        <div class="hstat"><strong>20,324+</strong>Cards indexed</div>
+        <div class="hstat" id="hstat-sets"><strong>&mdash;</strong>Sets tracked</div>
+        <div class="hstat" id="hstat-cards"><strong>&mdash;</strong>Cards indexed</div>
         <div class="hstat"><strong>6</strong>Markets live</div>
         <div class="hstat"><strong>Real-time</strong>Price updates</div><div class="hstat" style="opacity:.35"><strong style="font-size:12px">v20260822-0833</strong>Build</div>
       </div>
     </div>
   </div>
   <div class="content">
+    <!-- ── CHOOSE TCG SET ── Roy's spec: every set shows a relevant image
+         (set_logo), laid out TWO ROWS high. Where a set has no logo the
+         tile carries its name instead of a broken image — TCGdex holds no
+         logo for 63 of 220 English sets and for none of the Japanese or
+         Chinese ones. -->
+    <div class="sec-h" style="margin-top:28px">
+      <div>
+        <div class="sec-t">Choose TCG set</div>
+        <div class="sec-s" id="tcgset-sub">Newest first — every set in the CardHunt database</div>
+      </div>
+      <button class="sec-a" onclick="SS('sets')">See all →</button>
+    </div>
+    <div id="home-setrow" class="setrow2"></div>
+
     <div class="sec-h" style="margin-top:28px"><div class="sec-t">Browse by game</div></div>
     <div class="gg">
       <div class="gc on" onclick="selG(this)"><div class="gc-i">🎴</div><div class="gc-n">Pokémon TCG</div><div class="gc-c">20,324 cards</div></div>
@@ -1168,6 +1191,10 @@ async function loadAllSets() {
     if (live && live.length) {
       count();
       renderSets();
+      // The home row and the hero counters read the same list, so they are
+      // refreshed the moment it lands rather than staying on the fallback.
+      if (typeof renderHomeSetRow === "function") renderHomeSetRow();
+      if (typeof updateHeroStats === "function") updateHeroStats();
       if (i) console.info('[sets] database set list loaded on attempt ' + (i + 1));
       return;
     }
@@ -1481,6 +1508,8 @@ async function loadHome() {
   // arrays they used to read held invented prices and are gone.
 
   renderLatestSearches();
+  renderHomeSetRow();
+  updateHeroStats();
   updateAlertsBar();
 }
 
@@ -3525,6 +3554,86 @@ async function fillListingAvg(hostSel, cardId, grade) {
   return res;
 }
 
+// ── HOME: Choose TCG set ──────────────────────────────────────
+// Two rows high, newest first, drawn from the SAME list the Sets screen
+// browses — LANG_SETS[lang] via loadLangSets, never the embedded
+// pokemontcg-id fallback. If this drew from a different list it would be
+// the two-set-lists bug again, on a second screen.
+//
+// setTileHTML() is shared with renderSets() for the same reason
+// cardSummaryTile() is shared: one tile, one set of rules about what a
+// missing logo looks like.
+function setTileHTML(x, opts) {
+  opts = opts || {};
+  var logoHTML;
+  if (x.isCN && x.color) {
+    var lt = x.lt ? x.lt.replace(/\n/g, '<br>') : x.n;
+    logoHTML = '<div class="cn-logo" style="background:linear-gradient(135deg,'
+      + x.color + ',' + x.color + '99)">' + lt + '</div>';
+  } else if (x.lo) {
+    // The logo may still 404 even when the API reported one, so the named
+    // tile stays as the onerror target. Belt and braces, deliberately.
+    logoHTML = '<img src="' + x.lo + '" alt="" loading="lazy" '
+      + 'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
+      + '<div class="slogtxt" style="display:none">' + liveEsc((x.n || '').substring(0, 34)) + '</div>';
+  } else {
+    // No logo exists upstream. A named tile, not a blank box.
+    logoHTML = '<div class="slogtxt">' + liveEsc((x.n || '').substring(0, 34)) + '</div>';
+  }
+  var cov = (x.coverage !== undefined && x.coverage !== null)
+    ? '<span style="font-size:10px;color:' + (x.coverage >= 50 ? 'var(--gr)' : 'var(--fa)')
+      + ';margin-left:6px">' + x.coverage + '% priced</span>' : '';
+  return '<div class="stile" onclick="openSet(&quot;' + x.id + '&quot;,&quot;'
+    + (x.aid || x.id) + '&quot;)">'
+    + '<div class="sdate">' + fmtD(x.d) + '</div>'
+    + '<div class="slogo">' + logoHTML + '</div>'
+    + '<div class="sinfo"><div class="sn">' + liveEsc(x.n) + '</div>'
+    + '<div class="sc2">' + x.t + ' cards' + cov + '</div></div>'
+    + '</div>';
+}
+
+// The hero counters said "350+ Sets tracked" and "20,324+ Cards indexed".
+// Measured the same day: 445 sets and 46,089 cards. They were typed in at
+// some point and never moved again - the same class of fact as the FX rate
+// hardcoded at 157, or the crontab line that never ran anywhere. A number
+// nothing ever prints is a number that drifts silently.
+//
+// They are counted from the four language lists the app actually browses,
+// and until those answer they show an em dash rather than a guess.
+function updateHeroStats() {
+  var sets = 0, cards = 0, known = false;
+  ["en","ja","zh-tw","zh-cn"].forEach(function (l) {
+    var arr = (typeof LANG_SETS !== "undefined" && LANG_SETS[l]) || null;
+    if (!arr || !arr.length) return;
+    known = true;
+    sets += arr.length;
+    arr.forEach(function (x) { cards += (Number(x.cardCount) || Number(x.t) || 0); });
+  });
+  if (!known) return;
+  var a = document.getElementById("hstat-sets");
+  var b = document.getElementById("hstat-cards");
+  if (a) a.innerHTML = "<strong>" + sets.toLocaleString() + "</strong>Sets tracked";
+  if (b) b.innerHTML = "<strong>" + cards.toLocaleString() + "</strong>Cards indexed";
+}
+
+function renderHomeSetRow() {
+  var host = document.getElementById('home-setrow');
+  if (!host) return;
+  var data = (typeof getSetsData === 'function') ? getSetsData() : [];
+  if (!data || !data.length) {
+    host.innerHTML = '<div style="padding:16px;border:1px dashed var(--bd);border-radius:var(--r);'
+      + 'color:var(--mu);font-size:12px">Set list still loading &mdash; '
+      + 'Render\'s free tier sleeps, so the first visit can take up to a minute.</div>';
+    return;
+  }
+  var list = data.slice().sort(function (a, b) {
+    return String(b.d || '').localeCompare(String(a.d || ''));
+  }).slice(0, 24);
+  host.innerHTML = list.map(function (x) { return setTileHTML(x); }).join('');
+  var sub = document.getElementById('tcgset-sub');
+  if (sub) sub.textContent = data.length + ' sets in the CardHunt database — newest first';
+}
+
 // ── LATEST SEARCHES ───────────────────────────────────────────
 // Real: the cards this browser actually opened. Stored locally because
 // there is no sign-in, and stored as IDENTITY only — id, name, set, image
@@ -4214,31 +4323,11 @@ function renderSets() {
              : isCN ? '<span class="lf-cn">CN</span>' : '';
       var enDiv = (x.en && x.en !== x.n)
         ? '<div class="sn2">(' + x.en + ')</div>' : '';
-      var logoHTML;
-      if (x.isCN && x.color) {
-        var lt = x.lt ? x.lt.replace(/\n/g,'<br>') : x.n;
-        logoHTML = '<div class="cn-logo" style="background:linear-gradient(135deg,'
-          + x.color + ',' + x.color + '99)">' + lt + '</div>';
-      } else if (x.lo) {
-        logoHTML = '<img src="' + x.lo + '" alt="" loading="lazy" '
-          + 'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
-          + '<div class="slogtxt" style="display:none;align-items:center;justify-content:center;'
-          + 'height:100%;padding:6px">' + (x.n || '').substring(0,30) + '</div>';
-      } else {
-        logoHTML = '<div class="slogtxt">' + (x.n || '').substring(0,30) + '</div>';
-      }
-
-      var cov = (x.coverage !== undefined && x.coverage !== null)
-        ? '<span style="font-size:10px;color:' + (x.coverage >= 50 ? 'var(--gr)' : 'var(--fa)')
-          + ';margin-left:6px">' + x.coverage + '% priced</span>' : '';
-
-      html += '<div class="stile" onclick="openSet(&quot;' + x.id + '&quot;,&quot;'
-           + (x.aid || x.id) + '&quot;)">';
-      html += '<div class="sdate">' + fmtD(x.d) + '</div>';
-      html += '<div class="slogo">' + logoHTML + '</div>';
-      html += '<div class="sinfo"><div class="sn">' + x.n + lf + '</div>' + enDiv;
-      html += '<div class="sc2">' + x.t + ' cards' + cov + '</div></div>';
-      html += '</div>';
+      // The tile is built by setTileHTML(), shared with the Home row.
+      // Two tile builders would mean two answers to 'what does a set with
+      // no logo look like', and this file has already paid for that twice.
+      html += setTileHTML(x).replace('<div class="sn">' + liveEsc(x.n) + '</div>',
+        '<div class="sn">' + x.n + lf + '</div>' + enDiv);
     });
     html += '</div></div>';
   });
@@ -4501,6 +4590,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-63842d0-setlogo &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-f823589-setrow &middot; click to hide</div>
 </body>
 </html>

@@ -3378,50 +3378,103 @@ function handleAcKey(e,dropId){
 // ══════════════════════════════════════════════════════════
 
 // In-memory alerts store (in production: IndexedDB / backend)
-let ALERTS = [
-  {id:'a1',cardId:'base1-4',cardName:'Charizard Holo',setName:'Base Set',img:'https://images.pokemontcg.io/base1/4.png',grade:'PSA 9',type:'below',price:4000,market:'All markets',notify:'In-app + Email',status:'active',created:Date.now()-86400000*3,triggered:false,lastCheck:Date.now()-3600000,currentPrice:4200},
-  {id:'a2',cardId:'sv3pt5-172',cardName:'Pikachu Illustrator',setName:'151',img:'https://images.pokemontcg.io/sv3pt5/172.png',grade:'CGC 9',type:'below',price:350,market:'eBay only',notify:'In-app + Email',status:'triggered',created:Date.now()-86400000*7,triggered:true,triggeredAt:Date.now()-86400000,lastCheck:Date.now()-1800000,currentPrice:342},
-  {id:'a3',cardId:'swsh7-215',cardName:'Umbreon VMAX Alt Art',setName:'Evolving Skies',img:'https://images.pokemontcg.io/swsh7/215.png',grade:'Raw NM',type:'below',price:200,market:'TCGPlayer only',notify:'Email only',status:'active',created:Date.now()-86400000*1,triggered:false,lastCheck:Date.now()-900000,currentPrice:210},
-  {id:'a4',cardId:'sv2-228',cardName:'Gardevoir ex SAR',setName:'Paldea Evolved',img:'https://images.pokemontcg.io/sv2/228.png',grade:'PSA 10',type:'deal',price:15,market:'All markets',notify:'In-app + Email',status:'paused',created:Date.now()-86400000*14,triggered:false,lastCheck:Date.now()-7200000,currentPrice:68},
-];
+// ── ALERTS — real rows from /api/alerts, never simulated ──────
+//
+// This array used to hold four hardcoded cards with images.pokemontcg.io
+// URLs, and checkAlerts() moved their prices by a random +/-3% every 30
+// seconds. It had done so for weeks. CLAUDE.md T3 records that the alerts
+// table and /api/alerts both exist and that the frontend never called them:
+// `grep -c "api/alerts" cardhunt_preview.html` returned 0.
+//
+// A simulated price is worse than no price. It is indistinguishable from a
+// real one on screen, and the whole product is the claim that a number here
+// came from a marketplace.
+let ALERTS = [];
+let ALERTS_LOADED = false;      // false until the API has actually answered
+let ALERTS_ERROR  = null;       // set when it answered with a failure
+
+// There is no sign-in, so there is no server-side identity. A stable local
+// id makes the alerts REAL and persistent for this browser without
+// pretending someone is logged in. It is generated once and kept.
+const CH_USER = (function () {
+  try {
+    let u = localStorage.getItem('ch_user');
+    if (!u) { u = 'anon-' + Math.random().toString(36).slice(2, 10); localStorage.setItem('ch_user', u); }
+    return u;
+  } catch (e) { return 'anon'; }   // private window: alerts are per-session
+})();
+
+// Map an API row onto the shape this page already renders.
+function alertFromApi(r) {
+  return {
+    id: r.id,
+    cardId: r.card_api_id,
+    cardName: r.card_name || r.card_api_id,
+    setName: r.set_name || '',
+    img: r.card_img || '',
+    grade: r.grade || 'Raw NM',
+    type: r.alert_type || 'below',
+    price: Number(r.target_price) || 0,
+    market: r.marketplace || 'All markets',
+    notify: r.notify || 'In-app',
+    status: r.status || 'active',
+    created: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+    triggered: !!r.triggered_at,
+    triggeredAt: r.triggered_at ? new Date(r.triggered_at).getTime() : null,
+    lastCheck: r.last_checked_at ? new Date(r.last_checked_at).getTime() : null,
+    // The price the alert FIRED at, from the row that fired it. Never a
+    // random walk, and null when nothing has fired — which reads as
+    // "not checked yet", because that is what it is.
+    currentPrice: r.triggered_price != null ? Number(r.triggered_price)
+                : (r.current_price != null ? Number(r.current_price) : null),
+    triggeredUrl: r.triggered_url || null,
+    triggeredTitle: r.triggered_title || null
+  };
+}
+
+async function loadAlerts() {
+  try {
+    const r = await fetch(BACKEND + '/api/alerts/' + encodeURIComponent(CH_USER));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const rows = await r.json();
+    ALERTS = (Array.isArray(rows) ? rows : []).map(alertFromApi);
+    ALERTS_ERROR = null;
+  } catch (e) {
+    // Say so. An empty list and an unreachable API are different facts and
+    // must not render the same.
+    ALERTS = [];
+    ALERTS_ERROR = e.message || 'could not reach the alerts API';
+    console.warn('[alerts] ' + ALERTS_ERROR);
+  }
+  ALERTS_LOADED = true;
+  updateAlertsBar();
+  updateAlertStats();
+  if (document.getElementById('screen-alerts') && document.getElementById('screen-alerts').classList.contains('on')) renderAlertsList();
+}
 
 let alertFilter='all';
 let alertCardTarget=null; // card selected for new alert
 let alertCheckInterval=null;
 
 // ── ALERT CHECK ENGINE ─────────────────────────────────────
+//
+// It does not evaluate anything. Evaluation belongs on the server, where
+// `node ingest.js alerts` already does it against real prices and writes
+// triggered_at, triggered_price, triggered_source and triggered_url onto
+// the row. The browser's job is to SHOW what fired, not to decide it.
+//
+// What used to be here moved every alert by a random +/-3% every 30
+// seconds and wrote the result into the same field a real price would
+// occupy. Nothing on screen distinguished the two.
 function startAlertEngine(){
-  // Check alerts every 30 seconds (in production: server-side with webhooks)
-  checkAlerts();
-  alertCheckInterval=setInterval(checkAlerts, 30000);
+  loadAlerts();
+  // Re-read what the server has. Five minutes, because nothing here is
+  // computed locally any more — this is a refresh, not a simulation.
+  alertCheckInterval = setInterval(loadAlerts, 300000);
 }
 
-function checkAlerts(){
-  let triggered=0;
-  ALERTS.forEach(alert=>{
-    if(alert.status==='paused') return;
-    // Simulate price check — in production this hits the API
-    const variance=(Math.random()-0.5)*0.06; // ±3% price movement
-    alert.currentPrice=+(alert.currentPrice*(1+variance)).toFixed(2);
-    alert.lastCheck=Date.now();
-    // Check trigger condition
-    const wasTriggered=alert.triggered;
-    if(alert.type==='below' && alert.currentPrice<=alert.price){
-      alert.triggered=true;alert.status='triggered';alert.triggeredAt=Date.now();triggered++;
-    } else if(alert.type==='above' && alert.currentPrice>=alert.price){
-      alert.triggered=true;alert.status='triggered';alert.triggeredAt=Date.now();triggered++;
-    } else if(alert.type==='deal'){
-      const pct=((alert.currentPrice-alert.price)/alert.price*100);
-      if(pct<=-alert.price/100){alert.triggered=true;alert.status='triggered';alert.triggeredAt=Date.now();triggered++;}
-    }
-    // Show notification for newly triggered
-    if(!wasTriggered && alert.triggered) showAlertNotification(alert);
-  });
-  // Update UI
-  updateAlertsBar();
-  updateAlertStats();
-  if(document.getElementById('screen-alerts')?.classList.contains('on')) renderAlertsList();
-}
+// Kept as a name other code calls. It re-reads; it never invents.
+function checkAlerts(){ return loadAlerts(); }
 
 function showAlertNotification(alert){
   // Create in-app toast notification
@@ -3445,9 +3498,149 @@ function showAlertNotification(alert){
 }
 
 // ── ALERTS BAR (above hero) ────────────────────────────────
+// ── The shared card summary ───────────────────────────────────
+// "Latest searches" and "My alerts" show the SAME card structure — image,
+// name, set, current market price, average listing price — and Roy's spec
+// says so explicitly. Two renderers would drift, which is the one thing
+// this codebase has proved repeatedly: four estimators, two query builders,
+// two grader lists, two set lists.
+//
+// So both call cardSummaryTile(), and an alert simply adds its own row.
+//
+// "Average listing price" is the MEDIAN of gated, non-outlier listings —
+// `listingAvg` below. Where there are none it says so. It must never fall
+// back to the market price wearing a listing-average label: those are
+// different claims about different data, and conflating them is the
+// /api/market defect in a new costume.
+const CARD_SUMMARY_CACHE = {};
+
+async function cardSummary(cardId) {
+  if (CARD_SUMMARY_CACHE[cardId]) return CARD_SUMMARY_CACHE[cardId];
+  const out = { cardId: cardId, name: null, setName: null, img: null,
+                market: null, marketIsReal: false, listingAvg: null,
+                listingCount: 0, listingNote: null };
+  try {
+    const r = await fetch(BACKEND + '/api/cards/' + encodeURIComponent(cardId));
+    const j = await r.json();
+    const d = j && j.data;
+    if (d) {
+      out.name = d.name;
+      out.setName = (d.set && d.set.name) || '';
+      out.img = (d.images && (d.images.small || d.images.large)) || '';
+      out.market = d._price != null ? Number(d._price) : null;
+      // The est/real distinction the whole page depends on.
+      out.marketIsReal = d._priceIsReal === true
+        || !!(d._priceSource && !/^estimate/.test(d._priceSource));
+    }
+  } catch (e) { out.listingNote = 'card lookup failed'; }
+  CARD_SUMMARY_CACHE[cardId] = out;
+  return out;
+}
+
+// Second call, deliberately separate: /api/listings spends eBay quota, so
+// the tile paints from /api/cards first and fills this in when it arrives.
+async function cardListingAvg(cardId, grade) {
+  try {
+    const r = await fetch(BACKEND + '/api/listings/' + encodeURIComponent(cardId)
+      + '?grade=' + encodeURIComponent(grade || 'Raw NM'));
+    const j = await r.json();
+    // Outlier-flagged rows are excluded from the average for the same
+    // reason `cheapest` skips them: $2.08 against a $750 median is not a
+    // price for this card, and averaging it in moves the number people act
+    // on. Flagged rows are still SHOWN in the panel — never removed.
+    const rows = (j.listings || []).filter(function (l) { return !l.suspect && l.landed != null; });
+    if (!rows.length) {
+      return { avg: null, count: 0,
+               note: (j.listings || []).length ? 'all listings flagged as outliers' : 'no gated listings' };
+    }
+    const vals = rows.map(function (l) { return Number(l.landed); }).sort(function (a, b) { return a - b; });
+    const mid = Math.floor(vals.length / 2);
+    const med = vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
+    return { avg: med, count: vals.length, note: null };
+  } catch (e) {
+    return { avg: null, count: 0, note: 'listings unavailable' };
+  }
+}
+
+// One tile. `extra` is appended inside the info block — that is where an
+// alert puts its own target price.
+function cardSummaryTile(s, opts) {
+  opts = opts || {};
+  const id = liveEsc(s.cardId);
+  const img = s.img
+    ? '<img src="' + liveEsc(s.img) + '" alt="' + liveEsc(s.name || '') + '"'
+      + ' style="height:100%;width:auto;max-width:100%;object-fit:contain;border-radius:6px;'
+      + 'box-shadow:0 3px 14px rgba(0,0,0,.22)" onerror="this.style.display=\'none\'">'
+    : '<div class="sk" style="width:100%;height:100%"></div>';
+
+  // Both the image and the name open the card page — Roy's spec names both.
+  const open = 'onclick="openCard(\'' + id + '\')" style="cursor:pointer"';
+
+  let price;
+  if (s.market == null) {
+    price = '<span style="color:var(--mu);font-size:12px">no market price</span>';
+  } else {
+    price = '<span class="cp">' + fmtCurrency(s.market) + '</span>'
+      + (s.marketIsReal ? ''
+         : '<span style="font-size:9px;color:var(--fa);margin-left:4px;font-weight:600"'
+           + ' title="A multiplier estimate, not a measured market price">est</span>');
+  }
+
+  // The listing average, stated as what it is — or stated as absent.
+  let avg;
+  if (s.listingAvg != null) {
+    avg = '<span style="color:var(--tx);font-weight:600">' + fmtCurrency(s.listingAvg) + '</span>'
+        + '<span style="color:var(--fa)"> median of ' + s.listingCount + '</span>';
+  } else if (s.listingNote) {
+    avg = '<span style="color:var(--mu)">' + liveEsc(s.listingNote) + '</span>';
+  } else {
+    avg = '<span style="color:var(--fa)">checking listings&hellip;</span>';
+  }
+
+  return '<div class="ct" style="flex-shrink:0;width:172px;' + (opts.border || 'border:1px solid var(--bd)') + '">'
+    + '<div class="cti" style="position:relative;height:200px;padding:8px" ' + open + '>' + img + (opts.badges || '') + '</div>'
+    + '<div class="ci">'
+      + '<div class="cn" ' + open + '>' + liveEsc(s.name || s.cardId) + '</div>'
+      + '<div class="cs">' + liveEsc(s.setName || '') + '</div>'
+      + '<div class="cr" style="margin-top:4px">' + price + '</div>'
+      + '<div style="font-size:10px;margin-top:3px;line-height:1.5">'
+        + '<span style="color:var(--fa)">avg listing </span>' + avg + '</div>'
+      + (opts.extra || '')
+    + '</div></div>';
+}
+
+// Fill in the listing average once it arrives, without repainting the tile.
+async function fillListingAvg(hostSel, cardId, grade) {
+  const res = await cardListingAvg(cardId, grade);
+  const s = CARD_SUMMARY_CACHE[cardId];
+  if (s) { s.listingAvg = res.avg; s.listingCount = res.count; s.listingNote = res.note; }
+  document.querySelectorAll(hostSel + ' [data-avg="' + cardId + '"]').forEach(function (el) {
+    el.innerHTML = res.avg != null
+      ? '<span style="color:var(--tx);font-weight:600">' + fmtCurrency(res.avg) + '</span>'
+        + '<span style="color:var(--fa)"> median of ' + res.count + '</span>'
+      : '<span style="color:var(--mu)">' + liveEsc(res.note || 'no gated listings') + '</span>';
+  });
+}
+
 function updateAlertsBar() {
   var bar = document.getElementById('alerts-bar-items');
   if (!bar) return;
+
+  // Three states, and they must not look alike: not asked yet, asked and
+  // the API failed, asked and there are none.
+  if (!ALERTS_LOADED) {
+    bar.innerHTML = '<div class="sk" style="width:172px;height:300px;flex-shrink:0"></div>'
+      + '<div class="sk" style="width:172px;height:300px;flex-shrink:0"></div>';
+    return;
+  }
+  if (ALERTS_ERROR) {
+    bar.innerHTML = '<div style="padding:16px;border:1px dashed var(--re);border-radius:var(--r);'
+      + 'color:var(--mu);font-size:12px;min-width:280px">Could not load your alerts &mdash; '
+      + liveEsc(ALERTS_ERROR) + '. <br>This is the alerts API, not your alert list: '
+      + 'nothing has been lost.</div>';
+    return;
+  }
+
   var active = ALERTS.filter(function(a) { return a.status !== 'paused'; });
   var addTile = '<div class="ct" style="flex-shrink:0;width:158px;cursor:pointer;border:2px dashed var(--bd);background:var(--w)" onclick="showAddAlertModal()">'
     + '<div class="cti" style="flex-direction:column;gap:8px;background:var(--bg)">'
@@ -3459,29 +3652,83 @@ function updateAlertsBar() {
     + '<div class="cr"><span style="font-size:12px;color:var(--t);font-weight:600">Get notified &#8594;</span></div>'
     + '</div></div>';
 
-  if (!active.length) { bar.innerHTML = addTile; return; }
+  if (!active.length) {
+    bar.innerHTML = '<div style="padding:16px 18px;border:1px dashed var(--bd);border-radius:var(--r);'
+      + 'color:var(--mu);font-size:12px;min-width:300px;line-height:1.6">'
+      + '<div style="font-weight:700;color:var(--tx);font-size:13px;margin-bottom:4px">No alerts yet</div>'
+      + 'Alerts are stored on the server and evaluated against real prices &mdash; '
+      + 'nothing here is simulated. Add one and it will persist.</div>' + addTile;
+    return;
+  }
 
+  // Each alert in its own box, same card structure as Latest searches.
   var html = '';
   active.forEach(function(a) {
-    var isTriggered = a.status === 'triggered';
-    var pct = ((a.currentPrice - a.price) / a.price * 100);
-    var below = a.type === 'below' && pct <= 0;
-    var chgColor = below ? 'var(--gr)' : 'var(--re)';
-    var chgSym = below ? '&#8595;' : '&#8593;';
+    var isTriggered = a.status === 'triggered' || a.triggered;
     var border = isTriggered ? '2px solid var(--gr)' : '1px solid var(--bd)';
-    var hitBadge = isTriggered ? '<span class="badge b-grn btl" style="font-size:9px">&#10003; HIT</span>' : '';
-    var gradeBadge = '<span class="badge b-pur btr" style="font-size:9px">' + a.grade + '</span>';
-    var img = a.img ? '<img src="' + a.img + '" alt="' + a.cardName + '" style="height:144px;width:auto;object-fit:contain;border-radius:5px;box-shadow:0 3px 14px rgba(0,0,0,.2);position:relative;z-index:1" onerror="this.style.display=\'none\'">' : '<div class="sk"></div>';
-    html += '<div class="ct" style="flex-shrink:0;width:158px;cursor:pointer;border:' + border + '" onclick="openCard(\'' + a.cardId + '\')">';
-    html += '<div class="cti" style="position:relative">' + img + hitBadge + gradeBadge + '</div>';
-    html += '<div class="ci">';
-    html += '<div class="cn">' + a.cardName + '</div>';
-    html += '<div class="cs">' + a.setName + ' &middot; Target $' + a.price.toFixed(0) + '</div>';
-    html += '<div class="cr"><span class="cp" style="color:' + (isTriggered ? 'var(--gr)' : 'var(--tx)') + '">$' + a.currentPrice.toFixed(0) + '</span>';
-    html += '<span class="cc" style="color:' + chgColor + '">' + chgSym + Math.abs(pct).toFixed(1) + '%</span></div>';
-    html += '</div></div>';
+    var badges = (isTriggered ? '<span class="badge b-grn btl" style="font-size:9px">&#10003; HIT</span>' : '')
+      + '<span class="badge b-pur btr" style="font-size:9px">' + liveEsc(a.grade) + '</span>';
+
+    // The alert's own row: the target that was set, and what it fired at.
+    var typeWord = a.type === 'above' ? 'above' : (a.type === 'deal' ? 'below market' : 'below');
+    var extra = '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--bd);font-size:10px;line-height:1.6">'
+      + '<div><span style="color:var(--fa)">alert when ' + typeWord + ' </span>'
+      + '<span style="color:var(--tx);font-weight:700">' + fmtCurrency(a.price) + '</span></div>';
+    if (isTriggered && a.currentPrice != null) {
+      extra += '<div><span style="color:var(--fa)">fired at </span>'
+        + '<span style="color:var(--gr);font-weight:700">' + fmtCurrency(a.currentPrice) + '</span></div>';
+      // The listing that fired it — CLAUDE.md T3 asks for exactly this.
+      if (a.triggeredUrl) {
+        extra += '<div><a href="' + liveEsc(a.triggeredUrl) + '" target="_blank" rel="noopener"'
+          + ' style="color:var(--t);font-weight:600">see the listing &#8594;</a></div>';
+      }
+    } else {
+      // No invented number. "Not checked yet" is the honest reading of a
+      // row the server has not evaluated.
+      extra += '<div style="color:var(--fa)">'
+        + (a.lastCheck ? 'checked ' + timeAgo(a.lastCheck) : 'not checked yet') + '</div>';
+    }
+    extra += '</div>';
+
+    var s = CARD_SUMMARY_CACHE[a.cardId] || {
+      cardId: a.cardId, name: a.cardName, setName: a.setName, img: a.img,
+      market: null, marketIsReal: false, listingAvg: null, listingCount: 0, listingNote: null
+    };
+    html += cardSummaryTile(s, { border: 'border:' + border, badges: badges, extra: extra })
+      .replace('<span style="color:var(--fa)">checking listings&hellip;</span>',
+               '<span data-avg="' + liveEsc(a.cardId) + '">'
+               + '<span style="color:var(--fa)">checking listings&hellip;</span></span>');
   });
   bar.innerHTML = html + addTile;
+
+  // Fill in the real numbers behind the tiles, one card at a time.
+  active.forEach(function (a) {
+    cardSummary(a.cardId).then(function (s) {
+      // Repaint only if the summary added something the tile did not have.
+      if (s && s.market != null) updateAlertsBarPrices();
+      return fillListingAvg('#alerts-bar-items', a.cardId, a.grade);
+    });
+  });
+}
+
+// Patch the market price into already-rendered alert tiles.
+function updateAlertsBarPrices() {
+  var bar = document.getElementById('alerts-bar-items');
+  if (!bar) return;
+  ALERTS.forEach(function (a) {
+    var s = CARD_SUMMARY_CACHE[a.cardId];
+    if (!s || s.market == null) return;
+    var tile = bar.querySelector('[data-avg="' + a.cardId + '"]');
+    if (!tile) return;
+    var cr = tile.closest('.ci') && tile.closest('.ci').querySelector('.cr');
+    if (cr && !cr.getAttribute('data-filled')) {
+      cr.setAttribute('data-filled', '1');
+      cr.innerHTML = '<span class="cp">' + fmtCurrency(s.market) + '</span>'
+        + (s.marketIsReal ? ''
+           : '<span style="font-size:9px;color:var(--fa);margin-left:4px;font-weight:600"'
+             + ' title="A multiplier estimate, not a measured market price">est</span>');
+    }
+  });
 }
 
 function filterAlerts(filter,el){
@@ -3489,6 +3736,18 @@ function filterAlerts(filter,el){
   document.querySelectorAll('[onclick^="filterAlerts"]').forEach(b=>b.classList.remove('on'));
   el.classList.add('on');
   renderAlertsList();
+}
+
+// Lifted out of renderAlertsList, which was the only thing that could see
+// it. The alerts BAR needs the same wording, and a second copy is how this
+// codebase ended up with four estimators.
+function timeAgo(ts){
+  if(!ts) return 'never';
+  var d=(Date.now()-ts)/1000;
+  if(d<60) return 'just now';
+  if(d<3600) return Math.floor(d/60)+'m ago';
+  if(d<86400) return Math.floor(d/3600)+'h ago';
+  return Math.floor(d/86400)+'d ago';
 }
 
 function renderAlertsList(){
@@ -3499,15 +3758,6 @@ function renderAlertsList(){
   if(!list) return;
   if(!filtered.length){ list.innerHTML=''; if(empty) empty.style.display='block'; return; }
   if(empty) empty.style.display='none';
-
-  function timeAgo(ts){
-    if(!ts) return 'never';
-    var d=(Date.now()-ts)/1000;
-    if(d<60) return 'just now';
-    if(d<3600) return Math.floor(d/60)+'m ago';
-    if(d<86400) return Math.floor(d/3600)+'h ago';
-    return Math.floor(d/86400)+'d ago';
-  }
 
   var html = '';
   filtered.forEach(function(a){
@@ -4272,6 +4522,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260920-628cf4d-yuyutei &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-eba0615-alerts &middot; click to hide</div>
 </body>
 </html>

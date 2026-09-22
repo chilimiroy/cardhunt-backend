@@ -325,10 +325,28 @@ const GENUINE_ART_PHRASES =
 //
 // Keyed by the marker word, with the set it belongs to. A listing naming
 // the marker is that reprint; if our card is not from that set, refuse.
+//
+// `reNot` / `setNot` exist because TWO anniversary sets now share the word.
+// 30th Celebration and 30th Classic Collection (2026-09-16) reprint classics
+// exactly as Celebrations (2021) did — and "30th Celebration" satisfies
+// /celebrat/i, so ingesting them silently DISABLED the Celebrations guard for
+// all 188 of their cards, and made every 30th listing exempt on a 2021 card.
+// Measured, not assumed: "Dialga 103/128 Celebrations Holo" was kept against
+// en-30th-103, and "Charizard 4/102 30th Classic Collection" against
+// en-cel25cc-4. Both are the master-ball mirror with a five-year gap.
+//
+// A marker is skipped when the title ALSO names the other set (`reNot`), so a
+// seller writing "30th anniversary ... Celebrations" is not read as the 2021
+// set; and a set satisfies a marker only when it does not carry the
+// disqualifier (`setNot`), so "30th Celebration" no longer counts as
+// Celebrations. The bare `30th` marker is last and needs no `set` alias
+// beyond its own, since no other set name contains it.
 const REPRINT_MARKERS = [
-  { re: /\bcelebrations?\b/i,        set: /celebrat/i,           label: 'Celebrations' },
+  { re: /\bcelebrations?\b/i,        set: /celebrat/i,           setNot: /\b30th\b/i,
+    reNot: /\b30th\b/i,              label: 'Celebrations' },
   { re: /\bclassic collection\b/i,   set: /classic collection/i, label: 'Classic Collection' },
-  { re: /\blegendary collection\b/i, set: /legendary/i,          label: 'Legendary Collection' }
+  { re: /\blegendary collection\b/i, set: /legendary/i,          label: 'Legendary Collection' },
+  { re: /\b30th\b/i,                 set: /\b30th\b/i,           label: '30th Celebration' }
 ];
 
 // Han, Hiragana, Katakana, Hangul.
@@ -581,7 +599,12 @@ function printingConflict(title, card, opts) {
   // number, because the number WILL match — that is the whole problem.
   const ourSet = String(card.setName || '');
   for (const rp of REPRINT_MARKERS) {
-    if (rp.re.test(t) && !rp.set.test(ourSet)) {
+    if (!rp.re.test(t)) continue;
+    // The title names the OTHER anniversary set too — this marker is not
+    // what it is describing.
+    if (rp.reNot && rp.reNot.test(t)) continue;
+    const ourSetMatches = rp.set.test(ourSet) && !(rp.setNot && rp.setNot.test(ourSet));
+    if (!ourSetMatches) {
       return `title is a ${rp.label} reprint, which reuses this numbering — ` +
              `wanted ${ourSet || 'the original set'}`;
     }

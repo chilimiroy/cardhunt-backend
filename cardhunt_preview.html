@@ -295,7 +295,20 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
         <div style="font-size:11px;opacity:.8;margin-top:3px;color:var(--t)">Save & sync your data</div>
       </div>
     </div>
+    <!-- ── LATEST SEARCHES ── top of the page, per Roy's spec.
+         Same card structure as My alerts below: full card image, then
+         name, set, current market price and average listing price. Both
+         render through cardSummaryTile(). -->
     <div class="sec-h" style="margin-top:0;margin-bottom:14px">
+      <div>
+        <div class="sec-t">🕘 Latest searches</div>
+        <div class="sec-s">Cards you opened, newest first — market price and the median of gated listings</div>
+      </div>
+      <button class="sec-a" onclick="clearSearchHistory()">Clear →</button>
+    </div>
+    <div id="latest-searches" style="display:flex;gap:14px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none"></div>
+
+    <div class="sec-h" style="margin-top:28px;margin-bottom:14px">
         <div>
           <div class="sec-t">🔔 My card alerts</div>
           <div class="sec-s">Live price tracking — click any card to view listings</div>
@@ -1499,124 +1512,57 @@ async function loadHome() {
   if (S.homeLoaded) return;
   S.homeLoaded = true;
 
-  var TRENDING = [
-    {id:'me2pt5-276',name:'Pikachu ex',number:'276',rarity:'Special Illustration Rare',
-     set:{id:'me2pt5',name:'Ascended Heroes'},
-     images:{small:'https://images.pokemontcg.io/me2pt5/276.png'},
-     tcgplayer:{prices:{holofoil:{market:195,low:125,mid:195,high:320}}}},
-    {id:'sv3pt5-207',name:'Charizard ex',number:'207',rarity:'Special Illustration Rare',
-     set:{id:'sv3pt5',name:'151'},
-     images:{small:'https://images.pokemontcg.io/sv3pt5/207.png'},
-     tcgplayer:{prices:{holofoil:{market:118,low:76,mid:118,high:195}}}},
-    {id:'me2pt5-294',name:'Mega Charizard Y ex',number:'294',rarity:'Hyper Rare',
-     set:{id:'me2pt5',name:'Ascended Heroes'},
-     images:{small:'https://images.pokemontcg.io/me2pt5/294.png'},
-     tcgplayer:{prices:{holofoil:{market:480,low:310,mid:480,high:780}}}},
-    {id:'me2pt5-281',name:"Team Rocket's Mewtwo ex",number:'281',rarity:'Special Illustration Rare',
-     set:{id:'me2pt5',name:'Ascended Heroes'},
-     images:{small:'https://images.pokemontcg.io/me2pt5/281.png'},
-     tcgplayer:{prices:{holofoil:{market:185,low:118,mid:185,high:305}}}},
-    {id:'swsh7-215',name:'Umbreon VMAX',number:'215',rarity:'Special Illustration Rare',
-     set:{id:'swsh7',name:'Evolving Skies'},
-     images:{small:'https://images.pokemontcg.io/swsh7/215.png'},
-     tcgplayer:{prices:{holofoil:{market:198,low:128,mid:198,high:325}}}},
-    {id:'base1-4',name:'Charizard',number:'4',rarity:'Rare Holo',
-     set:{id:'base1',name:'Base Set'},
-     images:{small:'https://images.pokemontcg.io/base1/4.png'},
-     tcgplayer:{prices:{holofoil:{market:728,low:460,mid:728,high:1200}}}},
-    {id:'sv8pt5-241',name:'Pikachu ex',number:'241',rarity:'Special Illustration Rare',
-     set:{id:'sv8pt5',name:'Surging Sparks'},
-     images:{small:'https://images.pokemontcg.io/sv8pt5/241.png'},
-     tcgplayer:{prices:{holofoil:{market:145,low:92,mid:145,high:240}}}},
-    {id:'sv3pt5-172',name:'Pikachu ex',number:'172',rarity:'Special Illustration Rare',
-     set:{id:'sv3pt5',name:'151'},
-     images:{small:'https://images.pokemontcg.io/sv3pt5/172.png'},
-     tcgplayer:{prices:{holofoil:{market:88,low:56,mid:88,high:145}}}}
-  ];
+  // ── Trending / movers / deals: retired, not faked ────────────
+  //
+  // This was 78 lines of hardcoded cards with invented prices — Base Set
+  // Charizard at a flat $728, Pikachu ex at $195 — and 14
+  // images.pokemontcg.io URLs, which were the last live requests to that
+  // host on any page.
+  //
+  // Worse than decoration: the block ended with
+  //
+  //     TRENDING.forEach(function(c){ CARD_CACHE[c.id] = c; });
+  //     DEALS.forEach(function(c){ CARD_CACHE[c.id] = c; });
+  //
+  // CARD_CACHE has no expiry. So merely LOADING the home page pinned a
+  // fabricated price for six cards for the rest of the session, under
+  // pokemontcg-shaped ids ("base1-4", "me2pt5-276") that the rest of the
+  // app cannot resolve. That is the set-page cache defect recorded in
+  // CLAUDE.md, reached from the home page instead.
+  //
+  // There is no /api/trending, no movers endpoint and no deals endpoint.
+  // Rather than invent them, each section says so. A fallback must
+  // announce itself, and an empty shelf is a smaller lie than a full one.
+  var TRENDING = [], GAINERS = [], DECLINERS = [], DEALS = [];
 
-  var GAINERS = [
-    {id:'me2pt5-294',name:'Mega Charizard Y ex',set:'Ascended Heroes',price:480,chg:18.4},
-    {id:'me2pt5-276',name:'Pikachu ex #276 SIR',set:'Ascended Heroes',price:195,chg:12.1},
-    {id:'sv8pt5-241',name:'Pikachu ex SIR',set:'Surging Sparks',price:145,chg:9.8},
-    {id:'me2pt5-281',name:"Team Rocket's Mewtwo ex",set:'Ascended Heroes',price:185,chg:8.5},
-    {id:'sv3pt5-207',name:'Charizard ex SAR',set:'151',price:118,chg:7.2}
-  ];
+  // NOTHING is written into CARD_CACHE here. It has no expiry, so anything
+  // put in it from the home page outlives the visit — and what used to be
+  // put in it was invented.
 
-  var DECLINERS = [
-    {id:'swsh7-215',name:'Umbreon VMAX Alt Art',set:'Evolving Skies',price:198,chg:-6.2},
-    {id:'sv4-182',name:'Walking Wake ex SAR',set:'Paradox Rift',price:55,chg:-4.8},
-    {id:'sv6-204',name:'Milotic ex SAR',set:'Twilight Masquerade',price:42,chg:-3.9},
-    {id:'sv3-201',name:'Charizard ex SAR',set:'Obsidian Flames',price:168,chg:-2.8},
-    {id:'swsh12pt5-159',name:'Lugia VSTAR SAR',set:'Crown Zenith',price:58,chg:-2.1}
-  ];
-
-  var DEALS = [
-    {id:'sm115-68',name:'Charizard GX',number:'68',rarity:'Ultra Rare',
-     set:{id:'sm115',name:'Hidden Fates'},
-     images:{small:'https://images.pokemontcg.io/sm115/68.png'},
-     tcgplayer:{prices:{holofoil:{market:38,low:24,mid:38,high:62}}}},
-    {id:'sv3-234',name:'Garchomp ex SAR',number:'234',rarity:'Special Illustration Rare',
-     set:{id:'sv3',name:'Obsidian Flames'},
-     images:{small:'https://images.pokemontcg.io/sv3/234.png'},
-     tcgplayer:{prices:{holofoil:{market:18,low:11,mid:18,high:30}}}},
-    {id:'sv5-182',name:'Iron Thorns ex SAR',number:'182',rarity:'Special Illustration Rare',
-     set:{id:'sv5',name:'Temporal Forces'},
-     images:{small:'https://images.pokemontcg.io/sv5/182.png'},
-     tcgplayer:{prices:{holofoil:{market:22,low:14,mid:22,high:36}}}},
-    {id:'sv9-177',name:'Greninja ex SAR',number:'177',rarity:'Special Illustration Rare',
-     set:{id:'sv9',name:'Battle Partners'},
-     images:{small:'https://images.pokemontcg.io/sv9/177.png'},
-     tcgplayer:{prices:{holofoil:{market:45,low:29,mid:45,high:74}}}},
-    {id:'swsh12pt5-159',name:'Lugia VSTAR SAR',number:'159',rarity:'Special Illustration Rare',
-     set:{id:'swsh12pt5',name:'Crown Zenith'},
-     images:{small:'https://images.pokemontcg.io/swsh12pt5/159.png'},
-     tcgplayer:{prices:{holofoil:{market:58,low:37,mid:58,high:95}}}},
-    {id:'sv4pt5-91',name:'Charizard ex',number:'91',rarity:'Double Rare',
-     set:{id:'sv4pt5',name:'Paldean Fates'},
-     images:{small:'https://images.pokemontcg.io/sv4pt5/91.png'},
-     tcgplayer:{prices:{holofoil:{market:8.5,low:5.5,mid:8.5,high:14}}}}
-  ];
-
-  // Cache all cards
-  TRENDING.forEach(function(c){ CARD_CACHE[c.id]=c; });
-  DEALS.forEach(function(c){ CARD_CACHE[c.id]=c; });
-
-  // Render trending
-  var tRow = document.getElementById('home-trending');
-  if (tRow) tRow.innerHTML = TRENDING.map(function(c){ return cardTile(c,false); }).join('');
-
-  // Render gainers
-  var gList = document.getElementById('gainers');
-  if (gList) {
-    gList.innerHTML = GAINERS.map(function(g){
-      return '<div class="mrow" onclick="openCard(\''+g.id+'\');">'
-        +'<div style="flex:1"><div style="font-size:13px;font-weight:600">'+g.name+'</div>'
-        +'<div style="font-size:11px;color:var(--mu)">'+g.set+'</div></div>'
-        +'<div style="text-align:right">'
-        +'<div style="font-weight:700">$'+g.price.toLocaleString()+'</div>'
-        +'<div style="font-size:12px;font-weight:700;color:var(--gr)">&#8593;'+g.chg+'%</div>'
-        +'</div></div>';
-    }).join('');
+  // A named, visible reason beats an empty shelf. Each of these needs an
+  // endpoint that does not exist; saying which one is the honest version.
+  function notYet(id, what, endpoint) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = '<div style="padding:18px;border:1px dashed var(--bd);border-radius:var(--r);'
+      + 'color:var(--mu);font-size:12px;line-height:1.6;width:100%">'
+      + '<div style="font-weight:700;color:var(--tx);font-size:13px;margin-bottom:4px">'
+      + what + ' is not live yet</div>'
+      + 'This needs <span style="font-family:ui-monospace,monospace;color:var(--t)">'
+      + endpoint + '</span>, which the API does not serve. It used to show '
+      + 'hardcoded cards at invented prices, which is worse than showing nothing.'
+      + '</div>';
   }
 
-  // Render decliners
-  var dList = document.getElementById('decliners');
-  if (dList) {
-    dList.innerHTML = DECLINERS.map(function(g){
-      return '<div class="mrow" onclick="openCard(\''+g.id+'\');">'
-        +'<div style="flex:1"><div style="font-size:13px;font-weight:600">'+g.name+'</div>'
-        +'<div style="font-size:11px;color:var(--mu)">'+g.set+'</div></div>'
-        +'<div style="text-align:right">'
-        +'<div style="font-weight:700">$'+g.price.toLocaleString()+'</div>'
-        +'<div style="font-size:12px;font-weight:700;color:var(--re)">&#8595;'+Math.abs(g.chg)+'%</div>'
-        +'</div></div>';
-    }).join('');
-  }
+  notYet('home-trending', 'Trending', '/api/trending');
+  notYet('home-deals',    'Best deals', '/api/deals');
+  notYet('gainers',       'Top gainers', '/api/movers');
+  notYet('decliners',     'Top decliners', '/api/movers');
 
-  // Render best deals
-  var dealsRow = document.getElementById('home-deals');
-  if (dealsRow) dealsRow.innerHTML = DEALS.map(function(c){ return cardTile(c,true); }).join('');
+  // gainers / decliners / deals are handled by notYet() above — the
+  // arrays they used to read held invented prices and are gone.
 
+  renderLatestSearches();
   updateAlertsBar();
 }
 
@@ -2203,6 +2149,15 @@ async function openCard(id){
     }
     if(!c)return;
     S.currentCard=c;
+    // Latest searches records IDENTITY only — never the price. A price in
+    // localStorage goes stale silently and then cannot be told from a live
+    // one, which is exactly what CARD_CACHE did from the set page.
+    pushSearchHistory({
+      cardId: c.id,
+      name: c.name,
+      setName: (c.set && c.set.name) || '',
+      img: (c.images && (c.images.small || c.images.large)) || ''
+    });
     document.getElementById('cd-set-lnk').textContent=c.set&&c.set.name?c.set.name:'Set';
     document.getElementById('cd-bc').textContent=nameWithEnPlain(c.name, c.nameEn);
     document.getElementById('cd-img').src=c.images&&c.images.large?c.images.large:(c.images&&c.images.small?c.images.small:'');
@@ -3622,6 +3577,80 @@ async function fillListingAvg(hostSel, cardId, grade) {
   });
 }
 
+// ── LATEST SEARCHES ───────────────────────────────────────────
+// Real: the cards this browser actually opened. Stored locally because
+// there is no sign-in, and stored as IDENTITY only — id, name, set, image
+// — never a price. A price kept in localStorage goes stale silently and
+// is then indistinguishable from a live one, which is the whole failure
+// mode CARD_CACHE already demonstrated. Prices are fetched fresh every
+// time the row is drawn.
+const SEARCH_HISTORY_MAX = 12;
+
+function getSearchHistory() {
+  try { return JSON.parse(localStorage.getItem('ch_searches') || '[]'); }
+  catch (e) { return []; }
+}
+
+function pushSearchHistory(card) {
+  if (!card || !card.cardId) return;
+  try {
+    var list = getSearchHistory().filter(function (c) { return c.cardId !== card.cardId; });
+    list.unshift({ cardId: card.cardId, name: card.name || '', setName: card.setName || '',
+                   img: card.img || '', at: Date.now() });
+    localStorage.setItem('ch_searches', JSON.stringify(list.slice(0, SEARCH_HISTORY_MAX)));
+  } catch (e) { /* private window — the row simply stays empty */ }
+  renderLatestSearches();
+}
+
+function clearSearchHistory() {
+  try { localStorage.removeItem('ch_searches'); } catch (e) {}
+  renderLatestSearches();
+}
+
+function renderLatestSearches() {
+  var host = document.getElementById('latest-searches');
+  if (!host) return;
+  var list = getSearchHistory();
+  if (!list.length) {
+    host.innerHTML = '<div style="padding:16px 18px;border:1px dashed var(--bd);border-radius:var(--r);'
+      + 'color:var(--mu);font-size:12px;min-width:300px;line-height:1.6">'
+      + '<div style="font-weight:700;color:var(--tx);font-size:13px;margin-bottom:4px">Nothing opened yet</div>'
+      + 'Open any card and it will appear here with its market price and the '
+      + 'median of its gated listings.</div>';
+    return;
+  }
+
+  // Paint identity immediately, then fill the two prices in.
+  host.innerHTML = list.map(function (c) {
+    var s = CARD_SUMMARY_CACHE[c.cardId] || {
+      cardId: c.cardId, name: c.name, setName: c.setName, img: c.img,
+      market: null, marketIsReal: false, listingAvg: null, listingCount: 0, listingNote: null
+    };
+    return cardSummaryTile(s, {})
+      .replace('<span style="color:var(--fa)">checking listings&hellip;</span>',
+               '<span data-avg="' + liveEsc(c.cardId) + '">'
+               + '<span style="color:var(--fa)">checking listings&hellip;</span></span>');
+  }).join('');
+
+  list.forEach(function (c) {
+    cardSummary(c.cardId).then(function (s) {
+      var host2 = document.getElementById('latest-searches');
+      if (host2 && s && s.market != null) {
+        var el = host2.querySelector('[data-avg="' + c.cardId + '"]');
+        var cr = el && el.closest('.ci') && el.closest('.ci').querySelector('.cr');
+        if (cr && !cr.getAttribute('data-filled')) {
+          cr.setAttribute('data-filled', '1');
+          cr.innerHTML = '<span class="cp">' + fmtCurrency(s.market) + '</span>'
+            + (s.marketIsReal ? ''
+               : '<span style="font-size:9px;color:var(--fa);margin-left:4px;font-weight:600"'
+                 + ' title="A multiplier estimate, not a measured market price">est</span>');
+        }
+      }
+      return fillListingAvg('#latest-searches', c.cardId, 'Raw NM');
+    });
+  });
+}
+
 function updateAlertsBar() {
   var bar = document.getElementById('alerts-bar-items');
   if (!bar) return;
@@ -4522,6 +4551,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-eba0615-alerts &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-ed88c81-latest &middot; click to hide</div>
 </body>
 </html>

@@ -1080,6 +1080,12 @@ async function loadLangSets(lang, force){
             en: x.nameEn || null,
             s: cleanSeries(x.serie || x.series) || 'Other',
             t: x.total || x.totalWithSecrets || x.cardCount || 0,
+            // How many cards we actually HOLD, which is not the same as the
+            // set's printed total and was being dropped here. The hero
+            // counter summed `t` and reported 20,965 English cards against
+            // 23,752 in the database — a printed total is what the set
+            // contains, not what we have of it.
+            cardCount: x.cardCount || 0,
             d: x.releaseDate || '',
             lo: x.logo || '',
             lang: lang,
@@ -3601,14 +3607,26 @@ function setTileHTML(x, opts) {
 // They are counted from the four language lists the app actually browses,
 // and until those answer they show an em dash rather than a guess.
 function updateHeroStats() {
-  var sets = 0, cards = 0, known = false;
-  ["en","ja","zh-tw","zh-cn"].forEach(function (l) {
+  var LANGS = ["en","ja","zh-tw","zh-cn"];
+  var sets = 0, cards = 0, known = 0;
+  LANGS.forEach(function (l) {
     var arr = (typeof LANG_SETS !== "undefined" && LANG_SETS[l]) || null;
-    if (!arr || !arr.length) return;
-    known = true;
+    if (!arr || !arr.length) {
+      // Pull the rest in so the total is the whole catalogue rather than
+      // whichever language happened to be browsed. Counting only what is
+      // loaded reported 220 sets and called it the total.
+      if (typeof loadLangSets === "function" && !S._heroLangs) {
+        loadLangSets(l).then(function () { updateHeroStats(); });
+      }
+      return;
+    }
+    known++;
     sets += arr.length;
-    arr.forEach(function (x) { cards += (Number(x.cardCount) || Number(x.t) || 0); });
+    // cardCount is what we HOLD; `t` is the set's printed total. Summing
+    // `t` reported 20,965 English cards against 23,752 in the database.
+    arr.forEach(function (x) { cards += (Number(x.cardCount) || 0); });
   });
+  if (known === LANGS.length) S._heroLangs = true;
   if (!known) return;
   var a = document.getElementById("hstat-sets");
   var b = document.getElementById("hstat-cards");
@@ -4613,6 +4631,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-188b054-livesets &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-8c46c11-herostats &middot; click to hide</div>
 </body>
 </html>

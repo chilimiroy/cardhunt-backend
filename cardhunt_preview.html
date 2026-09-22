@@ -114,7 +114,14 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .sg{display:grid;grid-template-columns:repeat(auto-fill,minmax(186px,1fr));gap:12px}
 .stile{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:all .18s;box-shadow:var(--sh)}.stile:hover{box-shadow:var(--sh2);transform:translateY(-2px)}
 .slogo{height:94px;display:flex;align-items:center;justify-content:center;padding:10px 14px;background:linear-gradient(135deg,#f5f5fb,#ebebf4)}.slogo img{max-height:72px;max-width:148px;object-fit:contain}
-.slogtxt{font-size:11px;font-weight:700;text-align:center;line-height:1.35;padding:4px 8px;color:var(--tx)}
+/* The set has no logo — TCGdex holds none for 0/138 Japanese, 0/84 Chinese
+   and 63/220 English sets. A styled NAME tile, so the absence reads as a
+   deliberate design and not as a broken image. Before this, the server
+   guessed a URL that 404'd and the tile was simply blank. */
+.slogtxt{display:flex;align-items:center;justify-content:center;height:100%;width:100%;
+  font-size:11px;font-weight:700;text-align:center;line-height:1.3;padding:6px 8px;
+  color:var(--tx);background:linear-gradient(135deg,var(--bg),var(--bd));
+  border-radius:8px;letter-spacing:.01em;text-wrap:balance}
 .cn-logo{width:100%;height:74px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff;text-align:center;padding:8px;line-height:1.3}
 .sdate{font-size:10px;color:var(--fa);text-align:right;padding:9px 12px 2px;font-weight:500}
 .sinfo{padding:10px 14px}.sn{font-size:13px;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1125,103 +1132,14 @@ function filterSets(q){
   renderSets();
 }
 
-function renderSets(){
-  var data = getSetsData();
-  var q = (S.setsQ || '').toLowerCase();
-  var isJP = S.lang === 'ja', isTW = S.lang === 'zh-tw', isCN = S.lang === 'zh-cn';
+// renderSets() was defined TWICE in this file, 162KB apart. The second
+// definition won silently - it is the one with seriesRank() ordering and an
+// Other bucket - and this one had been dead for who knows how long. Editing
+// it would have changed nothing on screen, which is the shape of the three
+// "the fix did not work" reports already recorded in CLAUDE.md.
+// preserve.test.js now fails if ANY top-level function is declared twice.
 
-  var filt = data.filter(function(x){
-    var matchQ = !q || (x.n && x.n.toLowerCase().indexOf(q) >= 0) || (x.en && x.en.toLowerCase().indexOf(q) >= 0);
-    var matchS = S.series === 'All' || x.s === S.series;
-    return matchQ && matchS;
-  });
 
-  // Series chips
-  var allSeries = ['All'];
-  data.forEach(function(x){ if (x.s && allSeries.indexOf(x.s) < 0) allSeries.push(x.s); });
-  var ORDER = ['Mega Evolution','Scarlet & Violet','Sword & Shield','Sun & Moon','XY',
-    'Black & White','HeartGold & SoulSilver','Platinum','Diamond & Pearl','EX',
-    'E-Card','Neo','Gym','Base','Gem Pack','Collect 151','Brave Stars',
-    'Nine Colours','Interplay','POP','Other'];
-  var ord = ORDER.filter(function(x){ return allSeries.indexOf(x) >= 0; })
-    .concat(allSeries.filter(function(x){ return ORDER.indexOf(x) < 0; }));
-
-  var chipsHTML = '';
-  ord.forEach(function(sr){
-    chipsHTML += '<button class="fchip' + (S.series===sr?' on':'') + '" onclick="selSeries(&quot;' + sr + '&quot;,this)">' + sr + '</button>';
-  });
-  var chipsEl = document.getElementById('series-chips');
-  if (chipsEl) chipsEl.innerHTML = chipsHTML;
-
-  // Group by series
-  var grp = {};
-  filt.forEach(function(x){ if (!grp[x.s]) grp[x.s] = []; grp[x.s].push(x); });
-  var keys = ORDER.filter(function(k){ return grp[k]; })
-    .concat(Object.keys(grp).filter(function(k){ return ORDER.indexOf(k) < 0; }));
-
-  var html = '';
-  keys.forEach(function(sr){
-    html += '<div style="margin-bottom:28px">';
-    html += '<div style="font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">' + sr + ' (' + grp[sr].length + ')</div>';
-    html += '<div class="sg">';
-    grp[sr].forEach(function(x){
-      var lf = isJP ? '<span class="lf-jp">JP</span>'
-             : isTW ? '<span class="lf-tw">TW</span>'
-             : isCN ? '<span class="lf-cn">CN</span>' : '';
-      var enDiv = x.en ? '<div class="sn2">' + x.en + '</div>' : '';
-      var logoHTML;
-      if (x.isCN && x.color) {
-        logoHTML = '<div class="cn-logo" style="background:linear-gradient(135deg,' + x.color + ',' + x.color + '99)">' + (x.lt || x.n) + '</div>';
-      } else if (x.lo) {
-        logoHTML = '<img src="' + x.lo + '" alt="" loading="lazy" '
-          + 'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
-          + '<div class="slogtxt" style="display:none;align-items:center;justify-content:center;'
-          + 'height:100%;padding:6px">' + (x.n || '').substring(0,30) + '</div>';
-      } else {
-        logoHTML = '<div class="slogtxt">' + (x.n || '').substring(0,30) + '</div>';
-      }
-      html += '<div class="stile" onclick="openSet(&quot;' + x.id + '&quot;,&quot;' + (x.aid || x.id) + '&quot;)">';
-      html += '<div class="sdate">' + fmtD(x.d) + '</div>';
-      html += '<div class="slogo">' + logoHTML + '</div>';
-      html += '<div class="sinfo"><div class="sn">' + x.n + lf + '</div>' + enDiv;
-      html += '<div class="sc2">' + x.t + ' cards</div></div>';
-      html += '</div>';
-    });
-    html += '</div></div>';
-  });
-
-  var out = document.getElementById('sets-out');
-  if (out) out.innerHTML = html || '<div style="padding:40px;text-align:center;color:var(--mu)">No sets found</div>';
-
-  var sub = document.getElementById('sets-sub');
-  if (sub) {
-    var enCount = (S.enSets && S.enSets.length) ? S.enSets.length : EN_SETS.length;
-    sub.textContent = enCount + ' English &middot; ' + JP.length + ' Japanese &middot; ' + ZH_TW.length + ' Chinese Traditional &middot; ' + ZH_CN.length + ' Chinese Simplified';
-  }
-}
-
-// English browses the SAME list as every other language: /api/sets/lang/en.
-//
-// It used to browse /api/sets instead, and that was the bug. Two set lists,
-// one app: /api/sets serves 176 sets with pokemontcg.io ids (sv3pt5, base6,
-// swsh35), while the cards, prices and listings are all keyed on our own ids
-// from /api/sets/lang/en (214 sets: sv03.5, lc, swsh3.5). The server aliases
-// many of the old ids, which is why it looked fine — but 33 of the 176 had no
-// alias, and each one broke in one of two ways:
-//
-//   * 14 returned ZERO cards, so openSet fell through to tcgdexFetchSet and
-//     rendered the whole set as mockP() estimates. That is Base Set Charizard
-//     reading $7.67 instead of $882.02 — a real price collapsing to a few
-//     dollars, depending on the SET rather than the card.
-//   * 19 returned pokemontcg.io cards whose ids are "base6-1", not
-//     "en-lc-1", so /api/listings could not resolve them and no links appeared.
-//
-// And 92 sets that ARE in the database could not be reached from the UI at
-// all, because they were not in the browsed list.
-//
-// loadLangSets already does this correctly for ja/zh-tw/zh-cn. English was the
-// one language with its own path — the same "two implementations of one
-// thing" shape as the four estimators and the two query builders.
 async function loadAllSets() {
   const sub = document.getElementById('sets-sub');
   const count = function(){
@@ -4331,7 +4249,15 @@ function renderSets() {
 
   var sub = document.getElementById('sets-sub');
   if (sub) {
-    var enCount = (S.enSets && S.enSets.length) ? S.enSets.length : EN_SETS.length;
+    // LANG_SETS.en is the LIVE list; S.enSets is only ever assigned the
+    // embedded fallback and never reassigned after the API answers. Reading
+    // it made the header say '121 English' while 220 tiles were on screen -
+    // the fallback's count printed over the live list. A count that
+    // contradicts what is rendered is the fallback failing to announce
+    // itself, backwards.
+    var enCount = (LANG_SETS && LANG_SETS.en && LANG_SETS.en.length)
+      ? LANG_SETS.en.length
+      : ((S.enSets && S.enSets.length) ? S.enSets.length : EN_SETS.length);
     sub.textContent = enCount + ' English · ' + JP.length + ' Japanese · '
       + ZH_TW.length + ' Chinese Traditional · ' + ZH_CN.length + ' Chinese Simplified';
   }
@@ -4575,6 +4501,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-bba3e11-avgkey &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-63842d0-setlogo &middot; click to hide</div>
 </body>
 </html>

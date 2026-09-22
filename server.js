@@ -2806,9 +2806,25 @@ app.get('/api/sets/lang/:lang', async (req, res) => {
             realPrices: parseInt(r.real_prices),
             coverage: r.card_count > 0
               ? +((r.real_prices / r.card_count) * 100).toFixed(1) : 0,
-            // Real logo captured at ingest time; build a URL only as a fallback
-            logo: r.logo ||
-                  `https://assets.tcgdex.net/${lang}/${tcgdexSeriesFor(r.id)}/${r.id}/logo.png`,
+            // ── The logo is REPORTED, never guessed ──
+            //
+            // This used to fall back to a constructed URL. Measured
+            // 2026-09-22: 0 of 138 Japanese sets and 0 of 84 Chinese sets
+            // have a stored set_logo, plus 63 of 220 English — so 222 sets
+            // were served a URL that had been invented. Seven sampled
+            // Japanese ones returned 404, and tcgdexSeriesFor guesses the
+            // series segment wrongly as well (SM6b resolves to `swsh`).
+            // TCGdex simply has no logo for those sets.
+            //
+            // A guessed URL is indistinguishable from a real one until it
+            // is rendered, so the browser showed a blank tile and nothing
+            // said why. /api/cards/:id already returns null for this same
+            // fact — two paths disagreeing about one thing, which is the
+            // cross-check failure this codebase keeps finding.
+            //
+            // null is the honest answer, and the page draws a named tile
+            // from it. See "Don't guess URLs — read them" in CLAUDE.md.
+            logo: r.logo || null,
             serie: r.series || 'Other',
             releaseDate: r.release_date || null,
             lang

@@ -130,15 +130,77 @@ const GRADERS = GRADERS_UNAMBIGUOUS.concat(GRADERS_AMBIGUOUS);
 // "9.5", which sells well above a whole grade.
 const GRADE_NUM = '\\s*[-:]?\\s*(?:10|[1-9](?:\\.5)?)(?![\\d.])';
 
+// ── Qualified tens ────────────────────────────────────────────
+// "BGS 10" is not one grade. A BGS 10 Black Label — all four subgrades a
+// perfect 10 — sells for several times an ordinary BGS 10, and CGC 10
+// Pristine sits likewise above CGC 10 Gem Mint. Reading both as "10" puts
+// them in one list and quotes the wrong one as the market.
+//
+// Treated as a distinct grade STRING rather than a flag, because every
+// caller already passes grades around as text ("PSA 10", "BGS 9.5") and a
+// flag would be the field that one of the two marketplaces forgets to
+// forward — which is exactly how the year gate sat dead.
+//
+// Only these two combinations exist. A qualifier is meaningful solely on a
+// 10: there is no "BGS 9.5 Black Label".
+const GRADE_QUALIFIERS = [
+  { grader: 'BGS', name: 'BLACK LABEL', re: /\bblack\s*label\b/i, aliases: ['black label', 'blacklabel', 'bl'] },
+  { grader: 'CGC', name: 'PRISTINE',    re: /\bpristine\b/i,      aliases: ['pristine'] },
+  // CGC's ordinary 10 is branded "Gem Mint". Naming it explicitly lets a
+  // caller ask for the ordinary one and get the Pristine ones refused.
+  { grader: 'CGC', name: 'GEM MINT',    re: /\bgem\s*mint\b/i,    aliases: ['gem mint', 'gemmint', 'gem mt'] }
+];
+
+function qualifierFor(grader, text) {
+  const s = String(text || '').trim().toLowerCase();
+  return GRADE_QUALIFIERS.find(q => q.grader === grader &&
+    q.aliases.some(a => a === s)) || null;
+}
+
 function parseGrade(g) {
   if (!g) return { kind: 'raw', condition: null };
   const s = String(g).trim();
   if (/^raw/i.test(s) || /^ungraded/i.test(s)) {
     return { kind: 'raw', condition: s.replace(/^raw\s*/i, '').toUpperCase() || 'NM' };
   }
+
+  // ── Grader-wide: "PSA *", "PSA All", "PSA any" ──
+  // "PSA + All" in the UI must be ONE query that accepts any PSA grade and
+  // refuses BGS, CGC and raw. Ten queries, one per grade, would spend ten
+  // calls of a 5,000/day quota on a single card view — and the quota is
+  // shared with every other card anyone looks at that day.
+  const anyM = s.match(/^([A-Za-z]+)\s*(?:\*|all|any)$/i);
+  if (anyM) return { kind: 'graded', grader: anyM[1].toUpperCase(), grade: null, anyGrade: true };
+
+  // ── A qualified ten: "BGS 10 Black Label", "CGC 10 Pristine" ──
+  const qM = s.match(/^([A-Za-z]+)\s*([\d.]+)\s+(.+)$/);
+  if (qM) {
+    const grader = qM[1].toUpperCase();
+    const q = qualifierFor(grader, qM[3]);
+    // A qualifier only means anything on a 10 — there is no BGS 9.5 Black
+    // Label. Trailing text that is not a recognised qualifier, or one on
+    // the wrong number, is IGNORED and the plain grade still stands.
+    //
+    // It must not fall through to the plain parse below, which requires the
+    // string to END at the number: "BGS 9.5 Black Label" failed that, and a
+    // failed parse returns kind:'raw'. Asking for a slab and being handed a
+    // raw search is the worst available answer, and it is silent.
+    return (q && qM[2] === '10')
+      ? { kind: 'graded', grader, grade: '10', qualifier: q.name }
+      : { kind: 'graded', grader, grade: qM[2] };
+  }
+
   const m = s.match(/^([A-Za-z]+)\s*([\d.]+)$/);
   if (!m) return { kind: 'raw', condition: null };
   return { kind: 'graded', grader: m[1].toUpperCase(), grade: m[2] };
+}
+
+// Which qualifiers does this title state, for this grader?
+function qualifiersIn(title, grader) {
+  const t = String(title || '');
+  return GRADE_QUALIFIERS
+    .filter(q => (!grader || q.grader === grader) && q.re.test(t))
+    .map(q => q.name);
 }
 
 // ── Speculative grades ────────────────────────────────────────
@@ -165,6 +227,69 @@ function stripSpeculative(title) {
     .replace(new RegExp('(?:' + GRADERS.map(boundedTerm).join('|') + ')' +
       '\\s*[-:]?\\s*(?:10|[1-9](?:\\.5)?)\\s*(?:' +
       'contender|candidate|potential|pot\\.?\\??|worthy|ready|hopeful)\\b', 'gi'), ' ');
+}
+
+// ── Raw sub-condition, as the SELLER stated it ────────────────
+// TASK.md asked which this turned out to be. Measured on 2026-09-22 across
+// 447 live rows from six cards at Raw NM / LP / MP:
+//
+//   eBay's structured `condition` field is BINARY, not a scale.
+//   441 "Ungraded", 3 "Non gradée", 3 "Non gradata" — three values, all
+//   meaning ungraded, and identical whichever condition was requested.
+//
+// So there is no structured data to filter on, and the filter has to read
+// the seller's prose. That makes it a SELLER-STATED condition and it must
+// say so — the number is a claim by the person selling the card, not a
+// measurement, and nothing verifies it.
+//
+// Two traps, both measured rather than guessed, and both the shape that has
+// destroyed good data in this project before:
+//
+//   HP  9 titles contained it. EIGHT were "120 HP" — the card's Hit
+//       Points, printed on essentially every Pokémon card. Exactly one
+//       meant Heavily Played. A bare \bHP\b filter would be 89% wrong, and
+//       wrong in the direction of calling mint cards damaged.
+//   EX  25 titles contained it. TWENTY-FOUR were the card mechanic —
+//       "Charizard ex 199/165". EX as "Excellent" is unrecoverable from a
+//       Pokémon title, so it is not read at all. Deliberately absent, like
+//       GEM and MINT from the slab words.
+//
+// And the reason the "unstated" group is not optional: 74 of 149 titles —
+// 49.7% — state no condition vocabulary whatsoever. A filter that dropped
+// them would hide half the market, silently, which is the looksLikeJunk
+// failure wearing its sixth costume.
+const RAW_CONDITIONS = ['M', 'NM', 'LP', 'MP', 'HP', 'DMG'];
+
+// Order matters: the most specific spelling wins, so "Near Mint" is not
+// read as "Mint".
+const RAW_CONDITION_PATTERNS = [
+  { code: 'DMG', re: /\b(?:damaged|dmg|poor)\b/i },
+  { code: 'HP',  re: /\bheav(?:y|ily)\s*(?:played|play)\b/i },
+  { code: 'MP',  re: /\bmoderat(?:e|ely)\s*(?:played|play)\b/i },
+  { code: 'LP',  re: /\blight(?:ly)?\s*(?:played|play)\b/i },
+  { code: 'NM',  re: /\b(?:near\s*mint|nm)\b/i },
+  { code: 'M',   re: /\bmint\b/i },
+  // Bare abbreviations last, and only after the hit-points strip below.
+  { code: 'HP',  re: /\bhp\b/i },
+  { code: 'MP',  re: /\bmp\b/i },
+  { code: 'LP',  re: /\blp\b/i }
+];
+
+// "120 HP" is the card's Hit Points, not Heavily Played. Removed to a `~`
+// for the same reason GENUINE_ART_PHRASES is: a space would let the
+// neighbours join up and match something else.
+function stripHitPoints(title) {
+  return String(title || '').replace(/\b\d{1,3}\s*hp\b/gi, ' ~ ');
+}
+
+// Returns { code, stated }. `stated:false` means the seller said nothing —
+// those rows belong in an "unstated" group and must never be dropped.
+function sellerCondition(title) {
+  const t = stripHitPoints(title);
+  for (const p of RAW_CONDITION_PATTERNS) {
+    if (p.re.test(t)) return { code: p.code, stated: true };
+  }
+  return { code: null, stated: false };
 }
 
 // Find every grader+number in a title. Boundary-checked, so BGS 9 does
@@ -521,7 +646,18 @@ function buildQuery(card, grade, opts) {
   if (card.setName && !CJK.test(String(card.setName))) bits.push(card.setName);
 
   const g = parseGrade(grade);
-  if (g.kind === 'graded') bits.push(g.grader + ' ' + g.grade);
+  if (g.kind === 'graded') {
+    // Grader-wide asks for the COMPANY only — one call, not one per grade.
+    // "Charizard 4/102 Base Set PSA pokemon" returns PSA slabs at every
+    // grade and the gate sorts out which; ten queries would spend ten of a
+    // 5,000/day quota on one card view.
+    if (g.anyGrade) bits.push(g.grader);
+    // The qualifier goes IN the query. A Black Label seller always writes
+    // it — it is most of the price — so asking for it surfaces them,
+    // whereas asking for a bare "BGS 10" returns ordinary tens that the
+    // gate then rejects one by one.
+    else bits.push(g.grader + ' ' + g.grade + (g.qualifier ? ' ' + g.qualifier : ''));
+  }
 
   if (opts.suffix !== false) bits.push('pokemon');
 
@@ -718,8 +854,31 @@ function verifyCore(title, card, grade, opts) {
   const found = gradesIn(t);
   if (want.kind === 'graded') {
     if (!found.length) {
-      return { ok: false, reason: `wants ${want.grader} ${want.grade}, title states no grade` };
+      return { ok: false, reason: `wants ${want.grader} ${want.anyGrade ? 'any grade' : want.grade}` +
+        ', title states no grade' };
     }
+
+    // ── Grader-wide ("PSA *") ──
+    // Accept ANY grade from this grader, and refuse every other grader.
+    // Raw is already refused by the "title states no grade" branch above.
+    if (want.anyGrade) {
+      const mine   = found.filter(f => f.grader === want.grader);
+      const theirs = found.filter(f => f.grader !== want.grader);
+      if (!mine.length) {
+        return { ok: false, reason: `wants any ${want.grader} grade, title has ` +
+          found.map(f => f.grader + ' ' + f.grade).join(', ') };
+      }
+      // A title naming a second COMPANY is ambiguous — "PSA 10 / BGS 9.5"
+      // is one slab in one holder and we cannot tell which. Two grades from
+      // the SAME grader ("PSA 10 PSA 10") is just a repeated token.
+      if (theirs.length) {
+        return { ok: false, reason: 'title names more than one grading company: ' +
+          found.map(f => f.grader + ' ' + f.grade).join(', ') };
+      }
+      return { ok: true, grade: want.grader + ' ' + mine[0].grade,
+               qualifiers: qualifiersIn(t, want.grader) };
+    }
+
     const hit = found.find(f => f.grader === want.grader && f.grade === want.grade);
     if (!hit) {
       const got = found.map(f => f.grader + ' ' + f.grade).join(', ');
@@ -730,6 +889,34 @@ function verifyCore(title, card, grade, opts) {
     if (others.length) {
       return { ok: false, reason: 'title names more than one grade: ' +
         found.map(f => f.grader + ' ' + f.grade).join(', ') };
+    }
+
+    // ── The qualified ten ──
+    // Both directions matter, and the asymmetry is deliberate.
+    //
+    // Asking FOR a qualifier requires the title to state it: a Black Label
+    // seller always says so, because it is most of the price.
+    //
+    // Asking for a PLAIN 10 refuses a title that states a qualifier — an
+    // ordinary BGS 10 list must not be led by a Black Label at several
+    // times the money. But CGC's ordinary 10 is branded "Gem Mint", so
+    // that qualifier is not evidence of anything unusual and never
+    // excludes.
+    const stated = qualifiersIn(t, want.grader);
+    if (want.grade === '10') {
+      if (want.qualifier) {
+        if (!stated.includes(want.qualifier)) {
+          return { ok: false, reason: `wants ${want.grader} 10 ${want.qualifier}, ` +
+            (stated.length ? 'title states ' + stated.join(', ')
+                           : 'title states no qualifier — an ordinary 10') };
+        }
+      } else {
+        const premium = stated.filter(q => q !== 'GEM MINT');
+        if (premium.length) {
+          return { ok: false, reason: `wants an ordinary ${want.grader} 10, ` +
+            `title states ${premium.join(', ')} — a different grade` };
+        }
+      }
     }
   } else {
     // Raw: reject anything that says it is slabbed — but a card advertised
@@ -877,6 +1064,8 @@ function filterListings(listings, card, grade) {
 const API = {
   buildQuery, verify, filterListings,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
+  qualifiersIn, sellerCondition, stripHitPoints,
+  GRADE_QUALIFIERS, RAW_CONDITIONS, RAW_CONDITION_PATTERNS,
   printingEvidence,
   languageOf, cardLanguage, languageFromCardId, namesAConflictingSet, printingConflict,
   GRADERS, GRADERS_UNAMBIGUOUS, GRADERS_AMBIGUOUS, SLAB_GENERIC,

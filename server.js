@@ -1248,7 +1248,19 @@ function normaliseListing(o) {
     variant: o.variant || null,
     parsedRarity: o.parsedRarity || null,
     parsedYear: o.parsedYear || null,
-    matchConfidence: o.matchConfidence || null
+    matchConfidence: o.matchConfidence || null,
+    // ── Raw sub-condition, as the SELLER stated it ──
+    // Measured 2026-09-22 on 447 live rows: eBay's structured `condition`
+    // field is binary — 441 "Ungraded" plus 6 localisations, identical
+    // whichever condition was requested. There is no structured condition
+    // scale to filter on, so this is read from the seller's title and is a
+    // CLAIM, not a measurement. `sellerStated:false` means the title said
+    // nothing, which is 49.7% of them — those belong in an "unstated"
+    // group and must never be dropped.
+    //
+    // A label, exactly like `edition` above. Nothing is rejected on it.
+    sellerCondition: o.sellerCondition || null,
+    sellerStated: o.sellerStated === true
   };
 }
 
@@ -1725,6 +1737,9 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     const shipOpt = it.shippingOptions && it.shippingOptions[0];
     const shipping = (shipOpt && shipOpt.shippingCost && shipOpt.shippingCost.value != null)
       ? parseFloat(shipOpt.shippingCost.value) : null;
+    // Seller-stated raw condition, parsed once per row. cardmatch owns it —
+    // a second implementation here is the estimator split all over again.
+    const sc = cm.sellerCondition ? cm.sellerCondition(it.title) : { code: null, stated: false };
     listings.push(normaliseListing({
       source: 'ebay',
       sourceLabel: 'eBay',
@@ -1749,7 +1764,13 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       variant: parsed ? parsed.variant : null,
       parsedRarity: parsed ? parsed.rarity : null,
       parsedYear: parsed ? parsed.year : null,
-      matchConfidence: v.confidence || null
+      matchConfidence: v.confidence || null,
+      // Read from the TITLE, because eBay's own condition field carries
+      // nothing but "Ungraded" on every one of these — measured across 447
+      // live rows. cardmatch owns the parsing, including the "120 HP is Hit
+      // Points" and "Charizard ex is not Excellent" traps.
+      sellerCondition: sc.code,
+      sellerStated: sc.stated
     }));
   }
 

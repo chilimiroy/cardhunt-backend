@@ -146,8 +146,24 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .tbq{padding:6px 12px;border:1.5px solid var(--bd);border-radius:22px;font-size:12px;outline:none;color:var(--tx);background:var(--bg);width:160px;transition:all .2s}.tbq:focus{border-color:var(--t);background:var(--w);width:200px}.tbc{font-size:12px;color:var(--mu);margin-left:auto}
 .bc{font-size:12px;color:var(--mu);margin-bottom:18px;display:flex;align-items:center;gap:6px}.lnk{cursor:pointer;color:var(--t)}.lnk:hover{text-decoration:underline}
 .dg{display:grid;grid-template-columns:300px 1fr;gap:28px;align-items:start}
+/* ── Card page, Roy's Phase 1b layout ──
+   The image is LARGER and the price boxes sit to its RIGHT; the card
+   details go BELOW the image and the graph below both. The old .dg put a
+   300px image column beside everything else, so the image could never grow
+   and the details sat beside the prices rather than under the card. */
+.cdwrap{display:block}
+.cdtop{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:28px;align-items:start;margin-bottom:20px}
+.cdtop-r{min-width:0}
+/* The price boxes stack in the narrower column beside the image rather
+   than spreading across three, which is what made them unreadable there. */
+.cdtop-r .pboxes{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+#cd-meta{margin-bottom:20px}
+@media(max-width:860px){
+  .cdtop{grid-template-columns:1fr}
+  .cdtop-r .pboxes{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
+}
 .cview{background:linear-gradient(145deg,#f0eeff,#e8e4ff);border:1px solid #D0C8FF;border-radius:var(--r);padding:26px;text-align:center;margin-bottom:16px;box-shadow:var(--sh)}
-.cview img{max-width:100%;max-height:340px;object-fit:contain;border-radius:10px;box-shadow:0 10px 32px rgba(0,0,0,.25);margin:0 auto;transition:transform .3s}.cview img:hover{transform:scale(1.02)}
+.cview img{max-width:100%;max-height:520px;object-fit:contain;border-radius:10px;box-shadow:0 10px 32px rgba(0,0,0,.25);margin:0 auto;transition:transform .3s}.cview img:hover{transform:scale(1.02)}
 .gchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
 .gchip{padding:5px 11px;border:1.5px solid var(--bd);border-radius:22px;font-size:11px;font-weight:600;color:var(--mu);background:var(--w);cursor:pointer;transition:all .15s}
 .gchip.on{background:var(--pu);color:#fff;border-color:var(--pu);box-shadow:0 2px 8px rgba(124,58,237,.3)}.gchip:hover:not(.on){border-color:var(--pu);color:var(--pu)}
@@ -511,58 +527,84 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   </nav>
   <div class="content" style="padding-top:28px">
     <div class="bc"><span class="lnk" id="cd-set-lnk" onclick="SS('setdetail')">Set</span> › <span id="cd-bc">—</span></div>
-    <div class="dg">
-      <div>
-        <div class="cview"><img id="cd-img" src="" alt="" style="min-height:220px"></div>
-        <div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Grade / Condition</div>
-        <div class="gchips" id="cd-grades"></div>
-        <div class="mbox2" id="cd-meta"></div>
+    <!-- ══ CARD PAGE LAYOUT ══ Roy's spec, top to bottom:
+           1. card image, LARGER, with the price boxes to its RIGHT,
+              and the card details BELOW the image
+           2. price graph, underneath both
+           3. the grading selector (status box + condition box)
+           4. listings, filtered by that selection
+
+         Every element id below is unchanged. openCard(), selGrade(),
+         renderMarketData(), updateValueBar(), applyMeasuredGrade() and
+         renderListingFinder() all address this page by id, and a port that
+         renamed them would silently disconnect the logic from the markup —
+         which is the shape of the v36 adoption that dropped 8 functions. -->
+    <div class="cdwrap">
+      <div style="margin-bottom:14px">
+        <div id="cd-name" style="font-size:30px;font-weight:800;letter-spacing:-.6px;line-height:1.1"></div>
+        <div id="cd-sub" style="font-size:13px;color:var(--mu);margin-top:5px"></div>
       </div>
-      <div>
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
-          <div><div id="cd-name" style="font-size:28px;font-weight:800;letter-spacing:-.6px;line-height:1.1"></div><div id="cd-sub" style="font-size:13px;color:var(--mu);margin-top:5px"></div></div>
-        </div>
-        <div class="pboxes">
-          <div class="pbox"><div class="pbl">Market value</div><div class="pbv" id="cd-mkt">—</div><div class="pbs up" id="cd-chg"></div></div>
-          <div class="pbox"><div class="pbl">Lowest listing</div><div class="pbv" id="cd-low" style="color:var(--t)">—</div><div class="pbs" id="cd-lowsrc" style="color:var(--mu)"></div></div>
-          <div class="pbox"><div class="pbl">Last sold</div><div class="pbv" id="cd-sold">—</div><div class="pbs" id="cd-soldd" style="color:var(--mu)"></div></div>
-        </div>
-        <div class="gpt">
-          <div class="gpt-h"><span>Condition</span><span>Market avg</span><span>Low</span><span>High</span></div>
+
+      <!-- 1. image | price boxes -->
+      <div class="cdtop">
+        <div class="cview"><img id="cd-img" src="" alt="" style="min-height:260px"></div>
+        <div class="cdtop-r">
+          <div class="pboxes">
+            <div class="pbox"><div class="pbl">Market value</div><div class="pbv" id="cd-mkt">—</div><div class="pbs up" id="cd-chg"></div></div>
+            <div class="pbox"><div class="pbl">Lowest listing</div><div class="pbv" id="cd-low" style="color:var(--t)">—</div><div class="pbs" id="cd-lowsrc" style="color:var(--mu)"></div></div>
+            <div class="pbox"><div class="pbl">Last sold</div><div class="pbv" id="cd-sold">—</div><div class="pbs" id="cd-soldd" style="color:var(--mu)"></div></div>
+          </div>
           <div style="background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:14px 18px;margin-bottom:16px;box-shadow:var(--sh)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <span style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em">PRICE POSITION</span>
-        <div style="display:flex;gap:8px;align-items:center">
-          <span id="cd-trend-label" style="font-size:12px;font-weight:600;color:var(--gr)">&#8212;</span>
-          <button class="btn sm" id="cview-btn" onclick="toggleCondChart()" style="font-size:11px;padding:3px 9px">&#128202; All conditions</button>
-        </div>
-      </div>
-      <div style="height:6px;background:var(--bg);border-radius:6px;overflow:hidden">
-        <div id="cd-trend-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--t),var(--gr));border-radius:6px;transition:width .6s ease"></div>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-top:8px">
-        <span style="font-size:10px;color:var(--fa)">52w Low: <strong id="cd-52low">&#8212;</strong></span>
-        <span style="font-size:10px;color:var(--fa)">52w High: <strong id="cd-52high">&#8212;</strong></span>
-      </div>
-    </div>
-    <div id="cd-gpt"></div>
-        </div>
-        <div class="chart-box">
-          <div class="chart-h">
-            <div><div class="chart-t">Price history — <span id="cd-grade-lbl">Raw NM</span></div><div class="chart-s">eBay sold · TCGPlayer · 130point · PriceCharting</div></div>
-            <div class="rchips">
-              <button class="rc" onclick="setR(this,'1M')">1M</button><button class="rc on" onclick="setR(this,'3M')">3M</button>
-              <button class="rc" onclick="setR(this,'6M')">6M</button><button class="rc" onclick="setR(this,'1Y')">1Y</button><button class="rc" onclick="setR(this,'All')">All</button>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <span style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em">PRICE POSITION</span>
+              <div style="display:flex;gap:8px;align-items:center">
+                <span id="cd-trend-label" style="font-size:12px;font-weight:600;color:var(--gr)">&#8212;</span>
+                <button class="btn sm" id="cview-btn" onclick="toggleCondChart()" style="font-size:11px;padding:3px 9px">&#128202; All conditions</button>
+              </div>
+            </div>
+            <div style="height:6px;background:var(--bg);border-radius:6px;overflow:hidden">
+              <div id="cd-trend-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--t),var(--gr));border-radius:6px;transition:width .6s ease"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:8px">
+              <span style="font-size:10px;color:var(--fa)">52w Low: <strong id="cd-52low">&#8212;</strong></span>
+              <span style="font-size:10px;color:var(--fa)">52w High: <strong id="cd-52high">&#8212;</strong></span>
             </div>
           </div>
-          <div class="cwrap"><canvas id="cd-chart"></canvas></div>
-          <div class="cstats">
-            <div><div style="font-size:11px;color:var(--mu)">30-day avg</div><div style="font-weight:700;font-size:14px;margin-top:3px" id="cd-s30">—</div></div>
-            <div><div style="font-size:11px;color:var(--mu)">90-day avg</div><div style="font-weight:700;font-size:14px;margin-top:3px" id="cd-s90">—</div></div>
-            <div><div style="font-size:11px;color:var(--mu)">All-time high</div><div style="font-weight:700;font-size:14px;margin-top:3px;color:var(--gr)" id="cd-ath">—</div></div>
-            <div><div style="font-size:11px;color:var(--mu)">All-time low</div><div style="font-weight:700;font-size:14px;margin-top:3px;color:var(--re)" id="cd-atl">—</div></div>
+          <div class="gpt">
+            <div class="gpt-h"><span>Condition</span><span>Market avg</span><span>Low</span><span>High</span></div>
+            <div id="cd-gpt"></div>
           </div>
         </div>
+      </div>
+
+      <!-- card details, BELOW the image -->
+      <div class="mbox2" id="cd-meta"></div>
+
+      <!-- 2. price graph, underneath the image and price boxes -->
+      <div class="chart-box">
+        <div class="chart-h">
+          <div><div class="chart-t">Price history — <span id="cd-grade-lbl">Raw NM</span></div><div class="chart-s">eBay sold · TCGPlayer · 130point · PriceCharting</div></div>
+          <div class="rchips">
+            <button class="rc" onclick="setR(this,'1M')">1M</button><button class="rc on" onclick="setR(this,'3M')">3M</button>
+            <button class="rc" onclick="setR(this,'6M')">6M</button><button class="rc" onclick="setR(this,'1Y')">1Y</button><button class="rc" onclick="setR(this,'All')">All</button>
+          </div>
+        </div>
+        <div class="cwrap"><canvas id="cd-chart"></canvas></div>
+        <div class="cstats">
+          <div><div style="font-size:11px;color:var(--mu)">30-day avg</div><div style="font-weight:700;font-size:14px;margin-top:3px" id="cd-s30">—</div></div>
+          <div><div style="font-size:11px;color:var(--mu)">90-day avg</div><div style="font-weight:700;font-size:14px;margin-top:3px" id="cd-s90">—</div></div>
+          <div><div style="font-size:11px;color:var(--mu)">All-time high</div><div style="font-weight:700;font-size:14px;margin-top:3px;color:var(--gr)" id="cd-ath">—</div></div>
+          <div><div style="font-size:11px;color:var(--mu)">All-time low</div><div style="font-weight:700;font-size:14px;margin-top:3px;color:var(--re)" id="cd-atl">—</div></div>
+        </div>
+      </div>
+
+      <!-- 3. the grading selector. Piece 2 of this phase replaces the flat
+           chip list with a status box and a condition box; the chips stay
+           addressable meanwhile so selGrade() keeps working. -->
+      <div id="cd-selector"></div>
+      <div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Grade / Condition</div>
+      <div class="gchips" id="cd-grades"></div>
+
         <div class="lbox">
           <div class="lhdr">
             <div class="ltabs2">
@@ -574,7 +616,6 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
           </div>
           <div id="cd-listings"></div>
         </div>
-      </div>
     </div>
   </div>
 </div>
@@ -4643,6 +4684,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-f8ba9f9-heroloop &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-837d9cb-cardlayout &middot; click to hide</div>
 </body>
 </html>

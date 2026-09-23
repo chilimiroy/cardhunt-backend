@@ -2520,61 +2520,18 @@ function renderMarketData(m) {
 
 // Renders a list of eBay rows into #cd-listings. NOT wired to
 // /api/market — see above. Kept for a caller that has GATED rows to render.
-function renderRealListings(listings, sales) {
-  var host = document.getElementById('cd-listings');
-  if (!host) return;
-  var html = '';
-  listings.slice(0, 12).forEach(function(l){
-    var srcCls = l.type === 'auction' ? 'se' : 'se';
-    var total = l.price + (l.shipping || 0);
-    html += '<div class="lrow">'
-      + '<span class="src ' + srcCls + '">eBay</span>'
-      + '<div style="flex:1;min-width:0">'
-      + '<div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-      + (l.title || '') + '</div>'
-      + '<div style="font-size:11px;color:var(--mu)">'
-      + (l.condition || '') + (l.seller ? ' &middot; ' + l.seller : '')
-      + (l.feedback ? ' (' + l.feedback + '%)' : '')
-      + (l.country ? ' &middot; ' + l.country : '')
-      + (l.type === 'auction' ? ' &middot; <strong style="color:var(--am)">auction</strong>' : '')
-      + '</div></div>'
-      + '<div style="text-align:right;flex-shrink:0">'
-      + '<div style="font-weight:800;font-size:15px">' + fmtCurrency(l.price) + '</div>'
-      + (l.shipping ? '<div style="font-size:10px;color:var(--mu)">+' + fmtCurrency(l.shipping) + ' ship</div>' : '<div style="font-size:10px;color:var(--gr)">free ship</div>')
-      + '</div>'
-      + '<a href="' + l.url + '" target="_blank" rel="noopener" class="btn sm p" style="flex-shrink:0;text-decoration:none">Buy &#8594;</a>'
-      + '</div>';
-  });
-  if (sales && sales.length) {
-    html += '<div style="padding:10px 18px;background:var(--bg);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.05em">RECENT SOLD</div>';
-    sales.slice(0, 8).forEach(function(sale){
-      html += '<div class="lrow">'
-        + '<span class="src s30">SOLD</span>'
-        + '<div style="flex:1;min-width:0"><div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-        + (sale.title || 'eBay sale') + '</div>'
-        + '<div style="font-size:11px;color:var(--mu)">' + (sale.date || '') + '</div></div>'
-        + '<div style="font-weight:700;font-size:14px">' + fmtCurrency(sale.price) + '</div>'
-        + '</div>';
-    });
-  }
-  if (html) host.innerHTML = html;
-}
-
-// ══════════════════════════════════════════════════════════════
-// LISTING DEEP LINKS
+// renderRealListings() was here. It rendered whatever array it was handed
+// into #cd-listings, with no gate, and the comment above it said it was
+// "kept for a caller that has GATED rows to render". Nothing ever called it
+// again after renderMarketData stopped - but it remained a function that
+// writes the gated element, sitting next to the one that owns it, and that
+// is how it got wired up the first time.
 //
-// Given a card and a grade, build a URL that lands on a pre-filtered
-// live search on each marketplace. Query precision is the whole value —
-// "Charizard" returns 40,000 results; "Charizard ex 199/165 PSA 10"
-// returns the listings someone actually wants.
-// ══════════════════════════════════════════════════════════════
-
-// Grades, grouped by grading company
-// GRADE_GROUPS is gone: the selector owns the grade choice, and a third
-// list of grades is a third thing to drift.
+// Deleted rather than allow-listed. preserve.test.js asserts #cd-listings
+// has no unexpected writer, and a dead renderer aimed at that element is
+// exactly the thing the assertion exists to notice.
 
 
-// How each marketplace wants a grade expressed in a text search
 function gradeTerms(grade, platform) {
   if (!grade || /^raw/i.test(grade)) {
     // Raw: exclude graded slabs where the platform supports it
@@ -4927,6 +4884,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-aee1758-gradetext &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-3f1e56f-onewriteronly &middot; click to hide</div>
 </body>
 </html>

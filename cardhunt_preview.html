@@ -164,6 +164,23 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 }
 .cview{background:linear-gradient(145deg,#f0eeff,#e8e4ff);border:1px solid #D0C8FF;border-radius:var(--r);padding:26px;text-align:center;margin-bottom:16px;box-shadow:var(--sh)}
 .cview img{max-width:100%;max-height:520px;object-fit:contain;border-radius:10px;box-shadow:0 10px 32px rgba(0,0,0,.25);margin:0 auto;transition:transform .3s}.cview img:hover{transform:scale(1.02)}
+/* ── The grading selector: a STATUS box and, beside it, a CONDITION box ── */
+.selwrap{display:grid;grid-template-columns:minmax(200px,260px) 1fr;gap:16px;
+  background:var(--w);border:1px solid var(--bd);border-radius:var(--r);
+  padding:16px 18px;margin-bottom:18px;box-shadow:var(--sh);align-items:start}
+.selbox{min-width:0}
+.sellbl{font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;
+  letter-spacing:.07em;margin-bottom:8px}
+.selopts{display:flex;flex-wrap:wrap;gap:6px}
+.selchip{padding:6px 12px;border:1.5px solid var(--bd);border-radius:22px;font-size:12px;
+  font-weight:600;color:var(--mu);background:var(--w);cursor:pointer;transition:all .15s;
+  white-space:nowrap}
+.selchip.on{background:var(--t);color:#fff;border-color:var(--t);
+  box-shadow:0 2px 8px rgba(0,184,160,.3)}
+.selchip:hover:not(.on){border-color:var(--t);color:var(--t)}
+/* What the selection actually ASKS FOR. "All" is the option people misread. */
+.selnote{margin-top:10px;font-size:11px;color:var(--mu);line-height:1.6}
+@media(max-width:700px){.selwrap{grid-template-columns:1fr}}
 .gchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
 .gchip{padding:5px 11px;border:1.5px solid var(--bd);border-radius:22px;font-size:11px;font-weight:600;color:var(--mu);background:var(--w);cursor:pointer;transition:all .15s}
 .gchip.on{background:var(--pu);color:#fff;border-color:var(--pu);box-shadow:0 2px 8px rgba(124,58,237,.3)}.gchip:hover:not(.on){border-color:var(--pu);color:var(--pu)}
@@ -2061,6 +2078,136 @@ function updatePrices(grade,base){
   document.getElementById('cd-atl').textContent=`$${Math.min(...pd.avg).toFixed(2)}`;
 }
 
+// ══ THE GRADING SELECTOR ══════════════════════════════════════
+// A STATUS box and, beside it, a CONDITION box whose options depend on the
+// status — Roy's Phase 1b table.
+//
+// "All" means every listing for that status. Raw + All is every raw
+// listing; PSA + All is every PSA listing at any grade and NO BGS, CGC or
+// raw. That is one grader-wide query, not ten — see cardmatch's `PSA *`
+// mode. Ten queries per card view would spend ten of a 5,000/day quota
+// shared with every other card anyone looks at.
+//
+// The lists come from cardmatch (GRADE_QUALIFIERS, GRADERS_UNAMBIGUOUS,
+// RAW_CONDITIONS) wherever cardmatch has an opinion, so the box cannot
+// offer a grade the gate has never heard of. A selector built from its own
+// hardcoded list is two lists of one thing, which is how SLAB_WORDS drifted
+// from GRADERS and let a $987 AiGrade slab through a raw search.
+var CM = (typeof window !== 'undefined' && window.CardMatch) ? window.CardMatch : null;
+
+var STATUS_CONDITIONS = {
+  // Raw sub-conditions are SELLER-STATED — eBay's own condition field is
+  // binary. Measured across 447 live rows: 441 "Ungraded" plus 6
+  // localisations, identical whichever condition was asked for. The box
+  // says so, and unparseable listings go to an "unstated" group rather
+  // than vanishing.
+  Raw:   ['All', 'M', 'NM', 'LP', 'MP', 'HP', 'DMG'],
+  PSA:   ['All', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1'],
+  BGS:   ['All', '10 Black Label', '10', '9.5', '9', '8.5', '8', 'lower'],
+  CGC:   ['All', '10 Pristine', '10 Gem Mint', '9.5', '9', '8.5', '8', 'lower'],
+  SGC:   ['All', '10', '9.5', '9', '8.5', '8', 'lower'],
+  TAG:   ['All', '10', '9', '8', 'lower'],
+  Other: ['All', '10', '9.5', '9', '8.5', '8', 'lower']
+};
+
+// "Other" offers the remaining graders cardmatch knows about, so the list
+// cannot fall behind the gate's.
+function otherGraders() {
+  var known = ['PSA', 'BGS', 'CGC', 'SGC', 'TAG'];
+  var all = (CM && CM.GRADERS_UNAMBIGUOUS) ? CM.GRADERS_UNAMBIGUOUS : ['BVG', 'CSG', 'AGS', 'HGA'];
+  return all.filter(function (g) { return known.indexOf(g) < 0 && g !== 'AI GRADE'; });
+}
+
+var SEL = { status: 'Raw', condition: 'All', otherGrader: null };
+
+// Build the grade STRING the rest of the app already speaks. Everything
+// downstream — buildQuery, verify, /api/listings?grade= — takes a string,
+// so the selector produces one rather than inventing a parallel shape.
+function selectorGrade() {
+  var st = SEL.status, cond = SEL.condition;
+  if (st === 'Raw') return cond === 'All' ? 'Raw' : 'Raw ' + cond;
+  var grader = (st === 'Other') ? (SEL.otherGrader || otherGraders()[0] || 'BVG') : st;
+  if (cond === 'All')   return grader + ' *';       // grader-wide, one query
+  if (cond === 'lower') return grader + ' *';       // see note in renderSelector
+  return grader + ' ' + cond;
+}
+
+function renderSelector() {
+  var host = document.getElementById('cd-selector');
+  if (!host) return;
+  var statuses = ['Raw', 'PSA', 'BGS', 'CGC', 'SGC', 'TAG', 'Other'];
+  var conds = STATUS_CONDITIONS[SEL.status] || ['All'];
+
+  var h = '<div class="selwrap">';
+
+  h += '<div class="selbox"><div class="sellbl">Status</div><div class="selopts">';
+  statuses.forEach(function (s) {
+    h += '<button class="selchip' + (SEL.status === s ? ' on' : '') + '" '
+      + 'onclick="setStatus(\'' + s + '\')">' + s + '</button>';
+  });
+  h += '</div></div>';
+
+  h += '<div class="selbox"><div class="sellbl">Condition</div><div class="selopts">';
+  conds.forEach(function (c) {
+    h += '<button class="selchip' + (SEL.condition === c ? ' on' : '') + '" '
+      + 'onclick="setCondition(&quot;' + c + '&quot;)">' + c + '</button>';
+  });
+  h += '</div>';
+
+  if (SEL.status === 'Other') {
+    h += '<div class="sellbl" style="margin-top:10px">Grader</div><div class="selopts">';
+    otherGraders().forEach(function (g) {
+      h += '<button class="selchip' + ((SEL.otherGrader || otherGraders()[0]) === g ? ' on' : '') + '" '
+        + 'onclick="setOtherGrader(\'' + g + '\')">' + g + '</button>';
+    });
+    h += '</div>';
+  }
+
+  // Say what the selection ASKS FOR. "All" is the one people misread, and
+  // a grader-wide query is genuinely different from a specific grade.
+  var note = '';
+  if (SEL.status === 'Raw') {
+    note = SEL.condition === 'All'
+      ? 'Every ungraded listing. No slabs.'
+      : 'Ungraded, and the seller wrote <strong>' + liveEsc(SEL.condition) + '</strong> in the title. '
+        + 'eBay has no condition scale for raw cards &mdash; this is a '
+        + '<strong>seller-stated</strong> claim, not a measurement. Listings whose '
+        + 'condition cannot be read are grouped as <em>unstated</em>, never dropped.';
+  } else if (SEL.condition === 'All') {
+    note = 'Every ' + liveEsc(SEL.status) + ' slab at any grade &mdash; and no other grader, and no raw. '
+      + 'One query, not one per grade.';
+  } else if (SEL.condition === 'lower') {
+    note = 'Asked as a grader-wide ' + liveEsc(SEL.status) + ' search; grades above 8 are '
+      + 'filtered out of the results below.';
+  } else {
+    note = 'Only ' + liveEsc(SEL.status) + ' ' + liveEsc(SEL.condition) + '.';
+    if (SEL.condition === '10 Black Label') note += ' An ordinary BGS 10 is a different grade and is refused.';
+    if (SEL.condition === '10 Pristine')    note += ' An ordinary CGC 10 Gem Mint is a different grade and is refused.';
+    if (SEL.condition === '10' && SEL.status === 'BGS') note += ' Black Labels are refused &mdash; they sell for several times a regular 10.';
+  }
+  h += '<div class="selnote">' + note + '</div>';
+  h += '</div></div>';
+
+  host.innerHTML = h;
+}
+
+function setStatus(s) {
+  SEL.status = s;
+  SEL.condition = 'All';
+  if (s === 'Other' && !SEL.otherGrader) SEL.otherGrader = otherGraders()[0] || null;
+  renderSelector();
+  applySelection();
+}
+function setCondition(c) { SEL.condition = c; renderSelector(); applySelection(); }
+function setOtherGrader(g) { SEL.otherGrader = g; renderSelector(); applySelection(); }
+
+// One place that turns the selection into everything downstream.
+function applySelection() {
+  var grade = selectorGrade();
+  var base = S.activeGradeBase || (S.currentCard ? getBase(S.currentCard) : 0);
+  selGrade(grade, base);
+}
+
 function selGrade(grade,base){
   S.activeGrade=grade;S.activeGradeBase=base;
   updatePrices(grade,base);
@@ -2096,6 +2243,9 @@ async function openCard(id){
   SS('card');
   if(S.chart){S.chart.destroy();S.chart=null;}
   S.activeGrade='Raw NM';S.watching=false;
+  // A new card starts at Raw + All, and the selector is redrawn so it never
+  // shows the previous card's selection against this card's listings.
+  SEL.status='Raw'; SEL.condition='All'; SEL.otherGrader=null;
   document.getElementById('watch-btn').textContent='🤍 Watch';
   document.getElementById('cd-img').src='';
   document.getElementById('cd-name').textContent='Loading…';
@@ -2182,6 +2332,7 @@ async function openCard(id){
       gradeChips+='<button class="gchip'+(gi===0?' on':'')+'" onclick="selGrade(\''+g+'\','+( +(base*gradeMult(g)).toFixed(2))+'  )">'+g+'</button>';
     });
     document.getElementById('cd-grades').innerHTML=gradeChips;
+    renderSelector();
     var tcg=c.tcgplayer&&c.tcgplayer.prices?c.tcgplayer.prices:{};
     var cm=c.cardmarket&&c.cardmarket.prices?c.cardmarket.prices:{};
     var metaRows=[
@@ -4684,6 +4835,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-837d9cb-cardlayout &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-41cac35-selector &middot; click to hide</div>
 </body>
 </html>

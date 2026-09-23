@@ -2784,7 +2784,7 @@ function renderListingFinder(card) {
     html += '<div id="cd-gradeval" style="padding:12px 18px;background:var(--bg);'
       + 'border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;'
       + 'align-items:center">';
-    html += '<div><div style="font-size:11px;color:var(--mu)">Typical ' + LF.grade
+    html += '<div><div style="font-size:11px;color:var(--mu)">Typical ' + gradeText(LF.grade)
       + ' &middot; <span style="color:var(--am);font-weight:700">estimate</span></div>'
       + '<div style="font-size:20px;font-weight:800">' + fmtCurrency(est) + '</div></div>';
     html += '<div style="font-size:11px;color:var(--fa);text-align:right;max-width:200px">'
@@ -3002,7 +3002,7 @@ function applyMeasuredGrade(d){
   var range = (p.low != null && p.high != null && p.low !== p.high)
     ? fmtCurrency(p.low) + '&ndash;' + fmtCurrency(p.high) : '';
   host.innerHTML =
-      '<div><div style="font-size:11px;color:var(--mu)">' + liveEsc(d.grade)
+      '<div><div style="font-size:11px;color:var(--mu)">' + liveEsc(gradeText(d.grade))
     + ' &middot; <span style="color:var(--gr);font-weight:700">measured</span>' + ed + '</div>'
     + '<div style="font-size:20px;font-weight:800">' + fmtCurrency(p.value) + '</div>'
     + '<div style="font-size:10px;color:var(--fa)">' + liveEsc(p.label)
@@ -4927,6 +4927,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-46f1d0b-onewriter &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-aee1758-gradetext &middot; click to hide</div>
 </body>
 </html>

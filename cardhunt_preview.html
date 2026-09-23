@@ -4336,9 +4336,49 @@ function updateAlertStats(){
   if(triggered>0) document.getElementById('alert-stat-savings').textContent=`~$${(Math.random()*200+50).toFixed(0)}`;
 }
 
-function pauseAlert(id){const a=ALERTS.find(x=>x.id===id);if(a){a.status='paused';renderAlertsList();updateAlertsBar();}}
-function resumeAlert(id){const a=ALERTS.find(x=>x.id===id);if(a){a.status='active';a.triggered=false;renderAlertsList();updateAlertsBar();}}
-function deleteAlert(id){ALERTS=ALERTS.filter(x=>x.id!==id);renderAlertsList();updateAlertsBar();}
+// ── Every alert mutation goes to the SERVER ──────────────────
+// These three used to change the local ALERTS array and nothing else,
+// while the alerts bar reads /api/alerts. So a paused alert un-paused
+// itself on the next refresh, and a deleted one came back — the UI and the
+// database disagreeing, with the UI losing silently five minutes later.
+//
+// Each one now PATCHes and then re-reads, so what is on screen is what the
+// server actually holds. The local array is a cache of the server's answer,
+// never a second source of truth.
+async function patchAlert(id, status) {
+  try {
+    const r = await fetch(BACKEND + '/api/alerts/' + encodeURIComponent(id), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: status })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+  } catch (e) {
+    // Say so rather than showing a change the server did not accept.
+    alertToast('Could not save that change — ' + (e.message || 'the alerts API did not answer'), true);
+  }
+  await loadAlerts();
+}
+
+function pauseAlert(id){ return patchAlert(id, 'paused'); }
+function resumeAlert(id){ return patchAlert(id, 'active'); }
+// 'deleted' rather than a DELETE: the API filters status<>'deleted', so the
+// row survives for anything that referenced it. A user-visible delete that
+// is a soft delete underneath is fine; a delete that only happens in the
+// browser is not.
+function deleteAlert(id){ return patchAlert(id, 'deleted'); }
+
+// One toast, used by every alert action. Red when something failed.
+function alertToast(msg, bad) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:900;background:'
+    + (bad ? 'var(--re)' : 'var(--t)')
+    + ';color:#fff;border-radius:12px;padding:14px 20px;font-size:13px;font-weight:600;'
+    + 'box-shadow:var(--sh3);max-width:340px;line-height:1.5';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function(){ t.remove(); }, bad ? 6000 : 3500);
+}
 
 // ── ADD ALERT MODAL ────────────────────────────────────────
 function showAddAlertModal(card,price){
@@ -4397,7 +4437,7 @@ async function pickAlertCard(){
   }catch(e){alert('Search failed — try again');}
 }
 
-function saveAlert(){
+async function saveAlert(){
   const grade=document.getElementById('alert-grade').value;
   const type=document.getElementById('alert-type').value;
   const price=parseFloat(document.getElementById('alert-price').value);
@@ -4405,33 +4445,57 @@ function saveAlert(){
   const notify=document.getElementById('alert-notify').value;
   if(!alertCardTarget){alert('Please choose a card first');return;}
   if(!price||price<=0){alert('Please enter a target price');return;}
-  const newAlert={
-    id:'a'+Date.now(),
-    cardId:alertCardTarget.id,
-    cardName:alertCardTarget.name,
-    setName:alertCardTarget.set?.name||'',
-    img:alertCardTarget.images?.small||'',
-    grade,type,price,market,notify,
-    status:'active',
-    created:Date.now(),
-    triggered:false,
-    lastCheck:Date.now(),
-    currentPrice:getBase(alertCardTarget),
+  // ── The alert is created on the SERVER, or not at all ──
+  // This used to push onto the local ALERTS array and show a toast reading
+  // "We will notify you when X hits $Y". Nothing was saved. The alerts bar
+  // reads /api/alerts, so the new alert vanished on the next refresh —
+  // after promising to watch the card.
+  //
+  // Nothing is claimed before the server has accepted it.
+  const cardName = alertCardTarget.name;
+  const payload = {
+    user_id: CH_USER,
+    card_api_id: alertCardTarget.id,
+    card_name: cardName,
+    card_img: (alertCardTarget.images && (alertCardTarget.images.small || alertCardTarget.images.large)) || '',
+    set_name: (alertCardTarget.set && alertCardTarget.set.name) || '',
+    grade: grade,
+    alert_type: type,
+    target_price: price,
+    marketplace: market,
+    notify: notify
   };
-  ALERTS.unshift(newAlert);
+
+  const btn = document.getElementById('alert-save-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  let saved = null;
+  try {
+    const r = await fetch(BACKEND + '/api/alerts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    saved = await r.json();
+    if (saved && saved.error) throw new Error(saved.error);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '🔔 Create Alert'; }
+    alertToast('Alert NOT created — ' + (e.message || 'the alerts API did not answer')
+      + '. Nothing is being watched.', true);
+    return;
+  }
+
+  if (btn) { btn.disabled = false; btn.innerHTML = '🔔 Create Alert'; }
   closeAddAlertModal();
   alertCardTarget=null;
   document.getElementById('alert-card-name').textContent='Click to choose a card…';
   document.getElementById('alert-price').value='';
-  updateAlertsBar();
+  await loadAlerts();          // re-read, so the screen shows what was stored
   renderAlertsList();
   SS('alerts');
-  // Show success toast
-  const toast=document.createElement('div');
-  toast.style.cssText='position:fixed;bottom:24px;right:24px;z-index:900;background:var(--t);color:#fff;border-radius:12px;padding:14px 20px;font-size:13px;font-weight:600;box-shadow:var(--sh3)';
-  toast.textContent=`🔔 Alert created! We will notify you when ${newAlert.cardName} hits $${price}`;
-  document.body.appendChild(toast);
-  setTimeout(()=>toast.remove(),3500);
+  alertToast('Alert saved. ' + cardName + ' will be checked against real prices at '
+    + fmtCurrency(price) + '.');
 }
 
 // ── ADD ALERT BUTTON ON CARD DETAIL PAGE ──────────────────
@@ -4990,7 +5054,7 @@ function cleanSeries(name) {
       <strong>Alert preview:</strong> Notify me when a <span id="ap-grade">PSA 7</span> listing for <span id="ap-card">any card</span> drops below <span id="ap-price">$—</span> on <span id="ap-market">all markets</span>.
     </div>
 
-    <button onclick="saveAlert()" class="btn p" style="width:100%;padding:14px;font-size:15px;font-weight:700;justify-content:center">🔔 Create Alert</button>
+    <button id="alert-save-btn" onclick="saveAlert()" class="btn p" style="width:100%;padding:14px;font-size:15px;font-weight:700;justify-content:center">🔔 Create Alert</button>
   </div>
 </div>
 <!-- BUILD STAMP — bump on EVERY frontend change, date + short SHA.
@@ -5008,6 +5072,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-049ab44-setcount1 &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-6d26a03-alertsave &middot; click to hide</div>
 </body>
 </html>

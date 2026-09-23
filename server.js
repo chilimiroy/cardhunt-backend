@@ -2825,6 +2825,19 @@ app.get('/api/sets/lang/:lang', async (req, res) => {
             // null is the honest answer, and the page draws a named tile
             // from it. See "Don't guess URLs — read them" in CLAUDE.md.
             logo: r.logo || null,
+            // ── A real image for the 229 sets that have no logo ──
+            // TCGdex holds no logo for ANY Japanese or Chinese set, so those
+            // 222 plus 63 English ones fall back to a text tile. This query
+            // was already selecting the set's first card image and throwing
+            // it away — a genuinely relevant picture of the set, fetched and
+            // discarded.
+            //
+            // It is a CARD, not a logo, and the page renders it differently
+            // so it cannot be mistaken for one. Still null-able: a set whose
+            // cards have no artwork (every Simplified Chinese set, and
+            // 30th-c) falls through to the name tile, which is why that tile
+            // stays.
+            sampleImage: r.sample_image || null,
             serie: r.series || 'Other',
             releaseDate: r.release_date || null,
             lang

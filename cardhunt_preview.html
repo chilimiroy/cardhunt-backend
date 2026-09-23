@@ -126,6 +126,16 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .setrow2 .stile{width:150px;margin:0}
 @media(max-width:640px){.setrow2{grid-auto-columns:128px}.setrow2 .stile{width:128px}}
 
+/* No logo upstream, but the set has artwork: show a card FROM the set,
+   beside its name. Deliberately NOT stretched to fill the logo slot — it is
+   a card, and a card filling a branding slot reads as branding. */
+.scard{display:flex;align-items:center;gap:8px;height:100%;width:100%;padding:6px 8px}
+.scard img{height:100%;max-height:60px;width:auto;object-fit:contain;border-radius:4px;
+  box-shadow:0 2px 8px rgba(0,0,0,.22);flex-shrink:0}
+.scardn{font-size:10.5px;font-weight:700;line-height:1.3;color:var(--tx);
+  text-align:left;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;
+  -webkit-box-orient:vertical;text-wrap:balance}
+
 /* The set has no logo — TCGdex holds none for 0/138 Japanese, 0/84 Chinese
    and 63/220 English sets. A styled NAME tile, so the absence reads as a
    deliberate design and not as a broken image. Before this, the server
@@ -1151,6 +1161,10 @@ async function loadLangSets(lang, force){
             cardCount: x.cardCount || 0,
             d: x.releaseDate || '',
             lo: x.logo || '',
+            // The set's first card image - a real picture of the set for the
+            // 229 sets that have no logo at all. Rendered differently from a
+            // logo, because it is a card and must not look like branding.
+            sampleImage: x.sampleImage || '',
             lang: lang,
             coverage: x.coverage,
             realPrices: x.realPrices
@@ -3823,8 +3837,27 @@ function setTileHTML(x, opts) {
     logoHTML = '<img src="' + x.lo + '" alt="" loading="lazy" '
       + 'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
       + '<div class="slogtxt" style="display:none">' + liveEsc((x.n || '').substring(0, 34)) + '</div>';
+  } else if (x.sampleImage) {
+    // ── No logo exists upstream: show a card FROM the set ──
+    // TCGdex has no logo for any Japanese or Chinese set, so 229 of 449
+    // sets had nothing but a text tile. This is the set's first card — a
+    // genuinely relevant image, and one the set-list query was already
+    // fetching and discarding.
+    //
+    // Rendered as a card on a plate with the set name beside it, NOT
+    // stretched to fill the logo slot, because it is a card and must not
+    // be mistaken for branding. If it fails to load, the name tile is
+    // still the fallback underneath.
+    logoHTML = '<div class="scard">'
+      + '<img src="' + x.sampleImage + '" alt="" loading="lazy" '
+      + 'onerror="this.parentElement.style.display=\'none\';'
+      + 'this.parentElement.nextElementSibling.style.display=\'flex\'">'
+      + '<span class="scardn">' + liveEsc((x.n || '').substring(0, 28)) + '</span>'
+      + '</div>'
+      + '<div class="slogtxt" style="display:none">' + liveEsc((x.n || '').substring(0, 34)) + '</div>';
   } else {
-    // No logo exists upstream. A named tile, not a blank box.
+    // No logo and no artwork either — every Simplified Chinese set, and
+    // 30th Classic Collection. A named tile, not a blank box.
     logoHTML = '<div class="slogtxt">' + liveEsc((x.n || '').substring(0, 34)) + '</div>';
   }
   var cov = (x.coverage !== undefined && x.coverage !== null)
@@ -4884,6 +4917,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-3f1e56f-onewriteronly &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-82f6371-setimg &middot; click to hide</div>
 </body>
 </html>

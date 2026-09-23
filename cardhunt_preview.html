@@ -2210,6 +2210,11 @@ function applySelection() {
 
 function selGrade(grade,base){
   S.activeGrade=grade;S.activeGradeBase=base;
+  // The listings panel reads LF.grade. Without this the selector changed the
+  // prices and the chart and left the listings showing the previous grade —
+  // two controls disagreeing about one setting, silently.
+  LF.grade = grade;
+  if (S.currentCard) renderListingFinder(S.currentCard);
   updatePrices(grade,base);
   document.querySelectorAll('.gchip').forEach(b=>b.classList.toggle('on',b.textContent===grade));
   document.querySelectorAll('.gpt-r').forEach(r=>r.classList.remove('on'));
@@ -2541,15 +2546,9 @@ function renderRealListings(listings, sales) {
 // ══════════════════════════════════════════════════════════════
 
 // Grades, grouped by grading company
-var GRADE_GROUPS = [
-  { company: 'Raw',  grades: ['Raw NM', 'Raw LP', 'Raw MP', 'Raw HP'] },
-  { company: 'PSA',  grades: ['PSA 10', 'PSA 9', 'PSA 8', 'PSA 7'] },
-  { company: 'BGS',  grades: ['BGS 10', 'BGS 9.5', 'BGS 9'] },
-  { company: 'CGC',  grades: ['CGC 10', 'CGC 9.5', 'CGC 9'] },
-  { company: 'TAG',  grades: ['TAG 10', 'TAG 9'] },
-  { company: 'SGC',  grades: ['SGC 10', 'SGC 9.5', 'SGC 9'] },
-  { company: 'ACE',  grades: ['ACE 10', 'ACE 9'] }
-];
+// GRADE_GROUPS is gone: the selector owns the grade choice, and a third
+// list of grades is a third thing to drift.
+
 
 // How each marketplace wants a grade expressed in a text search
 function gradeTerms(grade, platform) {
@@ -2746,25 +2745,12 @@ function renderListingFinder(card) {
 
   var html = '';
 
-  // Grade selector, grouped by grading company
-  html += '<div style="padding:14px 18px;border-bottom:1px solid var(--bd)">';
-  html += '<div style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em;margin-bottom:10px">CONDITION / GRADE</div>';
-  GRADE_GROUPS.forEach(function(g){
-    html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">';
-    html += '<span style="font-size:10px;font-weight:700;color:var(--fa);width:34px;flex-shrink:0">' + g.company + '</span>';
-    g.grades.forEach(function(gr){
-      var on = LF.grade === gr;
-      html += '<button onclick="setListingGrade(&quot;' + gr + '&quot;)" '
-        + 'style="font-size:11px;padding:3px 9px;border-radius:12px;cursor:pointer;'
-        + 'border:1px solid ' + (on ? 'var(--t)' : 'var(--bd)') + ';'
-        + 'background:' + (on ? 'var(--tl)' : 'var(--w)') + ';'
-        + 'color:' + (on ? 'var(--td)' : 'var(--tx)') + ';'
-        + 'font-weight:' + (on ? '700' : '400') + '">'
-        + gr.replace(/^(Raw|PSA|BGS|CGC|TAG|SGC|ACE)\s*/, '') + '</button>';
-    });
-    html += '</div>';
-  });
-  html += '</div>';
+  // The grade choice lives in the SELECTOR above the listings, not here.
+  // This panel used to render its own chip grid from GRADE_GROUPS — a THIRD
+  // list of grades beside GRADES and the selector's STATUS_CONDITIONS, and
+  // one that offered "ACE 10" and "Raw HP" while the others did not. Two
+  // controls for one setting is also two places for them to disagree about
+  // what is currently selected.
 
   // Estimated value at the chosen grade
   var base = getBase(card);
@@ -3034,19 +3020,97 @@ async function renderLiveListings(card, grade){
   if (!LF.card || LF.card.id !== cardId || LF.grade !== grade) return;
 
   var rows = d.listings || [];
+
+  // ── The selection's second half, applied here ──
+  //
+  // The GRADE went to the server and the gate enforced it. The raw
+  // sub-condition cannot: eBay has no condition scale for ungraded cards —
+  // 447 live rows returned 441 "Ungraded" plus 6 localisations, identical
+  // whichever condition was requested. So the sub-condition is read from
+  // the seller's title, server-side, and carried on the row as
+  // sellerCondition / sellerStated. It is a LABEL, and the gate never
+  // rejects on it.
+  //
+  // Filtering therefore happens here, and it must not make listings
+  // disappear:
+  //   * rows whose stated condition matches  -> shown
+  //   * rows the seller said nothing about   -> shown, in an UNSTATED group
+  //   * rows stating a DIFFERENT condition   -> counted and named, not
+  //                                             silently dropped
+  //
+  // 49.7% of real titles state no condition at all, so an "unstated" group
+  // is not an edge case — it is most of the market. Dropping it would be
+  // looksLikeJunk again: a filter written against bad data eating good.
+  var condFilter = (SEL.status === 'Raw' && SEL.condition !== 'All') ? SEL.condition : null;
+  var unstated = [], wrongCond = 0;
+  if (condFilter) {
+    var keep = [];
+    rows.forEach(function (l) {
+      if (l.sellerStated === true) {
+        if (l.sellerCondition === condFilter) keep.push(l); else wrongCond++;
+      } else {
+        unstated.push(l);
+      }
+    });
+    rows = keep;
+  }
+
+  // "lower" on a graded status means everything below 8. The query was
+  // grader-wide, so the narrowing happens on the answer.
+  if (SEL.status !== 'Raw' && SEL.condition === 'lower') {
+    var before = rows.length;
+    rows = rows.filter(function (l) {
+      var m = String(l.title || '').match(/\b(?:PSA|BGS|CGC|SGC|TAG|BVG|CSG|AGS|HGA)\s*[-:]?\s*(10|[1-9](?:\.5)?)\b/i);
+      return m ? parseFloat(m[1]) < 8 : false;
+    });
+    wrongCond += before - rows.length;
+  }
+
   // "Checked" is the whole difference between this block and the search
   // links below it, and the panel has to say which is which.
+  var selLabel = SEL.status === 'Raw'
+    ? ('RAW' + (SEL.condition === 'All' ? ' — ALL' : ' — ' + SEL.condition))
+    : (SEL.status + ' — ' + SEL.condition).toUpperCase();
   var head = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd)">'
     + '<div style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em;margin-bottom:8px">'
-    + 'FOR SALE NOW &mdash; ' + liveEsc(String(grade).toUpperCase())
+    + 'FOR SALE NOW &mdash; ' + liveEsc(selLabel)
     + ' <span style="color:var(--gr)">&#10003; checked</span></div>';
+
+  // The unstated group, rendered wherever it is needed. Built once here so
+  // the empty case and the populated case cannot describe it differently.
+  function unstatedBlock() {
+    if (!unstated.length) return '';
+    return '<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--bd)">'
+      + '<div style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;'
+      + 'letter-spacing:.06em;margin-bottom:4px">Unstated condition &mdash; ' + unstated.length + '</div>'
+      + '<div style="font-size:11px;color:var(--mu);line-height:1.6;margin-bottom:8px">'
+      + 'These are the same card, ungraded, but the seller did not write a condition in the '
+      + 'title. eBay has no condition field for raw cards, so there is nothing else to read. '
+      + 'They are shown rather than hidden &mdash; about half of all listings say nothing.'
+      + '</div>'
+      + unstated.map(liveRow).join('')
+      + '</div>';
+  }
+  // Rows excluded because the seller stated a DIFFERENT condition. Counted
+  // and named, so a short list is never mistaken for a thin market.
+  function excludedNote() {
+    if (!wrongCond) return '';
+    return '<div style="font-size:11px;color:var(--fa);margin-top:8px">'
+      + wrongCond + ' listing' + (wrongCond === 1 ? '' : 's')
+      + ' hidden &mdash; the seller stated a different '
+      + (SEL.status === 'Raw' ? 'condition' : 'grade') + '.</div>';
+  }
 
   if (!rows.length) {
     host.innerHTML = head
       + '<div style="font-size:11px;color:var(--mu);line-height:1.6">'
-      + 'No listing matched this exact card at this grade. A listing is only shown when its '
-      + 'title confirms both the card and the set &mdash; a near miss is worse than nothing.'
-      + '</div>' + liveSourceNote(d) + '</div>';
+      + (condFilter
+          ? ('No listing states <strong>' + liveEsc(condFilter) + '</strong> in its title. '
+             + 'That is a claim by the seller, not a measurement &mdash; eBay has no condition '
+             + 'scale for ungraded cards.')
+          : ('No listing matched this exact card at this grade. A listing is only shown when its '
+             + 'title confirms both the card and the set &mdash; a near miss is worse than nothing.'))
+      + '</div>' + excludedNote() + unstatedBlock() + liveSourceNote(d) + '</div>';
     applyMeasuredGrade(d);
     return;
   }
@@ -3075,14 +3139,18 @@ async function renderLiveListings(card, grade){
       + 'text-transform:uppercase;letter-spacing:.4px">Recently ended &mdash; comparables, not offers</div>'
       + ended.slice(0, 6).map(liveRow).join('');
   }
-  html += liveOutlierNote(d) + liveSourceNote(d) + '</div>';
+  html += excludedNote() + unstatedBlock()
+        + liveOutlierNote(d) + liveSourceNote(d) + '</div>';
   host.innerHTML = html;
   applyMeasuredGrade(d);
 }
 
+// Kept as a name other code calls. The SELECTOR owns the grade now, so this
+// routes through it rather than setting LF.grade behind its back — two
+// writers for one setting is what the chip grid above the listings was.
 function setListingGrade(g) {
   LF.grade = g;
-  if (typeof selGrade === 'function') { try { selGrade(g); } catch(e) {} }
+  if (typeof selGrade === 'function') { try { selGrade(g, S.activeGradeBase); } catch(e) {} }
   renderListingFinder(LF.card);
 }
 
@@ -4835,6 +4903,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-41cac35-selector &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-fa1d1f9-condfilter &middot; click to hide</div>
 </body>
 </html>

@@ -1920,8 +1920,13 @@ async function openSet(setId, apiSetId){
     setCacheSet(cacheKey, list);
     S.allCards = list;
     applyFilters();
-    var cEl = document.getElementById('sd-count');
-    if (cEl) cEl.textContent = list.length + ' of ' + (set.t || list.length) + ' cards';
+    // sd-count has ONE writer: applyFilters(), called just above. This used
+    // to write it again immediately afterwards with a DIFFERENT meaning -
+    // 'cards we hold of the set printed total' rather than 'filtered of
+    // loaded' - so Ascended Heroes opened reading '295 of 217 cards' and
+    // switched to '12 of 295' the moment you touched a filter. Same element,
+    // two meanings, no warning. The printed total is still shown, by the one
+    // writer, as the separate fact it is.
     setSourceNote(note, wantLang, realCount, totalCount || list.length);
   }
 
@@ -2069,7 +2074,20 @@ function applyFilters(){
     }
   });
 
-  var totalCards = S.allCards.length; document.getElementById('sd-count').textContent = cards.length + ' of ' + totalCards + (totalCards < (S.currentSet&&S.currentSet.t||0) ? ' (loading…)' : '');
+  // ── The one writer of sd-count, saying one thing ──
+  // "filtered of loaded", plus the set's PRINTED total as a separate fact
+  // when it differs. Those two numbers genuinely disagree for most modern
+  // sets — Ascended Heroes prints 217 and we hold 295, because secret rares
+  // are numbered beyond the printed total — so the line names both rather
+  // than picking one and letting the reader guess which they are seeing.
+  var totalCards = S.allCards.length;
+  var printed = (S.currentSet && S.currentSet.t) || 0;
+  var txt = (cards.length === totalCards)
+    ? totalCards + ' cards'
+    : cards.length + ' of ' + totalCards;
+  if (printed && printed !== totalCards) txt += ' · ' + printed + ' printed';
+  if (printed && totalCards < printed) txt += ' (loading…)';
+  document.getElementById('sd-count').textContent = txt;
   if (!cards.length) {
     document.getElementById('sd-grid').innerHTML = '<div style="grid-column:1/-1;padding:40px;text-align:center;color:var(--mu)">No cards match</div>';
     return;
@@ -4990,6 +5008,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-708297a-setrow1 &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-049ab44-setcount1 &middot; click to hide</div>
 </body>
 </html>

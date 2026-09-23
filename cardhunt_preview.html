@@ -49,7 +49,10 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .av{width:34px;height:34px;border-radius:50%;background:var(--t);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;cursor:pointer;font-size:14px;flex-shrink:0}
 #login-modal-overlay{display:none}
 
-.lbox{background:rgba(255,255,255,.04);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:52px 48px;width:100%;max-width:460px;position:relative;z-index:1}
+/* A .lbox rule from an old login design used to sit here. Nothing carries
+   that class except the card page listings panel, but its max-width:460px
+   still applied - so the panel stayed 460px wide after the layout port gave
+   it the full column. Dead CSS is not inert when the name collides. */
 .llogo{display:flex;align-items:center;gap:12px;margin-bottom:36px;justify-content:center}
 .llogo-i{width:52px;height:52px;background:var(--t);border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px}
 .llogo-t{font-size:30px;font-weight:800;color:#fff;letter-spacing:-.6px}.llogo-t em{color:var(--t);font-style:normal}
@@ -619,8 +622,10 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
            chip list with a status box and a condition box; the chips stay
            addressable meanwhile so selGrade() keeps working. -->
       <div id="cd-selector"></div>
-      <div style="font-size:11px;font-weight:700;color:var(--mu);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em">Grade / Condition</div>
-      <div class="gchips" id="cd-grades"></div>
+      <!-- The flat 16-chip GRADES row used to sit here. The status/condition
+           selector above replaces it: two controls for one setting is two
+           places for them to disagree about what is selected, which is the
+           same reason the listings panel lost its own chip grid. -->
 
         <div class="lbox">
           <div class="lhdr">
@@ -2256,7 +2261,6 @@ async function openCard(id){
   document.getElementById('cd-name').textContent='Loading…';
   document.getElementById('cd-sub').textContent='';
   document.getElementById('cd-meta').innerHTML='';
-  document.getElementById('cd-grades').innerHTML='';
   document.getElementById('cd-gpt').innerHTML='';
   document.getElementById('cd-listings').innerHTML='<div style="padding:48px;text-align:center;color:var(--mu)"><div class="spin" style="width:34px;height:34px;border:3px solid var(--bd);border-top-color:var(--t);border-radius:50%;animation:sp .75s linear infinite;margin:0 auto 12px"></div></div>';
   try{
@@ -2332,11 +2336,8 @@ async function openCard(id){
       + '<div style="font-size:10px;color:var(--fa);padding:6px 2px 0">'
       + 'Estimated from the raw price &mdash; not measured from sales. '
       + 'Open a grade to see what is actually listed.</div>';
-    var gradeChips='';
-    GRADES.forEach(function(g,gi){
-      gradeChips+='<button class="gchip'+(gi===0?' on':'')+'" onclick="selGrade(\''+g+'\','+( +(base*gradeMult(g)).toFixed(2))+'  )">'+g+'</button>';
-    });
-    document.getElementById('cd-grades').innerHTML=gradeChips;
+    // The 16-chip GRADES row is gone; renderSelector() draws the status and
+    // condition boxes that replaced it.
     renderSelector();
     var tcg=c.tcgplayer&&c.tcgplayer.prices?c.tcgplayer.prices:{};
     var cm=c.cardmarket&&c.cardmarket.prices?c.cardmarket.prices:{};
@@ -4903,6 +4904,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-fa1d1f9-condfilter &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-9a01688-onecontrol &middot; click to hide</div>
 </body>
 </html>

@@ -2075,7 +2075,7 @@ function updatePrices(grade,base){
   document.getElementById('cd-lowsrc').textContent='eBay · active now';
   document.getElementById('cd-sold').textContent=`$${sold.toFixed(2)}`;
   document.getElementById('cd-soldd').textContent='2 days ago';
-  document.getElementById('cd-grade-lbl').textContent=grade;
+  document.getElementById('cd-grade-lbl').textContent=gradeText(grade);
   const pd=genPD(base,'3M');
   document.getElementById('cd-s30').textContent=`$${(pd.avg.slice(-4).reduce((a,b)=>a+b,0)/4).toFixed(2)}`;
   document.getElementById('cd-s90').textContent=`$${(pd.avg.reduce((a,b)=>a+b,0)/pd.avg.length).toFixed(2)}`;
@@ -2213,6 +2213,19 @@ function applySelection() {
   selGrade(grade, base);
 }
 
+// `PSA *` is the grader-wide mode's wire format — what buildQuery and verify
+// speak. It is not English, and it was reaching the screen: the deep-link
+// block rendered "Charizard Base Set #4 — PSA * ONLY". One helper turns a
+// grade string into something a person reads, used everywhere a grade is
+// shown rather than sent.
+function gradeText(g) {
+  var s = String(g || '');
+  if (/^raw$/i.test(s)) return 'Raw — all conditions';
+  var m = s.match(/^([A-Za-z]+)\s*\*$/);
+  if (m) return m[1] + ' — any grade';
+  return s;
+}
+
 function selGrade(grade,base){
   S.activeGrade=grade;S.activeGradeBase=base;
   // The listings panel reads LF.grade. Without this the selector changed the
@@ -2225,7 +2238,17 @@ function selGrade(grade,base){
   document.querySelectorAll('.gpt-r').forEach(r=>r.classList.remove('on'));
   document.getElementById(`gpt-${grade.replace(/[\s.]/g,'-')}`)?.classList.add('on');
   if(S.chart){const pd=genPD(base,'3M');S.chart.data.datasets[0].data=pd.avg;S.chart.data.datasets[1].data=pd.sold;S.chart.update();}
-  buildMockListings(S.currentCard,base,S.ltab);
+  // ── ONE writer for #cd-listings ──
+  // renderListingFinder() above owns this element on the LIVE tab. This call
+  // used to run unconditionally and overwrite it a moment later with
+  // buildMockListings output — the deep-link block, which is ungated by
+  // construction. So the panel showed a bare marketplace row where the gated
+  // endpoint had real rows, and whichever finished last won.
+  //
+  // That is the defect CLAUDE.md records under "the listings panel had two
+  // writers, one of them ungated", reintroduced by wiring the selector into
+  // selGrade. The other tabs still need this.
+  if (S.ltab && S.ltab !== 'live') buildMockListings(S.currentCard,base,S.ltab);
   fetchMarketPrice(S.currentCard, grade).then(function(m){
     if (m && m.marketValue > 0) renderMarketData(m);
   });
@@ -3207,7 +3230,7 @@ function buildMockListings(card,price,tab){
   }
   // LIVE — real working links
   const LDATA=[
-    {s:'se',l:'eBay',title:`${card.name} ${card.set?.name||''} #${card.number} — ${grade} ONLY`,sub:`eBay marketplace · ${isGraded?grStr+' graded':'Raw card'} · Fixed price listings`,pct:.86,sh:'+$12',d:'-14%',dc:'bd2',url:`https://www.ebay.com/sch/i.html?_nkw=${ebayQ}&_sacat=183454&LH_BIN=1&LH_ItemCondition=3000`},
+    {s:'se',l:'eBay',title:`${card.name} ${card.set?.name||''} #${card.number} — ${gradeText(grade)}`,sub:`eBay marketplace · ${isGraded?grStr+' graded':'Raw card'} · Fixed price listings`,pct:.86,sh:'+$12',d:'-14%',dc:'bd2',url:`https://www.ebay.com/sch/i.html?_nkw=${ebayQ}&_sacat=183454&LH_BIN=1&LH_ItemCondition=3000`},
     {s:'stc',l:'TCGPlayer',title:`${card.name} — ${card.set?.name||''}`,sub:'TCGPlayer marketplace · Verified sellers · Buyer protection',pct:1.02,sh:'Free ship',d:'~avg',dc:'',url:`https://www.tcgplayer.com/search/pokemon/product?q=${encQ}&view=grid`},
     {s:'sme',l:'Mercari',title:`${card.name} ${grade} ${card.set?.name||''}`,sub:'Mercari US · Private sellers · Offers available',pct:.91,sh:'+$8',d:'-9%',dc:'bd2',url:`https://www.mercari.com/search/?keyword=${encQ}`},
     // Amazon sells Pokémon TOWELS, and "Pokemon Giratina Raw NM" asked for
@@ -4904,6 +4927,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-9a01688-onecontrol &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260923-46f1d0b-onewriter &middot; click to hide</div>
 </body>
 </html>

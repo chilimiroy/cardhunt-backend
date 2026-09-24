@@ -353,23 +353,40 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
    300px image column beside everything else, so the image could never grow
    and the details sat beside the prices rather than under the card. */
 .cdwrap{display:block}
-.cdtop{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:28px;align-items:start;margin-bottom:20px}
+/* Two columns, two rows. Column one is the image's width in BOTH rows, so
+   the information panel under the image matches it; column two carries the
+   price boxes and position bar, then the graph beside the information. */
+.cdgrid{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:20px 28px;align-items:start;margin-bottom:20px}
+.cdgrid .cview{margin-bottom:0}
 .cdtop-r{min-width:0}
-/* The price boxes stack in the narrower column beside the image rather
-   than spreading across three, which is what made them unreadable there. */
-.cdtop-r .pboxes{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
-#cd-meta{margin-bottom:20px}
+.cdtop-r .pboxes{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px}
+.cd-info{align-self:start}
+.cd-chartcell{margin-bottom:0;min-width:0}
 @media(max-width:860px){
-  .cdtop{grid-template-columns:1fr}
+  .cdgrid{grid-template-columns:1fr}
   .cdtop-r .pboxes{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 }
 .cview{background:linear-gradient(145deg,var(--surface-2),var(--accent-soft));border:1px solid var(--border);border-radius:var(--r);padding:26px;text-align:center;margin-bottom:16px;box-shadow:var(--sh)}
 .cview img{max-width:100%;max-height:520px;object-fit:contain;border-radius:10px;box-shadow:0 10px 32px rgba(0,0,0,.25);margin:0 auto;transition:transform .3s}.cview img:hover{transform:scale(1.02)}
 /* ── The grading selector: a STATUS box and, beside it, a CONDITION box ── */
-.selwrap{display:grid;grid-template-columns:minmax(200px,260px) 1fr;gap:16px;
+/* Status and condition, each FULL WIDTH (Roy, T4), stacked. Both boxes
+   hold the same minimum height - two lines of chips - so Other expanding
+   onto its second line does not make the status box taller than the
+   condition box, and nothing below jumps when a grader row appears. */
+.selwrap{display:grid;grid-template-columns:1fr;gap:0;
   background:var(--w);border:1px solid var(--bd);border-radius:var(--r);
-  padding:16px 18px;margin-bottom:18px;box-shadow:var(--sh);align-items:start}
-.selbox{min-width:0}
+  padding:4px 18px;margin-bottom:18px;box-shadow:var(--sh)}
+.selbox{min-width:0;min-height:96px;padding:12px 0}
+.selbox + .selbox{border-top:1px solid var(--bd)}
+.selother{margin-top:8px;padding-left:10px;border-left:2px solid var(--accent-soft)}
+.selchip.sm{padding:4px 10px;font-size:11px}
+/* Live listing rows: two-line title, and a visible link. */
+.lrow2-t{font-size:14px;font-weight:600;line-height:1.35;overflow:hidden;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical}
+.lrow2-go{display:inline-block;margin-top:6px;padding:6px 12px;border-radius:999px;font-size:12px;
+  font-weight:700;background:var(--accent);color:var(--accent-ink);white-space:nowrap}
+.lrow2:hover .lrow2-go{background:var(--accent-strong)}
+.lrow2:hover .lrow2-t{color:var(--accent)}
 .sellbl{font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;
   letter-spacing:.07em;margin-bottom:8px}
 .selopts{display:flex;flex-wrap:wrap;gap:6px}
@@ -381,7 +398,6 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .selchip:hover:not(.on){border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 /* What the selection actually ASKS FOR. "All" is the option people misread. */
 .selnote{margin-top:10px;font-size:11px;color:var(--mu);line-height:1.6}
-@media(max-width:700px){.selwrap{grid-template-columns:1fr}}
 .gchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
 .gchip{padding:5px 11px;border:1.5px solid var(--bd);border-radius:22px;font-size:11px;font-weight:600;color:var(--mu);background:var(--w);cursor:pointer;transition:all .15s}
 .gchip.on{background:var(--pu);color:#fff;border-color:var(--pu);box-shadow:0 2px 8px rgba(124,58,237,.3)}.gchip:hover:not(.on){border-color:var(--pu);color:var(--pu)}
@@ -391,9 +407,6 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .pboxes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
 .pbox{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh)}
 .pbl{font-size:10px;color:var(--ink-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.07em;font-weight:600}.pbv{font-size:26px;font-weight:600;letter-spacing:-.01em;color:var(--money)}.pbs{font-size:12px;font-weight:500;margin-top:3px}
-.gpt{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;margin-bottom:20px;box-shadow:var(--sh)}
-.gpt-h{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;padding:10px 16px;background:var(--surface-2);border-bottom:1px solid var(--border);font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.07em}
-.gpt-r{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;padding:11px 16px;border-bottom:1px solid var(--bd);font-size:13px;cursor:pointer;transition:background .12s}.gpt-r:hover{background:var(--bg)}.gpt-r:last-child{border-bottom:none}.gpt-r.on{background:var(--tl);border-left:3px solid var(--t)}
 .chart-box{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:20px 22px;margin-bottom:20px;box-shadow:var(--sh)}
 .chart-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
 .chart-t{font-size:15px;font-weight:700;letter-spacing:-.2px}.chart-s{font-size:11px;color:var(--mu);margin-top:3px}
@@ -778,34 +791,37 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   </nav>
   <div class="content" style="padding-top:28px">
     <div class="bc"><span class="lnk" id="cd-set-lnk" onclick="SS('setdetail')">Set</span> › <span id="cd-bc">—</span></div>
-    <!-- ══ CARD PAGE LAYOUT ══ Roy's spec, top to bottom:
-           1. card image, LARGER, with the price boxes to its RIGHT,
-              and the card details BELOW the image
-           2. price graph, underneath both
-           3. the grading selector (status box + condition box)
-           4. listings, filtered by that selection
+    <!-- ══ CARD PAGE LAYOUT ══ Roy's spec (TASK.md T4), top to bottom:
+           1. card image | the three price boxes and the price position bar
+           2. information panel UNDER the image, its width | price history
+              graph beside it
+           3. status and condition, below those, full width
+           4. live listings
+         The price table is gone - Roy's call. Its rows were raw price x a
+         fixed multiplier, never measured.
 
-         Every element id below is unchanged. openCard(), selGrade(),
-         renderMarketData(), updateValueBar(), applyMeasuredGrade() and
-         renderListingFinder() all address this page by id, and a port that
-         renamed them would silently disconnect the logic from the markup —
-         which is the shape of the v36 adoption that dropped 8 functions. -->
+         Every element id the logic addresses is unchanged. openCard(),
+         selGrade(), renderMarketData(), updateValueBar() and
+         renderListingFinder() reach this page by id, and a renamed one
+         silently disconnects logic from markup. -->
     <div class="cdwrap">
       <div style="margin-bottom:14px">
         <div id="cd-name" style="font-size:30px;font-weight:800;letter-spacing:-.6px;line-height:1.1"></div>
         <div id="cd-sub" style="font-size:13px;color:var(--mu);margin-top:5px"></div>
       </div>
 
-      <!-- 1. image | price boxes -->
-      <div class="cdtop">
-        <div class="cview"><img id="cd-img" src="" alt="" style="min-height:260px"></div>
+      <div class="cdgrid">
+        <!-- 1a. the image, same size as before -->
+        <div class="cd-imgcell"><div class="cview"><img id="cd-img" src="" alt="" style="min-height:260px"></div></div>
+
+        <!-- 1b. price boxes, and the position bar beneath them -->
         <div class="cdtop-r">
           <div class="pboxes">
             <div class="pbox"><div class="pbl">Market value</div><div class="pbv" id="cd-mkt">—</div><div class="pbs up" id="cd-chg"></div></div>
             <div class="pbox"><div class="pbl">Lowest listing</div><div class="pbv" id="cd-low" style="color:var(--t)">—</div><div class="pbs" id="cd-lowsrc" style="color:var(--mu)"></div></div>
             <div class="pbox"><div class="pbl">Last sold</div><div class="pbv" id="cd-sold">—</div><div class="pbs" id="cd-soldd" style="color:var(--mu)"></div></div>
           </div>
-          <div style="background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:14px 18px;margin-bottom:16px;box-shadow:var(--sh)">
+          <div style="background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:14px 18px;box-shadow:var(--sh)">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
               <span style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em">PRICE POSITION</span>
               <div style="display:flex;gap:8px;align-items:center">
@@ -821,31 +837,28 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
               <span style="font-size:10px;color:var(--fa)">52w High: <strong id="cd-52high">&#8212;</strong></span>
             </div>
           </div>
-          <div class="gpt">
-            <div class="gpt-h"><span>Condition</span><span>Market avg</span><span>Low</span><span>High</span></div>
-            <div id="cd-gpt"></div>
-          </div>
         </div>
-      </div>
 
-      <!-- card details, BELOW the image -->
-      <div class="mbox2" id="cd-meta"></div>
+        <!-- 2a. information panel, under the image and matching its width:
+                 set, number, rarity, artist - nothing else. -->
+        <div class="mbox2 cd-info" id="cd-meta"></div>
 
-      <!-- 2. price graph, underneath the image and price boxes -->
-      <div class="chart-box">
-        <div class="chart-h">
-          <div><div class="chart-t">Price history — <span id="cd-grade-lbl">Raw NM</span></div><div class="chart-s">eBay sold · TCGPlayer · 130point · PriceCharting</div></div>
-          <div class="rchips">
-            <button class="rc" onclick="setR(this,'1M')">1M</button><button class="rc on" onclick="setR(this,'3M')">3M</button>
-            <button class="rc" onclick="setR(this,'6M')">6M</button><button class="rc" onclick="setR(this,'1Y')">1Y</button><button class="rc" onclick="setR(this,'All')">All</button>
+        <!-- 2b. price history, beside the information panel -->
+        <div class="chart-box cd-chartcell">
+          <div class="chart-h">
+            <div><div class="chart-t">Price history — <span id="cd-grade-lbl">Raw NM</span></div><div class="chart-s">eBay sold · TCGPlayer · 130point · PriceCharting</div></div>
+            <div class="rchips">
+              <button class="rc" onclick="setR(this,'1M')">1M</button><button class="rc on" onclick="setR(this,'3M')">3M</button>
+              <button class="rc" onclick="setR(this,'6M')">6M</button><button class="rc" onclick="setR(this,'1Y')">1Y</button><button class="rc" onclick="setR(this,'All')">All</button>
+            </div>
           </div>
-        </div>
-        <div class="cwrap"><canvas id="cd-chart"></canvas></div>
-        <div class="cstats">
-          <div><div style="font-size:11px;color:var(--mu)">30-day avg</div><div style="font-weight:700;font-size:14px;margin-top:3px" id="cd-s30">—</div></div>
-          <div><div style="font-size:11px;color:var(--mu)">90-day avg</div><div style="font-weight:700;font-size:14px;margin-top:3px" id="cd-s90">—</div></div>
-          <div><div style="font-size:11px;color:var(--mu)">All-time high</div><div style="font-weight:700;font-size:14px;margin-top:3px;color:var(--gr)" id="cd-ath">—</div></div>
-          <div><div style="font-size:11px;color:var(--mu)">All-time low</div><div style="font-weight:700;font-size:14px;margin-top:3px;color:var(--re)" id="cd-atl">—</div></div>
+          <div class="cwrap"><canvas id="cd-chart"></canvas></div>
+          <div class="cstats">
+            <div><div style="font-size:11px;color:var(--mu)">30-day avg</div><div style="font-weight:700;font-size:14px;margin-top:3px" id="cd-s30">—</div></div>
+            <div><div style="font-size:11px;color:var(--mu)">90-day avg</div><div style="font-weight:700;font-size:14px;margin-top:3px" id="cd-s90">—</div></div>
+            <div><div style="font-size:11px;color:var(--mu)">All-time high</div><div style="font-weight:700;font-size:14px;margin-top:3px;color:var(--gr)" id="cd-ath">—</div></div>
+            <div><div style="font-size:11px;color:var(--mu)">All-time low</div><div style="font-weight:700;font-size:14px;margin-top:3px;color:var(--re)" id="cd-atl">—</div></div>
+          </div>
         </div>
       </div>
 
@@ -2394,7 +2407,10 @@ var STATUS_CONDITIONS = {
   // than vanishing.
   Raw:   ['All', 'M', 'NM', 'LP', 'MP', 'HP', 'DMG'],
   PSA:   ['All', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1'],
-  BGS:   ['All', '10 Black Label', '10', '9.5', '9', '8.5', '8', 'lower'],
+  // '10 Pristine' is Beckett's own name for its ordinary 10 (Roy's list).
+  // It is SENT as 'BGS 10' - see selectorGrade - so the Black Label, a
+  // different and far dearer grade, is still refused from it.
+  BGS:   ['All', '10 Black Label', '10 Pristine', '9.5', '9', '8.5', '8', 'lower'],
   CGC:   ['All', '10 Pristine', '10 Gem Mint', '9.5', '9', '8.5', '8', 'lower'],
   SGC:   ['All', '10', '9.5', '9', '8.5', '8', 'lower'],
   TAG:   ['All', '10', '9', '8', 'lower'],
@@ -2403,10 +2419,20 @@ var STATUS_CONDITIONS = {
 
 // "Other" offers the remaining graders cardmatch knows about, so the list
 // cannot fall behind the gate's.
+// Roy's status row is Raw · PSA · BGS · CGC · Other, so SGC and TAG - which
+// had buttons of their own - lead the Other list, each keeping its own
+// condition scale in STATUS_CONDITIONS.
+var TOP_STATUSES = ['Raw', 'PSA', 'BGS', 'CGC', 'Other'];
 function otherGraders() {
   var known = ['PSA', 'BGS', 'CGC', 'SGC', 'TAG'];
   var all = (CM && CM.GRADERS_UNAMBIGUOUS) ? CM.GRADERS_UNAMBIGUOUS : ['BVG', 'CSG', 'AGS', 'HGA'];
-  return all.filter(function (g) { return known.indexOf(g) < 0 && g !== 'AI GRADE'; });
+  return ['SGC', 'TAG'].concat(all.filter(function (g) { return known.indexOf(g) < 0 && g !== 'AI GRADE'; }));
+}
+// The condition scale for the current status. Under Other it is the chosen
+// grader's own scale where one is defined (SGC, TAG), the generic one if not.
+function conditionsFor(status, otherGrader) {
+  if (status === 'Other') return STATUS_CONDITIONS[otherGrader] || STATUS_CONDITIONS.Other;
+  return STATUS_CONDITIONS[status] || ['All'];
 }
 
 var SEL = { status: 'Raw', condition: 'All', otherGrader: null };
@@ -2420,24 +2446,38 @@ function selectorGrade() {
   var grader = (st === 'Other') ? (SEL.otherGrader || otherGraders()[0] || 'BVG') : st;
   if (cond === 'All')   return grader + ' *';       // grader-wide, one query
   if (cond === 'lower') return grader + ' *';       // see note in renderSelector
+  if (grader === 'BGS' && cond === '10 Pristine') return 'BGS 10';   // a label, not a qualifier
   return grader + ' ' + cond;
 }
 
 function renderSelector() {
   var host = document.getElementById('cd-selector');
   if (!host) return;
-  var statuses = ['Raw', 'PSA', 'BGS', 'CGC', 'SGC', 'TAG', 'Other'];
-  var conds = STATUS_CONDITIONS[SEL.status] || ['All'];
+  var otherG = SEL.otherGrader || otherGraders()[0];
+  var conds = conditionsFor(SEL.status, otherG);
 
   var h = '<div class="selwrap">';
 
+  // ── STATUS ── one line; Other EXPANDS DOWNWARD onto a second line of
+  // graders beneath the first rather than replacing it, so the five
+  // statuses never move while a grader is being chosen.
   h += '<div class="selbox"><div class="sellbl">Status</div><div class="selopts">';
-  statuses.forEach(function (s) {
+  TOP_STATUSES.forEach(function (s) {
     h += '<button class="selchip' + (SEL.status === s ? ' on' : '') + '" '
-      + 'onclick="setStatus(\'' + s + '\')">' + s + '</button>';
+      + 'onclick="setStatus(&quot;' + s + '&quot;)">' + s + (s === 'Other' ? ' &#9662;' : '') + '</button>';
   });
-  h += '</div></div>';
+  h += '</div>';
+  if (SEL.status === 'Other') {
+    h += '<div class="selopts selother">';
+    otherGraders().forEach(function (g) {
+      h += '<button class="selchip sm' + (otherG === g ? ' on' : '') + '" '
+        + 'onclick="setOtherGrader(&quot;' + g + '&quot;)">' + g + '</button>';
+    });
+    h += '</div>';
+  }
+  h += '</div>';
 
+  // ── CONDITION ── every option visible, no "more" button.
   h += '<div class="selbox"><div class="sellbl">Condition</div><div class="selopts">';
   conds.forEach(function (c) {
     h += '<button class="selchip' + (SEL.condition === c ? ' on' : '') + '" '
@@ -2445,18 +2485,10 @@ function renderSelector() {
   });
   h += '</div>';
 
-  if (SEL.status === 'Other') {
-    h += '<div class="sellbl" style="margin-top:10px">Grader</div><div class="selopts">';
-    otherGraders().forEach(function (g) {
-      h += '<button class="selchip' + ((SEL.otherGrader || otherGraders()[0]) === g ? ' on' : '') + '" '
-        + 'onclick="setOtherGrader(\'' + g + '\')">' + g + '</button>';
-    });
-    h += '</div>';
-  }
-
   // Say what the selection ASKS FOR. "All" is the one people misread, and
   // a grader-wide query is genuinely different from a specific grade.
   var note = '';
+  var who = SEL.status === 'Other' ? otherG : SEL.status;   // name the grader, not 'Other'
   if (SEL.status === 'Raw') {
     note = SEL.condition === 'All'
       ? 'Every ungraded listing. No slabs.'
@@ -2465,16 +2497,16 @@ function renderSelector() {
         + '<strong>seller-stated</strong> claim, not a measurement. Listings whose '
         + 'condition cannot be read are grouped as <em>unstated</em>, never dropped.';
   } else if (SEL.condition === 'All') {
-    note = 'Every ' + liveEsc(SEL.status) + ' slab at any grade &mdash; and no other grader, and no raw. '
+    note = 'Every ' + liveEsc(who) + ' slab at any grade &mdash; and no other grader, and no raw. '
       + 'One query, not one per grade.';
   } else if (SEL.condition === 'lower') {
-    note = 'Asked as a grader-wide ' + liveEsc(SEL.status) + ' search; grades above 8 are '
+    note = 'Asked as a grader-wide ' + liveEsc(who) + ' search; grades above 8 are '
       + 'filtered out of the results below.';
   } else {
-    note = 'Only ' + liveEsc(SEL.status) + ' ' + liveEsc(SEL.condition) + '.';
+    note = 'Only ' + liveEsc(who) + ' ' + liveEsc(SEL.condition) + '.';
     if (SEL.condition === '10 Black Label') note += ' An ordinary BGS 10 is a different grade and is refused.';
-    if (SEL.condition === '10 Pristine')    note += ' An ordinary CGC 10 Gem Mint is a different grade and is refused.';
-    if (SEL.condition === '10' && SEL.status === 'BGS') note += ' Black Labels are refused &mdash; they sell for several times a regular 10.';
+    if (SEL.condition === '10 Pristine' && who === 'CGC') note += ' An ordinary CGC 10 Gem Mint is a different grade and is refused.';
+    if (SEL.condition === '10 Pristine' && who === 'BGS') note += ' Beckett&rsquo;s ordinary 10. Black Labels are refused &mdash; they sell for several times a regular 10.';
   }
   h += '<div class="selnote">' + note + '</div>';
   h += '</div></div>';
@@ -2490,7 +2522,13 @@ function setStatus(s) {
   applySelection();
 }
 function setCondition(c) { SEL.condition = c; renderSelector(); applySelection(); }
-function setOtherGrader(g) { SEL.otherGrader = g; renderSelector(); applySelection(); }
+function setOtherGrader(g) {
+  SEL.otherGrader = g;
+  // SGC and TAG have scales of their own; a condition the new grader's
+  // scale does not offer would be selected while invisible.
+  if (conditionsFor('Other', g).indexOf(SEL.condition) < 0) SEL.condition = 'All';
+  renderSelector(); applySelection();
+}
 
 // One place that turns the selection into everything downstream.
 function applySelection() {
@@ -2521,8 +2559,6 @@ function selGrade(grade,base){
   if (S.currentCard) renderListingFinder(S.currentCard);
   updatePrices(grade,base);
   document.querySelectorAll('.gchip').forEach(b=>b.classList.toggle('on',b.textContent===grade));
-  document.querySelectorAll('.gpt-r').forEach(r=>r.classList.remove('on'));
-  document.getElementById(`gpt-${grade.replace(/[\s.]/g,'-')}`)?.classList.add('on');
   if(S.chart){const pd=genPD(base,'3M');S.chart.data.datasets[0].data=pd.avg;S.chart.data.datasets[1].data=pd.sold;S.chart.update();}
   // ── ONE writer for #cd-listings ──
   // renderListingFinder() above owns this element on the LIVE tab. This call
@@ -2570,7 +2606,6 @@ async function openCard(id){
   document.getElementById('cd-name').textContent='Loading…';
   document.getElementById('cd-sub').textContent='';
   document.getElementById('cd-meta').innerHTML='';
-  document.getElementById('cd-gpt').innerHTML='';
   document.getElementById('cd-listings').innerHTML='<div style="padding:48px;text-align:center;color:var(--mu)"><div class="spin" style="width:34px;height:34px;border:3px solid var(--bd);border-top-color:var(--t);border-radius:50%;animation:sp .75s linear infinite;margin:0 auto 12px"></div></div>';
   try{
     // Check card cache first — but ONLY if what is cached came from our
@@ -2624,47 +2659,17 @@ async function openCard(id){
     document.getElementById('cd-bc').textContent=nameWithEnPlain(c.name, c.nameEn);
     document.getElementById('cd-img').src=c.images&&c.images.large?c.images.large:(c.images&&c.images.small?c.images.small:'');
     document.getElementById('cd-name').textContent=c.name;
-    document.getElementById('cd-sub').innerHTML=( c.set&&c.set.name?c.set.name:'')+' · #'+c.number+'/'+(c.set&&c.set.total?c.set.total:'?')+' · '+(c.set&&c.set.releaseDate?c.set.releaseDate.split('/')[0]:'')+' · <span class="b bg2">'+(c.rarity||'?')+'</span>';
+    document.getElementById('cd-sub').innerHTML=( c.set&&c.set.name?c.set.name:'')+' · #'+c.number+'/'+(c.set&&c.set.total?c.set.total:'?')+' · '+(c.set&&c.set.releaseDate?String(c.set.releaseDate).slice(0,4):'')+' · <span class="b bg2">'+(c.rarity||'?')+'</span>';
     var base=getBase(c);S.activeGradeBase=base;
     updateCardPrices('Raw NM',base);
-    var gptRows='';
-    GRADES.forEach(function(g){
-      var m2=gradeMult(g),avg=+(base*m2).toFixed(2),low=+(avg*.78).toFixed(2),hi=+(avg*1.28).toFixed(2);
-      gptRows+='<div class="gpt-r'+(g==='Raw NM'?' on':'')+'" id="gpt-'+g.replace(/[\s.]/g,'-')+'" onclick="selGrade(\''+g+'\','+avg+')">'
-        +'<span style="font-weight:600">'+g+'</span>'
-        +'<span style="font-weight:700">$'+avg.toLocaleString()+'</span>'
-        +'<span style="color:var(--mu)">$'+low.toLocaleString()+'</span>'
-        +'<span style="color:var(--mu)">$'+hi.toLocaleString()+'</span>'
-        +'</div>';
-    });
-    // Every row above is raw price x a multiplier. Real premiums run from
-    // ~3x on a modern common to 40x+ on a vintage chase card, so this table
-    // is at its worst exactly where the money is. It says what it is until a
-    // measured median replaces the row (see applyMeasuredGrade).
-    document.getElementById('cd-gpt').innerHTML=gptRows
-      + '<div style="font-size:10px;color:var(--fa);padding:6px 2px 0">'
-      + 'Estimated from the raw price &mdash; not measured from sales. '
-      + 'Open a grade to see what is actually listed.</div>';
+    // The price table that sat here is gone (Roy, TASK.md T4). Every row was
+    // the raw price x a fixed multiplier - the same PSA 10 premium on every
+    // card - where real premiums run from ~3x on a modern common to 40x+ on
+    // vintage. What a grade goes for comes from the gated listings below.
     // The 16-chip GRADES row is gone; renderSelector() draws the status and
     // condition boxes that replaced it.
     renderSelector();
-    var tcg=c.tcgplayer&&c.tcgplayer.prices?c.tcgplayer.prices:{};
-    var cm=c.cardmarket&&c.cardmarket.prices?c.cardmarket.prices:{};
-    var metaRows=[
-      ['Set',c.set&&c.set.name?c.set.name:'—'],
-      ['Number','#'+c.number+'/'+(c.set&&c.set.total?c.set.total:'?')],
-      ['Rarity',c.rarity||'—'],
-      ['Types',c.types?c.types.join(', '):'—'],
-      ['HP',c.hp||'—'],
-      ['Artist',c.artist||'—'],
-      ['TCGPlayer',tcg.holofoil&&tcg.holofoil.market?'$'+tcg.holofoil.market.toFixed(2):(tcg.normal&&tcg.normal.market?'$'+tcg.normal.market.toFixed(2):'—')],
-      ['Cardmarket',cm.averageSellPrice?'€'+cm.averageSellPrice.toFixed(2):'—'],
-    ];
-    var metaHTML='';
-    metaRows.forEach(function(row){
-      metaHTML+='<div class="mr2"><span class="ml2">'+row[0]+'</span><span class="mv2">'+row[1]+'</span></div>';
-    });
-    document.getElementById('cd-meta').innerHTML=metaHTML;
+    renderCardInfo(c);
     try { renderListingFinder(c); }
     catch (err) { console.warn('listing finder failed:', err.message); }
     // Pull real market data in the background
@@ -2680,6 +2685,62 @@ async function openCard(id){
   }
 }
 
+
+// ── The information panel: set, number, rarity, artist — nothing else ──
+// Roy's list. The artist is not in our database (no column on `cards`), so
+// it is read from TCGdex, the source the catalogue itself was built from,
+// by the card's own id. TCGdex numbers some sets zero-padded (sv10-001) and
+// some not (base1-4), so both are tried. If neither answers, the row says
+// the artist is not recorded rather than showing a bare dash that reads as
+// "this card has no artist".
+function renderCardInfo(c) {
+  var host = document.getElementById('cd-meta');
+  if (!host || !c) return;
+  var row = function (k, v) {
+    return '<div class="mr2"><span class="ml2">' + k + '</span><span class="mv2">' + v + '</span></div>';
+  };
+  host.innerHTML =
+      row('Set', liveEsc(c.set && (c.set.nameEn || c.set.name) || '—'))
+    + row('Number', '#' + liveEsc(String(c.number || '?')) + '/' + (c.set && c.set.total ? c.set.total : '?'))
+    + row('Rarity', liveEsc(c.rarity || '—'))
+    // The id is written out literally so the element-id check can see it.
+    + '<div class="mr2"><span class="ml2">Artist</span><span class="mv2" id="cd-artist">'
+    + '<span style="color:var(--fa);font-weight:500">looking up&hellip;</span></span></div>';
+  fetchArtist(c).then(function (name) {
+    // A slow answer for the previous card must not land on this one.
+    if (!S.currentCard || S.currentCard.id !== c.id) return;
+    var el = document.getElementById('cd-artist');
+    if (!el) return;
+    el.innerHTML = name
+      ? liveEsc(name) + ' <span style="color:var(--fa);font-weight:500;font-size:10px">via TCGdex</span>'
+      : '<span style="color:var(--fa);font-weight:500">not recorded</span>';
+  });
+}
+
+var ARTIST_CACHE = {};
+async function fetchArtist(c) {
+  if (ARTIST_CACHE[c.id] !== undefined) return ARTIST_CACHE[c.id];
+  var m = String(c.id || '').match(/^(en|ja|zh-tw|zh-cn)-(.+)-([^-]+)$/);
+  if (!m) return (ARTIST_CACHE[c.id] = null);
+  var lang = m[1], set = m[2], num = m[3];
+  var nums = [num];
+  if (/^[0-9]+$/.test(num)) {
+    var padded = ('000' + num).slice(-3);
+    if (padded !== num) nums.push(padded);
+    var bare = String(parseInt(num, 10));
+    if (nums.indexOf(bare) < 0) nums.push(bare);
+  }
+  for (var i = 0; i < nums.length; i++) {
+    try {
+      var r = await fetch('https://api.tcgdex.net/v2/' + lang + '/cards/'
+        + encodeURIComponent(set + '-' + nums[i]));
+      if (!r.ok) continue;
+      var d = await r.json();
+      if (d && d.illustrator) return (ARTIST_CACHE[c.id] = d.illustrator);
+    } catch (e) { /* unreachable - fall through to "not recorded" */ }
+  }
+  return (ARTIST_CACHE[c.id] = null);
+}
 
 // ── REAL MARKET PRICE from scraper backend ────────────────────
 async function fetchMarketPrice(card, grade) {
@@ -2762,25 +2823,9 @@ function renderMarketData(m) {
       + ' confidence</span> <span style="color:var(--fa);font-size:11px">' + (m.basis || '')
       + ' (name match)</span>';
   }
-  // Graded prices from PriceCharting
-  if (m.graded) {
-    var rows = document.querySelectorAll('.gpt-r');
-    var map = {'PSA 9':'Grade 9','PSA 10':'PSA 10','PSA 8':'Grade 8','PSA 7':'Grade 7','Raw NM':'Raw NM'};
-    for (var i = 0; i < rows.length; i++) {
-      var label = rows[i].querySelector('span');
-      if (!label) continue;
-      var g = label.textContent.trim();
-      var src = map[g];
-      if (src && m.graded[src] > 0) {
-        var cells = rows[i].querySelectorAll('span');
-        if (cells[1]) {
-          cells[1].textContent = fmtCurrency(m.graded[src]);
-          cells[1].style.color = 'var(--gr)';
-          cells[1].title = 'Live PriceCharting data';
-        }
-      }
-    }
-  }
+  // m.graded (PriceCharting, by name) used to be pasted into the price
+  // table's rows. The table is gone (TASK.md T4), so there is nowhere for
+  // it to go; it is still in the response for any future use.
   // ── NOT the listings panel ────────────────────────────────────
   // This used to call renderRealListings(m.listings) and write into
   // #cd-listings — the same element renderListingFinder() owns. Two writers,
@@ -3143,20 +3188,22 @@ function liveRow(l){
   var when = l.live ? (l.listingType === 'auction' ? liveEndsIn(l.endsAt) : 'buy it now') : 'ended';
   var bids = (l.bids != null && l.bids > 0) ? ' \u00b7 ' + l.bids + ' bid' + (l.bids === 1 ? '' : 's') : '';
   return '<a href="' + liveEsc(l.url) + '" target="_blank" rel="noopener" '
-    + 'style="display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--bd);'
+    + 'class="lrow2" style="display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--bd);'
     + 'text-decoration:none;color:inherit'
     + (l.suspect ? ';opacity:.55;background:rgba(245,158,11,.06)' : '') + '">'
+    // Roy, T4: a larger thumbnail and a larger link. 72x100 is big enough
+    // to tell a slab from a raw card, and a PSA label from a BGS one.
     + (l.imageUrl
         ? '<img src="' + liveEsc(l.imageUrl) + '" loading="lazy" alt="" '
-          + 'style="width:36px;height:50px;object-fit:cover;border-radius:4px;background:var(--bd);flex-shrink:0">'
-        : '<div style="width:36px;height:50px;border-radius:4px;background:var(--bd);flex-shrink:0"></div>')
+          + 'style="width:72px;height:100px;object-fit:cover;border-radius:6px;background:var(--bd);flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15)">'
+        : '<div style="width:72px;height:100px;border-radius:6px;background:var(--bd);flex-shrink:0"></div>')
     + '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;flex-shrink:0;'
     + (l.live ? 'background:#DCFCE7;color:#166534' : 'background:#F1F5F9;color:#64748B') + '">'
     + liveEsc(l.sourceLabel || l.source) + '</span>'
     + '<div style="flex:1;min-width:0">'
-    + '<div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+    + '<div class="lrow2-t">'
     + liveEsc(l.title) + '</div>'
-    + '<div style="font-size:10px;color:var(--mu)">' + liveEsc(l.condition) + ' \u00b7 '
+    + '<div style="font-size:11px;color:var(--mu);margin-top:3px">' + liveEsc(l.condition) + ' \u00b7 '
     + liveEsc(when) + bids + (l.seller ? ' \u00b7 ' + liveEsc(l.seller) : '')
     // A shop's asking price is not a sale and not a bid. The row says so
     // itself: it can be read far from anything else that would explain it,
@@ -3168,8 +3215,11 @@ function liveRow(l){
     + '</div>'
     + liveSuspectNote(l) + '</div>'
     + '<div style="text-align:right;flex-shrink:0">'
-    + '<div style="font-size:14px;font-weight:800">' + landed + '</div>'
-    + '<div style="font-size:10px;color:var(--mu)">' + liveEsc(ship) + orig + '</div></div></a>';
+    + '<div style="font-size:17px;font-weight:800">' + landed + '</div>'
+    + '<div style="font-size:10px;color:var(--mu)">' + liveEsc(ship) + orig + '</div>'
+    // The whole row is the link; this makes it LOOK like one, at a size
+    // that is easy to hit.
+    + '<span class="lrow2-go">View listing &#8599;</span></div></a>';
 }
 
 // What the outlier check did — including when it did NOT run. "Not applied,
@@ -3337,7 +3387,9 @@ async function renderLiveListings(card, grade){
   // links below it, and the panel has to say which is which.
   var selLabel = SEL.status === 'Raw'
     ? ('RAW' + (SEL.condition === 'All' ? ' — ALL' : ' — ' + SEL.condition))
-    : (SEL.status + ' — ' + SEL.condition).toUpperCase();
+    // Under Other, name the grader: "OTHER — ALL" did not say which slabs.
+    : ((SEL.status === 'Other' ? (SEL.otherGrader || otherGraders()[0]) : SEL.status)
+       + ' — ' + SEL.condition).toUpperCase();
   var head = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd)">'
     + '<div style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em;margin-bottom:8px">'
     + 'FOR SALE NOW &mdash; ' + liveEsc(selLabel)
@@ -5397,6 +5449,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-8935262-setlist &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-d927505-cardpage &middot; click to hide</div>
 </body>
 </html>

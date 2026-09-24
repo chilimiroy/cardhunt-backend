@@ -1043,19 +1043,44 @@ app.post('/api/portfolio', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET /api/history/:cardId — measured, ungraded price observations, one
+// series per market.
+//
+// This used to average every row for the card per day, estimates included
+// and across sources — a tcgplayer_market row, a 1st Edition row and an
+// estimate on the same day became one "price". Nothing called it, and the
+// card page drew a SYNTHETIC curve instead (the current price times a fixed
+// shape, plus Math.random() for "sold"). The card page now draws this, so
+// it has to be something a buyer can rely on:
+//   * estimates never appear;
+//   * one series per source + edition + variant — editions are separate
+//     markets, and averaging across sources manufactures movement;
+//   * `series` names each one, so the page can draw the card's own market.
+// No date limit: price_history starts 2026-07-27, and "All" means all.
 app.get('/api/history/:cardId', async (req, res) => {
-  if (!db) return res.json({ data: [] });
+  if (!db) return res.json({ data: [], series: [] });
   try {
     const rows = await db.query(`
       SELECT DATE_TRUNC('day', recorded_at) AS date,
-             AVG(price_usd) AS avg_price, MIN(price_usd) AS low,
-             MAX(price_usd) AS high, COUNT(*) AS sales
+             -- yahoojp_N carries its sample size in the NAME (yahoojp_3,
+             -- yahoojp_21). One market, so one series; left apart, every
+             -- Yahoo observation became a single-point series of its own.
+             CASE WHEN source ~ '^yahoojp_[0-9]+$' THEN 'yahoojp' ELSE source END AS source,
+             COALESCE(edition, '') AS edition, COALESCE(variant, '') AS variant,
+             AVG(price_usd)::float AS price, COUNT(*)::int AS n
       FROM price_history
-      WHERE card_api_id=$1 AND grade IS NULL
-        AND recorded_at >= NOW() - INTERVAL '1 year'
-      GROUP BY 1 ORDER BY 1`, [req.params.cardId]);
-    res.json({ data: rows.rows });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+      WHERE card_api_id = $1 AND grade IS NULL
+        AND source NOT LIKE 'estimate%' AND price_usd > 0
+      GROUP BY 1, 2, 3, 4 ORDER BY 1`, [req.params.cardId]);
+    const series = {};
+    for (const r of rows.rows) {
+      const key = [r.source, r.edition, r.variant].filter(Boolean).join(' · ');
+      (series[key] = series[key] || { key, source: r.source, edition: r.edition || null,
+        variant: r.variant || null, points: [] }).points.push({ date: r.date, price: r.price, n: r.n });
+    }
+    res.json({ cardId: req.params.cardId, series: Object.values(series),
+      note: 'Measured, ungraded prices only. Estimates are never included.' });
+  } catch (err) { res.status(500).json({ error: err.message, series: [] }); }
 });
 
 // ══════════════════════════════════════════════════════════════

@@ -412,6 +412,8 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .chart-t{font-size:15px;font-weight:700;letter-spacing:-.2px}.chart-s{font-size:11px;color:var(--mu);margin-top:3px}
 .rchips{display:flex;gap:4px}.rc{padding:4px 11px;border:1.5px solid var(--bd);border-radius:22px;font-size:11px;font-weight:600;color:var(--mu);background:var(--w);cursor:pointer;transition:all .15s}.rc.on{background:var(--t);color:#fff;border-color:var(--t)}
 .cwrap{position:relative;width:100%;height:178px}
+/* Said in place of a line when there are not two recorded prices to join. */
+.cmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:0 20px;font-size:12.5px;color:var(--ink-2);border:1px dashed var(--bd);border-radius:8px}
 .cstats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:14px;padding-top:14px;border-top:1px solid var(--bd)}
 .lbox{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
 .lhdr{padding:14px 18px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
@@ -826,15 +828,14 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
               <span style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em">PRICE POSITION</span>
               <div style="display:flex;gap:8px;align-items:center">
                 <span id="cd-trend-label" style="font-size:12px;font-weight:600;color:var(--gr)">&#8212;</span>
-                <button class="btn sm" id="cview-btn" onclick="toggleCondChart()" style="font-size:11px;padding:3px 9px">&#128202; All conditions</button>
               </div>
             </div>
             <div style="height:6px;background:var(--bg);border-radius:6px;overflow:hidden">
               <div id="cd-trend-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--t),var(--gr));border-radius:6px;transition:width .6s ease"></div>
             </div>
             <div style="display:flex;justify-content:space-between;margin-top:8px">
-              <span style="font-size:10px;color:var(--fa)">52w Low: <strong id="cd-52low">&#8212;</strong></span>
-              <span style="font-size:10px;color:var(--fa)">52w High: <strong id="cd-52high">&#8212;</strong></span>
+              <span style="font-size:10px;color:var(--fa)">Recorded low: <strong id="cd-52low">&#8212;</strong></span>
+              <span style="font-size:10px;color:var(--fa)">Recorded high: <strong id="cd-52high">&#8212;</strong></span>
             </div>
           </div>
         </div>
@@ -846,7 +847,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
         <!-- 2b. price history, beside the information panel -->
         <div class="chart-box cd-chartcell">
           <div class="chart-h">
-            <div><div class="chart-t">Price history — <span id="cd-grade-lbl">Raw NM</span></div><div class="chart-s">eBay sold · TCGPlayer · 130point · PriceCharting</div></div>
+            <div><div class="chart-t">Price history — <span id="cd-grade-lbl">Raw NM</span></div><div class="chart-s" id="cd-chart-src">Loading recorded prices…</div></div>
             <div class="rchips">
               <button class="rc" onclick="setR(this,'1M')">1M</button><button class="rc on" onclick="setR(this,'3M')">3M</button>
               <button class="rc" onclick="setR(this,'6M')">6M</button><button class="rc" onclick="setR(this,'1Y')">1Y</button><button class="rc" onclick="setR(this,'All')">All</button>
@@ -856,8 +857,8 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
           <div class="cstats">
             <div><div style="font-size:11px;color:var(--mu)">30-day avg</div><div style="font-weight:700;font-size:14px;margin-top:3px" id="cd-s30">—</div></div>
             <div><div style="font-size:11px;color:var(--mu)">90-day avg</div><div style="font-weight:700;font-size:14px;margin-top:3px" id="cd-s90">—</div></div>
-            <div><div style="font-size:11px;color:var(--mu)">All-time high</div><div style="font-weight:700;font-size:14px;margin-top:3px;color:var(--gr)" id="cd-ath">—</div></div>
-            <div><div style="font-size:11px;color:var(--mu)">All-time low</div><div style="font-weight:700;font-size:14px;margin-top:3px;color:var(--re)" id="cd-atl">—</div></div>
+            <div><div style="font-size:11px;color:var(--mu)">Highest recorded</div><div style="font-weight:700;font-size:14px;margin-top:3px;color:var(--gr)" id="cd-ath">—</div></div>
+            <div><div style="font-size:11px;color:var(--mu)">Lowest recorded</div><div style="font-weight:700;font-size:14px;margin-top:3px;color:var(--re)" id="cd-atl">—</div></div>
           </div>
         </div>
       </div>
@@ -1620,7 +1621,7 @@ function gradeMult(g){
 }
 
 const GRADES=['Raw NM','Raw LP','Raw MP','PSA 5','PSA 6','PSA 7','PSA 8','PSA 9','PSA 10','CGC 8','CGC 9','CGC 9.5','CGC 10','BGS 8','BGS 9','BGS 9.5'];
-const PD={'1M':{l:['W1','W2','W3','W4'],f:[.78,.83,.9,.97]},'3M':{l:['Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'],f:[.73,.78,.84,.81,.88,.93,.97,.99,1]},'6M':{l:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan'],f:[.81,.88,.93,.97,.99,1,1.03,1.01,1.04,1.05,1.02,1,1]},'1Y':{l:['J','F','M','A','M','J','J','A','S','O','N','D','J','F','M','A','M','J'],f:[.67,.7,.71,.73,.78,.84,.81,.88,.93,.97,.99,1,1.02,1.03,1,.99,1,1]},'All':{l:['2020','2021','2022','2023','2024','2025'],f:[.21,.51,.71,.82,1,1.03]}};
+// const PD (the fixed price-history curve genPD drew) is gone with it.
 
 function mockP(rarity, cardId, cardName, cardNumber, setTotal, setRelease) {
   // This function WAS the estimator, and it was the only one with a vintage
@@ -1767,7 +1768,7 @@ function getBase(c) {
   return mockP(c.rarity, c.id, c.name, c.number, (c.set && c.set.total), (c.set && (c.set.releaseDate || c.set.release)));
 }
 
-function genPD(base,range){const d=PD[range]||PD['3M'];return{labels:d.l,avg:d.f.map(f=>+(f*base).toFixed(2)),sold:d.f.map(f=>+((f*base*(0.94+Math.random()*.09)).toFixed(2)))};}
+// genPD() - the synthetic price curve - is gone; the card page draws /api/history.
 function fmtD(d){if(!d)return'';const p=(d+'').replace(/-/g,'/').split('/');return['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]-1]+' '+p[0];}
 function fmtP(n){return n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+n.toFixed(2);}
 
@@ -2356,8 +2357,18 @@ function applyFilters(){
 }
 
 function updateCardPrices(grade,base){ return updatePrices(grade,base); }
+// ── The three boxes say what is measured, or say nothing ──
+// This used to write "Lowest listing" as base x 0.74 labelled "eBay · active
+// now", "Last sold" as base x (0.9 + Math.random()*0.1) labelled "2 days
+// ago", and a change of (Math.random()-.3)*16 % "this month" - so the same
+// card showed a different last sale on every visit. Each box now starts
+// empty and is filled only by something real:
+//   Lowest listing  <- the cheapest GATED live listing (setLowestFromListings),
+//                      or /api/market's by-name lowest, labelled ungated
+//   Last sold       <- /api/market's recent sales, labelled by name
+//   the badge       <- renderMarketData's collector-number match
+// and the graph and its stats <- /api/history (loadHistory).
 function updatePrices(grade,base){
-  const low=+(base*.74).toFixed(2),sold=+(base*(0.9+Math.random()*.1)).toFixed(2),chg=((Math.random()-.3)*16).toFixed(1);
   // Say whether the headline number is measured or derived. The set tile has
   // always shown `est`; the card page showed the same number bare, so the one
   // screen a buyer actually decides on was the one that did not say.
@@ -2368,18 +2379,38 @@ function updatePrices(grade,base){
     + (priceIsReal ? '' : '<span style="font-size:11px;color:var(--fa);margin-left:6px;'
         + 'font-weight:600" title="Estimated from rarity and set age — no market '
         + 'data for this card yet">est</span>');
-  document.getElementById('cd-chg').textContent=`${chg>0?'↑':'↓'} ${Math.abs(chg)}% this month`;
-  document.getElementById('cd-chg').className=`pbs ${chg>0?'up':'dn'}`;
-  document.getElementById('cd-low').textContent=`$${low.toFixed(2)}`;
-  document.getElementById('cd-lowsrc').textContent='eBay · active now';
-  document.getElementById('cd-sold').textContent=`$${sold.toFixed(2)}`;
-  document.getElementById('cd-soldd').textContent='2 days ago';
-  document.getElementById('cd-grade-lbl').textContent=gradeText(grade);
-  const pd=genPD(base,'3M');
-  document.getElementById('cd-s30').textContent=`$${(pd.avg.slice(-4).reduce((a,b)=>a+b,0)/4).toFixed(2)}`;
-  document.getElementById('cd-s90').textContent=`$${(pd.avg.reduce((a,b)=>a+b,0)/pd.avg.length).toFixed(2)}`;
-  document.getElementById('cd-ath').textContent=`$${Math.max(...pd.avg).toFixed(2)}`;
-  document.getElementById('cd-atl').textContent=`$${Math.min(...pd.avg).toFixed(2)}`;
+  // Lowest listing depends on the grade, so a grade change clears it until
+  // that grade's gated listings answer.
+  var lo = document.getElementById('cd-low');
+  lo.textContent = '—'; lo.removeAttribute('data-gated');
+  document.getElementById('cd-lowsrc').textContent = 'checking ' + gradeText(grade) + ' listings…';
+  if (!S._soldShown) {
+    document.getElementById('cd-sold').textContent = '—';
+    document.getElementById('cd-soldd').textContent = 'no sold data for this card';
+  }
+}
+
+// The cheapest GATED live listing at the selected grade — the same number
+// the listings panel leads with, so the box and the panel cannot disagree.
+function setLowestFromListings(d, grade) {
+  var lo = document.getElementById('cd-low');
+  var ls = document.getElementById('cd-lowsrc');
+  if (!lo || !ls) return;
+  lo.setAttribute('data-gated', '1');
+  if (d && d.cheapestLive != null) {
+    lo.textContent = fmtCurrency(Number(d.cheapestLive));
+    ls.textContent = gradeText(grade) + ' · checked listing, landed';
+  } else {
+    // "None live" and "a marketplace did not answer" are different facts.
+    var src = (d && d.sources) || {};
+    var silent = Object.keys(src).filter(function (k) {
+      return ['error', 'unconfigured', 'quota', 'disabled'].indexOf(src[k].status) >= 0;
+    });
+    lo.textContent = '—';
+    ls.textContent = silent.length
+      ? 'no checked listing — ' + silent.join(', ') + ' did not answer'
+      : 'no checked ' + gradeText(grade) + ' listing live';
+  }
 }
 
 // ══ THE GRADING SELECTOR ══════════════════════════════════════
@@ -2559,7 +2590,9 @@ function selGrade(grade,base){
   if (S.currentCard) renderListingFinder(S.currentCard);
   updatePrices(grade,base);
   document.querySelectorAll('.gchip').forEach(b=>b.classList.toggle('on',b.textContent===grade));
-  if(S.chart){const pd=genPD(base,'3M');S.chart.data.datasets[0].data=pd.avg;S.chart.data.datasets[1].data=pd.sold;S.chart.update();}
+  // The graph is the raw card's recorded history whatever the grade; the
+  // redraw only updates its caption to say so.
+  if (S.currentCard) initChart(base, S.activeRange);
   // ── ONE writer for #cd-listings ──
   // renderListingFinder() above owns this element on the LIVE tab. This call
   // used to run unconditionally and overwrite it a moment later with
@@ -2598,6 +2631,7 @@ async function openCard(id){
   SS('card');
   if(S.chart){S.chart.destroy();S.chart=null;}
   S.activeGrade='Raw NM';S.watching=false;
+  S._soldShown=false;
   // A new card starts at Raw + All, and the selector is redrawn so it never
   // shows the previous card's selection against this card's listings.
   SEL.status='Raw'; SEL.condition='All'; SEL.otherGrader=null;
@@ -2676,7 +2710,6 @@ async function openCard(id){
     fetchMarketPrice(c, S.activeGrade).then(function(m){
       if (m && m.marketValue > 0) renderMarketData(m);
     });
-    condChartMode=false;var btn2=document.getElementById('cview-btn');if(btn2){btn2.textContent='📊 All conditions';btn2.style.background='';btn2.style.borderColor='';}
     updateValueBar(base);
     setTimeout(function(){initChart(base,'3M');},80);
   }catch(err){
@@ -2795,8 +2828,11 @@ function renderMarketData(m) {
   // gate, so this is "cheapest thing called this in this set", not this
   // card. Say which, rather than presenting it as the card's own floor —
   // the gated per-card listings are in the panel below.
-  if (m.lowestActive > 0) {
-    var lo = document.getElementById('cd-low');
+  // A gated per-card lowest (setLowestFromListings) always wins; this one
+  // may only fill an empty box.
+  var loBox = document.getElementById('cd-low');
+  if (m.lowestActive > 0 && !(loBox && loBox.getAttribute('data-gated'))) {
+    var lo = loBox;
     var ls = document.getElementById('cd-lowsrc');
     if (lo) lo.textContent = fmtCurrency(m.lowestActive);
     if (ls) ls.textContent = m.activeCount + ' active on eBay · by name, ungated';
@@ -2805,6 +2841,7 @@ function renderMarketData(m) {
   if (m.recentSales && m.recentSales.length) {
     var sd = document.getElementById('cd-sold');
     var sdd = document.getElementById('cd-soldd');
+    S._soldShown = true;
     if (sd) sd.textContent = fmtCurrency(m.recentSales[0].price);
     if (sdd) sdd.textContent = (m.recentSales[0].date || 'recent sale') + ' · by name';
   }
@@ -3336,6 +3373,9 @@ async function renderLiveListings(card, grade){
   // The user may have changed card or grade while this was in flight.
   if (!LF.card || LF.card.id !== cardId || LF.grade !== grade) return;
 
+  // The Lowest listing box reads the same gated answer this panel leads with.
+  setLowestFromListings(d, grade);
+
   var rows = d.listings || [];
 
   // ── The selection's second half, applied here ──
@@ -3576,22 +3616,128 @@ function viewListing(cardId,source,price,srcName){
 function selPhoto(el,src){document.querySelectorAll('.photo-t').forEach(t=>t.classList.remove('on'));el.classList.add('on');document.getElementById('photo-main').src=src;}
 
 // CHART
-function initChart(base,range){
-  const canvas=document.getElementById('cd-chart');if(!canvas)return;
-  if(S.chart){S.chart.destroy();S.chart=null;}
-  const pd=genPD(base,range);
-  S.chart=new Chart(canvas,{type:'bar',data:{labels:pd.labels,datasets:[
-    {label:'Market avg',data:pd.avg,backgroundColor:'rgba(0,184,160,0.15)',borderColor:'#00B8A0',borderWidth:1.5,borderRadius:4,order:2},
-    {label:'Sold price',data:pd.sold,type:'line',borderColor:'#7C3AED',backgroundColor:'rgba(124,58,237,0.08)',borderWidth:2,pointRadius:3,pointBackgroundColor:'#7C3AED',tension:0.35,order:1}
-  ]},options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{display:true,position:'top',labels:{font:{size:11},boxWidth:10,padding:10}},tooltip:{mode:'index',intersect:false,callbacks:{label:c=>`${c.dataset.label}: $${c.parsed.y?.toFixed(2)}`}}},
-    scales:{x:{grid:{display:false},ticks:{font:{size:11},color:'#6B6B80'}},y:{grid:{color:'rgba(0,0,0,0.04)'},ticks:{font:{size:11},color:'#6B6B80',callback:v=>`$${v>=1000?(v/1000).toFixed(1)+'k':v.toFixed(0)}`}}}
-  }});
+// ── Price history: measured observations only ──
+// This drew genPD(): the current price times a FIXED curve (the same
+// "Oct … Jun" shape on every card, labels from a year that had not
+// happened) plus Math.random() for "Sold price". Every card rose smoothly
+// to today's price, and every visit drew a different sold line.
+//
+// Now: /api/history, one series per market, estimates never included. The
+// card's own market is drawn — the series matching its headline price
+// source, else the longest one — and named under the heading. The 30/90-day
+// averages, the high/low and the price position bar all read the same
+// series, so the four numbers and the line cannot disagree.
+var HIST = { cardId: null, series: null, all: null, loading: null, done: false };
+var RANGE_DAYS = { '1M': 30, '3M': 91, '6M': 182, '1Y': 365, 'All': 100000 };
+
+function loadHistory(card) {
+  if (!card) return Promise.resolve(null);
+  if (HIST.cardId === card.id && HIST.done) return Promise.resolve(HIST.series);
+  if (HIST.cardId === card.id && HIST.loading) return HIST.loading;
+  HIST = { cardId: card.id, series: null, all: null, loading: null, done: false };
+  HIST.loading = fetch(BACKEND + '/api/history/' + encodeURIComponent(card.id))
+    .then(function (r) { return r.ok ? r.json() : { series: [] }; })
+    .catch(function () { return { series: [], _err: true }; })
+    .then(function (d) {
+      if (HIST.cardId !== card.id) return null;         // a newer card took over
+      var all = (d && d.series) || [];
+      // The server folds yahoojp_N into one 'yahoojp' series; match that.
+      var want = String(card._priceSource || '').replace(/^yahoojp_\d+$/, 'yahoojp');
+      var pick = all.filter(function (s) { return s.source === want && !s.edition && !s.variant; })[0]
+              || all.filter(function (s) { return s.source === want; })[0]
+              || all.slice().sort(function (a, b) { return b.points.length - a.points.length; })[0]
+              || null;
+      HIST.all = all; HIST.series = pick; HIST.err = !!(d && d._err); HIST.done = true;
+      return pick;
+    });
+  return HIST.loading;
 }
-function setR(el,r){
-  document.querySelectorAll('.rc').forEach(x=>x.classList.remove('on'));el.classList.add('on');
-  if(!S.chart)return;const pd=genPD(S.activeGradeBase,r);
-  S.chart.data.labels=pd.labels;S.chart.data.datasets[0].data=pd.avg;S.chart.data.datasets[1].data=pd.sold;S.chart.update();
+
+function histPoints(range) {
+  var s = HIST.series;
+  if (!s) return [];
+  var cut = Date.now() - (RANGE_DAYS[range] || RANGE_DAYS['3M']) * 864e5;
+  return s.points.filter(function (p) { return new Date(p.date).getTime() >= cut; });
+}
+
+function histSourceLabel(s) {
+  if (!s) return '';
+  var name = String(s.source).replace(/^tcgplayer_/, 'TCGplayer ').replace(/^yuyutei_shop$/, 'Yuyu-tei shop ask')
+    .replace(/^yahoojp$/, 'Yahoo! Auctions JP').replace(/^tcgdex_cardmarket$/, 'Cardmarket via TCGdex');
+  return name + (s.edition ? ' · ' + s.edition : '') + (s.variant ? ' · ' + s.variant : '');
+}
+
+async function initChart(base, range) {
+  range = range || S.activeRange || '3M';
+  S.activeRange = range;
+  var card = S.currentCard;
+  var canvas = document.getElementById('cd-chart');
+  if (!canvas || !card) return;
+  var src = document.getElementById('cd-chart-src');
+  if (src && HIST.cardId !== card.id) src.textContent = 'Loading recorded prices…';
+  await loadHistory(card);
+  if (!S.currentCard || S.currentCard.id !== card.id) return;
+  if (S.chart) { S.chart.destroy(); S.chart = null; }
+
+  var wrap = canvas.parentElement;
+  var msg = wrap.querySelector('.cmsg');
+  if (msg) msg.remove();
+  var pts = histPoints(range);
+  var graded = S.activeGrade && !/^raw/i.test(S.activeGrade);
+  if (src) {
+    src.textContent = HIST.series
+      ? histSourceLabel(HIST.series) + ' · ' + HIST.series.points.length + ' recorded price'
+        + (HIST.series.points.length === 1 ? '' : 's') + ' since '
+        + new Date(HIST.series.points[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        + ' · estimates never shown'
+        + (graded ? ' · the raw card: graded prices are not recorded over time' : '')
+      : (HIST.err ? 'Price history could not be loaded' : 'No measured price has been recorded for this card');
+  }
+  fillHistStats();
+  updateValueBar();
+  if (pts.length < 2) {
+    var m = document.createElement('div');
+    m.className = 'cmsg';
+    m.textContent = !HIST.series ? 'No price history to draw — nothing measured has been recorded for this card.'
+      : pts.length === 1 ? 'Only one recorded price in this range — a line needs two. Try a longer range.'
+      : 'No recorded price in this range. Try a longer range.';
+    wrap.appendChild(m);
+    return;
+  }
+  S.chart = new Chart(canvas, { type: 'line', data: {
+      labels: pts.map(function (p) { return new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }),
+      datasets: [{ label: histSourceLabel(HIST.series), data: pts.map(function (p) { return p.price; }),
+        borderColor: '#2F4BA6', backgroundColor: 'rgba(47,75,166,0.08)', borderWidth: 2, pointRadius: 3,
+        pointBackgroundColor: '#2F4BA6', tension: 0.2, fill: true }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false,
+        callbacks: { label: function (c) { return ' $' + (c.parsed.y != null ? c.parsed.y.toFixed(2) : '—'); } } } },
+      scales: { x: { grid: { display: false }, ticks: { font: { size: 11 }, color: '#6B6B80', maxTicksLimit: 8 } },
+        y: { grid: { color: 'rgba(0,0,0,0.04)' }, ticks: { font: { size: 11 }, color: '#6B6B80',
+          callback: function (v) { return '$' + (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(v < 10 ? 2 : 0)); } } } } } });
+}
+
+// 30/90-day averages and the recorded high and low, from the same series.
+function fillHistStats() {
+  var set = function (id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
+  var s = HIST.series;
+  if (!s || !s.points.length) { ['cd-s30', 'cd-s90', 'cd-ath', 'cd-atl'].forEach(function (id) { set(id, '—'); }); return; }
+  var avg = function (days) {
+    var cut = Date.now() - days * 864e5;
+    var p = s.points.filter(function (x) { return new Date(x.date).getTime() >= cut; });
+    return p.length ? fmtCurrency(p.reduce(function (a, x) { return a + x.price; }, 0) / p.length) : '—';
+  };
+  var prices = s.points.map(function (x) { return x.price; });
+  set('cd-s30', avg(30));
+  set('cd-s90', avg(91));
+  set('cd-ath', fmtCurrency(Math.max.apply(null, prices)));
+  set('cd-atl', fmtCurrency(Math.min.apply(null, prices)));
+}
+
+function setR(el, r) {
+  document.querySelectorAll('.rc').forEach(function (x) { x.classList.remove('on'); });
+  el.classList.add('on');
+  initChart(S.activeGradeBase, r);
 }
 
 // COMPARE
@@ -4875,76 +5021,44 @@ const slideStyle=document.createElement('style');
 slideStyle.textContent='@keyframes slideInUp{from{transform:translateY(100px);opacity:0}to{transform:translateY(0);opacity:1}}';
 document.head.appendChild(slideStyle);
 
-var condChartMode = false;
-function toggleCondChart() {
-  condChartMode = !condChartMode;
-  var btn = document.getElementById('cview-btn');
-  if (condChartMode) {
-    btn.textContent = '📈 Price history';
-    btn.style.background = 'var(--tl)';
-    btn.style.borderColor = 'var(--t)';
-    showAllConditionsChart();
-  } else {
-    btn.textContent = '📊 All conditions';
-    btn.style.background = '';
-    btn.style.borderColor = '';
-    if (S.activeGradeBase) initChart(S.activeGradeBase, S.activeRange || '3M');
-  }
-}
+// toggleCondChart / showAllConditionsChart were removed: the "All conditions"
+// chart drew raw price x a fixed multiplier per grade along a fixed curve -
+// six invented lines. Nothing records graded prices over time to draw instead.
 
-function showAllConditionsChart() {
-  if (!S.currentCard) return;
-  var base = S.activeGradeBase || getBase(S.currentCard);
-  if (!base) return;
-  var grades = ['Raw NM','PSA 7','PSA 8','PSA 9','PSA 10','CGC 9.5'];
-  var colors = ['#00B8A0','#6366F1','#F59E0B','#10B981','#EF4444','#8B5CF6'];
-  var GM2 = {'Raw NM':1,'PSA 7':1.4,'PSA 8':2.0,'PSA 9':3.5,'PSA 10':7.0,'CGC 9.5':4.5};
-  var labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var factors = [0.67,0.71,0.78,0.84,0.81,0.88,0.93,0.97,0.99,1.0,1.02,1.03];
-  var datasets = grades.map(function(g, i) {
-    var mult = GM2[g] || 1;
-    return {
-      label: g,
-      data: factors.map(function(f){ return parseFloat((base * mult * f).toFixed(2)); }),
-      borderColor: colors[i],
-      backgroundColor: colors[i] + '15',
-      borderWidth: 2,
-      pointRadius: 0,
-      tension: 0.4,
-      fill: false
-    };
-  });
-  if (S.chart) { S.chart.destroy(); S.chart = null; }
-  var ctx = document.getElementById('cd-chart');
-  if (!ctx) return;
-  S.chart = new Chart(ctx, {
-    type: 'line',
-    data: { labels: labels, datasets: datasets },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, font: { size: 10 } } } },
-      scales: {
-        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
-        y: { grid: { color: 'rgba(0,0,0,.05)' }, ticks: { callback: function(v){ return '$'+v; }, font: { size: 10 } } }
-      }
-    }
-  });
-}
-
-function updateValueBar(base) {
-  if (!base) return;
-  var low52 = (base * 0.67).toFixed(2);
-  var high52 = (base * 1.35).toFixed(2);
-  var pos = Math.min(100, Math.max(0, ((base - base*0.67) / (base*0.68)) * 100));
+// ── The price position bar: where the latest recorded price sits between
+// the lowest and highest recorded in the last 52 weeks, same series as the
+// graph. It used to set the low to price x 0.67 and the high to price x
+// 1.35, which put EVERY card at 48.5% and labelled it "Mid range". With
+// fewer than two different recorded prices there is no range, and it says
+// so rather than drawing one. The argument is ignored and kept only so the
+// existing callers need not change.
+function updateValueBar() {
   var el = document.getElementById('cd-trend-bar');
   var lbl = document.getElementById('cd-trend-label');
   var lo = document.getElementById('cd-52low');
   var hi = document.getElementById('cd-52high');
+  var card = S.currentCard;
+  var s = (card && HIST.cardId === card.id) ? HIST.series : null;
+  var cut = Date.now() - 365 * 864e5;
+  var pts = s ? s.points.filter(function (p) { return new Date(p.date).getTime() >= cut; }) : [];
+  var prices = pts.map(function (p) { return p.price; });
+  var min = prices.length ? Math.min.apply(null, prices) : null;
+  var max = prices.length ? Math.max.apply(null, prices) : null;
+  if (!prices.length || max === min) {
+    if (el) el.style.width = '0%';
+    if (lbl) { lbl.textContent = (card && HIST.cardId === card.id && HIST.done) ? 'Not enough history' : 'Loading…';
+               lbl.style.color = 'var(--mu)'; }
+    if (lo) lo.textContent = min != null ? fmtCurrency(min) : '—';
+    if (hi) hi.textContent = max != null ? fmtCurrency(max) : '—';
+    return;
+  }
+  var now = prices[prices.length - 1];
+  var pos = (now - min) / (max - min) * 100;
   if (el) setTimeout(function(){ el.style.width = pos.toFixed(0) + '%'; }, 100);
-  if (lbl) lbl.textContent = pos > 60 ? '↑ Near 52w high' : pos < 30 ? '↓ Near 52w low' : '→ Mid range';
-  if (lbl) lbl.style.color = pos > 60 ? 'var(--gr)' : pos < 30 ? 'var(--re)' : 'var(--am)';
-  if (lo) lo.textContent = '$' + low52;
-  if (hi) hi.textContent = '$' + high52;
+  if (lbl) lbl.textContent = pos > 66 ? '↑ Near its recorded high' : pos < 33 ? '↓ Near its recorded low' : '→ Mid range';
+  if (lbl) lbl.style.color = pos > 66 ? 'var(--gr)' : pos < 33 ? 'var(--re)' : 'var(--am)';
+  if (lo) lo.textContent = fmtCurrency(min);
+  if (hi) hi.textContent = fmtCurrency(max);
 }
 
 // ── DOM INIT (runs after all elements exist) ──
@@ -5449,6 +5563,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-d927505-cardpage &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-0cc88e7-measured &middot; click to hide</div>
 </body>
 </html>

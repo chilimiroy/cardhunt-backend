@@ -4,6 +4,33 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CardHunt</title>
+
+<!-- ══ FONTS — LOADED WITHOUT BLOCKING THE FIRST PAINT ══
+     The redesign carries three: Source Serif 4 for headings, IBM Plex Sans
+     for body, IBM Plex Mono for numbers.
+
+     It loads them with a plain <link rel="stylesheet">, which IS
+     render-blocking: the browser will not paint anything until that request
+     to fonts.googleapis.com finishes. On Render's free tier, with a cold
+     start already costing 30-60s, a third-party stylesheet in front of the
+     first paint is the difference between a slow page and a blank one. A
+     blocking resource has frozen this page before.
+
+     media="print" makes the browser fetch it at low priority WITHOUT
+     blocking paint; onload promotes it to all. The <noscript> copy keeps it
+     working with JS disabled, where nothing can promote it.
+
+     Every font-family below therefore names a real system fallback, and the
+     page is designed to be correct before the webfonts arrive - not merely
+     to survive it. display=swap means text paints in the fallback and swaps,
+     rather than sitting invisible. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" media="print" onload="this.media='all';this.onload=null"
+      href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<noscript><link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"></noscript>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <!-- MODULE URLS STAY ABSOLUTE, deliberately.
      This page is served from https://cardhunt-backend.onrender.com/app AND
@@ -31,8 +58,89 @@
 <script async src="https://cardhunt-backend.onrender.com/gradeprice.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
-:root{--t:#00B8A0;--td:#008C7A;--tl:#E6F9F6;--bg:#F7F8FA;--w:#fff;--bd:#E8E8EC;--tx:#0F0F14;--mu:#6B6B80;--fa:#A8A8B8;--gr:#22C55E;--re:#EF4444;--am:#F59E0B;--pu:#7C3AED;--r:14px;--rs:10px;--sh:0 1px 3px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.04);--sh2:0 4px 24px rgba(0,0,0,.10);--sh3:0 8px 32px rgba(0,0,0,.14)}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);font-size:14px}
+/* ══════════════════════════════════════════════════════════════
+   THE TOKEN LAYER — the redesign's visual identity
+
+   The redesign carries 58 tokens and 122 classes. The port took its markup
+   structure and left this behind, so the result was invisible: same teal,
+   same greys, same fonts, rearranged.
+
+   The tokens below are the redesign's. The app's OWN variable names are
+   then defined in terms of them, rather than renamed — `--mu` alone is used
+   130 times, `--bd` 96, `--t` 92, and renaming would touch roughly 600
+   sites across 122 classes for no gain. Every existing rule keeps working
+   and changes colour because what it points AT changed.
+
+   Custom properties resolve at computed-value time, so the aliases follow
+   the tokens automatically when dark mode redefines them on :root. That is
+   why the dark blocks below only restate the tokens, never the aliases.
+
+   The one real substitution: the accent moves from teal #00B8A0 to the
+   redesign's deep blue #25459E, and prices get their own --money token
+   instead of borrowing the accent.
+   ══════════════════════════════════════════════════════════════ */
+:root{
+  /* ── redesign tokens ── */
+  --bg:#F2F3F6; --surface:#FFFFFF; --surface-2:#E9EBF1; --surface-3:#DEE1E9;
+  --ink:#14161C; --ink-2:#4B5063; --ink-3:#868CA0; --border:#DBDEE7;
+  --accent:#25459E; --accent-ink:#FFFFFF; --accent-soft:#E4E9FB;
+  /* Not in the redesign: the app has hover/active states that need a darker
+     accent, and inventing one here beats leaving ten call sites on teal. */
+  --accent-strong:#1B3478;
+  --good:#1D7A54; --good-soft:#DEF2E7;
+  --warn:#9C6B12; --warn-soft:#F7EBD3;
+  --crit:#B23B3B; --crit-soft:#FBE3E3;
+  --money:#8A5A11;
+  --shadow:0 1px 2px rgba(20,22,28,.06),0 8px 24px -12px rgba(20,22,28,.18);
+  --radius:14px;
+
+  /* ── the app's names, mapped onto the tokens above ── */
+  --t:var(--accent); --td:var(--accent-strong); --tl:var(--accent-soft);
+  --w:var(--surface); --bd:var(--border);
+  --tx:var(--ink); --mu:var(--ink-2); --fa:var(--ink-3);
+  --gr:var(--good); --re:var(--crit); --am:var(--warn); --pu:var(--accent);
+  --r:var(--radius); --rs:10px;
+  --sh:var(--shadow);
+  --sh2:0 4px 24px rgba(20,22,28,.10);
+  --sh3:0 8px 32px rgba(20,22,28,.16);
+}
+
+/* Dark mode, from the redesign. The :not([data-theme="light"]) guard lets an
+   explicit light choice win over the system preference. */
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14161B; --surface:#1C1F27; --surface-2:#262A34; --surface-3:#323744;
+    --ink:#ECEDF3; --ink-2:#B7BBCB; --ink-3:#7E859A; --border:#333A48;
+    --accent:#7C97EC; --accent-ink:#0E1220; --accent-soft:#232B47;
+    --accent-strong:#A8BCF5;
+    --good:#4FBE8C; --good-soft:#173226;
+    --warn:#E0AA51; --warn-soft:#332711;
+    --crit:#E27878; --crit-soft:#3A2222;
+    --money:#E0B45C;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14161B; --surface:#1C1F27; --surface-2:#262A34; --surface-3:#323744;
+  --ink:#ECEDF3; --ink-2:#B7BBCB; --ink-3:#7E859A; --border:#333A48;
+  --accent:#7C97EC; --accent-ink:#0E1220; --accent-soft:#232B47;
+  --accent-strong:#A8BCF5;
+  --good:#4FBE8C; --good-soft:#173226;
+  --warn:#E0AA51; --warn-soft:#332711;
+  --crit:#E27878; --crit-soft:#3A2222;
+  --money:#E0B45C;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.5);
+}
+
+/* ── Type ──
+   Every stack names a real system fallback FIRST after the webfont, because
+   the webfonts are loaded without blocking paint and the page is read in the
+   fallback until they arrive. */
+body{font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);font-size:14px}
+h1,h2,h3,.sec-t,.hero h1{font-family:'Source Serif 4',Georgia,'Times New Roman',serif;text-wrap:balance}
+/* Numbers line up when they are tabular — prices in a column that jitter as
+   the digits change are the thing this font is for. */
+.num,.cp,.pbv,.hstat strong,.mono{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
 a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cursor:pointer}img{display:block}
 .screen{display:none;min-height:100vh}.screen.on{display:block}
 /* openM()/closeM() toggle .on; the overlays they open are display:none
@@ -5090,6 +5198,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-b655e34-compare &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-5ce69b3-tokens &middot; click to hide</div>
 </body>
 </html>

@@ -262,7 +262,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .bg2{background:#EEEDFE;color:#5B21B6;border:1px solid #C4C2F4}.bu{background:#D1FAE5;color:#065F46;border:1px solid #A7F3D0}.bdn{background:#FEE2E2;color:#991B1B;border:1px solid #FECACA}
 .ci{padding:11px 13px}.cn{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
 .cs{font-size:11px;color:var(--mu);margin-bottom:8px}.cr{display:flex;align-items:center;justify-content:space-between}
-.cp{font-size:16px;font-weight:800;letter-spacing:-.4px}.cc{font-size:11px;font-weight:700}.up{color:var(--gr)}.dn{color:var(--re)}
+.cp{color:var(--money);font-size:16px;font-weight:800;letter-spacing:-.4px}.cc{font-size:11px;font-weight:700}.up{color:var(--gr)}.dn{color:var(--re)}
 .movers{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .mbox{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
 .mhdr{padding:14px 18px;border-bottom:1px solid var(--bd);font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
@@ -335,7 +335,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   .cdtop{grid-template-columns:1fr}
   .cdtop-r .pboxes{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 }
-.cview{background:linear-gradient(145deg,#f0eeff,#e8e4ff);border:1px solid #D0C8FF;border-radius:var(--r);padding:26px;text-align:center;margin-bottom:16px;box-shadow:var(--sh)}
+.cview{background:linear-gradient(145deg,var(--surface-2),var(--accent-soft));border:1px solid var(--border);border-radius:var(--r);padding:26px;text-align:center;margin-bottom:16px;box-shadow:var(--sh)}
 .cview img{max-width:100%;max-height:520px;object-fit:contain;border-radius:10px;box-shadow:0 10px 32px rgba(0,0,0,.25);margin:0 auto;transition:transform .3s}.cview img:hover{transform:scale(1.02)}
 /* ── The grading selector: a STATUS box and, beside it, a CONDITION box ── */
 .selwrap{display:grid;grid-template-columns:minmax(200px,260px) 1fr;gap:16px;
@@ -345,12 +345,12 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .sellbl{font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;
   letter-spacing:.07em;margin-bottom:8px}
 .selopts{display:flex;flex-wrap:wrap;gap:6px}
-.selchip{padding:6px 12px;border:1.5px solid var(--bd);border-radius:22px;font-size:12px;
+.selchip{padding:6px 13px;border:1px solid var(--border);border-radius:999px;font-size:12px;
   font-weight:600;color:var(--mu);background:var(--w);cursor:pointer;transition:all .15s;
   white-space:nowrap}
-.selchip.on{background:var(--t);color:#fff;border-color:var(--t);
+.selchip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);
   box-shadow:var(--sh)}
-.selchip:hover:not(.on){border-color:var(--t);color:var(--t)}
+.selchip:hover:not(.on){border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
 /* What the selection actually ASKS FOR. "All" is the option people misread. */
 .selnote{margin-top:10px;font-size:11px;color:var(--mu);line-height:1.6}
 @media(max-width:700px){.selwrap{grid-template-columns:1fr}}
@@ -362,9 +362,9 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .ml2{color:var(--mu)}.mv2{font-weight:600;text-align:right;max-width:64%;word-break:break-word}
 .pboxes{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
 .pbox{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh)}
-.pbl{font-size:11px;color:var(--mu);margin-bottom:5px}.pbv{font-size:24px;font-weight:800;letter-spacing:-.6px}.pbs{font-size:12px;font-weight:500;margin-top:3px}
+.pbl{font-size:10px;color:var(--ink-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.07em;font-weight:600}.pbv{font-size:26px;font-weight:600;letter-spacing:-.01em;color:var(--money)}.pbs{font-size:12px;font-weight:500;margin-top:3px}
 .gpt{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;margin-bottom:20px;box-shadow:var(--sh)}
-.gpt-h{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;padding:9px 16px;background:var(--bg);border-bottom:1px solid var(--bd);font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.04em}
+.gpt-h{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;padding:10px 16px;background:var(--surface-2);border-bottom:1px solid var(--border);font-size:10px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.07em}
 .gpt-r{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;padding:11px 16px;border-bottom:1px solid var(--bd);font-size:13px;cursor:pointer;transition:background .12s}.gpt-r:hover{background:var(--bg)}.gpt-r:last-child{border-bottom:none}.gpt-r.on{background:var(--tl);border-left:3px solid var(--t)}
 .chart-box{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:20px 22px;margin-bottom:20px;box-shadow:var(--sh)}
 .chart-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
@@ -440,7 +440,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
       <h1>Find the best deal on<br>any <em>Pokémon card.</em></h1>
       <p>Live prices from eBay, TCGPlayer, Mercari, Yahoo Japan & local stores — one search, every market.</p>
       <div style="display:flex;gap:7px;margin-bottom:12px;align-items:center">
-        <span style="font-size:12px;font-weight:600;color:rgba(255,255,255,.45)">Language:</span>
+        <span style="font-size:12px;font-weight:600;color:var(--ink-3)">Language:</span>
         <button class="htag" id="hlang-all" onclick="setHeroLang('all',this)" style="border-color:rgba(0,184,160,.6);color:var(--t)">🌍 All</button>
         <button class="htag" id="hlang-en" onclick="setHeroLang('en',this)">🇺🇸 English</button>
         <button class="htag" id="hlang-ja" onclick="setHeroLang('ja',this)">🇯🇵 Japanese</button>
@@ -5235,6 +5235,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-0aeab1c-homeskin &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-306bcfb-cardskin &middot; click to hide</div>
 </body>
 </html>

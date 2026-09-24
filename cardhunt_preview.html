@@ -263,6 +263,13 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .rp-h .sec-a{font-size:12px;text-transform:none;letter-spacing:0}
 .rp-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
 /* the shared tile sets its size inline; a small panel needs smaller tiles */
+.trend-ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.trend-note{font-size:11.5px;color:var(--ink-3);line-height:1.55;margin:-6px 0 14px;max-width:880px}
+.trend-grid{display:flex;flex-wrap:wrap;gap:14px}
+.trend-empty{padding:18px;border:1px dashed var(--bd);border-radius:var(--r);color:var(--ink-2);font-size:12.5px;line-height:1.6;width:100%}
+.tmove{font-size:11px;font-weight:700;margin-top:5px}
+.tmove .was{font-weight:500;color:var(--ink-3)}
+.tsus{display:inline-block;margin-top:4px;font-size:9.5px;font-weight:700;color:var(--re);border:1px solid var(--re);border-radius:4px;padding:0 4px}
 .rp-row .ct{width:128px!important}.rp-row .cti{height:150px!important}.gc-n{font-size:12px;font-weight:700;color:var(--tx)}.gc-c{font-size:11px;color:var(--mu)}
 .cg{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:14px}
 /* The set page's single row: consistent tile sizing, scrolls sideways, with
@@ -581,6 +588,16 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <div class="bc"><span class="lnk" onclick="SS('home')">Home</span> › <span>Pokémon</span></div>
     <div style="font-size:26px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px;font-family:'Source Serif 4',Georgia,serif">Pokémon TCG</div>
 
+    <!-- ── CHOOSE LANGUAGE ── the same four the Sets screen offers, and the
+         same S.lang: choosing here changes Latest sets AND Trending. -->
+    <div class="sec-h" style="margin-top:22px"><div class="sec-t">Choose language</div></div>
+    <div class="ltabs" id="pk-langs">
+      <button class="lt on" data-lang="en" onclick="setPokeLang('en')">🇺🇸 English</button>
+      <button class="lt" data-lang="ja" onclick="setPokeLang('ja')">🇯🇵 Japanese</button>
+      <button class="lt" data-lang="zh-tw" onclick="setPokeLang('zh-tw')">🇹🇼 Chinese Traditional</button>
+      <button class="lt" data-lang="zh-cn" onclick="setPokeLang('zh-cn')">🇨🇳 Chinese Simplified</button>
+    </div>
+
     <!-- ── LATEST SETS ── the Choose TCG set block, moved from Home. -->
     <div class="sec-h" style="margin-top:28px">
       <div>
@@ -592,8 +609,30 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <div id="home-setrow" class="setrow2"></div>
 
     <!-- ── TRENDING RIGHT NOW ── moved from Home. -->
-    <div class="sec-h"><div><div class="sec-t">🔥 Trending right now</div><div class="sec-s" id="trend-sub">Not live yet</div></div></div>
-    <div class="trow" id="home-trending"><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div></div>
+    <div class="sec-h" style="align-items:flex-end">
+      <div><div class="sec-t">🔥 Trending right now</div><div class="sec-s" id="trend-sub">Loading&hellip;</div></div>
+      <div class="trend-ctl">
+        <label class="tbl" for="trend-sort">Sort</label>
+        <select class="tbsel" id="trend-sort" onchange="loadTrending()">
+          <option value="price-desc">Price: high to low</option>
+          <option value="price-asc">Price: low to high</option>
+          <option value="gain-pct">Biggest movers — % gain</option>
+          <option value="fall-pct">Biggest fallers — %</option>
+          <option value="gain-usd">Biggest movers — value gain</option>
+          <option value="fall-usd">Biggest fallers — value</option>
+        </select>
+        <!-- A mover needs a window. Stated, defaulted to 7 days, and only
+             shown when the sort uses it. -->
+        <label class="tbl" for="trend-window" id="trend-window-l" style="display:none">Over</label>
+        <select class="tbsel" id="trend-window" onchange="loadTrending()" style="display:none">
+          <option value="24h">24 hours</option>
+          <option value="7d" selected>7 days</option>
+          <option value="30d">30 days</option>
+        </select>
+      </div>
+    </div>
+    <div class="trend-note" id="trend-rule"></div>
+    <div class="trend-grid" id="home-trending"><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div></div>
   </div>
 </div>
 
@@ -689,10 +728,10 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <div style="font-size:22px;font-weight:800;letter-spacing:-.4px;margin-bottom:4px">Sets</div>
     <div style="font-size:13px;color:var(--mu);margin-bottom:20px" id="sets-sub">Loading…</div>
     <div class="ltabs">
-      <button class="lt on" onclick="setLang('en',this)">🇺🇸 English</button>
-      <button class="lt" onclick="setLang('ja',this)">🇯🇵 Japanese</button>
-      <button class="lt" onclick="setLang('zh-tw',this)">🇹🇼 Chinese Traditional</button>
-      <button class="lt" onclick="setLang('zh-cn',this)">🇨🇳 Chinese Simplified</button>
+      <button class="lt on" data-lang="en" onclick="setLang('en',this)">🇺🇸 English</button>
+      <button class="lt" data-lang="ja" onclick="setLang('ja',this)">🇯🇵 Japanese</button>
+      <button class="lt" data-lang="zh-tw" onclick="setLang('zh-tw',this)">🇹🇼 Chinese Traditional</button>
+      <button class="lt" data-lang="zh-cn" onclick="setLang('zh-cn',this)">🇨🇳 Chinese Simplified</button>
     </div>
     <div class="fchips" id="series-chips"></div>
     <div id="sets-out"><div class="sk" style="width:100%;height:280px;border-radius:var(--r)"></div></div>
@@ -881,7 +920,13 @@ const API='https://api.pokemontcg.io/v2';
 const H={'X-Api-Key':KEY};
 
 // ── RENDER BACKEND CONNECTION ─────────────────────────────────
-const BACKEND='https://cardhunt-backend.onrender.com';
+// Same origin when the page is served by a LOCAL server.js, so an endpoint
+// can be verified in the browser before it is deployed; ?api=render forces
+// the deployed API from localhost (eBay credentials live only on Render).
+// Everywhere else, including file://, it is the deployed API as before.
+const BACKEND=(['localhost','127.0.0.1'].indexOf(location.hostname)>=0
+  && location.search.indexOf('api=render')<0)
+  ? location.origin : 'https://cardhunt-backend.onrender.com';
 
 // ── TCGDEX: FREE MULTILINGUAL API (EN/JA/ZH-TW + new sets) ────
 // Docs: https://tcgdex.dev  |  No API key required
@@ -1388,9 +1433,12 @@ function getSetsData(){
 function setLang(l, el){
   S.lang = l;
   S.series = 'All';
+  // Every language row - the Sets screen's and the Pokémon page's - shows
+  // the same S.lang. Two rows each highlighting their own last click would
+  // be two answers to one question.
   var tabs = document.querySelectorAll('.lt');
-  for (var i=0;i<tabs.length;i++) tabs[i].classList.remove('on');
-  if (el) el.classList.add('on');
+  for (var i=0;i<tabs.length;i++) tabs[i].classList.toggle('on', tabs[i].getAttribute('data-lang') === l);
+  if (el && !el.getAttribute('data-lang')) el.classList.add('on');
 
   // Already have the real list — render it straight away
   if (LANG_SETS[l] && LANG_SETS[l].length) { renderSets(); return; }
@@ -1725,7 +1773,7 @@ function SS(id,skipHistory){
   window.scrollTo(0,0);
   if(id==='home'&&!S.homeLoaded) loadHome();
   if(id==='sets'){if(!S.enSets.length) loadAllSets(); else renderSets();}
-  if(id==='pokemon'){renderHomeSetRow();updateHeroStats();}
+  if(id==='pokemon'){renderHomeSetRow();updateHeroStats();loadTrending();}
   if(id==='portfolio') renderPortfolio();
   if(id==='search') loadSearchTrending();
   if(id==='alerts'){renderAlertsList();updateAlertStats();updateAlertsBar();}
@@ -1786,7 +1834,6 @@ async function loadHome() {
       + '</div>';
   }
 
-  notYet('home-trending', 'Trending', '/api/trending');
   notYet('home-deals',    'Best deals', '/api/deals');
   notYet('gainers',       'Top gainers', '/api/movers');
   notYet('decliners',     'Top decliners', '/api/movers');
@@ -4099,8 +4146,10 @@ function cardSummaryTile(s, opts) {
       + '<div class="cn" ' + open + '>' + liveEsc(s.name || s.cardId) + '</div>'
       + '<div class="cs">' + liveEsc(s.setName || '') + '</div>'
       + '<div class="cr" style="margin-top:4px">' + price + '</div>'
-      + '<div style="font-size:10px;margin-top:3px;line-height:1.5">'
-        + '<span style="color:var(--fa)">avg listing </span>' + avg + '</div>'
+      // opts.noAvg: a caller that will not fetch listings must not print a
+      // 'checking listings…' slot that nothing ever fills.
+      + (opts.noAvg ? '' : '<div style="font-size:10px;margin-top:3px;line-height:1.5">'
+        + '<span style="color:var(--fa)">avg listing </span>' + avg + '</div>')
       + (opts.extra || '')
     + '</div></div>';
 }
@@ -4248,12 +4297,18 @@ function renderHomeSetRow() {
   // what it is doing in the meantime.
   var data = (typeof LANG_SETS !== 'undefined' && LANG_SETS[l]) ? LANG_SETS[l] : null;
   if (!data || !data.length) {
-    if (!S._homeSetsRequested) {
-      S._homeSetsRequested = true;
+    // Asked once PER LANGUAGE. A single flag meant that once English had
+    // been requested, choosing Japanese on the Pokémon page never asked for
+    // Japanese at all and the row sat on 'Loading' for good.
+    S._homeSetsRequested = S._homeSetsRequested || {};
+    if (!S._homeSetsRequested[l]) {
+      S._homeSetsRequested[l] = true;
       if (l === 'en') {
         if (typeof loadAllSets === 'function') loadAllSets();
       } else if (typeof loadLangSets === 'function') {
-        loadLangSets(l).then(function () { renderHomeSetRow(); updateHeroStats(); });
+        loadLangSets(l).then(function (res) {
+          if (res && res.length && S.lang === l) { renderHomeSetRow(); updateHeroStats(); }
+        });
       }
     }
     host.innerHTML = '<div style="padding:16px;border:1px dashed var(--bd);border-radius:var(--r);'
@@ -4269,6 +4324,92 @@ function renderHomeSetRow() {
   host.innerHTML = list.map(function (x) { return setTileHTML(x); }).join('');
   var sub = document.getElementById('tcgset-sub');
   if (sub) sub.textContent = data.length + ' sets in the CardHunt database — newest first';
+}
+
+// ── POKÉMON PAGE: language, and Trending with a sort ─────────
+function setPokeLang(l) {
+  // setLang owns S.lang and keeps every language row in step; it also
+  // redraws the Sets screen, which is hidden here and costs nothing.
+  setLang(l);
+  renderHomeSetRow();
+  loadTrending();
+}
+
+// Trending, from /api/trending. What each sort may rank - measured prices
+// only, movers between two measured prices from the same market a stated
+// window apart - is decided server-side in trending.js and stated back in
+// `rule`, which is printed under the heading. "Most viewed" is not offered:
+// nothing records a card view, and a sort with no data behind it would be
+// an arbitrary order wearing a ranking's clothes.
+var TREND_SEQ = 0;
+async function loadTrending() {
+  var host = document.getElementById('home-trending');
+  if (!host) return;
+  var sortEl = document.getElementById('trend-sort');
+  var winEl = document.getElementById('trend-window');
+  var sort = sortEl ? sortEl.value : 'price-desc';
+  var mover = sort.indexOf('price') !== 0;
+  if (winEl) winEl.style.display = mover ? '' : 'none';
+  var wl = document.getElementById('trend-window-l');
+  if (wl) wl.style.display = mover ? '' : 'none';
+  var win = winEl ? winEl.value : '7d';
+  var lang = S.lang || 'en';
+  var sub = document.getElementById('trend-sub');
+  var rule = document.getElementById('trend-rule');
+  var seq = ++TREND_SEQ;
+  host.innerHTML = '<div class="sk" style="width:172px;height:300px"></div>'
+    + '<div class="sk" style="width:172px;height:300px"></div>'
+    + '<div class="sk" style="width:172px;height:300px"></div>';
+  var d;
+  try {
+    var r = await fetch(BACKEND + '/api/trending?lang=' + encodeURIComponent(lang)
+      + '&sort=' + encodeURIComponent(sort) + '&window=' + encodeURIComponent(win) + '&limit=24');
+    d = await r.json();
+    if (!r.ok) throw new Error(d && d.error ? d.error : 'HTTP ' + r.status);
+  } catch (e) {
+    if (seq !== TREND_SEQ) return;
+    if (sub) sub.textContent = 'Could not load';
+    if (rule) rule.textContent = '';
+    host.innerHTML = '<div class="trend-empty">Trending could not be loaded &mdash; '
+      + liveEsc(e.message) + '. Render\'s free tier sleeps, so the first request can take up to a minute.</div>';
+    return;
+  }
+  if (seq !== TREND_SEQ) return;   // a newer choice has already been made
+
+  var langName = { en: 'English', ja: 'Japanese', 'zh-tw': 'Traditional Chinese', 'zh-cn': 'Simplified Chinese' }[lang] || lang;
+  if (sub) sub.textContent = d.sortLabel + (d.windowLabel ? ' · over ' + d.windowLabel : '')
+    + ' · ' + langName + ' · ' + d.count + ' of ' + d.eligible.toLocaleString()
+    + (mover ? ' cards with two measured prices that far apart' : ' cards with a measured price');
+  if (rule) rule.textContent = d.rule + (d.suspect ? ' ' + d.suspect + ' flagged.' : '')
+    + ' “Most viewed” is not offered: nothing records card views yet.';
+
+  if (!d.cards.length) {
+    host.innerHTML = '<div class="trend-empty"><b>Nothing to rank.</b> '
+      + (d.eligible === 0
+          ? (mover
+              ? 'No ' + langName + ' card has two measured prices ' + (d.windowLabel || '') + ' apart. '
+                + (lang === 'ja' ? 'Japanese cards are not being re-priced: on 24 Sep 2026 one Japanese card had a measured price from the last four days, so there is no recent pair to compare. ' : '')
+              : 'No ' + langName + ' card has a measured price yet. ')
+            + 'This is missing data, not a quiet market.'
+          : 'Every candidate was filtered out by the rules above.')
+      + '</div>';
+    return;
+  }
+  host.innerHTML = d.cards.map(function (c) {
+    var extra = '';
+    if (mover && c.change != null) {
+      var upc = c.change > 0;
+      extra = '<div class="tmove ' + (upc ? 'up' : 'dn') + '">' + (upc ? '▲ +' : '▼ −')
+        + fmtCurrency(Math.abs(c.change)) + ' (' + (upc ? '+' : '') + c.changePct + '%)'
+        + '<br><span class="was">from ' + fmtCurrency(c.prevPrice) + ' · ' + new Date(c.prevDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + '</span></div>'
+        + (c.suspect ? '<span class="tsus" title="Moved more than 5x in the window - more often a printing mix-up than a market">check: &gt;5x move</span>' : '');
+    }
+    return cardSummaryTile({
+      cardId: c.id, name: c.nameEn && lang !== 'en' ? c.name + ' (' + c.nameEn + ')' : c.name,
+      setName: (c.set && (c.set.nameEn || c.set.name) || '') + (c.number ? ' · #' + c.number : ''),
+      img: c.image, market: c.price, marketIsReal: true
+    }, { noAvg: true, extra: extra });
+  }).join('');
 }
 
 // ── LATEST SEARCHES ───────────────────────────────────────────
@@ -5303,6 +5444,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-f093eb6-home &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-c47b1b6-pokemon &middot; click to hide</div>
 </body>
 </html>

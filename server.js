@@ -623,6 +623,60 @@ app.get('/api/cards/:cardId', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── TRENDING ─────────────────────────────────────────────────
+// GET /api/trending?lang=en&sort=price-desc|price-asc|gain-pct|fall-pct|
+//                   gain-usd|fall-usd&window=24h|7d|30d&limit=24
+//
+// Read-only. The rules about what may be ranked live in trending.js, with
+// the measurements that justify them. There is no "most viewed": nothing
+// records a card view, and the response says so rather than inventing an
+// order. Cached like everything else here (15 min) — the price table
+// changes nightly, and the cold query takes ~5s.
+const trending = require('./trending');
+app.get('/api/trending', async (req, res) => {
+  const p = trending.parseParams(req.query);
+  const key = `trending_${p.lang}_${p.sort}_${p.window}_${p.limit}`;
+  const hit = cGet(key);
+  if (hit) return res.json(Object.assign({}, hit, { cached: true }));
+  if (!db) return res.status(503).json({ error: 'database not configured', cards: [] });
+  const t0 = Date.now();
+  try {
+    let cards, eligible, extra = {};
+    if (p.kind === 'price') {
+      const r = await db.query(trending.priceSql(p));
+      cards = r.rows;
+      eligible = r.rows.length ? Number(r.rows[0].eligible) : 0;
+    } else {
+      const r = await db.query(trending.moverSql(p));
+      const k = trending.rankMovers(r.rows, p.sort);
+      cards = k.cards.slice(0, p.limit);
+      eligible = k.eligible;
+      extra = { ranked: k.cards.length, excluded: k.excluded, suspect: k.suspect };
+    }
+    const body = Object.assign({
+      sort: p.sort, sortLabel: trending.SORTS[p.sort].label,
+      window: p.kind === 'move' ? p.window : null,
+      windowLabel: p.kind === 'move' ? trending.WINDOWS[p.window].label : null,
+      lang: p.lang, count: cards.length, eligible,
+      rule: trending.describeRule(p),
+      unavailable: { 'most-viewed': 'Nothing records card views yet, so there is no data to rank by.' },
+      cards: cards.map(c => ({
+        id: c.id, name: c.name, nameEn: c.name_en || null, number: c.number,
+        rarity: c.rarity, image: c.image_small || null,
+        set: { id: c.set_api_id, name: c.set_name, nameEn: c.set_name_en || null },
+        price: Number(c.price), priceSource: c.price_source, priceDate: c.price_date,
+        priceIsReal: true,
+        prevPrice: c.prev_price != null ? Number(c.prev_price) : undefined,
+        prevDate: c.prev_date || undefined,
+        change: c.change, changePct: c.change_pct, suspect: c.suspect || undefined,
+      })),
+      tookMs: Date.now() - t0, generatedAt: new Date().toISOString(), cached: false,
+    }, extra);
+    cSet(key, body);
+    res.json(body);
+  } catch (err) { res.status(500).json({ error: err.message, cards: [] }); }
+});
+
 // ── SEARCH ────────────────────────────────────────────────────
 app.get('/api/cards', async (req, res) => {
   const { q, pageSize = 250, page = 1 } = req.query;

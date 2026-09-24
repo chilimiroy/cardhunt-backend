@@ -191,7 +191,10 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
    read as the old app after T1.
    Now a light surface with an accent wash, from tokens, so it follows dark
    mode with everything else. */
-.hero{background:linear-gradient(150deg,var(--surface-2),var(--surface) 55%,var(--accent-soft));padding:52px 28px 44px;position:relative;overflow:hidden;border-bottom:1px solid var(--border)}
+.hero{background:linear-gradient(150deg,var(--surface-2),var(--surface) 55%,var(--accent-soft));padding:52px 28px 44px;position:relative;z-index:5;overflow-x:clip;overflow-y:visible;border-bottom:1px solid var(--border)}
+/* overflow-x:clip, not overflow:hidden: the recent-searches panel drops
+   below the hero and hidden cut it off at the hero edge. The glow above is
+   still clipped sideways, which is all hidden was there for. */
 .hero::before{content:'';position:absolute;top:-140px;right:-100px;width:520px;height:520px;background:radial-gradient(circle,var(--accent-soft),transparent 70%);opacity:.9;pointer-events:none}
 .hero-in{max-width:1180px;margin:0 auto;position:relative}
 .hero h1{font-size:42px;font-weight:700;color:var(--ink);line-height:1.1;margin-bottom:12px;letter-spacing:-.02em}
@@ -236,7 +239,31 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   .gc:hover,.gc.on{box-shadow:0 4px 20px color-mix(in srgb,var(--accent) 22%,transparent)}
 }
 .gc.on{background:var(--accent-soft)}
-.gc-i{font-size:32px}.gc-n{font-size:12px;font-weight:700;color:var(--tx)}.gc-c{font-size:11px;color:var(--mu)}
+.gc-i{font-size:32px}
+/* Game tiles carry a logo plate, like set tiles. Where no freely licensed
+   logo exists the plate holds the game's name as a wordmark. */
+.gc-logo{height:64px;width:100%;display:flex;align-items:center;justify-content:center}
+.gc-logo img{max-height:60px;max-width:150px;object-fit:contain}
+.gc-word{display:flex;align-items:center;justify-content:center;height:100%;padding:0 6px;
+  font-family:'Source Serif 4',Georgia,serif;font-size:17px;font-weight:700;line-height:1.1;
+  letter-spacing:-.01em;color:var(--ink-2);text-align:center;text-wrap:balance}
+/* Unavailable: no catalogue behind it. Reads as switched off rather than
+   broken - greyed logo, no lift, no pointer, and the words say why. */
+.gc.off{cursor:default;box-shadow:none;background:var(--bg);border-style:dashed}
+.gc.off:hover{border-color:var(--bd);box-shadow:none;transform:none}
+.gc.off .gc-logo{filter:grayscale(1);opacity:.45}
+.gc.off .gc-n{color:var(--ink-2)}
+.gc.off .gc-c{color:var(--ink-3);font-weight:600}
+.htag.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+/* Hero drop-downs: autocomplete results first, recent searches beneath. */
+.hero-drops{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:100;display:flex;flex-direction:column;gap:8px}
+.recent-panel{background:var(--surface);border:1.5px solid var(--bd);border-radius:12px;box-shadow:var(--sh3);padding:10px 12px 12px}
+.rp-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;
+  font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-2)}
+.rp-h .sec-a{font-size:12px;text-transform:none;letter-spacing:0}
+.rp-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+/* the shared tile sets its size inline; a small panel needs smaller tiles */
+.rp-row .ct{width:128px!important}.rp-row .cti{height:150px!important}.gc-n{font-size:12px;font-weight:700;color:var(--tx)}.gc-c{font-size:11px;color:var(--mu)}
 .cg{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:14px}
 /* The set page's single row: consistent tile sizing, scrolls sideways, with
    a "See all" tile at the end. grid-auto-flow:column keeps every tile the
@@ -438,31 +465,42 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   <div class="hero">
     <div class="hero-in">
       <h1>Find the best deal on<br>any <em>Pokémon card.</em></h1>
-      <p>Live prices from eBay, TCGPlayer, Mercari, Yahoo Japan & local stores — one search, every market.</p>
-      <div style="display:flex;gap:7px;margin-bottom:12px;align-items:center">
+      <div style="display:flex;gap:7px;margin-bottom:12px;margin-top:18px;align-items:center">
         <span style="font-size:12px;font-weight:600;color:var(--ink-3)">Language:</span>
-        <button class="htag" id="hlang-all" onclick="setHeroLang('all',this)" style="border-color:rgba(0,184,160,.6);color:var(--t)">🌍 All</button>
+        <button class="htag on" id="hlang-all" onclick="setHeroLang('all',this)">🌍 All</button>
         <button class="htag" id="hlang-en" onclick="setHeroLang('en',this)">🇺🇸 English</button>
         <button class="htag" id="hlang-ja" onclick="setHeroLang('ja',this)">🇯🇵 Japanese</button>
         <button class="htag" id="hlang-zh" onclick="setHeroLang('zh',this)">🇨🇳 Chinese</button>
       </div>
       <div class="hero-row">
         <div style="flex:1;position:relative">
-          <input class="hero-inp" id="hero-q" placeholder="Try: Charizard Base Set PSA 9…" 
-            oninput="triggerAutocomplete(this.value,'hero-ac')" 
+          <input class="hero-inp" id="hero-q" placeholder="Try: Charizard Base Set PSA 9…"
+            oninput="triggerAutocomplete(this.value,'hero-ac')"
             onkeydown="handleAcKey(event,'hero-ac')"
+            onfocus="showRecentPanel()" onblur="hideRecentPanel()"
             autocomplete="off" style="width:100%">
-          <div id="hero-ac" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1.5px solid var(--bd);border-radius:12px;box-shadow:var(--sh3);z-index:100;overflow:hidden;max-height:320px;overflow-y:auto"></div>
+          <!-- Results first, recent searches beneath them. One absolutely
+               positioned column, so the recent panel sits BELOW the result
+               area rather than on top of it. -->
+          <div class="hero-drops">
+            <div id="hero-ac" style="display:none;background:var(--surface);border:1.5px solid var(--bd);border-radius:12px;box-shadow:var(--sh3);overflow:hidden;max-height:320px;overflow-y:auto"></div>
+            <!-- ── LATEST SEARCHES ── transient, per Roy: only while the
+                 search bar has focus, gone when focus leaves or a result is
+                 chosen. mousedown is cancelled so clicking a tile does not
+                 blur the input first and take the tile away mid-click.
+                 Same tile as My alerts: cardSummaryTile(). -->
+            <div id="recent-panel" class="recent-panel" style="display:none"
+                 onmousedown="event.preventDefault()"
+                 onclick="if(event.target.closest('[onclick*=openCard]'))hideRecentPanel(true)">
+              <div class="rp-h">
+                <span>Recent searches</span>
+                <button class="sec-a" onclick="clearSearchHistory()">Clear</button>
+              </div>
+              <div id="latest-searches" class="rp-row"></div>
+            </div>
+          </div>
         </div>
         <button class="hero-btn" onclick="heroSearch()">Search →</button>
-      </div>
-      <div class="hero-tags">
-        <span class="htag" onclick="tagSearch('Charizard Holo Base Set')">⚡ Charizard Base Set</span>
-        <span class="htag" onclick="tagSearch('Pikachu Illustrator')">🌟 Pikachu Illustrator</span>
-        <span class="htag" onclick="tagSearch('Umbreon VMAX')">🌙 Umbreon VMAX Alt Art</span>
-        <span class="htag" onclick="tagSearch('Blastoise 1st Edition')">💧 Blastoise 1st Ed</span>
-        <span class="htag" onclick="tagSearch('Gardevoir ex')">🔮 Gardevoir ex SAR</span>
-        <span class="htag" onclick="tagSearch('Mew CGC 10')">✨ Mew CGC 10</span>
       </div>
       <div class="hero-stats">
         <div class="hstat" id="hstat-sets"><strong>&mdash;</strong>Sets tracked</div>
@@ -473,99 +511,89 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     </div>
   </div>
   <div class="content">
-    <!-- ── CHOOSE TCG SET ── Roy's spec: every set shows a relevant image
-         (set_logo), laid out TWO ROWS high. Where a set has no logo the
-         tile carries its name instead of a broken image — TCGdex holds no
-         logo for 63 of 220 English sets and for none of the Japanese or
-         Chinese ones. -->
+    <!-- ── BROWSE BY GAME ── moved up into the space Choose TCG set held.
+         The catalogue is Pokémon only: 46,088 cards, every one of them a
+         Pokémon card. Every other tile is therefore UNAVAILABLE, and says
+         so — no onclick, no hover lift, no "Coming soon" link that opens
+         an empty screen.
+
+         Logos: Pokémon's and Magic's are public domain on Wikimedia
+         Commons, read from the Wikipedia pageimages API rather than
+         guessed. The others exist only as non-free images and are not
+         hotlinked; those tiles carry the game's name as a wordmark, the
+         same treatment a set with no logo gets. -->
+    <div class="sec-h" style="margin-top:28px"><div class="sec-t">Browse by game</div></div>
+    <div class="gg" id="game-grid">
+      <div class="gc on" onclick="SS('pokemon')" role="link" tabindex="0" onkeydown="if(event.key==='Enter')SS('pokemon')" title="Pokémon TCG — sets, trending cards and prices">
+        <div class="gc-logo"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Pok%C3%A9mon_Trading_Card_Game_logo.svg/500px-Pok%C3%A9mon_Trading_Card_Game_logo.svg.png" alt="Pokémon Trading Card Game" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="gc-word" style="display:none">Pokémon</span></div>
+        <div class="gc-n">Pokémon TCG</div><div class="gc-c" id="gc-pokemon-count">EN · JA · Chinese</div>
+      </div>
+      <div class="gc off" aria-disabled="true" title="Not in the CardHunt catalogue — no cards or prices are held for this game">
+        <div class="gc-logo"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Magic_the_Gathering_2017.svg/500px-Magic_the_Gathering_2017.svg.png" alt="Magic: The Gathering" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span class="gc-word" style="display:none">Magic</span></div>
+        <div class="gc-n">Magic: The Gathering</div><div class="gc-c">Not tracked yet</div>
+      </div>
+      <div class="gc off" aria-disabled="true" title="Not in the CardHunt catalogue — no cards or prices are held for this game"><div class="gc-logo"><span class="gc-word">Yu-Gi-Oh!</span></div><div class="gc-n">Yu-Gi-Oh!</div><div class="gc-c">Not tracked yet</div></div>
+      <div class="gc off" aria-disabled="true" title="Not in the CardHunt catalogue — no cards or prices are held for this game"><div class="gc-logo"><span class="gc-word">One Piece</span></div><div class="gc-n">One Piece</div><div class="gc-c">Not tracked yet</div></div>
+      <div class="gc off" aria-disabled="true" title="Not in the CardHunt catalogue — no cards or prices are held for this game"><div class="gc-logo"><span class="gc-word">Lorcana</span></div><div class="gc-n">Disney Lorcana</div><div class="gc-c">Not tracked yet</div></div>
+      <div class="gc off" aria-disabled="true" title="Not in the CardHunt catalogue — no cards or prices are held for this game"><div class="gc-logo"><span class="gc-word">Dragon Ball</span></div><div class="gc-n">Dragon Ball Super</div><div class="gc-c">Not tracked yet</div></div>
+      <div class="gc off" aria-disabled="true" title="Not in the CardHunt catalogue — no cards or prices are held for this game"><div class="gc-logo"><span class="gc-word">Digimon</span></div><div class="gc-n">Digimon</div><div class="gc-c">Not tracked yet</div></div>
+      <div class="gc off" aria-disabled="true" title="Not in the CardHunt catalogue — no cards or prices are held for this game"><div class="gc-logo"><span class="gc-word">Flesh and Blood</span></div><div class="gc-n">Flesh and Blood</div><div class="gc-c">Not tracked yet</div></div>
+      <div class="gc off" aria-disabled="true" title="Not in the CardHunt catalogue — no cards or prices are held for this game"><div class="gc-logo"><span class="gc-word">Star Wars Unlimited</span></div><div class="gc-n">Star Wars: Unlimited</div><div class="gc-c">Not tracked yet</div></div>
+      <div class="gc off" aria-disabled="true" title="Not in the CardHunt catalogue — no cards or prices are held for this game"><div class="gc-logo"><span class="gc-word">Vanguard</span></div><div class="gc-n">Cardfight!! Vanguard</div><div class="gc-c">Not tracked yet</div></div>
+    </div>
+
+    <!-- ══ MY ALERTS — kept as it was ══ -->
+    <div class="sec-h" style="margin-top:38px;margin-bottom:14px">
+      <div>
+        <div class="sec-t">🔔 My card alerts</div>
+        <div class="sec-s">Live price tracking — click any card to view listings</div>
+      </div>
+      <button class="sec-a" onclick="SS('alerts')">Manage alerts →</button>
+    </div>
+    <div id="alerts-bar-items" style="display:flex;gap:14px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none">
+      <!-- Populated by updateAlertsBar() -->
+      <div style="display:flex;align-items:center;justify-content:center;min-width:180px;height:220px;border:2px dashed var(--bd);border-radius:var(--r);cursor:pointer;flex-direction:column;gap:10px;color:var(--mu);font-size:13px" onclick="SS('alerts')">
+        <span style="font-size:32px">🔔</span>
+        <span style="font-weight:600">Add alert</span>
+        <span style="font-size:11px;color:var(--fa)">Track any card price</span>
+      </div>
+    </div>
+    <div class="sec-h"><div><div class="sec-t">📊 Biggest movers</div><div class="sec-s">Largest % change in 7 days</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
+    <div class="movers"><div class="mbox"><div class="mhdr">🚀 Top Gainers</div><div id="gainers"></div></div><div class="mbox"><div class="mhdr">📉 Top Decliners</div><div id="decliners"></div></div></div>
+    <div class="sec-h"><div><div class="sec-t">💎 Best deals right now</div><div class="sec-s">Listed below market average</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
+    <div class="cg" id="home-deals"><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div></div>
+  </div>
+</div>
+
+<!-- ══ POKÉMON ══ between Home and the sets, per Roy: pressing Pokémon in
+     Browse by game lands here. Choose TCG set and Trending moved here from
+     Home with their element ids unchanged, so every function that draws
+     them still finds them. -->
+<div id="screen-pokemon" class="screen">
+  <nav class="nav">
+    <button class="btn" onclick="goBack()" style="padding:7px 12px;font-size:13px;margin-right:8px">← Back</button>
+    <div class="logo" onclick="SS('home')"><div class="logo-i">⚡</div>Card<em>Hunt</em></div>
+    <button class="nl" onclick="SS('home')">Home</button><button class="nl on">Pokémon</button>
+    <button class="nl" onclick="SS('sets')">Sets</button><button class="nl" onclick="SS('portfolio')">Portfolio</button>
+    <div class="nav-r"><div class="av">A</div></div>
+  </nav>
+  <div class="content" style="padding-top:28px">
+    <div class="bc"><span class="lnk" onclick="SS('home')">Home</span> › <span>Pokémon</span></div>
+    <div style="font-size:26px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px;font-family:'Source Serif 4',Georgia,serif">Pokémon TCG</div>
+
+    <!-- ── LATEST SETS ── the Choose TCG set block, moved from Home. -->
     <div class="sec-h" style="margin-top:28px">
       <div>
-        <div class="sec-t">Choose TCG set</div>
+        <div class="sec-t">Latest sets</div>
         <div class="sec-s" id="tcgset-sub">Newest first — every set in the CardHunt database</div>
       </div>
       <button class="sec-a" onclick="SS('sets')">See all →</button>
     </div>
     <div id="home-setrow" class="setrow2"></div>
 
-    <div class="sec-h" style="margin-top:28px"><div class="sec-t">Browse by game</div></div>
-    <div class="gg">
-      <div class="gc on" onclick="selG(this)"><div class="gc-i">🎴</div><div class="gc-n">Pokémon TCG</div><div class="gc-c">20,324 cards</div></div>
-      <div class="gc" onclick="selG(this)"><div class="gc-i">⚔️</div><div class="gc-n">Magic: TG</div><div class="gc-c">Coming soon</div></div>
-      <div class="gc" onclick="selG(this)"><div class="gc-i">⭐</div><div class="gc-n">Yu-Gi-Oh!</div><div class="gc-c">Coming soon</div></div>
-      <div class="gc" onclick="selG(this)"><div class="gc-i">🏴‍☠️</div><div class="gc-n">One Piece</div><div class="gc-c">Coming soon</div></div>
-      <div class="gc" onclick="selG(this)"><div class="gc-i">✨</div><div class="gc-n">Lorcana</div><div class="gc-c">Coming soon</div></div>
-      <div class="gc" onclick="selG(this)"><div class="gc-i">🐉</div><div class="gc-n">Dragon Ball</div><div class="gc-c">Coming soon</div></div>
-      <div class="gc" onclick="selG(this)"><div class="gc-i">🤖</div><div class="gc-n">Digimon</div><div class="gc-c">Coming soon</div></div>
-      <div class="gc" onclick="selG(this)"><div class="gc-i">⚡</div><div class="gc-n">Flesh & Blood</div><div class="gc-c">Coming soon</div></div>
-      <div class="gc" onclick="selG(this)"><div class="gc-i">🌟</div><div class="gc-n">Star Wars</div><div class="gc-c">Coming soon</div></div>
-      <div class="gc" onclick="selG(this)"><div class="gc-i">⚜️</div><div class="gc-n">Vanguard</div><div class="gc-c">Coming soon</div></div>
-    </div>
-
-    <!-- ══ ALERTS BAR - card tile row like trending ══ -->
-    <div style="margin-bottom:0">
-      <!-- ══ FEATURE SHORTCUTS ══ -->
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:32px">
-      <div onclick="SS('search')" style="background:linear-gradient(135deg,#6366F1,#8B5CF6);border-radius:var(--r);padding:20px 16px;cursor:pointer;color:#fff;transition:all .18s;box-shadow:0 4px 14px rgba(99,102,241,.3)" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-        <div style="font-size:28px;margin-bottom:8px">🔍</div>
-        <div style="font-weight:700;font-size:14px">Search Cards</div>
-        <div style="font-size:11px;opacity:.8;margin-top:3px">Find any card instantly</div>
-      </div>
-      <div onclick="SS('sets')" style="background:linear-gradient(135deg,#0EA5E9,#06B6D4);border-radius:var(--r);padding:20px 16px;cursor:pointer;color:#fff;transition:all .18s;box-shadow:0 4px 14px rgba(14,165,233,.3)" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-        <div style="font-size:28px;margin-bottom:8px">🗂️</div>
-        <div style="font-weight:700;font-size:14px">Browse Sets</div>
-        <div style="font-size:11px;opacity:.8;margin-top:3px">EN · JP · CN sets</div>
-      </div>
-      <div onclick="SS('alerts')" style="background:linear-gradient(135deg,#F59E0B,#EF4444);border-radius:var(--r);padding:20px 16px;cursor:pointer;color:#fff;transition:all .18s;box-shadow:0 4px 14px rgba(245,158,11,.3)" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-        <div style="font-size:28px;margin-bottom:8px">🔔</div>
-        <div style="font-weight:700;font-size:14px">Price Alerts</div>
-        <div style="font-size:11px;opacity:.8;margin-top:3px">Get notified on deals</div>
-      </div>
-      <div onclick="SS('portfolio')" style="background:linear-gradient(135deg,#10B981,#059669);border-radius:var(--r);padding:20px 16px;cursor:pointer;color:#fff;transition:all .18s;box-shadow:0 4px 14px rgba(16,185,129,.3)" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-        <div style="font-size:28px;margin-bottom:8px">💼</div>
-        <div style="font-weight:700;font-size:14px">My Portfolio</div>
-        <div style="font-size:11px;opacity:.8;margin-top:3px">Track your collection</div>
-      </div>
-      <div onclick="openLoginModal()" style="background:linear-gradient(135deg,#0F0F14,#1A1A2E);border-radius:var(--r);padding:20px 16px;cursor:pointer;color:#fff;transition:all .18s;box-shadow:0 4px 14px rgba(0,0,0,.3);border:1px solid rgba(0,184,160,.3)" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
-        <div style="font-size:28px;margin-bottom:8px">👤</div>
-        <div style="font-weight:700;font-size:14px">Sign In</div>
-        <div style="font-size:11px;opacity:.8;margin-top:3px;color:var(--t)">Save & sync your data</div>
-      </div>
-    </div>
-    <!-- ── LATEST SEARCHES ── top of the page, per Roy's spec.
-         Same card structure as My alerts below: full card image, then
-         name, set, current market price and average listing price. Both
-         render through cardSummaryTile(). -->
-    <div class="sec-h" style="margin-top:0;margin-bottom:14px">
-      <div>
-        <div class="sec-t">🕘 Latest searches</div>
-        <div class="sec-s">Cards you opened, newest first — market price and the median of gated listings</div>
-      </div>
-      <button class="sec-a" onclick="clearSearchHistory()">Clear →</button>
-    </div>
-    <div id="latest-searches" style="display:flex;gap:14px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none"></div>
-
-    <div class="sec-h" style="margin-top:28px;margin-bottom:14px">
-        <div>
-          <div class="sec-t">🔔 My card alerts</div>
-          <div class="sec-s">Live price tracking — click any card to view listings</div>
-        </div>
-        <button class="sec-a" onclick="SS("alerts")">Manage alerts →</button>
-      </div>
-      <div id="alerts-bar-items" style="display:flex;gap:14px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none">
-        <!-- Populated by updateAlertsBar() -->
-        <div style="display:flex;align-items:center;justify-content:center;min-width:180px;height:220px;border:2px dashed var(--bd);border-radius:var(--r);cursor:pointer;flex-direction:column;gap:10px;color:var(--mu);font-size:13px" onclick="SS("alerts")">
-          <span style="font-size:32px">🔔</span>
-          <span style="font-weight:600">Add alert</span>
-          <span style="font-size:11px;color:var(--fa)">Track any card price</span>
-        </div>
-      </div>
-    </div>
-    <div class="sec-h"><div><div class="sec-t">🔥 Trending right now</div><div class="sec-s">Most searched in the last 24 hours</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
-    <div class="trow" id="home-trending"><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div></div>
-    <div class="sec-h"><div><div class="sec-t">📊 Biggest movers</div><div class="sec-s">Largest % change in 7 days</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
-    <div class="movers"><div class="mbox"><div class="mhdr">🚀 Top Gainers</div><div id="gainers"></div></div><div class="mbox"><div class="mhdr">📉 Top Decliners</div><div id="decliners"></div></div></div>
-    <div class="sec-h"><div><div class="sec-t">💎 Best deals right now</div><div class="sec-s">Listed below market average</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
-    <div class="cg" id="home-deals"><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div></div>
+    <!-- ── TRENDING RIGHT NOW ── moved from Home. -->
+    <div class="sec-h"><div><div class="sec-t">🔥 Trending right now</div><div class="sec-s" id="trend-sub">Not live yet</div></div></div>
+    <div class="trow" id="home-trending"><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div></div>
   </div>
 </div>
 
@@ -1697,6 +1725,7 @@ function SS(id,skipHistory){
   window.scrollTo(0,0);
   if(id==='home'&&!S.homeLoaded) loadHome();
   if(id==='sets'){if(!S.enSets.length) loadAllSets(); else renderSets();}
+  if(id==='pokemon'){renderHomeSetRow();updateHeroStats();}
   if(id==='portfolio') renderPortfolio();
   if(id==='search') loadSearchTrending();
   if(id==='alerts'){renderAlertsList();updateAlertStats();updateAlertsBar();}
@@ -3685,8 +3714,41 @@ let acTimer=null, acIdx=-1, acResults=[], heroLang='all';
 
 function setHeroLang(lang,el){
   heroLang=lang;searchLang=lang;
-  document.querySelectorAll('[id^="hlang-"]').forEach(b=>{b.style.borderColor='rgba(255,255,255,.15)';b.style.color='rgba(255,255,255,.55)';});
-  el.style.borderColor='rgba(0,184,160,.6)';el.style.color='var(--t)';
+  // Was white at 55% on the unselected buttons - written for the old dark
+  // hero. On the light one it made three of the four languages vanish the
+  // moment any was clicked. A class, so the token layer decides the colours.
+  document.querySelectorAll('[id^="hlang-"]').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+}
+
+// The hero's Search button and its Enter key both called heroSearch(), and
+// no function of that name has existed at any point in this file's history:
+// the one search box on the home page threw a ReferenceError on submit and
+// only the autocomplete rows ever worked. Found while moving Latest
+// searches beside it.
+function heroSearch(){
+  var inp=document.getElementById('hero-q');
+  var q=inp?inp.value.trim():'';
+  if(!q) return;
+  hideRecentPanel(true);
+  closeAutocomplete();
+  doSearch(q, heroLang);
+}
+
+// ── Latest searches, transient ──
+// Shown only while the hero search has focus; gone when focus leaves or a
+// result is chosen. The blur is deferred one tick so a click that is
+// already under way lands before the panel disappears.
+function showRecentPanel(){
+  var p=document.getElementById('recent-panel');
+  if(!p) return;
+  if(!getSearchHistory().length){ p.style.display='none'; return; }
+  renderLatestSearches();
+  p.style.display='block';
+}
+function hideRecentPanel(now){
+  var go=function(){ var p=document.getElementById('recent-panel'); if(p) p.style.display='none'; };
+  if(now) go(); else setTimeout(go,120);
 }
 
 function setSearchLang(lang,el){
@@ -3748,6 +3810,7 @@ async function fetchAutocomplete(val,dropId){
 
 function selectAc(name,dropId){
   closeAutocomplete();
+  hideRecentPanel(true);
   // Set input value
   const inputMap={'hero-ac':'hero-q','nav-ac':'nav-q','main-ac':'search-main'};
   const inp=document.getElementById(inputMap[dropId]);
@@ -4161,6 +4224,10 @@ function updateHeroStats() {
   var b = document.getElementById("hstat-cards");
   if (a) a.innerHTML = "<strong>" + sets.toLocaleString() + "</strong>Sets tracked";
   if (b) b.innerHTML = "<strong>" + cards.toLocaleString() + "</strong>Cards indexed";
+  // The Pokémon game tile said "20,324 cards", typed in once. Same count as
+  // the hero, from the same lists, and only once every language has answered.
+  var g = document.getElementById("gc-pokemon-count");
+  if (g && known === LANGS.length) g.textContent = cards.toLocaleString() + " cards";
 }
 
 function renderHomeSetRow() {
@@ -4232,6 +4299,7 @@ function pushSearchHistory(card) {
 function clearSearchHistory() {
   try { localStorage.removeItem('ch_searches'); } catch (e) {}
   renderLatestSearches();
+  hideRecentPanel(true);
 }
 
 function renderLatestSearches() {
@@ -5235,6 +5303,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-306bcfb-cardskin &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-f093eb6-home &middot; click to hide</div>
 </body>
 </html>

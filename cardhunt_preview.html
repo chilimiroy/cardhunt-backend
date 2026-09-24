@@ -272,18 +272,12 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .tsus{display:inline-block;margin-top:4px;font-size:9.5px;font-weight:700;color:var(--re);border:1px solid var(--re);border-radius:4px;padding:0 4px}
 .rp-row .ct{width:128px!important}.rp-row .cti{height:150px!important}.gc-n{font-size:12px;font-weight:700;color:var(--tx)}.gc-c{font-size:11px;color:var(--mu)}
 .cg{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:14px}
-/* The set page's single row: consistent tile sizing, scrolls sideways, with
-   a "See all" tile at the end. grid-auto-flow:column keeps every tile the
-   same width, which is what "consistent sizing" has to mean here — a flex
-   row would let them shrink to fit and the cards would stop matching. */
-.cgrow{display:grid;grid-auto-flow:column;grid-auto-columns:158px;gap:14px;
-  overflow-x:auto;padding-bottom:10px;scrollbar-width:thin;align-items:start}
-.cgrow .ct{width:158px}
-.ct.seeall{cursor:pointer;border:1.5px dashed var(--bd);background:var(--bg)}
-.ct.seeall:hover{border-color:var(--t);color:var(--t)}
-.ct.seeall .cti{background:transparent;color:var(--mu);min-height:0;height:150px;
-  display:flex;align-items:center;justify-content:center}
-@media(max-width:640px){.cgrow{grid-auto-columns:138px}.cgrow .ct{width:138px}}
+/* The set page: every card, wrapping, and every tile the SAME width.
+   Fixed columns rather than .cg's minmax(158px,1fr), which stretched tiles
+   to fill the row so cards in one set stopped matching each other. */
+.cgall{display:grid;grid-template-columns:repeat(auto-fill,158px);gap:14px;justify-content:start}
+.cgall .ct{width:158px}
+@media(max-width:640px){.cgall{grid-template-columns:repeat(auto-fill,138px)}.cgall .ct{width:138px}}
 .trow{display:flex;gap:14px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}.trow::-webkit-scrollbar{display:none}.trow .ct{flex-shrink:0;width:158px}
 .ct{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:all .18s;box-shadow:var(--sh)}.ct:hover{box-shadow:var(--sh2);transform:translateY(-3px)}
 .cti{height:162px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;background:linear-gradient(145deg,#f5f5fb,#ebebf4)}
@@ -2075,9 +2069,6 @@ async function doSearchLegacy(q, lang) {
 
 async function openSet(setId, apiSetId){
   S.tbType='all';
-  // A newly opened set starts as one row, never inheriting the previous
-  // set's expanded state.
-  S.sdView = 'row';
   document.getElementById('sd-sort').value='num';
   document.getElementById('sd-rar').value='all';
   document.getElementById('sd-q').value='';
@@ -2322,73 +2313,35 @@ function applyFilters(){
     var tiles = [];
   cards.forEach(function(c) {
     var price = priceMap[c.id] || 0;
-    var rare = isRare(c.rarity);
-    var hash = 0;
-    for (var i=0; i<c.id.length; i++) hash += c.id.charCodeAt(i);
-    var deal = rare && price>5 && (hash%5===0);
-    var chg = (((hash%29)-14)/10).toFixed(1);
-    var chgClass = parseFloat(chg)>=0?'up':'dn';
-    var chgSym = parseFloat(chg)>=0?'&#x2191;':'&#x2193;';
-    var tlBadge = deal ? '<span class="badge b-teal btl">deal</span>' : '';
-    var trBadge = (rare&&(hash%4===0)) ? '<span class="badge b-pur btr">PSA '+(9+(hash%2))+'</span>' : '';
+    // Three badges used to sit here, all computed from a hash of the card
+    // id: a % change (((hash%29)-14)/10 - every tile showed a price
+    // "movement" between -1.4% and +1.4%), a "deal" flag on one rare in
+    // five, and a "PSA 9"/"PSA 10" label on one in four. None was data.
+    // Real movement exists now, measured, on the Pokémon page's Trending
+    // sort; an invented one beside it would contradict it card by card.
     var priceStr = price>0 ? fmtCurrency(price) : '&#8212;';
     var isReal = (c._priceIsReal === true) || (c._priceSource && !/^estimate/.test(c._priceSource));
     var estMark = isReal ? '' : '<span style="font-size:9px;color:var(--fa);margin-left:3px" title="Estimated - no market data yet">est</span>';
     tiles.push( '<div class="ct" onclick="openCard(\''+c.id+'\')">'
-      +'<div class="cti">'+imgOrSk(c)+tlBadge+trBadge+'</div>'
+      +'<div class="cti">'+imgOrSk(c)+'</div>'
       +'<div class="ci">'
       +'<div class="cn" title="'+(c.nameEn||c.name||'')+'">'+nameWithEn(c.name, c.nameEn)+'</div>'
       +'<div class="cs">#'+c.number+' &middot; '+(c.rarity||'')+(c._raritySource==='inferred'?'<span style="color:var(--fa);font-size:9px">*</span>':'')+'</div>'
-      +'<div class="cr"><span class="cp">'+priceStr+estMark+'</span>'
-      +'<span class="cc '+chgClass+'">'+chgSym+Math.abs(chg)+'%</span></div>'
+      +'<div class="cr"><span class="cp">'+priceStr+estMark+'</span></div>'
       +'</div></div>');
   });
 
-  // ── Single row, consistent sizing, "See All" at the end ──
-  // Roy's Phase 2 spec. The set page rendered every card in a wrapping grid,
-  // so opening Ascended Heroes laid 295 tiles down the page and the toolbar
-  // above them scrolled out of reach immediately.
-  //
-  // The row is the DEFAULT view and "See All" switches to the full grid.
-  // Both render from the same `cards` array, already sorted and filtered, so
-  // the row is genuinely the first N of what the filters selected rather
-  // than a separate query — two lists of one thing is the failure this
-  // codebase keeps paying for.
+  // ── The full list, every card, fixed tile size ──
+  // Roy preferred the open list to the single row with See all (049ab44),
+  // so every card that passes the filters is drawn — no See all, no Show
+  // less. What that work got right is kept: .cgall gives every tile the
+  // SAME width, where .cg's minmax(…,1fr) stretched the last row's tiles
+  // and the cards stopped matching each other.
   var grid = document.getElementById('sd-grid');
-  var rowMode = (S.sdView !== 'all') && cards.length > SD_ROW_N;
-  grid.className = rowMode ? 'cgrow' : 'cg';
-  if (rowMode) {
-    var shown = cards.length - SD_ROW_N;
-    grid.innerHTML = tiles.slice(0, SD_ROW_N).join('')
-      + '<div class="ct seeall" onclick="setSdView(&quot;all&quot;)">'
-      + '<div class="cti" style="flex-direction:column;gap:6px">'
-      + '<span style="font-size:26px;line-height:1">&#43;</span>'
-      + '<span style="font-size:12px;font-weight:700">See all</span></div>'
-      + '<div class="ci"><div class="cn">' + shown + ' more</div>'
-      + '<div class="cs">' + cards.length + ' in this view</div></div></div>';
-  } else {
-    grid.innerHTML = tiles.join('')
-      + (cards.length > SD_ROW_N
-          ? '<div class="ct seeall" onclick="setSdView(&quot;row&quot;)">'
-            + '<div class="cti" style="flex-direction:column;gap:6px">'
-            + '<span style="font-size:26px;line-height:1">&#8722;</span>'
-            + '<span style="font-size:12px;font-weight:700">Show less</span></div>'
-            + '<div class="ci"><div class="cn">Back to one row</div>'
-            + '<div class="cs">' + cards.length + ' in this view</div></div></div>'
-          : '');
-  }
+  grid.className = 'cgall';
+  grid.innerHTML = tiles.join('');
 }
 
-// How many cards the single row shows before "See all".
-var SD_ROW_N = 11;
-
-function setSdView(v) {
-  S.sdView = v;
-  applyFilters();
-  // Changing the view must not silently scroll the page somewhere else.
-  var g = document.getElementById('sd-grid');
-  if (g && v === 'row') g.scrollLeft = 0;
-}
 function updateCardPrices(grade,base){ return updatePrices(grade,base); }
 function updatePrices(grade,base){
   const low=+(base*.74).toFixed(2),sold=+(base*(0.9+Math.random()*.1)).toFixed(2),chg=((Math.random()-.3)*16).toFixed(1);
@@ -5444,6 +5397,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-c47b1b6-pokemon &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-8935262-setlist &middot; click to hide</div>
 </body>
 </html>

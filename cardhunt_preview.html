@@ -137,7 +137,10 @@
    the webfonts are loaded without blocking paint and the page is read in the
    fallback until they arrive. */
 body{font-family:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--tx);font-size:14px}
-h1,h2,h3,.sec-t,.hero h1{font-family:'Source Serif 4',Georgia,'Times New Roman',serif;text-wrap:balance}
+/* Serif is for TITLES — the hero, a card's name, a set's name. Section heads
+   are deliberately NOT here: the redesign sets those in small uppercase
+   sans, and .sec-t was in this stack until T2 moved it. */
+h1,h2,h3,.hero h1,#cd-name,.sn{font-family:'Source Serif 4',Georgia,'Times New Roman',serif;text-wrap:balance}
 /* Numbers line up when they are tabular — prices in a column that jitter as
    the digits change are the thing this font is for. */
 .num,.cp,.pbv,.hstat strong,.mono{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;font-variant-numeric:tabular-nums}
@@ -173,32 +176,66 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .lf input{width:100%;padding:12px 16px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.12);border-radius:10px;font-size:14px;color:#fff;outline:none;transition:all .2s}
 .lf input::placeholder{color:rgba(255,255,255,.28)}.lf input:focus{border-color:var(--t);background:rgba(255,255,255,.1)}
 .lbtn{width:100%;padding:14px;background:var(--t);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;margin-top:6px;cursor:pointer;transition:all .15s}
-.lbtn:hover{background:var(--td);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,184,160,.3)}
+.lbtn:hover{background:var(--td);transform:translateY(-1px);box-shadow:var(--sh2)}
 .ldiv{display:flex;align-items:center;gap:14px;margin:24px 0;color:rgba(255,255,255,.22);font-size:12px}
 .ldiv::before,.ldiv::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.08)}
 .lsoc{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .lsb{padding:11px;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s}
 .lsb:hover{background:rgba(255,255,255,.1)}
 .lfoot{text-align:center;margin-top:22px;font-size:12px;color:rgba(255,255,255,.32)}.lfoot a{color:var(--t);cursor:pointer}
-.hero{background:linear-gradient(135deg,#0D0D18,#141428 60%,#0D1820);padding:44px 28px 38px;position:relative;overflow:hidden}
-.hero::before{content:'';position:absolute;top:-120px;right:-120px;width:480px;height:480px;background:radial-gradient(circle,rgba(0,184,160,.18),transparent 70%);pointer-events:none}
+/* ── THE HERO ──
+   Was a hardcoded dark slab — linear-gradient(135deg,#0D0D18,#141428,#0D1820)
+   with a teal radial glow — and it survived the token layer untouched
+   because none of it went through a variable. It was the single largest
+   piece of the old identity left on the page, and the reason Home still
+   read as the old app after T1.
+   Now a light surface with an accent wash, from tokens, so it follows dark
+   mode with everything else. */
+.hero{background:linear-gradient(150deg,var(--surface-2),var(--surface) 55%,var(--accent-soft));padding:52px 28px 44px;position:relative;overflow:hidden;border-bottom:1px solid var(--border)}
+.hero::before{content:'';position:absolute;top:-140px;right:-100px;width:520px;height:520px;background:radial-gradient(circle,var(--accent-soft),transparent 70%);opacity:.9;pointer-events:none}
 .hero-in{max-width:1180px;margin:0 auto;position:relative}
-.hero h1{font-size:38px;font-weight:800;color:#fff;line-height:1.15;margin-bottom:10px;letter-spacing:-.8px}
-.hero h1 em{color:var(--t);font-style:normal}
-.hero p{font-size:14px;color:rgba(255,255,255,.5);max-width:520px;line-height:1.65;margin-bottom:24px}
+.hero h1{font-size:42px;font-weight:700;color:var(--ink);line-height:1.1;margin-bottom:12px;letter-spacing:-.02em}
+.hero h1 em{color:var(--accent);font-style:normal}
+/* Every one of these assumed a dark hero: white text at 50% alpha, a white
+   10% input, a placeholder at 34%. On the light surface above they would be
+   invisible or nearly so — changing the hero background without them would
+   have shipped a blank hero. */
+.hero p{font-size:15px;color:var(--ink-2);max-width:540px;line-height:1.65;margin-bottom:24px}
 .hero-row{display:flex;gap:10px;max-width:640px}
-.hero-inp{flex:1;padding:14px 20px;border-radius:12px;border:none;font-size:14px;background:rgba(255,255,255,.1);color:#fff;outline:none}
-.hero-inp::placeholder{color:rgba(255,255,255,.34)}.hero-inp:focus{background:rgba(255,255,255,.15);box-shadow:0 0 0 2px var(--t)}
-.hero-btn{padding:14px 26px;background:var(--t);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700}.hero-btn:hover{background:var(--td)}
+.hero-inp{flex:1;padding:14px 20px;border-radius:999px;border:1px solid var(--border);font-size:14px;background:var(--surface);color:var(--ink);outline:none;transition:box-shadow .15s,border-color .15s}
+.hero-inp::placeholder{color:var(--ink-3)}
+.hero-inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.hero-btn{padding:14px 26px;background:var(--accent);color:var(--accent-ink);border:none;border-radius:999px;font-size:14px;font-weight:600}.hero-btn:hover{background:var(--accent-strong)}
 .hero-tags{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
-.htag{padding:5px 13px;border:1px solid rgba(255,255,255,.15);border-radius:22px;font-size:12px;color:rgba(255,255,255,.55);cursor:pointer;transition:all .15s}.htag:hover{border-color:var(--t);color:var(--t)}
-.hero-stats{display:flex;gap:28px;margin-top:24px}.hstat{color:rgba(255,255,255,.45);font-size:12px}.hstat strong{display:block;color:#fff;font-size:22px;font-weight:800;letter-spacing:-.5px}
+.htag{padding:5px 13px;border:1px solid var(--border);background:var(--surface);border-radius:999px;font-size:12px;color:var(--ink-2);cursor:pointer;transition:all .15s}
+.htag:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.hero-stats{display:flex;gap:28px;margin-top:26px}
+.hstat{color:var(--ink-3);font-size:12px}
+.hstat strong{display:block;color:var(--ink);font-size:24px;font-weight:600;letter-spacing:-.01em}
 .content{max-width:1180px;margin:0 auto;padding:0 24px 60px}
-.sec-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;margin-top:34px}
-.sec-t{font-size:18px;font-weight:700;letter-spacing:-.3px}.sec-s{font-size:12px;color:var(--mu);margin-top:3px}.sec-a{font-size:13px;color:var(--t);font-weight:600;border:none;background:none}
+/* ── Section heads, the redesign's treatment ──
+   Small uppercase sans with wide tracking in --ink-2, not an 18px bold
+   serif. This is the marker that reads as "the new design" on every screen,
+   and it is why .sec-t is pulled OUT of the serif stack T1 put it in:
+   T1 gave it Source Serif because the redesign sets h1,h2,h3 in serif, but
+   its section heads are deliberately sans. */
+.sec-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;margin-top:38px}
+.sec-t{font-family:'IBM Plex Sans',-apple-system,system-ui,sans-serif;font-size:13px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.07em;color:var(--ink-2)}
+.sec-s{font-size:12px;color:var(--ink-3);margin-top:4px;text-transform:none;letter-spacing:0}
+.sec-a{font-size:13px;color:var(--accent);font-weight:600;border:none;background:none;cursor:pointer}
+.sec-a:hover{color:var(--accent-strong);text-decoration:underline}
 .gg{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
 .gc{background:var(--w);border:1.5px solid var(--bd);border-radius:var(--r);padding:20px 14px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;transition:all .18s;box-shadow:var(--sh);text-align:center}
-.gc:hover,.gc.on{border-color:var(--t);box-shadow:0 4px 20px rgba(0,184,160,.18);transform:translateY(-2px)}.gc.on{background:var(--tl)}
+/* The teal glow here was hardcoded rgba(0,184,160,...) — the old accent,
+   surviving the token layer because it never went through a variable.
+   colour-mix keeps the glow tied to whatever --accent is, including in dark
+   mode, with a plain shadow as the fallback for browsers without it. */
+.gc:hover,.gc.on{border-color:var(--accent);box-shadow:var(--sh2);transform:translateY(-2px)}
+@supports (background:color-mix(in srgb,red,blue)){
+  .gc:hover,.gc.on{box-shadow:0 4px 20px color-mix(in srgb,var(--accent) 22%,transparent)}
+}
+.gc.on{background:var(--accent-soft)}
 .gc-i{font-size:32px}.gc-n{font-size:12px;font-weight:700;color:var(--tx)}.gc-c{font-size:11px;color:var(--mu)}
 .cg{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:14px}
 /* The set page's single row: consistent tile sizing, scrolls sideways, with
@@ -221,7 +258,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 @keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .btl{position:absolute;top:8px;left:8px;z-index:2}.btr{position:absolute;top:8px;right:8px;z-index:2}
 .b{display:inline-flex;align-items:center;padding:2px 8px;border-radius:22px;font-size:10px;font-weight:700;line-height:1.5}
-.bd2{background:#E6F9F6;color:#007A60;border:1px solid #B3EDE6}.bh{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
+.bd2{background:var(--good-soft);color:var(--good);border:1px solid var(--good)}.bh{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
 .bg2{background:#EEEDFE;color:#5B21B6;border:1px solid #C4C2F4}.bu{background:#D1FAE5;color:#065F46;border:1px solid #A7F3D0}.bdn{background:#FEE2E2;color:#991B1B;border:1px solid #FECACA}
 .ci{padding:11px 13px}.cn{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
 .cs{font-size:11px;color:var(--mu);margin-bottom:8px}.cr{display:flex;align-items:center;justify-content:space-between}
@@ -312,7 +349,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   font-weight:600;color:var(--mu);background:var(--w);cursor:pointer;transition:all .15s;
   white-space:nowrap}
 .selchip.on{background:var(--t);color:#fff;border-color:var(--t);
-  box-shadow:0 2px 8px rgba(0,184,160,.3)}
+  box-shadow:var(--sh)}
 .selchip:hover:not(.on){border-color:var(--t);color:var(--t)}
 /* What the selection actually ASKS FOR. "All" is the option people misread. */
 .selnote{margin-top:10px;font-size:11px;color:var(--mu);line-height:1.6}
@@ -365,7 +402,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .co-card h3{font-size:17px;font-weight:700;margin-bottom:20px;letter-spacing:-.3px}
 .ff{margin-bottom:16px}.ff label{display:block;font-size:11px;font-weight:700;color:var(--mu);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
 .ff input,.ff select{width:100%;padding:11px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:14px;color:var(--tx);outline:none;transition:all .2s;background:var(--w)}
-.ff input:focus,.ff select:focus{border-color:var(--t);box-shadow:0 0 0 3px rgba(0,184,160,.1)}
+.ff input:focus,.ff select:focus{border-color:var(--t);box-shadow:0 0 0 3px var(--accent-soft)}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .osum{background:var(--bg);border:1px solid var(--bd);border-radius:var(--rs);padding:18px 20px;margin-top:8px}
 .orow{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--bd)}.orow:last-child{border-bottom:none;font-weight:700;font-size:15px;margin-top:6px;padding-top:12px}
@@ -5198,6 +5235,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-5ce69b3-tokens &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-0aeab1c-homeskin &middot; click to hide</div>
 </body>
 </html>

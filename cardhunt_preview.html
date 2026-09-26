@@ -2429,6 +2429,16 @@ function setLowestFromListings(d, grade) {
 // hardcoded list is two lists of one thing, which is how SLAB_WORDS drifted
 // from GRADERS and let a $987 AiGrade slab through a raw search.
 var CM = (typeof window !== 'undefined' && window.CardMatch) ? window.CardMatch : null;
+// READ LIVE, not the `CM` above. cardmatch.js is an ASYNC script, so `CM` is
+// captured once at parse time and is null whenever the module arrives
+// second - after which every `CM && ...` guard silently takes its fallback.
+// Found 2026-09-27: the Other grader list shrank to three hardcoded names
+// and eBay's condition labels fell back to bare codes, on a page load like
+// one that had worked an hour earlier. Anything that runs on a click or a
+// render calls this instead.
+function liveCM() {
+  return (typeof window !== 'undefined' && window.CardMatch) ? window.CardMatch : CM;
+}
 
 var STATUS_CONDITIONS = {
   // Raw sub-conditions are eBay's OWN "Card Condition", asked of search as
@@ -2438,7 +2448,9 @@ var STATUS_CONDITIONS = {
   // four values: it does not separate Mint from Near Mint and has no
   // Damaged, so M and DMG are not offered — a chip eBay cannot answer is a
   // control backed by no data. The list is cardmatch's, not a copy.
-  Raw:   ['All'].concat((CM && CM.EBAY_CONDITION_CODES) || ['NM', 'LP', 'MP', 'HP']),
+  // Built at parse time, when the module may not have arrived: the literal
+  // is cardmatch's EBAY_CONDITION_CODES, and selector.test.js asserts they match.
+  Raw:   ['All', 'NM', 'LP', 'MP', 'HP'],
   // Every grade each company PUBLISHES, checked 2026-09-27 against its own
   // scale page rather than a summary of it. Three were not what we assumed:
   //   PSA  half grades exist - "between PSA 2 and PSA 9" (so 2.5-8.5, no
@@ -2492,7 +2504,8 @@ var TOP_STATUSES = ['Raw', 'PSA', 'BGS', 'CGC', 'Other'];
 var VERIFIED_OTHER = ['SGC', 'TAG', 'ACE', 'AGS', 'ISA'];
 function otherGraders() {
   var known = ['PSA', 'BGS', 'CGC'].concat(VERIFIED_OTHER);
-  var all = (CM && CM.GRADERS_UNAMBIGUOUS) ? CM.GRADERS_UNAMBIGUOUS : ['BVG', 'CSG', 'HGA'];
+  var cmx = liveCM();
+  var all = (cmx && cmx.GRADERS_UNAMBIGUOUS) ? cmx.GRADERS_UNAMBIGUOUS : ['BVG', 'CSG', 'HGA'];
   return VERIFIED_OTHER.concat(all.filter(function (g) { return known.indexOf(g) < 0 && g !== 'AI GRADE'; }));
 }
 // The condition scale for the current status. Under Other it is the chosen
@@ -2559,7 +2572,7 @@ function renderSelector() {
     note = SEL.condition === 'All'
       ? 'Every ungraded listing. No slabs.'
       : 'Ungraded, and listed as <strong>'
-        + liveEsc((CM && CM.EBAY_CARD_CONDITION && CM.EBAY_CARD_CONDITION[SEL.condition]) || SEL.condition)
+        + liveEsc((liveCM() && liveCM().EBAY_CARD_CONDITION && liveCM().EBAY_CARD_CONDITION[SEL.condition]) || SEL.condition)
         + '</strong> in eBay&rsquo;s own Card Condition field &mdash; the seller&rsquo;s '
         + 'declaration, in a structured field rather than the title. eBay does not separate Mint from '
         + 'Near Mint. Shop listings with no such field are grouped as <em>unstated</em>, never dropped.';
@@ -3319,8 +3332,8 @@ function liveRow(l){
     + liveEsc(l.title) + '</div>'
     + '<div style="font-size:11px;color:var(--mu);margin-top:3px">' + liveEsc(l.condition)
     // eBay's structured Card Condition, when the search was filtered on it.
-    + (l.conditionSource === 'ebay' && l.sellerCondition && CM && CM.EBAY_CARD_CONDITION
-        ? ' \u00b7 ' + liveEsc(CM.EBAY_CARD_CONDITION[l.sellerCondition]) : '')
+    + (l.conditionSource === 'ebay' && l.sellerCondition && liveCM() && liveCM().EBAY_CARD_CONDITION
+        ? ' \u00b7 ' + liveEsc(liveCM().EBAY_CARD_CONDITION[l.sellerCondition]) : '')
     + ' \u00b7 '
     + liveEsc(when) + bids + (l.seller ? ' \u00b7 ' + liveEsc(l.seller) : '')
     // A shop's asking price is not a sale and not a bid. The row says so
@@ -5630,6 +5643,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-849252b-ebaycond &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-3235503-livecm &middot; click to hide</div>
 </body>
 </html>

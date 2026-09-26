@@ -3212,14 +3212,51 @@ app.get('/api/ebay/conditions/:cardId', async (req, res) => {
       }
     }
 
+    // ?aspects=1 — can SEARCH filter on it, so a condition costs one call
+    // rather than one per listing? Ask for eBay's aspect refinements, and for
+    // every condition-like aspect run one filtered search per value. The
+    // aspect name and values are eBay's own, read from the response — never
+    // supplied by the caller.
+    let aspects = null;
+    if (req.query.aspects === '1') {
+      const ra = await ebay.fetchEbay(db, { url: url + '&fieldgroups=ASPECT_REFINEMENTS',
+        token: auth.token, kind: 'search', meta: { cardId, probe: 'conditions-aspects' },
+        countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
+      const ref = (ra.ok && ra.data && ra.data.refinement) || {};
+      const dists = ref.aspectDistributions || [];
+      aspects = {
+        names: dists.map(a => a.localizedAspectName),
+        conditionDistributions: (ref.conditionDistributions || []).map(c => [c.condition, c.conditionId, c.matchCount]),
+        condition: []
+      };
+      for (const a of dists.filter(a => /condition|grade|grader/i.test(a.localizedAspectName))) {
+        const vals = (a.aspectValueDistributions || []).slice(0, 8);
+        const entry = { name: a.localizedAspectName,
+          values: vals.map(v => [v.localizedAspectValue, v.matchCount]), filtered: [] };
+        for (const v of vals.slice(0, 5)) {
+          const af = `categoryId:183454,${a.localizedAspectName}:{${v.localizedAspectValue}}`;
+          const rf = await ebay.fetchEbay(db, {
+            url: url + '&aspect_filter=' + encodeURIComponent(af),
+            token: auth.token, kind: 'search', meta: { cardId, probe: 'conditions-aspect-filter' },
+            countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
+          const its = (rf.ok && rf.data && rf.data.itemSummaries) || [];
+          entry.filtered.push({ value: v.localizedAspectValue, ok: rf.ok, total: rf.ok ? rf.data.total : null,
+            returned: its.length, firstTitles: its.slice(0, 3).map(i => i.title),
+            firstIds: its.slice(0, 3).map(i => i.itemId) });
+        }
+        aspects.condition.push(entry);
+      }
+    }
+
     const body = {
-      cardId, grade, query: q,
+      cardId, grade, query: q, aspects,
       search: { calls: 1, items: items.length, summariesWithDescriptors,
                 summaryKeys, condition: summaryCondition, descriptors: summaryDescriptors },
       getItem: { asked: nItems, fetched: itemsFetched, errors: itemErrors,
                  withDescriptors: itemsWithDescriptors,
                  condition: itemCondition, descriptors: itemDescriptors, samples },
-      quotaSpent: 1 + itemsFetched + itemErrors,
+      quotaSpent: 1 + itemsFetched + itemErrors +
+        (aspects ? 1 + aspects.condition.reduce((n, e) => n + e.filtered.length, 0) : 0),
       stored: false
     };
     conditionProbeCache.set(key, { at: Date.now(), body });

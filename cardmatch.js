@@ -448,31 +448,204 @@ const GENUINE_ART_PHRASES =
 // $250,000. Presenting those as one market is exactly the failure the
 // product exists to prevent.
 //
-// Keyed by the marker word, with the set it belongs to. A listing naming
-// the marker is that reprint; if our card is not from that set, refuse.
+// ── Which sets reprint which: keyed by SET ID, never by a set's name ──
 //
-// `reNot` / `setNot` exist because TWO anniversary sets now share the word.
-// 30th Celebration and 30th Classic Collection (2026-09-16) reprint classics
-// exactly as Celebrations (2021) did — and "30th Celebration" satisfies
-// /celebrat/i, so ingesting them silently DISABLED the Celebrations guard for
-// all 188 of their cards, and made every 30th listing exempt on a 2021 card.
-// Measured, not assumed: "Dialga 103/128 Celebrations Holo" was kept against
-// en-30th-103, and "Charizard 4/102 30th Classic Collection" against
-// en-cel25cc-4. Both are the master-ball mirror with a five-year gap.
+// The first version keyed this on words. A title naming "celebrations" was
+// the reprint, and our card was exempt when its SET NAME matched
+// /celebrat/i. Then 30th Celebration and 30th Classic Collection
+// (2026-09-16) were ingested, "30th Celebration" satisfied /celebrat/i, and
+// the guard was silently disabled for all 188 of their cards. The patch for
+// that (`reNot` / `setNot`) was more words about words.
 //
-// A marker is skipped when the title ALSO names the other set (`reNot`), so a
-// seller writing "30th anniversary ... Celebrations" is not read as the 2021
-// set; and a set satisfies a marker only when it does not carry the
-// disqualifier (`setNot`), so "30th Celebration" no longer counts as
-// Celebrations. The bare `30th` marker is last and needs no `set` alias
-// beyond its own, since no other set name contains it.
-const REPRINT_MARKERS = [
-  { re: /\bcelebrations?\b/i,        set: /celebrat/i,           setNot: /\b30th\b/i,
-    reNot: /\b30th\b/i,              label: 'Celebrations' },
-  { re: /\bclassic collection\b/i,   set: /classic collection/i, label: 'Classic Collection' },
-  { re: /\blegendary collection\b/i, set: /legendary/i,          label: 'Legendary Collection' },
-  { re: /\b30th\b/i,                 set: /\b30th\b/i,           label: '30th Celebration' }
+// And it only ever worked in ONE direction. Searching the original rejected
+// a title naming the reprint; searching the REPRINT accepted the original,
+// because an Aquapolis Lugia title names no reprint at all. The original is
+// usually the far more valuable card, so that is the expensive direction:
+// live, Aquapolis Lugia 149/147 ran $385 to $15,050 on one Raw search.
+//
+// So the relationship now lives in set ids, which cannot collide:
+//
+//   REPRINT_FAMILIES   the anniversary sets, the set ids that belong to each,
+//                      and what a SELLER writes to say "this printing".
+//   REPRINT_OF         for each Classic Collection card, the original it
+//                      reprints and the number PRINTED on it — which is the
+//                      original's, not our catalogue's ordinal.
+//
+// Words still appear, because a listing title is all a listing has. But they
+// are only ever evidence about the LISTING; which family OUR card belongs to
+// is read from its set id, and a family's words are tested in a fixed order
+// (30th first) so that "30th Celebration" can never be read as Celebrations.
+//
+// Adding a set: give it an id here. A new set whose NAME happens to contain
+// another family's word changes nothing, because nothing reads set names.
+const REPRINT_FAMILIES = [
+  // First, deliberately: every 30th title also tends to say "Celebration",
+  // "Classic Collection" or "CC". Whatever else it says, "30th" decides.
+  { id: '30th', label: '30th Celebration (2026)', year: 2026,
+    sets: ['30th', '30th-c'],
+    says: [/\b30th\b/i, /\b30c\b/i],
+    ask: '30th Celebration' },
+  // "25th Anniversary" is how sellers describe a Celebrations reprint too —
+  // live, "Charizard 4/102 Base Set Holo 25th Anniversary" at $195 was kept
+  // on the 1999 card. But McDonald's 2021 is ALSO a 25th Anniversary set,
+  // and reprints nothing. So `saysOnOriginal`: evidence only when our card
+  // is one REPRINT_OF says this family reprinted, where there is no other
+  // 25th Anniversary card it could be.
+  { id: 'cel25', label: 'Celebrations (2021)', year: 2021,
+    sets: ['cel25', 'cel25cc'],
+    says: [/\bcelebrations?\b/i, /\bclassic collection\b/i],
+    saysOnOriginal: [/\b25th\b/i],
+    ask: 'Celebrations' },
+  { id: 'lc', label: 'Legendary Collection (2002)', year: 2002,
+    sets: ['lc'],
+    says: [/\blegendary collection\b/i],
+    ask: 'Legendary Collection' }
 ];
+
+// Classic Collection cards: our catalogue number -> [original card, the
+// number PRINTED on the reprint]. The printed number is the original's
+// "149/147", which is what every seller writes; our catalogue holds TCGdex's
+// ordinal ("029" of 30), which no seller has ever written — so until this
+// table existed a 30th Classic Collection search asked eBay for
+// "Lugia 029/030" and got nothing back at all.
+//
+// Built 2026-09-26 from pokemontcg.io's printed numbers (me55c, cel25c)
+// matched to our own catalogue by name and number, and where more than one
+// original carried that number, by attacks, HP and illustrator on TCGdex:
+// the 30th Metagross is Delta Species 11/113 (same attack, same artist), not
+// Hidden Legends or Deoxys, which also carry an 11. Darkrai & Cresselia
+// LEGEND is two cards (99 and 100); 019/020 are taken in that order.
+const REPRINT_OF = {
+  '30th-c': {
+    '001': ['base1-4',     '4/102'],     // Charizard
+    '002': ['ex1-5',       '5/109'],     // Delcatty
+    '003': ['ex11-11',     '11/113'],    // Metagross δ
+    '004': ['bw10-11',     '11/101'],    // Genesect-EX
+    '005': ['gym1-18',     '18/132'],    // Misty
+    '006': ['ex7-19',      '19/109'],    // Dark Tyranitar
+    '007': ['neo1-25',     '25/111'],    // Sneasel
+    '008': ['sm9-33',      '33/181'],    // Pikachu & Zekrom-GX
+    '009': ['xy9-41',      '41/122'],    // Greninja BREAK
+    '010': ['dp6-43',      '43/146'],    // Uxie
+    '011': ['pl1-47',      '47/127'],    // Crobat G
+    '012': ['swsh4-50',    '50/185'],    // Raikou (Amazing Rare)
+    '013': ['sm4-57',      '57/111'],    // Buzzwole-GX
+    '014': ['base1-58',    '58/102'],    // Pikachu
+    '015': ['gym2-69',     '69/132'],    // Erika's Jigglypuff
+    '016': ['bw6-85',      '85/124'],    // Rayquaza-EX
+    '017': ['sm1-89',      '89/149'],    // Solgaleo-GX
+    '018': ['hgss4-94',    '94/102'],    // Gengar
+    '019': ['hgss4-99',    '99/102'],    // Darkrai & Cresselia LEGEND (top)
+    '020': ['hgss4-100',   '100/102'],   // Darkrai & Cresselia LEGEND (bottom)
+    '021': ['bw3-101',     '101/101'],   // N
+    '022': ['dp4-106',     '106/106'],   // Palkia (LV.X era)
+    '023': ['xy5-106',     '106/160'],   // M Gardevoir-EX
+    '024': ['neo4-106',    '106/105'],   // Shining Celebi
+    '025': ['ex10-108',    '108/115'],   // Scizor ex
+    '026': ['swsh8-114',   '114/264'],   // Mew VMAX
+    '027': ['swsh9-123',   '123/172'],   // Arceus VSTAR
+    '028': ['swsh1-138',   '138/202'],   // Zacian V
+    '029': ['ecard2-149',  '149/147'],   // Lugia
+    '030': ['sv02-203',    '203/193']    // Magikarp
+  },
+  'cel25cc': {
+    'CC001': ['base1-2',   '2/102'],     // Blastoise
+    'CC002': ['base1-4',   '4/102'],     // Charizard
+    'CC003': ['base1-15',  '15/102'],    // Venusaur
+    'CC004': ['base1-73',  '73/102'],    // Imposter Professor Oak
+    'CC005': ['base5-8',   '8/82'],      // Dark Gyarados
+    'CC006': ['base5-15',  '15/82'],     // Here Comes Team Rocket!
+    'CC007': ['gym2-15',   '15/132'],    // Rocket's Zapdos
+    'CC008': ['basep-24',  '24'],        // _____'s Pikachu (a promo: no total)
+    'CC009': ['neo1-20',   '20/111'],    // Cleffa
+    'CC010': ['neo3-66',   '66/64'],     // Shining Magikarp
+    'CC011': ['ex4-9',     '9/95'],      // Team Magma's Groudon
+    'CC012': ['ex7-86',    '86/109'],    // Rocket's Admin.
+    'CC013': ['ex12-88',   '88/92'],     // Mew ex
+    'CC014': ['ex15-93',   '93/101'],    // Gardevoir ex δ
+    'CC015': ['pop5-17',   '17/17'],     // Umbreon ☆
+    'CC016': ['dp4-15',    '15/106'],    // Claydol
+    'CC017': ['pl2-109',   '109/111'],   // Luxray GL LV.X
+    'CC018': ['pl3-145',   '145/147'],   // Garchomp C LV.X
+    'CC019': ['hgss1-107', '107/123'],   // Donphan
+    'CC020': ['bw1-113',   '113/114'],   // Reshiram
+    'CC021': ['bw1-114',   '114/114'],   // Zekrom
+    'CC022': ['bw4-54',    '54/99'],     // Mewtwo-EX
+    'CC023': ['xy1-97',    '97/146'],    // Xerneas-EX
+    'CC024': ['xy6-76',    '76/108'],    // M Rayquaza-EX
+    'CC025': ['sm2-60',    '60/145']     // Tapu Lele-GX
+  }
+};
+
+// A card's set id: stated, or read from its {lang}-{setId}-{number} id.
+// Never from its set NAME — that is the whole point of this section.
+const CARD_ID_PARTS = /^(?:en|ja|zh-tw|zh-cn|ko)-(.+)-([^-]+)$/;
+function setIdOf(card) {
+  if (!card) return null;
+  if (card.setId) return String(card.setId);
+  const m = String(card.cardId || card.api_card_id || card.id || '').match(CARD_ID_PARTS);
+  return m ? m[1] : null;
+}
+
+function familyOfSet(setId) {
+  if (!setId) return null;
+  return REPRINT_FAMILIES.find(f => f.sets.includes(setId)) || null;
+}
+
+// Which families reprinted THIS card? By id: 'base1-4' is reprinted by both
+// Celebrations and 30th Celebration. Empty for nearly every card.
+function familiesReprinting(card) {
+  const set = setIdOf(card);
+  if (!set || card.number == null) return [];
+  const key = set + '-' + normNum(card.number);
+  const out = [];
+  for (const rset of Object.keys(REPRINT_OF)) {
+    const hit = Object.values(REPRINT_OF[rset]).some(([orig]) => {
+      const i = orig.lastIndexOf('-');
+      return orig.slice(0, i) + '-' + normNum(orig.slice(i + 1)) === key;
+    });
+    if (hit) out.push(familyOfSet(rset));
+  }
+  return out;
+}
+
+// Which family does a LISTING say it is? First match wins, in table order.
+// `card` only widens the evidence (saysOnOriginal); it never decides.
+function familyNamedBy(title, card) {
+  const t = String(title || '');
+  // The reprint's own family counts too: "25th Anniversary" on a Celebrations
+  // card is that card saying what it is.
+  const reprinted = card ? familiesReprinting(card).concat(familyOfSet(setIdOf(card)) || []) : [];
+  return REPRINT_FAMILIES.find(f =>
+    f.says.some(re => re.test(t)) ||
+    (f.saysOnOriginal && reprinted.includes(f) && f.saysOnOriginal.some(re => re.test(t)))
+  ) || null;
+}
+
+// The original a Classic Collection card reprints, and the number printed on
+// it. null for every other card — which is nearly all of them.
+function reprintOf(card) {
+  const set = setIdOf(card);
+  const table = set && REPRINT_OF[set];
+  if (!table || card.number == null) return null;
+  const want = normNum(card.number);
+  const key = Object.keys(table).find(k => normNum(k) === want);
+  if (!key) return null;
+  const [original, printed] = table[key];
+  const [num, tot] = printed.split('/');
+  const lang = cardLanguage(card) || 'en';
+  return { set, family: familyOfSet(set), originalId: lang + '-' + original,
+           number: num, setTotal: tot ? parseInt(tot, 10) : null, printed };
+}
+
+// The card as a seller would describe it: a Classic Collection card carries
+// its original's number. Everything else passes through untouched.
+function asPrinted(card) {
+  const rp = reprintOf(card);
+  if (!rp) return card;
+  return Object.assign({}, card, { number: rp.number, setTotal: rp.setTotal,
+                                   catalogueNumber: card.number });
+}
 
 // Han, Hiragana, Katakana, Hangul.
 const CJK = /[぀-ヿ㐀-䶿一-鿿가-힯]/;
@@ -613,6 +786,12 @@ const EBAY_KEYWORD_LIMIT = 300;
 // why "Charizard VMAX 74 PSA 10" returned whatever eBay felt like.
 function buildQuery(card, grade, opts) {
   opts = opts || {};
+  // A Classic Collection card is asked for by its printed number and its
+  // family's name ("Lugia 149/147 30th Celebration"): sellers write "30th
+  // Celebration CC", rarely the full set name, and eBay needs every word.
+  const rp = reprintOf(card);
+  card = asPrinted(card);
+  if (rp) card = Object.assign({}, card, { setName: rp.family.ask });
   const bits = [];
   const name = card.nameEn || card.name || '';
   if (name) bits.push(name);
@@ -733,16 +912,27 @@ function printingConflict(title, card, opts) {
 
   // Reprint set that reuses this card's numbering. Checked BEFORE the
   // number, because the number WILL match — that is the whole problem.
+  // Our side is a set id; only the listing's side is words.
   const ourSet = String(card.setName || '');
-  for (const rp of REPRINT_MARKERS) {
-    if (!rp.re.test(t)) continue;
-    // The title names the OTHER anniversary set too — this marker is not
-    // what it is describing.
-    if (rp.reNot && rp.reNot.test(t)) continue;
-    const ourSetMatches = rp.set.test(ourSet) && !(rp.setNot && rp.setNot.test(ourSet));
-    if (!ourSetMatches) {
-      return `title is a ${rp.label} reprint, which reuses this numbering — ` +
-             `wanted ${ourSet || 'the original set'}`;
+  const ourFamily = familyOfSet(setIdOf(card));
+  const named = familyNamedBy(t, card);
+  if (named && named !== ourFamily) {
+    return `title is a ${named.label} reprint, which reuses this numbering — ` +
+           `wanted ${ourSet || 'the original set'}`;
+  }
+
+  // ...and the other direction. A Classic Collection card shares its number
+  // with an original that is usually worth far more, and a title for the
+  // original names no reprint — so silence is NOT neutral here the way it
+  // is everywhere else in this gate. The listing has to say it is the
+  // reprint, by the family's words or by the reprint's own year.
+  const rp = reprintOf(card);
+  if (rp && !named) {
+    const ys = yearsIn(t);
+    const saysOurYear = ys.some(y => Math.abs(y - rp.family.year) <= 1);
+    if (!saysOurYear) {
+      return `title does not say it is the ${rp.family.label} reprint — ` +
+             `${rp.printed} is also ${rp.originalId}, the original`;
     }
   }
 
@@ -796,11 +986,18 @@ function printingEvidence(card) {
   const language = cardLanguage(card);
   const year = card.setYear || null;
   const setName = card.setName ? String(card.setName) : null;
+  // The reprint check reads the set ID. Without one, our card is treated as
+  // belonging to no reprint family — so a reprint card would reject its own
+  // listings. Say so rather than let that pass for "nothing matched".
+  const setId = setIdOf(card);
+  const rp = reprintOf(card);
   const unchecked = [];
   if (!language) unchecked.push('language');
   if (!year) unchecked.push('year');
-  if (!setName) unchecked.push('reprint set');
-  return { language, year, setName, unchecked };
+  if (!setId) unchecked.push('reprint set');
+  return { language, year, setName, setId,
+           reprintOf: rp ? { originalId: rp.originalId, printed: rp.printed } : null,
+           unchecked };
 }
 
 // ── Verification ──────────────────────────────────────────────
@@ -849,6 +1046,10 @@ function verifyCore(title, card, grade, opts) {
   //     query builder and the title gate each drifted in this project.
   const printing = printingConflict(t, card, opts);
   if (printing) return { ok: false, reason: printing };
+
+  // From here on the card is compared as PRINTED: a 30th Classic Collection
+  // Lugia is "149/147" on the card and in every title, not our "029".
+  card = asPrinted(card);
 
   // 2. Grade must match exactly — grader AND number
   const found = gradesIn(t);
@@ -1070,7 +1271,9 @@ const API = {
   languageOf, cardLanguage, languageFromCardId, namesAConflictingSet, printingConflict,
   GRADERS, GRADERS_UNAMBIGUOUS, GRADERS_AMBIGUOUS, SLAB_GENERIC,
   SLAB_WORDS, NOT_A_SINGLE_CARD, NOT_A_SINGLE_CARD_TERMS,
-  SET_NAME_PHRASES, GENUINE_ART_PHRASES, REPRINT_MARKERS, boundedTerm,
+  SET_NAME_PHRASES, GENUINE_ART_PHRASES, boundedTerm,
+  REPRINT_FAMILIES, REPRINT_OF, setIdOf, familyOfSet, familyNamedBy, familiesReprinting,
+  reprintOf, asPrinted,
   EBAY_KEYWORD_LIMIT
 };
 

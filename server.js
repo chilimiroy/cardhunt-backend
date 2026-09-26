@@ -1708,6 +1708,12 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     number: card.number,
     setTotal: card.set_total,
     setName: card.set_name_en || card.set_name,
+    // The reprint gate reads the SET ID, never the set name: "30th
+    // Celebration" containing "Celebration" is how that gate was disabled
+    // for 188 cards. Without this field every card here would be treated as
+    // belonging to no reprint family — and a Classic Collection card would
+    // reject its own listings.
+    setId: card.set_api_id,
     // The release year separates a card from its own reprint. Celebrations
     // (2021) reprints Base Set (1999) cards with the ORIGINAL 4/102
     // numbering and the words "Base Set" in the title, so number, set size

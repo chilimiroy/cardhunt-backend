@@ -306,6 +306,55 @@ function sellerCondition(title) {
   return { code: null, stated: false };
 }
 
+// ── eBay's OWN card condition — structured, and filterable in search ──
+//
+// Measured 2026-09-27 through /api/ebay/conditions, superseding the title
+// reading above for eBay:
+//   * item SUMMARIES carry no conditionDescriptors — 0 of 400;
+//   * full items (getItem) carry them — 100 of 100: every ungraded item a
+//     "Card Condition", every slab a grader, grade and cert number;
+//   * search takes aspect_filter on "Card Condition", and the filtered
+//     results agreed with each item's own descriptor 36 of 36 times on
+//     ungraded rows (the only strays were slabs, which the raw gate refuses);
+//   * "Not Specified" is NOT a filter — eBay ignores it and returns
+//     everything — so the unstated group can never be asked for this way.
+// So a raw condition costs ONE search, the same as it always has; reading
+// descriptors per listing would cost 25-75 getItem calls per view.
+//
+// eBay's scale has four values. It does not separate Mint from Near Mint,
+// and has no Damaged; those two map to the nearest value and the source
+// block says so, rather than offering a distinction eBay cannot make.
+const EBAY_CARD_CONDITION = {
+  M:   'Near Mint or Better',
+  NM:  'Near Mint or Better',
+  LP:  'Lightly Played (Excellent)',
+  MP:  'Moderately Played (Very Good)',
+  HP:  'Heavily Played (Poor)',
+  DMG: 'Heavily Played (Poor)'
+};
+const EBAY_CONDITION_CODES = ['NM', 'LP', 'MP', 'HP'];   // what eBay can actually tell apart
+
+// The aspect_filter for a raw grade, or null (Raw All, a graded search, or
+// a condition eBay has no value for).
+function ebayConditionFilter(grade) {
+  const g = parseGrade(grade);
+  if (g.kind !== 'raw' || !g.condition) return null;
+  // parseGrade reads a bare "Raw" as NM. That is "every raw listing", not
+  // a filter — only an explicitly stated condition narrows.
+  if (!/^\s*raw\s+\S/i.test(String(grade))) return null;
+  const value = EBAY_CARD_CONDITION[g.condition];
+  if (!value) return null;
+  return {
+    asked: g.condition,
+    code: g.condition === 'M' ? 'NM' : g.condition === 'DMG' ? 'HP' : g.condition,
+    value,
+    aspectFilter: 'categoryId:183454,Card Condition:{' + value + '}',
+    note: g.condition === 'M' ? 'eBay does not separate Mint from Near Mint'
+        : g.condition === 'DMG' ? 'eBay has no Damaged value; its lowest is Heavily Played (Poor)'
+        : null
+  };
+}
+
 // Find every grader+number in a title. Boundary-checked, so BGS 9 does
 // not match "BGS 9.5" — a half grade sells well above a whole one.
 function gradesIn(title) {
@@ -1280,6 +1329,7 @@ const API = {
   buildQuery, verify, filterListings,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
   qualifiersIn, sellerCondition, stripHitPoints,
+  EBAY_CARD_CONDITION, EBAY_CONDITION_CODES, ebayConditionFilter,
   GRADE_QUALIFIERS, RAW_CONDITIONS, RAW_CONDITION_PATTERNS,
   printingEvidence,
   languageOf, cardLanguage, languageFromCardId, namesAConflictingSet, printingConflict,

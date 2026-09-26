@@ -2431,12 +2431,14 @@ function setLowestFromListings(d, grade) {
 var CM = (typeof window !== 'undefined' && window.CardMatch) ? window.CardMatch : null;
 
 var STATUS_CONDITIONS = {
-  // Raw sub-conditions are SELLER-STATED — eBay's own condition field is
-  // binary. Measured across 447 live rows: 441 "Ungraded" plus 6
-  // localisations, identical whichever condition was asked for. The box
-  // says so, and unparseable listings go to an "unstated" group rather
-  // than vanishing.
-  Raw:   ['All', 'M', 'NM', 'LP', 'MP', 'HP', 'DMG'],
+  // Raw sub-conditions are eBay's OWN "Card Condition", asked of search as
+  // an aspect filter (T3, measured 2026-09-27: the coarse `condition` field
+  // is binary, but every ungraded item carries a structured Card Condition,
+  // and the filtered rows agreed with it 36 of 36 times). eBay's scale has
+  // four values: it does not separate Mint from Near Mint and has no
+  // Damaged, so M and DMG are not offered — a chip eBay cannot answer is a
+  // control backed by no data. The list is cardmatch's, not a copy.
+  Raw:   ['All'].concat((CM && CM.EBAY_CONDITION_CODES) || ['NM', 'LP', 'MP', 'HP']),
   // Every grade each company PUBLISHES, checked 2026-09-27 against its own
   // scale page rather than a summary of it. Three were not what we assumed:
   //   PSA  half grades exist - "between PSA 2 and PSA 9" (so 2.5-8.5, no
@@ -2556,10 +2558,11 @@ function renderSelector() {
   if (SEL.status === 'Raw') {
     note = SEL.condition === 'All'
       ? 'Every ungraded listing. No slabs.'
-      : 'Ungraded, and the seller wrote <strong>' + liveEsc(SEL.condition) + '</strong> in the title. '
-        + 'eBay has no condition scale for raw cards &mdash; this is a '
-        + '<strong>seller-stated</strong> claim, not a measurement. Listings whose '
-        + 'condition cannot be read are grouped as <em>unstated</em>, never dropped.';
+      : 'Ungraded, and listed as <strong>'
+        + liveEsc((CM && CM.EBAY_CARD_CONDITION && CM.EBAY_CARD_CONDITION[SEL.condition]) || SEL.condition)
+        + '</strong> in eBay&rsquo;s own Card Condition field &mdash; the seller&rsquo;s '
+        + 'declaration, in a structured field rather than the title. eBay does not separate Mint from '
+        + 'Near Mint. Shop listings with no such field are grouped as <em>unstated</em>, never dropped.';
   } else if (SEL.condition === 'All') {
     note = 'Every ' + liveEsc(who) + ' slab at any grade &mdash; and no other grader, and no raw. '
       + 'One query, not one per grade.';
@@ -3314,7 +3317,11 @@ function liveRow(l){
     + '<div style="flex:1;min-width:0">'
     + '<div class="lrow2-t">'
     + liveEsc(l.title) + '</div>'
-    + '<div style="font-size:11px;color:var(--mu);margin-top:3px">' + liveEsc(l.condition) + ' \u00b7 '
+    + '<div style="font-size:11px;color:var(--mu);margin-top:3px">' + liveEsc(l.condition)
+    // eBay's structured Card Condition, when the search was filtered on it.
+    + (l.conditionSource === 'ebay' && l.sellerCondition && CM && CM.EBAY_CARD_CONDITION
+        ? ' \u00b7 ' + liveEsc(CM.EBAY_CARD_CONDITION[l.sellerCondition]) : '')
+    + ' \u00b7 '
     + liveEsc(when) + bids + (l.seller ? ' \u00b7 ' + liveEsc(l.seller) : '')
     // A shop's asking price is not a sale and not a bid. The row says so
     // itself: it can be read far from anything else that would explain it,
@@ -3454,13 +3461,12 @@ async function renderLiveListings(card, grade){
 
   // ── The selection's second half, applied here ──
   //
-  // The GRADE went to the server and the gate enforced it. The raw
-  // sub-condition cannot: eBay has no condition scale for ungraded cards —
-  // 447 live rows returned 441 "Ungraded" plus 6 localisations, identical
-  // whichever condition was requested. So the sub-condition is read from
-  // the seller's title, server-side, and carried on the row as
-  // sellerCondition / sellerStated. It is a LABEL, and the gate never
-  // rejects on it.
+  // The GRADE went to the server and the gate enforced it. For eBay the raw
+  // sub-condition did too: the search was filtered on eBay's own Card
+  // Condition, and those rows arrive with conditionSource 'ebay'. Other
+  // sources (the Japanese shops) have no such field, so their condition is
+  // still read from the title and carried as sellerCondition /
+  // sellerStated — a LABEL the gate never rejects on.
   //
   // Filtering therefore happens here, and it must not make listings
   // disappear:
@@ -3506,9 +3512,8 @@ async function renderLiveListings(card, grade){
       + '<div style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;'
       + 'letter-spacing:.06em;margin-bottom:4px">Unstated condition &mdash; ' + unstated.length + '</div>'
       + '<div style="font-size:11px;color:var(--mu);line-height:1.6;margin-bottom:8px">'
-      + 'These are the same card, ungraded, but the seller did not write a condition in the '
-      + 'title. eBay has no condition field for raw cards, so there is nothing else to read. '
-      + 'They are shown rather than hidden &mdash; about half of all listings say nothing.'
+      + 'These are the same card, ungraded, from a source with no structured condition field, '
+      + 'and the title does not state one. They are shown rather than hidden.'
       + '</div>'
       + unstated.map(liveRow).join('')
       + '</div>';
@@ -3527,9 +3532,8 @@ async function renderLiveListings(card, grade){
     host.innerHTML = head
       + '<div style="font-size:11px;color:var(--mu);line-height:1.6">'
       + (condFilter
-          ? ('No listing states <strong>' + liveEsc(condFilter) + '</strong> in its title. '
-             + 'That is a claim by the seller, not a measurement &mdash; eBay has no condition '
-             + 'scale for ungraded cards.')
+          ? ('No listing of this card is marked <strong>' + liveEsc(condFilter) + '</strong> '
+             + 'in eBay&rsquo;s Card Condition field right now, and no shop title states it.')
           : ('No listing matched this exact card at this grade. A listing is only shown when its '
              + 'title confirms both the card and the set &mdash; a near miss is worse than nothing.'))
       + '</div>' + excludedNote() + unstatedBlock() + liveSourceNote(d) + '</div>';
@@ -5626,6 +5630,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-387c7dd-scales &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-849252b-ebaycond &middot; click to hide</div>
 </body>
 </html>

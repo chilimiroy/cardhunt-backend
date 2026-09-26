@@ -1339,7 +1339,12 @@ function normaliseListing(o) {
     //
     // A label, exactly like `edition` above. Nothing is rejected on it.
     sellerCondition: o.sellerCondition || null,
-    sellerStated: o.sellerStated === true
+    sellerStated: o.sellerStated === true,
+    // WHERE the condition came from: 'ebay' is eBay's structured Card
+    // Condition (the search was filtered on it), 'title' is prose. Dropped
+    // here, the page could not tell a marketplace field from a guess.
+    conditionSource: o.conditionSource || null,
+    titleCondition: o.titleCondition || null
   };
 }
 
@@ -1730,9 +1735,15 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // cardmatch.buildQuery is the single query builder, shared with the
   // frontend's deep links so a link and an API call ask the same question.
   const q = cm.buildQuery(matchCard, grade);
+  // A raw sub-condition is asked of eBay's own "Card Condition" aspect,
+  // which search can filter on. Measured: the filtered rows agreed with each
+  // item's descriptor 36 of 36 times. Same one call as before — each raw
+  // condition was already its own search. See cardmatch.ebayConditionFilter.
+  const condFilter = cm.ebayConditionFilter(grade);
   const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search'
     + '?q=' + encodeURIComponent(q)
-    + '&category_ids=183454&limit=' + Math.min(limit * 3, 100) + '&sort=price';
+    + '&category_ids=183454&limit=' + Math.min(limit * 3, 100) + '&sort=price'
+    + (condFilter ? '&aspect_filter=' + encodeURIComponent(condFilter.aspectFilter) : '');
 
   const call = await ebay.fetchEbay(db, {
     url, token, kind: 'search', background,
@@ -1854,8 +1865,12 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       // nothing but "Ungraded" on every one of these — measured across 447
       // live rows. cardmatch owns the parsing, including the "120 HP is Hit
       // Points" and "Charizard ex is not Excellent" traps.
-      sellerCondition: sc.code,
-      sellerStated: sc.stated
+      // Under a condition filter eBay has already answered, in its own
+      // structured field; the title is kept only as a second opinion.
+      sellerCondition: condFilter ? condFilter.code : sc.code,
+      sellerStated: condFilter ? true : sc.stated,
+      conditionSource: condFilter ? 'ebay' : (sc.stated ? 'title' : null),
+      titleCondition: sc.stated ? sc.code : null
     }));
   }
 
@@ -1871,6 +1886,9 @@ async function sourceEbay(card, grade, limit, opts = {}) {
            dropped: dropped.slice(0, 40),
            parserDisagreements: disagreements.slice(0, 20),
            gate: cm.printingEvidence(matchCard),
+           conditionFilter: condFilter
+             ? { asked: condFilter.asked, ebay: condFilter.value, note: condFilter.note }
+             : null,
            query: q };
 }
 
@@ -1963,6 +1981,9 @@ async function gatherListings(card, grade, limit, opts) {
       // "This shop does not carry that set" is a fact, not a failure, and
       // an empty list with no explanation reads as "no stock".
       if (r.value.note) sources[s.id].note = r.value.note;
+      // Which structured condition eBay was asked for — and what it cannot
+      // separate (Mint from Near Mint, Damaged from Heavily Played).
+      if (r.value.conditionFilter) sources[s.id].conditionFilter = r.value.conditionFilter;
 
       // Printing rejections (reprint / language / year) from a source that
       // does not use the `rejected` shape below. Reported even when zero:

@@ -148,7 +148,21 @@ const GRADE_QUALIFIERS = [
   { grader: 'CGC', name: 'PRISTINE',    re: /\bpristine\b/i,      aliases: ['pristine'] },
   // CGC's ordinary 10 is branded "Gem Mint". Naming it explicitly lets a
   // caller ask for the ordinary one and get the Pristine ones refused.
-  { grader: 'CGC', name: 'GEM MINT',    re: /\bgem\s*mint\b/i,    aliases: ['gem mint', 'gemmint', 'gem mt'] }
+  { grader: 'CGC', name: 'GEM MINT',    re: /\bgem\s*mint\b/i,    aliases: ['gem mint', 'gemmint', 'gem mt'] },
+  // SGC and TAG publish the same split as CGC — a Pristine 10 above an
+  // ordinary Gem Mint 10 (gosgc.com, taggrading.com/pages/scale: Pristine is
+  // TAG's 990-1000). AGS calls its top ten "Legendary" (agscard.com). Each
+  // offered in the selector, so each must parse here, or picking it would
+  // silently return the ordinary ten's list — or nothing.
+  { grader: 'SGC', name: 'PRISTINE',    re: /\bpristine\b/i,      aliases: ['pristine'] },
+  { grader: 'SGC', name: 'GEM MINT',    re: /\bgem\s*mint\b/i,    aliases: ['gem mint', 'gemmint', 'gem mt'] },
+  { grader: 'TAG', name: 'PRISTINE',    re: /\bpristine\b/i,      aliases: ['pristine'] },
+  { grader: 'TAG', name: 'GEM MINT',    re: /\bgem\s*mint\b/i,    aliases: ['gem mint', 'gemmint', 'gem mt'] },
+  // "Legendary" is also Legendary Collection and Legendary Treasures, so a
+  // bare word would refuse every ordinary AGS 10 of those sets. Only beside
+  // the ten does it mean the grade.
+  { grader: 'AGS', name: 'LEGENDARY',   re: /\b(?:10\s*legendary|legendary\s*10)\b/i, aliases: ['legendary'] },
+  { grader: 'AGS', name: 'GEM MINT',    re: /\bgem\s*mint\b/i,    aliases: ['gem mint', 'gemmint', 'gem mt'] }
 ];
 
 function qualifierFor(grader, text) {

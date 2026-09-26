@@ -2437,15 +2437,44 @@ var STATUS_CONDITIONS = {
   // says so, and unparseable listings go to an "unstated" group rather
   // than vanishing.
   Raw:   ['All', 'M', 'NM', 'LP', 'MP', 'HP', 'DMG'],
-  PSA:   ['All', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1'],
+  // Every grade each company PUBLISHES, checked 2026-09-27 against its own
+  // scale page rather than a summary of it. Three were not what we assumed:
+  //   PSA  half grades exist - "between PSA 2 and PSA 9" (so 2.5-8.5, no
+  //        9.5), plus FR 1.5. psacard.com/gradingstandards
+  //   TAG  no 9.5 - "half points on every grade level except for between 9
+  //        and 10". taggrading.com/pages/scale
+  //   ACE  whole grades only, and no Pristine. acegrading.com/grading-scale
+  //   AGS  10 Legendary, 10 Gem Mint, then WHOLE grades 9-2, 1.5, 1.
+  //        agscard.com/grading-standards
+  //   ISA  half grades "from ISA 1 to ISA 8" - no 9.5. isagrading.com/grading-scale
+  //   CGC  Pristine 10, Gem Mint 10, then halves to 1.5. cgccards.com
+  //   BGS  halves 1-10, 10 Pristine, Black Label = Pristine with four 10
+  //        subgrades. From beckett.com's own pages via search: the scale
+  //        page itself was down for maintenance on the day.
+  //   SGC  10 Pristine, 10 Gem Mint, halves below. From gosgc.com via
+  //        search; the scale page renders client-side and could not be read.
+  // A grade offered here that a company never issues returns an empty list,
+  // indistinguishable from "no listings" - hence the check.
+  PSA:   ['All', '10', '9', '8.5', '8', '7.5', '7', '6.5', '6', '5.5', '5', '4.5', '4',
+          '3.5', '3', '2.5', '2', '1.5', '1'],
   // '10 Pristine' is Beckett's own name for its ordinary 10 (Roy's list).
   // It is SENT as 'BGS 10' - see selectorGrade - so the Black Label, a
   // different and far dearer grade, is still refused from it.
-  BGS:   ['All', '10 Black Label', '10 Pristine', '9.5', '9', '8.5', '8', 'lower'],
-  CGC:   ['All', '10 Pristine', '10 Gem Mint', '9.5', '9', '8.5', '8', 'lower'],
-  SGC:   ['All', '10', '9.5', '9', '8.5', '8', 'lower'],
-  TAG:   ['All', '10', '9', '8', 'lower'],
-  Other: ['All', '10', '9.5', '9', '8.5', '8', 'lower']
+  BGS:   ['All', '10 Black Label', '10 Pristine', '9.5', '9', '8.5', '8', '7.5', '7', '6.5',
+          '6', '5.5', '5', '4.5', '4', '3.5', '3', '2.5', '2', '1.5', '1'],
+  CGC:   ['All', '10 Pristine', '10 Gem Mint', '9.5', '9', '8.5', '8', '7.5', '7', '6.5',
+          '6', '5.5', '5', '4.5', '4', '3.5', '3', '2.5', '2', '1.5', '1'],
+  SGC:   ['All', '10 Pristine', '10 Gem Mint', '9.5', '9', '8.5', '8', '7.5', '7', '6.5',
+          '6', '5.5', '5', '4.5', '4', '3.5', '3', '2.5', '2', '1.5', '1'],
+  TAG:   ['All', '10 Pristine', '10 Gem Mint', '9', '8.5', '8', '7.5', '7', '6.5',
+          '6', '5.5', '5', '4.5', '4', '3.5', '3', '2.5', '2', '1.5', '1'],
+  ACE:   ['All', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1'],
+  AGS:   ['All', '10 Legendary', '10 Gem Mint', '9', '8', '7', '6', '5', '4', '3', '2', '1.5', '1'],
+  ISA:   ['All', '10', '9', '8.5', '8', '7.5', '7', '6.5', '6', '5.5', '5', '4.5', '4',
+          '3.5', '3', '2.5', '2', '1.5', '1'],
+  // Graders whose scale nobody has checked get the grader-wide search only.
+  // "All" cannot name a grade the company does not issue; a guessed list can.
+  Other: ['All']
 };
 
 // "Other" offers the remaining graders cardmatch knows about, so the list
@@ -2454,10 +2483,15 @@ var STATUS_CONDITIONS = {
 // had buttons of their own - lead the Other list, each keeping its own
 // condition scale in STATUS_CONDITIONS.
 var TOP_STATUSES = ['Raw', 'PSA', 'BGS', 'CGC', 'Other'];
+// ACE was never missing from cardmatch - it is in GRADERS_AMBIGUOUS, because
+// "ACE SPEC" is a rarity and the bare word is not a slab. It was missing from
+// THIS list, which read only the unambiguous graders. The gate still needs a
+// number beside "ACE"; the selector always sends one, or the grader-wide mode.
+var VERIFIED_OTHER = ['SGC', 'TAG', 'ACE', 'AGS', 'ISA'];
 function otherGraders() {
-  var known = ['PSA', 'BGS', 'CGC', 'SGC', 'TAG'];
-  var all = (CM && CM.GRADERS_UNAMBIGUOUS) ? CM.GRADERS_UNAMBIGUOUS : ['BVG', 'CSG', 'AGS', 'HGA'];
-  return ['SGC', 'TAG'].concat(all.filter(function (g) { return known.indexOf(g) < 0 && g !== 'AI GRADE'; }));
+  var known = ['PSA', 'BGS', 'CGC'].concat(VERIFIED_OTHER);
+  var all = (CM && CM.GRADERS_UNAMBIGUOUS) ? CM.GRADERS_UNAMBIGUOUS : ['BVG', 'CSG', 'HGA'];
+  return VERIFIED_OTHER.concat(all.filter(function (g) { return known.indexOf(g) < 0 && g !== 'AI GRADE'; }));
 }
 // The condition scale for the current status. Under Other it is the chosen
 // grader's own scale where one is defined (SGC, TAG), the generic one if not.
@@ -2476,7 +2510,6 @@ function selectorGrade() {
   if (st === 'Raw') return cond === 'All' ? 'Raw' : 'Raw ' + cond;
   var grader = (st === 'Other') ? (SEL.otherGrader || otherGraders()[0] || 'BVG') : st;
   if (cond === 'All')   return grader + ' *';       // grader-wide, one query
-  if (cond === 'lower') return grader + ' *';       // see note in renderSelector
   if (grader === 'BGS' && cond === '10 Pristine') return 'BGS 10';   // a label, not a qualifier
   return grader + ' ' + cond;
 }
@@ -2530,13 +2563,18 @@ function renderSelector() {
   } else if (SEL.condition === 'All') {
     note = 'Every ' + liveEsc(who) + ' slab at any grade &mdash; and no other grader, and no raw. '
       + 'One query, not one per grade.';
-  } else if (SEL.condition === 'lower') {
-    note = 'Asked as a grader-wide ' + liveEsc(who) + ' search; grades above 8 are '
-      + 'filtered out of the results below.';
+    // Say why there is nothing else to pick, rather than look unfinished.
+    if (SEL.status === 'Other' && !STATUS_CONDITIONS[who]) {
+      note += ' ' + liveEsc(who) + '&rsquo;s own grading scale has not been checked, so no single '
+        + 'grade is offered &mdash; a grade it never issues would return an empty list that looks '
+        + 'like no listings.';
+    }
   } else {
     note = 'Only ' + liveEsc(who) + ' ' + liveEsc(SEL.condition) + '.';
     if (SEL.condition === '10 Black Label') note += ' An ordinary BGS 10 is a different grade and is refused.';
-    if (SEL.condition === '10 Pristine' && who === 'CGC') note += ' An ordinary CGC 10 Gem Mint is a different grade and is refused.';
+    if (SEL.condition === '10 Pristine' && who !== 'BGS') note += ' An ordinary ' + liveEsc(who) + ' 10 Gem Mint is a different grade and is refused.';
+    if (SEL.condition === '10 Legendary') note += ' An ordinary AGS 10 Gem Mint is a different grade and is refused.';
+    if (SEL.condition === '10 Gem Mint') note += ' The ordinary 10. A ' + (who === 'AGS' ? 'Legendary' : 'Pristine') + ' 10 is refused.';
     if (SEL.condition === '10 Pristine' && who === 'BGS') note += ' Beckett&rsquo;s ordinary 10. Black Labels are refused &mdash; they sell for several times a regular 10.';
   }
   h += '<div class="selnote">' + note + '</div>';
@@ -3446,17 +3484,6 @@ async function renderLiveListings(card, grade){
       }
     });
     rows = keep;
-  }
-
-  // "lower" on a graded status means everything below 8. The query was
-  // grader-wide, so the narrowing happens on the answer.
-  if (SEL.status !== 'Raw' && SEL.condition === 'lower') {
-    var before = rows.length;
-    rows = rows.filter(function (l) {
-      var m = String(l.title || '').match(/\b(?:PSA|BGS|CGC|SGC|TAG|BVG|CSG|AGS|HGA)\s*[-:]?\s*(10|[1-9](?:\.5)?)\b/i);
-      return m ? parseFloat(m[1]) < 8 : false;
-    });
-    wrongCond += before - rows.length;
   }
 
   // "Checked" is the whole difference between this block and the search
@@ -5599,6 +5626,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-2515a23-printruns &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-387c7dd-scales &middot; click to hide</div>
 </body>
 </html>

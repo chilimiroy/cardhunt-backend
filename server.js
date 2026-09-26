@@ -3217,7 +3217,7 @@ app.get('/api/ebay/conditions/:cardId', async (req, res) => {
     // every condition-like aspect run one filtered search per value. The
     // aspect name and values are eBay's own, read from the response — never
     // supplied by the caller.
-    let aspects = null;
+    let aspects = null, aspectCalls = 0;
     if (req.query.aspects === '1') {
       const ra = await ebay.fetchEbay(db, { url: url + '&fieldgroups=ASPECT_REFINEMENTS',
         token: auth.token, kind: 'search', meta: { cardId, probe: 'conditions-aspects' },
@@ -3229,7 +3229,9 @@ app.get('/api/ebay/conditions/:cardId', async (req, res) => {
         conditionDistributions: (ref.conditionDistributions || []).map(c => [c.condition, c.conditionId, c.matchCount]),
         condition: []
       };
-      for (const a of dists.filter(a => /condition|grade|grader/i.test(a.localizedAspectName))) {
+      const only = req.query.aspect ? String(req.query.aspect) : null;
+      for (const a of dists.filter(a => /condition|grade|grader/i.test(a.localizedAspectName) &&
+                                        (!only || a.localizedAspectName === only))) {
         const vals = (a.aspectValueDistributions || []).slice(0, 8);
         const entry = { name: a.localizedAspectName,
           values: vals.map(v => [v.localizedAspectValue, v.matchCount]), filtered: [] };
@@ -3240,9 +3242,24 @@ app.get('/api/ebay/conditions/:cardId', async (req, res) => {
             token: auth.token, kind: 'search', meta: { cardId, probe: 'conditions-aspect-filter' },
             countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
           const its = (rf.ok && rf.data && rf.data.itemSummaries) || [];
+          // ?verify=N — does the filter AGREE with each item's own
+          // descriptor? Two paths to one fact, asserted to match: getItem on
+          // the first N results of every filtered search.
+          const agree = [];
+          for (const it of its.slice(0, Math.min(5, parseInt(req.query.verify, 10) || 0))) {
+            const gi = await ebay.fetchEbay(db, {
+              url: 'https://api.ebay.com/buy/browse/v1/item/' + encodeURIComponent(it.itemId),
+              token: auth.token, kind: 'item', meta: { cardId, probe: 'conditions-verify' },
+              countFrom: () => 1 });
+            aspectCalls++;
+            const ds = gi.ok ? descOf(gi.data.conditionDescriptors) : [];
+            const said = ds.filter(d => /condition|grade/i.test(d.name))
+              .map(d => d.name + ': ' + d.values.join('/')).join('; ');
+            agree.push({ title: (it.title || '').slice(0, 60), descriptor: said || '(none)' });
+          }
           entry.filtered.push({ value: v.localizedAspectValue, ok: rf.ok, total: rf.ok ? rf.data.total : null,
             returned: its.length, firstTitles: its.slice(0, 3).map(i => i.title),
-            firstIds: its.slice(0, 3).map(i => i.itemId) });
+            firstIds: its.slice(0, 3).map(i => i.itemId), agree });
         }
         aspects.condition.push(entry);
       }
@@ -3256,7 +3273,7 @@ app.get('/api/ebay/conditions/:cardId', async (req, res) => {
                  withDescriptors: itemsWithDescriptors,
                  condition: itemCondition, descriptors: itemDescriptors, samples },
       quotaSpent: 1 + itemsFetched + itemErrors +
-        (aspects ? 1 + aspects.condition.reduce((n, e) => n + e.filtered.length, 0) : 0),
+        (aspects ? 1 + aspects.condition.reduce((n, e) => n + e.filtered.length, 0) + aspectCalls : 0),
       stored: false
     };
     conditionProbeCache.set(key, { at: Date.now(), body });

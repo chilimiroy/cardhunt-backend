@@ -3128,6 +3128,107 @@ app.post('/ebay/deletion', (req, res) => {
 // READ-ONLY with respect to card data. It writes only the quota ledger,
 // which is the point of the ledger.
 // ══════════════════════════════════════════════════════════════
+// ── Where does eBay state a raw card's condition? A MEASUREMENT, not a feature ──
+//
+//   GET /api/ebay/conditions/:cardId?grade=Raw%20NM&items=20
+//
+// The coarse `condition` field on 447 live rows said "Ungraded" (or a
+// localisation of it) every time. eBay also has trading-card condition
+// DESCRIPTORS — a structured "Card Condition" for ungraded cards — and the
+// question is whether they reach us at all, and at what quota cost:
+//
+//   1. one search call: does ANY item summary carry conditionDescriptors?
+//      (the summary's full key set is reported, so absence is visible)
+//   2. `items` getItem calls (0 by default, capped at 25): does the full
+//      item carry them, and with what values?
+//
+// Read-only and never stored: it returns COUNTS and a few samples, exactly
+// as /api/listings serves rows for a request. It takes a card id, never a
+// URL. Cached 30 minutes, because a probe that can be hammered spends the
+// quota it exists to measure.
+const conditionProbeCache = new Map();
+app.get('/api/ebay/conditions/:cardId', async (req, res) => {
+  const cardId = req.params.cardId;
+  const grade = String(req.query.grade || 'Raw NM');
+  const nItems = Math.max(0, Math.min(25, parseInt(req.query.items, 10) || 0));
+  const key = [cardId, grade, nItems].join('|');
+  const hit = conditionProbeCache.get(key);
+  if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') {
+    return res.json(Object.assign({ cached: true, cachedAgeSec: Math.round((Date.now() - hit.at) / 1000) }, hit.body));
+  }
+  try {
+    if (!ebay.ebayEnabled()) return res.status(503).json({ error: 'EBAY_ENABLED=false' });
+    const card = await resolveListingCard(cardId);
+    if (!card) return res.status(404).json({ error: 'card not in catalogue', cardId });
+    const auth = await getEbayTokenDetailed({});
+    if (!auth.token) return res.status(503).json({ error: auth.reason || auth.error || 'no token' });
+
+    const q = cm.buildQuery({
+      name: card.name_en || card.name, nameEn: card.name_en || null, number: card.number,
+      setTotal: card.set_total, setName: card.set_name_en || card.set_name,
+      setId: card.set_api_id, lang: gateLanguage(card)
+    }, grade);
+    const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search?q=' + encodeURIComponent(q)
+      + '&category_ids=183454&limit=100';
+    const call = await ebay.fetchEbay(db, { url, token: auth.token, kind: 'search',
+      meta: { cardId, grade, query: q, probe: 'conditions' },
+      countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
+    if (!call.ok) return res.status(502).json({ error: call.reason || call.blocked, query: q });
+
+    const items = (call.data && call.data.itemSummaries) || [];
+    const tally = (m, k) => { m[k] = (m[k] || 0) + 1; };
+    const summaryKeys = {}, summaryCondition = {}, summaryDescriptors = {};
+    let summariesWithDescriptors = 0;
+    const descOf = arr => (arr || []).map(d => ({
+      name: d.name, values: (d.values || []).map(v => v.content || v.value || v) }));
+    for (const it of items) {
+      Object.keys(it).forEach(k => tally(summaryKeys, k));
+      tally(summaryCondition, `${it.condition || '(none)'} [${it.conditionId || '-'}]`);
+      if (it.conditionDescriptors && it.conditionDescriptors.length) {
+        summariesWithDescriptors++;
+        descOf(it.conditionDescriptors).forEach(d => d.values.forEach(v => tally(summaryDescriptors, d.name + ': ' + v)));
+      }
+    }
+
+    // The per-item half: only as many calls as were asked for.
+    const itemDescriptors = {}, itemCondition = {}, samples = [];
+    let itemsFetched = 0, itemsWithDescriptors = 0, itemErrors = 0;
+    for (const it of items.slice(0, nItems)) {
+      const g = await ebay.fetchEbay(db, {
+        url: 'https://api.ebay.com/buy/browse/v1/item/' + encodeURIComponent(it.itemId),
+        token: auth.token, kind: 'item', meta: { cardId, probe: 'conditions' },
+        countFrom: () => 1 });
+      if (!g.ok) { itemErrors++; if (g.blocked) break; continue; }
+      itemsFetched++;
+      const full = g.data || {};
+      tally(itemCondition, `${full.condition || '(none)'} [${full.conditionId || '-'}]`);
+      const ds = descOf(full.conditionDescriptors);
+      if (ds.length) itemsWithDescriptors++;
+      ds.forEach(d => d.values.forEach(v => tally(itemDescriptors, d.name + ': ' + v)));
+      if (samples.length < 25) {
+        const sc = cm.sellerCondition(full.title || it.title);
+        samples.push({ title: full.title || it.title, condition: full.condition,
+                       descriptors: ds, titleSays: sc.stated ? sc.code : null });
+      }
+    }
+
+    const body = {
+      cardId, grade, query: q,
+      search: { calls: 1, items: items.length, summariesWithDescriptors,
+                summaryKeys, condition: summaryCondition, descriptors: summaryDescriptors },
+      getItem: { asked: nItems, fetched: itemsFetched, errors: itemErrors,
+                 withDescriptors: itemsWithDescriptors,
+                 condition: itemCondition, descriptors: itemDescriptors, samples },
+      quotaSpent: 1 + itemsFetched + itemErrors,
+      stored: false
+    };
+    conditionProbeCache.set(key, { at: Date.now(), body });
+    res.json(body);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('/api/ebay/quota', async (req, res) => {
   try {
     const out = await quota.status(db);

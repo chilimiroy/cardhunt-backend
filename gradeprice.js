@@ -218,8 +218,69 @@ function priceFor(agg, grade, rawPrice, multiplier, opts) {
   return est;
 }
 
+// ── Print runs: 1st Edition, Shadowless, Unlimited — only where they exist ──
+//
+// An EXPLICIT list, not a date rule. English 1st Edition ran from Base Set
+// (1999) to Neo Destiny (2002) and stopped there: the e-Card sets, Legendary
+// Collection and Base Set 2 never had one, so "anything before 2003" would
+// offer a 1st Edition group on four sets where it cannot exist. Checked
+// 2026-09-26 against TCGdex, whose set payload counts first-edition cards:
+// exactly these ten English sets report cardCount.firstEd > 0, and no other.
+// Shadowless is a Base Set print run and nothing else.
+//
+// Japanese is deliberately absent. Its "1st Edition" mark is a different
+// thing on different sets, and no set here has been checked — an unchecked
+// group is a control backed by no data.
+const FIRST_EDITION_SETS = ['base1', 'base2', 'base3', 'base5', 'gym1', 'gym2',
+                            'neo1', 'neo2', 'neo3', 'neo4'];
+const SHADOWLESS_SETS = ['base1'];
+
+function printRunsFor(setId, lang) {
+  if (lang && lang !== 'en') return [];
+  if (!FIRST_EDITION_SETS.includes(String(setId || ''))) return [];
+  return SHADOWLESS_SETS.includes(setId)
+    ? ['1st Edition', 'Shadowless', 'Unlimited']
+    : ['1st Edition', 'Unlimited'];
+}
+
+const RUN_NOT_STATED = 'Print run not stated';
+
+// Separate markets, each with its own median. null when the set has no
+// print runs, which tells the caller to show one list as before.
+//
+// A row is placed by what the SELLER wrote (listingparse's `edition`); a
+// title saying nothing goes to its own group rather than into Unlimited —
+// on Base Set that group is a mixture, and it is labelled as one. Nothing
+// is dropped: every row lands in exactly one group, in the order it came,
+// so flagged rows stay last within their group.
+function byPrintRun(listings, setId, lang) {
+  const runs = printRunsFor(setId, lang);
+  if (!runs.length) return null;
+  const groups = runs.map(run => ({ run, rows: [] }));
+  const other = {};
+  const unstated = { run: RUN_NOT_STATED, rows: [], unstated: true };
+  for (const l of listings || []) {
+    const ed = l.edition ? String(l.edition) : null;
+    const g = ed && groups.find(x => x.run === ed);
+    if (g) g.rows.push(l);
+    else if (ed) (other[ed] = other[ed] || { run: ed, rows: [] }).rows.push(l);
+    else unstated.rows.push(l);
+  }
+  return groups.concat(Object.values(other), [unstated]).map(g => {
+    const vals = g.rows.filter(usable).map(landedOf);
+    return Object.assign(g, {
+      count: g.rows.length,
+      median: vals.length ? median(vals) : null,
+      low: vals.length ? Math.min(...vals) : null,
+      priced: vals.length,
+      thin: vals.length < 3
+    });
+  });
+}
+
 const API = { aggregate, priceFor, fromMultiplier, median, landedOf, usable,
-              GRADE_MULTIPLIERS };
+              GRADE_MULTIPLIERS,
+              FIRST_EDITION_SETS, SHADOWLESS_SETS, printRunsFor, byPrintRun, RUN_NOT_STATED };
 
 // ── Dual mode: Node require() AND a browser <script> ──────────
 // Same arrangement as cardmatch.js and estimator.js: server.js serves this

@@ -3087,6 +3087,42 @@ function buildListings(card, grade) {
 // ── LISTING FINDER UI ─────────────────────────────────────────
 var LF = { grade: 'Raw NM', card: null };
 
+// ── 1st Edition, Shadowless, Unlimited: separate markets ──────
+// A Base Set Charizard at $105 and one at $10,000 were one list with one
+// headline. On the ten English sets that had a 1st Edition, the live rows
+// are split by the print run the SELLER stated, each run with its own
+// median. The set list and the grouping live in gradeprice.js, so the page
+// and node agree on which sets qualify; every other set — including any
+// 2026 set whose sellers write "1st edition" — renders one list, exactly
+// as before. Nothing is dropped: rows that state no print run get their own
+// group, named as a mixture, because on Base Set that is what it is.
+function livePrintRuns(rows) {
+  var GP = window.GradePrice, CM = window.CardMatch, card = LF.card || {};
+  var cid = card.id || card.cardId || '';
+  var groups = (GP && GP.byPrintRun && CM && CM.setIdOf)
+    ? GP.byPrintRun(rows, CM.setIdOf({ cardId: cid }), CM.cardLanguage({ cardId: cid }))
+    : null;
+  if (!groups) return rows.map(liveRow).join('');
+  return groups.map(function (g) {
+    var stats = g.median != null
+      ? (g.thin ? g.priced + ' priced &mdash; too few for a market price, median '
+                : 'median ') + fmtCurrency(g.median) + ' &middot; from ' + fmtCurrency(g.low)
+      : (g.count ? 'no usable price' : 'no live listing states this print run');
+    return '<div class="lrun" data-run="' + liveEsc(g.run) + '" style="margin-top:14px">'
+      + '<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;'
+      + 'font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;'
+      + 'padding-bottom:6px;border-bottom:2px solid var(--bd)">'
+      + '<span>' + liveEsc(g.run) + ' &mdash; ' + g.count + '</span>'
+      + '<span style="text-transform:none;letter-spacing:0;font-weight:600">' + stats + '</span></div>'
+      + (g.unstated && g.count
+          ? '<div style="font-size:11px;color:var(--fa);margin:6px 0">The seller did not say which print '
+            + 'run. On this set that is a mixture of all of them, so its median is not any one market.</div>'
+          : '')
+      + g.rows.map(liveRow).join('')
+      + '</div>';
+  }).join('');
+}
+
 function renderListingFinder(card) {
   LF.card = card;
   var host = document.getElementById('cd-listings');
@@ -3492,7 +3528,7 @@ async function renderLiveListings(card, grade){
           : '')
       + '</div>';
   }
-  if (live.length) html += live.map(liveRow).join('');
+  if (live.length) html += livePrintRuns(live);
   if (ended.length) {
     html += '<div style="font-size:10px;font-weight:700;color:var(--fa);margin:12px 0 4px;'
       + 'text-transform:uppercase;letter-spacing:.4px">Recently ended &mdash; comparables, not offers</div>'
@@ -5563,6 +5599,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260924-0cc88e7-measured &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-2515a23-printruns &middot; click to hide</div>
 </body>
 </html>

@@ -3479,6 +3479,59 @@ app.get('/api/ebay/conditions/:cardId', async (req, res) => {
   }
 });
 
+// ── Which raw condition values does eBay actually have? A MEASUREMENT ──
+//
+//   GET /api/ebay/conditionvalues[?cards=en-base1-4,en-base1-58]
+//
+// The M and DMG chips were removed (3235503) on the premise "eBay's scale has
+// four values — no Mint, no Damaged". That was read off ONE search's aspect
+// distribution, which only lists values present among those results. This
+// asks eBay directly, three ways: the category's condition POLICY (Sell
+// Metadata — the list a seller picks from), the category's ASPECTS
+// (Taxonomy), and live Card Condition distributions over several raw-heavy
+// cards. Read-only; card ids only (resolved from our catalogue).
+app.get('/api/ebay/conditionvalues', async (req, res) => {
+  try {
+    if (!ebay.ebayEnabled()) return res.status(503).json({ error: 'EBAY_ENABLED=false' });
+    const auth = await getEbayTokenDetailed({});
+    if (!auth.token) return res.status(503).json({ error: auth.reason || auth.error || 'no token' });
+    const out = { category: 183454 };
+    const get = (url, probe) => ebay.fetchEbay(db, { url, token: auth.token, kind: 'meta',
+      meta: { probe }, countFrom: () => 0 });
+
+    const pol = await get('https://api.ebay.com/sell/metadata/v1/marketplace/EBAY_US/get_item_condition_policies'
+      + '?filter=' + encodeURIComponent('categoryIds:{183454}'), 'condition-policy');
+    out.policy = pol.ok
+      ? ((pol.data.itemConditionPolicies || [])[0] || {}).itemConditions || pol.data
+      : { error: pol.reason || pol.blocked, status: pol.status };
+
+    const tax = await get('https://api.ebay.com/commerce/taxonomy/v1/category_tree/0/get_item_aspects_for_category'
+      + '?category_id=183454', 'condition-aspects');
+    out.aspects = tax.ok
+      ? (tax.data.aspects || []).filter(a => /condition|grade|grader/i.test(a.localizedAspectName))
+          .map(a => ({ name: a.localizedAspectName, values: (a.aspectValues || []).map(v => v.localizedValue) }))
+      : { error: tax.reason || tax.blocked, status: tax.status };
+
+    const ids = String(req.query.cards || 'en-base1-4,en-base1-58,en-base1-2,en-base1-15,en-neo1-9')
+      .split(',').map(s => s.trim()).filter(cardid.isOurCardId).slice(0, 6);
+    out.distributions = [];
+    for (const id of ids) {
+      const card = await resolveListingCard(id);
+      if (!card) { out.distributions.push({ cardId: id, error: 'not in catalogue' }); continue; }
+      const q = cm.buildQuery(ebayMatchCard(card), 'Raw');
+      const r = await ebay.fetchEbay(db, { url: 'https://api.ebay.com/buy/browse/v1/item_summary/search?q='
+          + encodeURIComponent(q) + '&category_ids=183454&limit=1&fieldgroups=ASPECT_REFINEMENTS',
+        token: auth.token, kind: 'search', meta: { cardId: id, probe: 'condition-values' },
+        countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
+      const dists = (r.ok && r.data.refinement && r.data.refinement.aspectDistributions) || [];
+      const cc = dists.find(a => a.localizedAspectName === 'Card Condition');
+      out.distributions.push({ cardId: id, query: q, total: r.ok ? r.data.total : null,
+        cardCondition: cc ? cc.aspectValueDistributions.map(v => [v.localizedAspectValue, v.matchCount]) : null });
+    }
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── What does filtering to NARROW cost, against the 75-row cap? A MEASUREMENT ──
 //
 //   GET /api/ebay/gradecost/:cardId?grade=PSA%208&pages=3

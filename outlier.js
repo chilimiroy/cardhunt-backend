@@ -97,6 +97,128 @@ function flagOutliers(listings, opts) {
   return { listings: out, stats };
 }
 
+// ── Priced AT a known reprint ─────────────────────────────────
+// Aquapolis Lugia 149/147, Raw, measured live 2026-09-27: 28 listings past
+// the gate, 14 of them at $350-$500 and naming no reprint. The 30th
+// Celebration Classic Collection Lugia reprints it with the same number; its
+// own 32 listings run $375-$950, median $450. The genuine 2003 card runs
+// $1,500-$15,050.
+//
+// "Cheap for this card" cannot see those rows: they are HALF the feed, so
+// they drag the median to $1,000 and sit at 0.35-0.5x of it. The sharper
+// question is "priced exactly where the reprint trades?", and it can only
+// be asked where a reprint relationship is KNOWN (cardmatch REPRINT_OF) —
+// so it cannot touch a card without one. The global ratio is not loosened.
+//
+// Four conditions, all required, so a genuine listing at a fair price is
+// not caught because a number nearby happens to be similar:
+//   1. the reprint has enough priced listings to have a band (MIN_SAMPLE);
+//   2. the ORIGINAL prices apart from it in this feed — at least
+//      REPRINT_MIN_ABOVE of its rows sit above the band, with their median
+//      REPRINT_SEPARATION x the reprint's;
+//   3. ...and in the catalogue: the stored number-matched market price
+//      (opts.marketPrice) is also REPRINT_SEPARATION x the reprint's median.
+//      Where the two cards trade alike, price is no evidence: Base Set
+//      Charizard raw runs $21-$350 live against a $290 reprint, because
+//      damaged genuine copies really do sell there — nothing is flagged;
+//   4. the listing falls inside the reprint's own interquartile range,
+//      widened by REPRINT_BAND_PAD either side.
+// FLAGS, never rejects. A genuine damaged original can sell there.
+const REPRINT_BAND_PAD   = 0.15;
+const REPRINT_SEPARATION = 2.5;
+const REPRINT_MIN_ABOVE  = 3;
+// Stated condition codes (cardmatch.sellerCondition / eBay's Card Condition)
+// that explain a low price on their own.
+const PLAYED = new Set(['MP', 'HP', 'DMG']);
+
+function quantile(sorted, q) {
+  if (!sorted.length) return null;
+  const pos = (sorted.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+}
+
+// reprint: { label, cardId, prices: [number] } — the reprint's own gated,
+// untrusted-rows-removed listing prices at the SAME grade.
+function flagReprintPriced(listings, reprint, opts) {
+  opts = opts || {};
+  const minSample  = opts.minSample  || MIN_SAMPLE;
+  const separation = opts.separation || REPRINT_SEPARATION;
+  const minAbove   = opts.minAbove   || REPRINT_MIN_ABOVE;
+  const pad        = opts.bandPad != null ? opts.bandPad : REPRINT_BAND_PAD;
+  const minMarket  = opts.minMarket  || MIN_MEDIAN;
+
+  const out = listings.map(l => Object.assign({}, l));
+  const rp = ((reprint && reprint.prices) || []).map(Number)
+    .filter(p => isFinite(p) && p > 0).sort((a, b) => a - b);
+  const stats = { reprint: reprint ? reprint.cardId : null,
+                  label: reprint ? reprint.label : null,
+                  sample: rp.length, applied: false, flagged: 0, reason: null };
+
+  if (rp.length < minSample) {
+    stats.reason = `only ${rp.length} priced reprint listings — too few to know where it trades`;
+    return { listings: out, stats };
+  }
+  stats.median = median(rp);
+  const lo = +(quantile(rp, 0.25) * (1 - pad)).toFixed(2);
+  const hi = +(quantile(rp, 0.75) * (1 + pad)).toFixed(2);
+  stats.band = [lo, hi];
+
+  const above = out.map(priceOf).filter(p => p !== null && p > hi);
+  stats.originalAbove = above.length;
+  stats.originalAboveMedian = above.length ? median(above) : null;
+  if (above.length < minAbove || stats.originalAboveMedian < stats.median * separation) {
+    stats.reason = `this card does not price apart from ${stats.label} here ` +
+      `(${above.length} listings above $${hi}` +
+      (above.length ? `, median $${stats.originalAboveMedian.toFixed(2)}` : '') +
+      `) — price is no evidence either way`;
+    return { listings: out, stats };
+  }
+  // ...and the catalogue must agree, independently of this feed. A few
+  // high rows exist in almost any feed; the stored number-matched market
+  // price is a second path to the same fact. It is the UNGRADED price, so
+  // on a graded search it is a lower bound — it can only make this refuse
+  // more often, never less. No stored price, no flag.
+  const mkt = Number(opts.marketPrice);
+  stats.marketPrice = isFinite(mkt) && mkt > 0 ? mkt : null;
+  if (stats.marketPrice == null) {
+    stats.reason = 'no stored market price for this card to confirm it prices apart from ' +
+      stats.label + ' — not applied';
+    return { listings: out, stats };
+  }
+  // The same floor flagOutliers keeps, for the same reason: under $15 a
+  // genuine played copy honestly sells at a reprint's level. Measured:
+  // Claydol 15/106 (market $5.15) "MP" at $1.99 against a $2 reprint.
+  if (stats.marketPrice < minMarket) {
+    stats.reason = `stored market price $${stats.marketPrice.toFixed(2)} is under $${minMarket} — ` +
+      'cheap cards spread widely for honest reasons';
+    return { listings: out, stats };
+  }
+  if (stats.marketPrice < stats.median * separation) {
+    stats.reason = `stored market price $${stats.marketPrice.toFixed(2)} is under ` +
+      `${separation}x the ${stats.label} median ($${stats.median.toFixed(2)}) — ` +
+      'the catalogue does not say this card prices apart, so price is no evidence';
+    return { listings: out, stats };
+  }
+
+  stats.applied = true;
+  stats.exemptPlayed = 0;
+  for (const l of out) {
+    const p = priceOf(l);
+    if (p === null || l.suspect) continue;       // a stronger flag stands
+    if (p >= lo && p <= hi) {
+      // A played copy has an honest reason to sit low: "Zekrom 114/114 Holo
+      // Damaged" at $19.99 is the genuine card at a fair price for it.
+      if (PLAYED.has(l.sellerCondition)) { stats.exemptPlayed++; continue; }
+      l.suspect = 'reprint-priced';
+      l.suspectReason = `$${p.toFixed(2)} is priced at the ${stats.label} median ` +
+        `($${stats.median.toFixed(2)}; it trades $${lo.toFixed(0)}-$${hi.toFixed(0)}) — ` +
+        `may be the reprint. This card's other listings run from $${Math.min(...above).toFixed(0)}`;
+      stats.flagged++;
+    }
+  }
+  return { listings: out, stats };
+}
+
 // How far down a flagged listing goes. Exported because the server sorts
 // on `live` as well and must not grow its own idea of the ranking — two
 // implementations of one ordering is how the estimator and the query
@@ -124,6 +246,7 @@ function sortWithSuspectsLast(listings) {
   });
 }
 
-module.exports = { flagOutliers, sortWithSuspectsLast, suspectRank, trustworthy,
+module.exports = { flagOutliers, flagReprintPriced, sortWithSuspectsLast, suspectRank, trustworthy,
                    median, priceOf,
+                   REPRINT_BAND_PAD, REPRINT_SEPARATION, REPRINT_MIN_ABOVE,
                    SUSPECT_RATIO, IMPLAUSIBLE_RATIO, MIN_SAMPLE, MIN_MEDIAN };

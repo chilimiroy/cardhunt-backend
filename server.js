@@ -2113,6 +2113,47 @@ async function gatherListings(card, grade, limit, opts) {
   const judged = outlier.flagOutliers(listings);
   listings = judged.listings;
 
+  // ── Priced at a known reprint's level ─────────────────────────
+  // Only where cardmatch KNOWS a reprint of this card (REPRINT_OF) — every
+  // other card skips this entirely, so the global ratio above stays as it
+  // is. The reprint's own gated listings, same grade, set its band.
+  // Reported per reprint in outliers.reprints, applied or not, and why.
+  const reprintCards = cm.reprintCardsOf(card);
+  if (reprintCards.length && !opts.noReprintCheck) {
+    judged.stats.reprints = [];
+    // The catalogue's own number-matched price: the second, independent
+    // path to "this card prices apart from its reprint". Real prices only.
+    const mp = await numberMatchedPrice(card.api_card_id).catch(() => null);
+    const marketPrice = mp && mp.isReal ? mp.price : null;
+    for (const rc of reprintCards) {
+      let prices = null, why = null;
+      try {
+        const hit = listingCacheGet(rc.cardId, grade);
+        let rows = hit && hit.listings;
+        if (!rows) {
+          const rcard = await resolveListingCard(rc.cardId);
+          if (!rcard) why = 'reprint card not in catalogue';
+          // noReprintCheck: a reprint has no reprint of its own today, but
+          // the recursion must not be able to start if REPRINT_OF grows one.
+          else rows = (await gatherListings(rcard, grade, 50,
+                         Object.assign({}, opts, { noReprintCheck: true }))).listings;
+        }
+        if (rows) prices = rows.filter(outlier.trustworthy).map(outlier.priceOf).filter(p => p != null);
+      } catch (e) { why = 'reprint listings failed: ' + String(e.message || e).slice(0, 120); }
+      if (!prices) {
+        judged.stats.reprints.push({ reprint: rc.cardId, label: rc.family && rc.family.label,
+                                     applied: false, reason: why || 'no reprint listings' });
+        continue;
+      }
+      const rj = outlier.flagReprintPriced(listings,
+        { cardId: rc.cardId, label: rc.family ? rc.family.label : rc.cardId, prices },
+        { marketPrice });
+      listings = rj.listings;
+      judged.stats.reprints.push(rj.stats);
+      judged.stats.flagged += rj.stats.flagged;
+    }
+  }
+
   // Cheapest LANDED cost first. Rows whose shipping the source did not state
   // sort on price alone and say so, rather than pretending shipping is zero.
   // Buyable first, then cheapest landed cost. An ended auction never

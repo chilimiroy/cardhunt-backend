@@ -672,6 +672,25 @@ function familiesReprinting(card) {
   return out;
 }
 
+// The reprint CARDS of this card, as our catalogue ids — what a caller needs
+// to fetch the reprint's own listings. 'en-ecard2-149' (Aquapolis Lugia) ->
+// [{ cardId: 'en-30th-c-029', family: <30th> }]. Empty for nearly every card.
+function reprintCardsOf(card) {
+  const set = setIdOf(card);
+  if (!set || card.number == null) return [];
+  const key = set + '-' + normNum(card.number);
+  const lang = cardLanguage(card) || 'en';
+  const out = [];
+  for (const rset of Object.keys(REPRINT_OF)) {
+    for (const [catNum, [orig]] of Object.entries(REPRINT_OF[rset])) {
+      const i = orig.lastIndexOf('-');
+      if (orig.slice(0, i) + '-' + normNum(orig.slice(i + 1)) !== key) continue;
+      out.push({ cardId: `${lang}-${rset}-${catNum}`, family: familyOfSet(rset) });
+    }
+  }
+  return out;
+}
+
 // Which family does a LISTING say it is? First match wins, in table order.
 // `card` only widens the evidence (saysOnOriginal); it never decides.
 function familyNamedBy(title, card) {
@@ -1336,7 +1355,7 @@ const API = {
   GRADERS, GRADERS_UNAMBIGUOUS, GRADERS_AMBIGUOUS, SLAB_GENERIC,
   SLAB_WORDS, NOT_A_SINGLE_CARD, NOT_A_SINGLE_CARD_TERMS,
   SET_NAME_PHRASES, GENUINE_ART_PHRASES, boundedTerm,
-  REPRINT_FAMILIES, REPRINT_OF, setIdOf, familyOfSet, familyNamedBy, familiesReprinting,
+  REPRINT_FAMILIES, REPRINT_OF, setIdOf, familyOfSet, familyNamedBy, familiesReprinting, reprintCardsOf,
   reprintOf, asPrinted,
   EBAY_KEYWORD_LIMIT
 };

@@ -3615,7 +3615,7 @@ app.get('/api/ebay/certprobe/:cardId', async (req, res) => {
   const bulk = Math.max(0, Math.min(5, parseInt(req.query.bulk, 10) || 0));
   const raw = req.query.graded === '0';
   const graderArg = String(req.query.grader || '').toUpperCase();
-  const key = JSON.stringify([cardId, pages, bulk, raw, graderArg]);
+  const key = JSON.stringify([cardId, pages, bulk, raw, graderArg, req.query.single || 0]);
   const hit = certProbeCache.get(key);
   if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') {
     return res.json(Object.assign({ cached: true }, hit.body));
@@ -3685,6 +3685,26 @@ app.get('/api/ebay/certprobe/:cardId', async (req, res) => {
             .map(a => [a.name, a.value])
         };
       }
+    }
+    // Measured 2026-09-28: getItems answers 403 "1100: Access denied" to this
+    // keyset — it is a restricted API. ?single=N measures the path that IS
+    // open, getItem, at one call per listing: the price of a cert number.
+    const single = Math.max(0, Math.min(25, parseInt(req.query.single, 10) || 0));
+    for (const it of items.slice(0, single)) {
+      if (full[it.itemId]) continue;
+      const r = await ebay.fetchEbay(db, {
+        url: 'https://api.ebay.com/buy/browse/v1/item/' + encodeURIComponent(it.itemId),
+        token: auth.token, kind: 'item', background: true, meta: { cardId, probe: 'certprobe-item' },
+        countFrom: () => 1 });
+      calls++;
+      if (!r.ok) { if (r.blocked) break; continue; }
+      full[it.itemId] = {
+        descriptors: (r.data.conditionDescriptors || []).map(d => ({
+          name: d.name, values: (d.values || []).map(v => v.content || v.value || v),
+          additional: (d.values || []).map(v => v.additionalInfo).filter(Boolean) })),
+        aspects: (r.data.localizedAspects || []).filter(a => /cert|grade|grader/i.test(a.name))
+          .map(a => [a.name, a.value])
+      };
     }
     for (const it of items) if (full[it.itemId]) it.full = full[it.itemId];
 

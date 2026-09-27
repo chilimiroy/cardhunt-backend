@@ -525,7 +525,13 @@ const NOT_A_SINGLE_CARD_TERMS = [
 // The one entry that is genuinely a pattern rather than a word: "50 cards",
 // "50cards". It carries its own boundaries deliberately and is kept apart
 // from the word list so the word list stays free of regex.
-const NOT_A_SINGLE_CARD_PATTERNS = ['\\d+\\s*cards?\\b'];
+// The second: a rarity or mechanic word followed by "set" — "Charizard
+// Venusaur Blastoise ex SAR Set 201/165", a three-card lot kept as one PSA 10
+// Charizard (live, $1,289 and $1,699.99, 2026-09-27). A bare "set" would
+// be wrong: of 727 real kept titles exactly one carried a standalone "set",
+// and it was a genuine single ("Dracaufeu Charizard - 4/102 - Set de Base").
+const NOT_A_SINGLE_CARD_PATTERNS = ['\\d+\\s*cards?\\b',
+  '\\b(?:ex|gx|vmax|vstar|sar|sir|chr|csr|ur|hr)\\s+set\\b'];
 
 // The boundaries are applied by boundedTerm, defined once near the top of
 // this file because the grader list needs it too.

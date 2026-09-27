@@ -1135,6 +1135,10 @@ function verifyCore(title, card, grade, opts) {
 
   // 2. Grade must match exactly — grader AND number
   const found = gradesIn(t);
+  let anyHit = null;
+  // Every accepting return goes through here, so the grade grader-wide mode
+  // read rides on the verdict whichever branch accepted.
+  const accept = r => Object.assign(r, anyHit || {});
   if (want.kind === 'graded') {
     if (!found.length) {
       return { ok: false, reason: `wants ${want.grader} ${want.anyGrade ? 'any grade' : want.grade}` +
@@ -1158,10 +1162,16 @@ function verifyCore(title, card, grade, opts) {
         return { ok: false, reason: 'title names more than one grading company: ' +
           found.map(f => f.grader + ' ' + f.grade).join(', ') };
       }
-      return { ok: true, grade: want.grader + ' ' + mine[0].grade,
-               qualifiers: qualifiersIn(t, want.grader) };
+      // NOT a return. This used to return ok here — before the name,
+      // number and set checks below ever ran — so in "PSA + All" mode any
+      // PSA slab of ANY card passed: "Pikachu 58/102 Base Set PSA 9" was
+      // kept as Base Set Charizard (found 2026-09-27). The grade is settled;
+      // the card still has to be the card.
+      anyHit = { grade: want.grader + ' ' + mine[0].grade, qualifiers: qualifiersIn(t, want.grader) };
     }
 
+    // The specific-grade checks. Grader-wide mode settled its grade above.
+    if (!want.anyGrade) {
     const hit = found.find(f => f.grader === want.grader && f.grade === want.grade);
     if (!hit) {
       const got = found.map(f => f.grader + ' ' + f.grade).join(', ');
@@ -1201,6 +1211,7 @@ function verifyCore(title, card, grade, opts) {
         }
       }
     }
+    }   // !want.anyGrade
   } else {
     // Raw: reject anything that says it is slabbed — but a card advertised
     // as "(PSA 10 Contender)" IS raw, and rejecting it here as well as from
@@ -1271,8 +1282,8 @@ function verifyCore(title, card, grade, opts) {
       return { ok: false, reason:
         `number matches but the title names ${conflict}, not ${card.setName}` };
     }
-    return { ok: true, reason: null, confidence: 'number+total',
-             matched: { number: exact.raw, grade: grade } };
+    return accept({ ok: true, reason: null, confidence: 'number+total',
+             matched: { number: exact.raw, grade: grade } });
   }
 
   // 5. No N/M pair. Accept only with a bare number AND the set name —
@@ -1289,8 +1300,8 @@ function verifyCore(title, card, grade, opts) {
       return { ok: false, reason:
         `title names ${conflict2}, not ${card.setName}` };
     }
-    return { ok: true, reason: null, confidence: 'number+setname',
-             matched: { number: wantNum, set: card.setName, grade: grade } };
+    return accept({ ok: true, reason: null, confidence: 'number+setname',
+             matched: { number: wantNum, set: card.setName, grade: grade } });
   }
 
   if (!bareNum && !setNamed) {

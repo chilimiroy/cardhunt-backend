@@ -3591,6 +3591,110 @@ app.get('/api/ebay/conditionvalues', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Is a slab's CERT NUMBER available, and where? A MEASUREMENT (T4 step 1) ──
+//
+//   GET /api/ebay/certprobe/:cardId?grader=PSA&pages=2&bulk=3
+//   GET /api/ebay/certprobe/:cardId?graded=0&pages=1          (raw titles, T2)
+//
+// Before any cert verification is designed, three questions, each answered
+// from eBay rather than assumed:
+//   · does a search SUMMARY carry it?  (every key on every summary is tallied)
+//   · is it a search ASPECT?           (eBay's own refinement names, listed)
+//   · does the full item carry it?     (getItems, 20 per call; ?bulk= calls)
+// It also returns every title, so how often sellers WRITE the number — and
+// how often they write "PSA10" unspaced (T2) — is counted locally from
+// eBay's own text, not from a sample typed by hand.
+//
+// Read-only; nothing stored (eBay's terms); takes a catalogue card id and a
+// grader name from our own list, never a URL. Costs pages + 1 + bulk calls,
+// all background, so it yields at the soft stop like ingestion does.
+const certProbeCache = new Map();
+app.get('/api/ebay/certprobe/:cardId', async (req, res) => {
+  const cardId = req.params.cardId;
+  const pages = Math.max(1, Math.min(3, parseInt(req.query.pages, 10) || 1));
+  const bulk = Math.max(0, Math.min(5, parseInt(req.query.bulk, 10) || 0));
+  const raw = req.query.graded === '0';
+  const graderArg = String(req.query.grader || '').toUpperCase();
+  const key = JSON.stringify([cardId, pages, bulk, raw, graderArg]);
+  const hit = certProbeCache.get(key);
+  if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') {
+    return res.json(Object.assign({ cached: true }, hit.body));
+  }
+  try {
+    if (!ebay.ebayEnabled()) return res.status(503).json({ error: 'EBAY_ENABLED=false' });
+    let filter;
+    if (raw) filter = 'categoryId:183454,Graded:{No}';
+    else if (graderArg) {
+      const gf = cm.GRADERS_UNAMBIGUOUS.concat(['TAG']).includes(graderArg) ? cm.ebayGradeFilter(graderArg + ' *') : null;
+      if (!gf) return res.status(400).json({ error: 'grader must be one eBay names, e.g. PSA, BGS, CGC, SGC, TAG' });
+      filter = gf.aspectFilter;
+    } else filter = 'categoryId:183454,Graded:{Yes}';
+    const card = await resolveListingCard(cardId);
+    if (!card) return res.status(404).json({ error: 'card not in catalogue', cardId });
+    const auth = await getEbayTokenDetailed({ background: true });
+    if (!auth.token) return res.status(503).json({ error: auth.reason || auth.error || 'no token' });
+    const q = cm.buildQuery(ebayMatchCard(card), raw ? 'Raw' : '');
+    const base = 'https://api.ebay.com/buy/browse/v1/item_summary/search?q=' + encodeURIComponent(q)
+      + '&category_ids=183454&limit=100&sort=price&aspect_filter=' + encodeURIComponent(filter);
+
+    const tally = (m, k) => { m[k] = (m[k] || 0) + 1; };
+    const items = [], summaryKeys = {};
+    let total = null, calls = 0, aspectNames = null;
+    for (let p = 0; p < pages; p++) {
+      const url = base + '&offset=' + (p * 100) + (p === 0 ? '&fieldgroups=ASPECT_REFINEMENTS,MATCHING_ITEMS' : '');
+      const r = await ebay.fetchEbay(db, { url, token: auth.token, kind: 'search', background: true,
+        meta: { cardId, probe: 'certprobe' },
+        countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
+      calls++;
+      if (!r.ok) { if (!items.length) return res.status(502).json({ error: r.reason || r.blocked, query: q }); break; }
+      total = r.data.total;
+      if (p === 0) {
+        const ref = r.data.refinement || {};
+        aspectNames = (ref.aspectDistributions || []).map(a => a.localizedAspectName);
+      }
+      const its = r.data.itemSummaries || [];
+      for (const it of its) {
+        Object.keys(it).forEach(k => tally(summaryKeys, k));
+        items.push({ itemId: it.itemId, title: it.title, price: it.price && +it.price.value,
+                     condition: it.condition || null,
+                     descriptors: it.conditionDescriptors || undefined });
+      }
+      if (its.length < 100 || (p + 1) * 100 >= total) break;
+    }
+
+    // The full item, 20 at a time. getItems is the bulk form of getItem; if
+    // eBay refuses it, say so with its status rather than quietly falling
+    // back to one call per item.
+    const full = {}; let bulkStatus = null;
+    for (let b = 0; b < bulk; b++) {
+      const ids = items.slice(b * 20, b * 20 + 20).map(i => i.itemId);
+      if (!ids.length) break;
+      const r = await ebay.fetchEbay(db, {
+        url: 'https://api.ebay.com/buy/browse/v1/item/?item_ids=' + encodeURIComponent(ids.join(',')),
+        token: auth.token, kind: 'item', background: true, meta: { cardId, probe: 'certprobe-items' },
+        countFrom: () => ids.length });
+      calls++;
+      if (!r.ok) { bulkStatus = { ok: false, reason: r.reason || r.blocked, status: r.status || null }; break; }
+      bulkStatus = { ok: true };
+      for (const it of (r.data.items || [])) {
+        full[it.itemId] = {
+          descriptors: (it.conditionDescriptors || []).map(d => ({
+            name: d.name, values: (d.values || []).map(v => v.content || v.value || v),
+            additional: (d.values || []).map(v => v.additionalInfo).filter(Boolean) })),
+          aspects: (it.localizedAspects || []).filter(a => /cert|grade|grader/i.test(a.name))
+            .map(a => [a.name, a.value])
+        };
+      }
+    }
+    for (const it of items) if (full[it.itemId]) it.full = full[it.itemId];
+
+    const body = { cardId, query: q, filter, ebayTotal: total, returned: items.length,
+                   summaryKeys, aspectNames, bulkStatus, calls, stored: false, items };
+    certProbeCache.set(key, { at: Date.now(), body });
+    res.json(body);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── What does filtering to NARROW cost, against the 75-row cap? A MEASUREMENT ──
 //
 //   GET /api/ebay/gradecost/:cardId?grade=PSA%208&pages=3

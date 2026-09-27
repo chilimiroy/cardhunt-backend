@@ -282,6 +282,12 @@ const RAW_CONDITION_PATTERNS = [
   { code: 'MP',  re: /\bmoderat(?:e|ely)\s*(?:played|play)\b/i },
   { code: 'LP',  re: /\blight(?:ly)?\s*(?:played|play)\b/i },
   { code: 'NM',  re: /\b(?:near\s*mint|nm)\b/i },
+  // "Excellent-Mint" / "EX-MT" is the grade BELOW Near Mint — eBay's own
+  // "Lightly played (Excellent)". Read as Mint, it sat in the Raw M list
+  // (live: "Blastoise … EX MT Excellent-Mint", 2026-09-27). Only the
+  // explicit spellings: a bare "ex" is the card mechanic ("Charizard ex
+  // Mint" really does claim Mint), and "EX MT" with a space is left alone.
+  { code: 'LP',  re: /\b(?:excellent[\s-]*(?:mint|mt)|ex-(?:mint|mt)|exmt)\b/i },
   { code: 'M',   re: /\bmint\b/i },
   // Bare abbreviations last, and only after the hit-points strip below.
   { code: 'HP',  re: /\bhp\b/i },

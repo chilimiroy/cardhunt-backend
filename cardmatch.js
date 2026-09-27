@@ -130,6 +130,22 @@ const GRADERS = GRADERS_UNAMBIGUOUS.concat(GRADERS_AMBIGUOUS);
 // "9.5", which sells well above a whole grade.
 const GRADE_NUM = '\\s*[-:]?\\s*(?:10|[1-9](?:\\.5)?)(?![\\d.])';
 
+// A grader name as it may stand before its grade. "PSA10" has no word
+// boundary between A and 1, so boundedTerm alone never read it. Measured
+// 2026-09-28 on real titles: unspaced in 3 of 829 eBay slabs (all
+// Japanese cards) and 494 of 652 Yahoo graded titles; across 868 eBay raw
+// and 344 Yahoo TAG TEAM / ACE SPEC titles the unspaced form fired on
+// PSA/BGS/CGC/ARS grades only — never on a card name.
+//
+// UNAMBIGUOUS graders only. TAG, ACE and MNT keep the strict boundary:
+// their strictness is what keeps TAG TEAM and ACE SPEC reachable, no title
+// in the sample wrote "TAG10", and loosening them would buy nothing.
+function graderToken(co) {
+  const b = boundedTerm(co);
+  if (GRADERS_AMBIGUOUS.includes(co) || !/\\b$/.test(b)) return b;
+  return b.slice(0, -2) + '(?:\\b|(?=\\d))';
+}
+
 // ── Qualified tens ────────────────────────────────────────────
 // "BGS 10" is not one grade. A BGS 10 Black Label — all four subgrades a
 // perfect 10 — sells for several times an ordinary BGS 10, and CGC 10
@@ -238,9 +254,11 @@ function stripSpeculative(title) {
   return String(title)
     .replace(/\(([^)]*)\)/g, (whole, inner) =>
       SPECULATIVE_GRADE.test(inner) ? ' ' : whole)
-    .replace(new RegExp('(?:' + GRADERS.map(boundedTerm).join('|') + ')' +
-      '\\s*[-:]?\\s*(?:10|[1-9](?:\\.5)?)\\s*(?:' +
-      'contender|candidate|potential|pot\\.?\\??|worthy|ready|hopeful)\\b', 'gi'), ' ');
+    // A bare "?" after the grade is the same claim: live, an Ungraded
+    // Umbreon VMAX titled "... | PSA10 ?" (2026-09-28).
+    .replace(new RegExp('(?:' + GRADERS.map(graderToken).join('|') + ')' +
+      '\\s*[-:]?\\s*(?:10|[1-9](?:\\.5)?)(?![\\d.])\\s*(?:(?:' +
+      'contender|candidate|potential|pot\\.?\\??|worthy|ready|hopeful)\\b|\\?)', 'gi'), ' ');
 }
 
 // ── Raw sub-condition, as the SELLER stated it ────────────────
@@ -443,7 +461,7 @@ function titleGradeClaims(title) {
   const t = stripSpeculative(String(title || ''));
   const out = gradesIn(t).map(f => ({ grader: f.grader, grade: f.grade }));
   for (const co of GRADERS) {
-    const re = new RegExp(boundedTerm(co) + GRADE_FILLER + '\\s*[-:]?\\s*(10|[1-9](?:\\.5)?)(?![\\d.\\/])', 'gi');
+    const re = new RegExp(graderToken(co) + GRADE_FILLER + '\\s*[-:]?\\s*(10|[1-9](?:\\.5)?)(?![\\d.\\/])', 'gi');
     let m;
     while ((m = re.exec(t))) {
       if (!out.some(o => o.grader === co && o.grade === m[1])) out.push({ grader: co, grade: m[1] });
@@ -458,7 +476,7 @@ function gradesIn(title) {
   const out = [];
   const t = stripSpeculative(title);
   for (const co of GRADERS) {
-    const re = new RegExp(boundedTerm(co) + '\\s*[-:]?\\s*(10|[1-9](?:\\.5)?)(?![\\d.])', 'gi');
+    const re = new RegExp(graderToken(co) + '\\s*[-:]?\\s*(10|[1-9](?:\\.5)?)(?![\\d.])', 'gi');
     let m;
     while ((m = re.exec(t))) out.push({ grader: co, grade: m[1] });
   }
@@ -483,6 +501,8 @@ const SLAB_GENERIC = ['graded', 'slab', 'slabbed', 'gem mint', 'gemmint',
 const SLAB_WORDS = new RegExp('(?:' + [].concat(
   // An unambiguous company name is slab evidence on its own.
   GRADERS_UNAMBIGUOUS.map(boundedTerm),
+  // ...including written against its grade: "PSA10" (see graderToken).
+  GRADERS_UNAMBIGUOUS.map(co => graderToken(co) + GRADE_NUM),
   // An ambiguous one only with a grade beside it — see GRADERS_AMBIGUOUS.
   GRADERS_AMBIGUOUS.map(co => boundedTerm(co) + GRADE_NUM),
   SLAB_GENERIC.map(boundedTerm)
@@ -1265,7 +1285,7 @@ function verifyCore(title, card, grade, opts) {
           `${sg.grader} ${sg.grade || '(any)'} — they disagree and neither is authoritative`, gradeConflict: true };
       }
       if (!found.length && sg.grade) {
-        const other = GRADERS_UNAMBIGUOUS.find(co => co !== sg.grader && new RegExp(boundedTerm(co), 'i').test(t));
+        const other = GRADERS_UNAMBIGUOUS.find(co => co !== sg.grader && new RegExp(graderToken(co), 'i').test(t));
         if (other) {
           return { ok: false, reason: `title names ${other}, eBay's grader field says ${sg.grader} — refused`,
                    gradeConflict: true };

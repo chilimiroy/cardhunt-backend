@@ -1735,6 +1735,10 @@ function ebayMatchCard(card) {
   };
 }
 
+// 3 pages of 75 = 225 rows: enough that a median stops moving, and a hard
+// ceiling on what one card view can spend. See the paging in sourceEbay.
+const EBAY_MAX_PAGES = 3;
+
 async function sourceEbay(card, grade, limit, opts = {}) {
   const background = !!opts.background;
 
@@ -1801,10 +1805,19 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // only — other marketplaces read a leading "-" as literal text.
   const tOnly = cm.titleOnlyCondition(grade);
   const qAsk = (tOnly && tOnly.code === 'M') ? q + ' -"near mint"' : q;
-  const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search'
+  // Paged past the first 75 only when eBay says there is more. Measured on
+  // five busy cards (/api/ebay/gradecost): the cap lost 79-82 wanted rows on
+  // one of them — ~20x what unset grade fields lose — and under sort=price it
+  // cuts the EXPENSIVE end, so `cheapest` was fine while every median built
+  // from these rows sat low. Capped at EBAY_MAX_PAGES so one popular card
+  // cannot spend seven calls; the response says when it stopped there.
+  const pageSize = Math.min(limit * 3, 100);
+  const pageUrl = offset => 'https://api.ebay.com/buy/browse/v1/item_summary/search'
     + '?q=' + encodeURIComponent(qAsk)
-    + '&category_ids=183454&limit=' + Math.min(limit * 3, 100) + '&sort=price'
+    + '&category_ids=183454&limit=' + pageSize + '&sort=price'
+    + (offset ? '&offset=' + offset : '')
     + (aspectFilter ? '&aspect_filter=' + encodeURIComponent(aspectFilter) : '');
+  const url = pageUrl(0);
 
   const call = await ebay.fetchEbay(db, {
     url, token, kind: 'search', background,
@@ -1832,7 +1845,39 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   if (!call.ok) throw new Error(call.reason);
 
   const d = call.data || {};
-  const items = d.itemSummaries || [];
+  const items = (d.itemSummaries || []).slice();
+  const ebayTotal = Number.isFinite(d.total) ? d.total : null;
+  let pagesFetched = 1, pageError = null, received = items.length;
+  const seen = new Set(items.map(it => it.itemId));
+  // Another page only while eBay's total says one exists and the last page
+  // came back full. A later page that fails keeps what page 1 delivered and
+  // says so — never an empty list, never a silent short one.
+  while (pagesFetched < EBAY_MAX_PAGES && ebayTotal != null
+         && ebayTotal > pagesFetched * pageSize
+         && (d.itemSummaries || []).length >= pageSize) {
+    const more = await ebay.fetchEbay(db, {
+      url: pageUrl(pagesFetched * pageSize), token, kind: 'search', background,
+      meta: { cardId: card.api_card_id, grade, query: q, page: pagesFetched + 1 },
+      countFrom: x => (x && x.itemSummaries ? x.itemSummaries.length : 0)
+    });
+    if (!more.ok) { pageError = more.reason || more.blocked || 'page fetch failed'; break; }
+    pagesFetched++;
+    const got = (more.data && more.data.itemSummaries) || [];
+    received += got.length;
+    // Offset paging over a live, price-sorted feed can repeat a row that
+    // moved between calls; count each item once.
+    for (const it of got) if (!seen.has(it.itemId)) { seen.add(it.itemId); items.push(it); }
+    if (got.length < pageSize) break;
+  }
+  const pages = {
+    fetched: pagesFetched, pageSize, maxPages: EBAY_MAX_PAGES, ebayTotal,
+    // A truncated result must say it is truncated: eBay holds more rows than
+    // were examined, and under sort=price the missing ones are the dearest.
+    truncated: !!pageError || (ebayTotal != null && ebayTotal > received),
+    duplicatesSkipped: received - items.length,
+    stoppedAtCap: pagesFetched >= EBAY_MAX_PAGES && ebayTotal != null && ebayTotal > pagesFetched * pageSize,
+    pageError
+  };
 
   // ── The gate ──
   // cardmatch.verify decides; listingparse labels. Every rejection carries a
@@ -1965,6 +2010,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
                  keptOnEbayFieldAlone: listings.filter(l => l.gradeSource === 'ebay').length,
                  refusedOnDisagreement: dropped.filter(d => d.gradeConflict).length }
              : null,
+           pages,
            query: qAsk };
 }
 
@@ -2062,6 +2108,7 @@ async function gatherListings(card, grade, limit, opts) {
       if (r.value.conditionFilter) sources[s.id].conditionFilter = r.value.conditionFilter;
       if (r.value.gradeFilter) sources[s.id].gradeFilter = r.value.gradeFilter;
       if (r.value.titleCondition) sources[s.id].titleCondition = r.value.titleCondition;
+      if (r.value.pages) sources[s.id].pages = r.value.pages;
 
       // Printing rejections (reprint / language / year) from a source that
       // does not use the `rejected` shape below. Reported even when zero:

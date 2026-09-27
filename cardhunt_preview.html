@@ -3420,7 +3420,12 @@ function liveSourceNote(d){
   var bits = [], src = d.sources || {};
   Object.keys(src).forEach(function(k){
     var v = src[k];
-    if (v.status === 'ok') bits.push(k + ': ' + v.count);
+    // A truncated eBay search says so: under sort=price the rows it never
+    // examined are the dearest, so the measured median above leans low.
+    var pg = v.pages;
+    if (v.status === 'ok') bits.push(k + ': ' + v.count
+      + (pg && pg.truncated ? ' (first ' + v.scanned + ' of ' + (pg.ebayTotal != null ? pg.ebayTotal : '?')
+          + ' examined' + (pg.pageError ? ', a page failed' : '') + ')' : ''));
     else if (v.status === 'unconfigured') bits.push(k + ': needs credentials');
     else if (v.status === 'error') bits.push(k + ': failed');
     else if (v.status === 'skipped') bits.push(k + ': n/a');
@@ -5704,6 +5709,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-16d767a-mdmg &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-b96f1e3-paging &middot; click to hide</div>
 </body>
 </html>

@@ -19,6 +19,9 @@
 // ══════════════════════════════════════════════════════════════
 
 // ── Grading companies, with the spellings people actually type ──
+// Pocket (digital-only) cards are never a search candidate — digital.js.
+const digital = require('./digital');
+
 const GRADERS = [
   { id: 'PSA',  patterns: ['psa'] },
   { id: 'BGS',  patterns: ['bgs', 'beckett'] },
@@ -267,6 +270,7 @@ async function resolveCard(db, parsed, opts) {
             ORDER BY recorded_at DESC LIMIT 1) AS price
     FROM cards c
     WHERE ${conds.join(' AND ')}
+      AND ${digital.visibleSql('c')}
     LIMIT 200`, params);
 
   // Score each candidate against everything the parse told us

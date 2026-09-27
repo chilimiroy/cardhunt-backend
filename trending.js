@@ -48,6 +48,10 @@
 
 'use strict';
 
+// Pocket (digital-only) cards never rank — digital.js. 33 of them carry
+// tcgplayer_market rows up to $498.88 matched against physical promos.
+const digital = require('./digital');
+
 const SORTS = {
   'price-desc': { label: 'Price: high to low',               kind: 'price' },
   'price-asc':  { label: 'Price: low to high',               kind: 'price' },
@@ -109,6 +113,7 @@ function priceSql(p) {
              l.recorded_at AS price_date,
              COUNT(*) OVER () AS eligible
       FROM latest l JOIN cards c ON c.api_card_id = l.card_api_id
+      WHERE ${digital.visibleSql('c')}
       ORDER BY l.price_usd ${dir}, c.api_card_id
       LIMIT $2`,
     values: [langPattern(p.lang), p.limit],
@@ -147,7 +152,8 @@ function moverSql(p) {
              cur.recorded_at AS price_date,
              prev.price_usd AS prev_price, prev.recorded_at AS prev_date
       FROM cur JOIN prev USING (card_api_id)
-      JOIN cards c ON c.api_card_id = cur.card_api_id`,
+      JOIN cards c ON c.api_card_id = cur.card_api_id
+      WHERE ${digital.visibleSql('c')}`,
     values: [langPattern(p.lang), MAX_AGE_DAYS, w.days, w.days + w.tolDays],
   };
 }

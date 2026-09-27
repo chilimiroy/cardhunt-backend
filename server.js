@@ -19,6 +19,11 @@ const lp = require('./listingparse');
 // at 1/400th of the price. The card's own listings are the only evidence.
 // See TASK.md T2 and outlier.js.
 const outlier = require('./outlier');
+// Pokémon TCG Pocket sets are hidden at THIS layer — every read of `cards`
+// carries digital.visibleSql(), so no screen can forget to filter them.
+// The rows stay in the database. See digital.js; preserve.test.js asserts
+// every `FROM cards` / `JOIN cards` here either filters or says why not.
+const digital = require('./digital');
 
 const app = express();
 app.use(cors({ origin: '*' }));
@@ -175,7 +180,7 @@ app.get('/', async (req, res) => {
   if (db) {
     try {
       const t0 = Date.now();
-      const c = await db.query('SELECT COUNT(*)::int AS cards FROM cards');
+      const c = await db.query('SELECT COUNT(*)::int AS cards FROM cards /* digital:unfiltered - rows stored, not rows shown */');
       const p = await db.query('SELECT COUNT(*)::int AS prices FROM price_history');
       const real = await db.query(
         "SELECT COUNT(*)::int AS n FROM price_history WHERE source NOT LIKE 'estimate%'");
@@ -220,20 +225,20 @@ app.get('/api/db/check', async (req, res) => {
   try {
     const c = await db.query(`
       SELECT split_part(api_card_id,'-',1) AS lang, COUNT(*)::int AS n
-      FROM cards GROUP BY 1 ORDER BY n DESC`);
+      FROM cards /* digital:unfiltered - storage diagnostic */ GROUP BY 1 ORDER BY n DESC`);
     out.checks.cardsByLang = c.rows;
   } catch (e) { out.checks.cardsByLang = 'ERROR ' + e.message; }
 
   try {
     const s = await db.query(
-      `SELECT api_card_id, name, set_api_id FROM cards
+      `SELECT api_card_id, name, set_api_id FROM cards /* digital:unfiltered - base1 probe */
        WHERE set_api_id = 'base1' ORDER BY api_card_id LIMIT 5`);
     out.checks.sampleBase1 = s.rows;
   } catch (e) { out.checks.sampleBase1 = 'ERROR ' + e.message; }
 
   try {
     const one = await db.query(
-      `SELECT api_card_id, name FROM cards WHERE api_card_id = 'en-base1-4'`);
+      `SELECT api_card_id, name FROM cards /* digital:unfiltered - base1 probe */ WHERE api_card_id = 'en-base1-4'`);
     out.checks.lookup_en_base1_4 = one.rows.length ? one.rows[0] : 'NOT FOUND';
   } catch (e) { out.checks.lookup_en_base1_4 = 'ERROR ' + e.message; }
 
@@ -367,9 +372,25 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
           ) lp ON TRUE
           WHERE c.set_api_id = ANY($1)
             AND c.api_card_id LIKE $2
+            AND ${digital.visibleSql('c')}
           ORDER BY NULLIF(regexp_replace(c.number,'[^0-9]','','g'), '')::int NULLS LAST,
                    c.number
         `, [[...aliases], dbLang + '-%']);
+
+        // Hidden is an ANSWER, not an absence. Zero rows falls through to
+        // live TCGdex below — which carries Pocket — so without this a
+        // hidden set would be redrawn from TCGdex as estimates, the way 14
+        // unaliased sets once collapsed to mockP().
+        if (!rows.rows.length) {
+          const hid = await db.query(`
+            SELECT 1 FROM cards c /* digital:unfiltered - detects the hidden set */
+            WHERE c.set_api_id = ANY($1) AND c.api_card_id LIKE $2
+              AND NOT ${digital.visibleSql('c')} LIMIT 1`, [[...aliases], dbLang + '-%']);
+          if (hid.rows.length) {
+            return res.json({ totalCount: 0, data: [], lang: dbLang,
+                              hidden: { setId, reason: digital.REASON } });
+          }
+        }
 
         if (rows.rows.length) {
           const cards = rows.rows.map(r => {
@@ -474,6 +495,11 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
     const tdLang = ['ja','zh-tw','fr','de','it','es','pt','ko'].includes(lang) ? lang : 'en';
     let tdCards = null, tdName = null, tdPrinted = 0, tdResolved = null, tdRelease = null;
     const probe = await tcgdexResolve(req.query.uiSetId || setId, setId, tdLang);
+    // A set we never ingested can still be Pocket. TCGdex says so itself.
+    if (probe && probe.data && digital.isDigitalSeries(probe.data.serie)) {
+      return res.json({ totalCount: 0, data: [], lang: tdLang,
+                        hidden: { setId, reason: digital.REASON } });
+    }
     if (probe) {
       tdName = probe.data.name;
       tdRelease = probe.data.releaseDate || null;
@@ -569,7 +595,12 @@ app.get('/api/cards/:cardId', async (req, res) => {
           ORDER BY (ph.source NOT LIKE 'estimate%') DESC, ph.recorded_at DESC
           LIMIT 1
         ) lp ON TRUE
-        WHERE c.api_card_id = ANY($1) LIMIT 1`, [[...new Set(variants)]]);
+        WHERE c.api_card_id = ANY($1)
+          AND ${digital.visibleSql('c')} LIMIT 1`, [[...new Set(variants)]]);
+      if (!row.rows.length) {
+        const hidden = await hiddenReason([...new Set(variants)]);
+        if (hidden) return res.status(404).json({ error: 'hidden', hidden: { cardId, reason: hidden } });
+      }
       if (row.rows.length) {
         const c = row.rows[0];
         const price = c.price_usd ? parseFloat(c.price_usd) : 0;
@@ -717,8 +748,12 @@ app.get('/api/price/:cardId', async (req, res) => {
         }
 
         const card = await db.query(
-          'SELECT * FROM cards WHERE api_card_id = ANY($1) LIMIT 1',
+          `SELECT * FROM cards WHERE api_card_id = ANY($1) AND ${digital.visibleSql()} LIMIT 1`,
           [[...new Set(variants)]]);
+        if (!card.rows.length) {
+          const hidden = await hiddenReason([...new Set(variants)]);
+          if (hidden) return res.status(404).json({ error: 'hidden', hidden: { cardId, reason: hidden } });
+        }
         if (card.rows.length) {
           const c = card.rows[0];
           const realId = c.api_card_id;
@@ -1162,6 +1197,17 @@ function listingIdCandidates(cardId) {
   return [...out];
 }
 
+// If any of these ids is one of OUR cards but hidden (digital.js), the reason;
+// otherwise null. Used where "not found" would send a caller to a fallback
+// that fetches the card from somewhere else and shows it anyway.
+async function hiddenReason(ids) {
+  if (!db) return null;
+  const r = await db.query(
+    `SELECT 1 FROM cards c /* digital:unfiltered - detects a hidden card */
+     WHERE c.api_card_id = ANY($1) AND NOT ${digital.visibleSql('c')} LIMIT 1`, [ids]);
+  return r.rows.length ? digital.REASON : null;
+}
+
 async function resolveListingCard(cardId) {
   if (!db) return null;
   // set_release and set_name_en are NOT optional extras — they are the two
@@ -1183,7 +1229,8 @@ async function resolveListingCard(cardId) {
   const r = await db.query(
     `SELECT api_card_id, name, name_en, number, rarity, set_api_id, set_name,
             set_name_en, set_total, set_release, image_small
-     FROM cards WHERE api_card_id = ANY($1) LIMIT 1`, [listingIdCandidates(cardId)]);
+     FROM cards WHERE api_card_id = ANY($1)
+       AND ${digital.visibleSql()} LIMIT 1`, [listingIdCandidates(cardId)]);
   return r.rows[0] || null;
 }
 
@@ -1207,7 +1254,8 @@ async function numberMatchedPrice(cardId) {
       ORDER BY (ph.source NOT LIKE 'estimate%') DESC, ph.recorded_at DESC
       LIMIT 1
     ) lp ON TRUE
-    WHERE c.api_card_id = ANY($1) LIMIT 1`, [listingIdCandidates(cardId)]);
+    WHERE c.api_card_id = ANY($1)
+      AND ${digital.visibleSql('c')} LIMIT 1`, [listingIdCandidates(cardId)]);
   if (!r.rows.length) return null;
   const c = r.rows[0];
   const price = c.price_usd ? parseFloat(c.price_usd) : 0;
@@ -2105,6 +2153,11 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
   } catch (err) {
     return res.status(500).json({ cardId, grade, listings: [], error: err.message });
   }
+  // Hidden (Pocket) — say so. Falling through would search eBay by name.
+  if (!card) {
+    const hidden = await hiddenReason(listingIdCandidates(cardId)).catch(() => null);
+    if (hidden) return res.status(404).json({ cardId, grade, listings: [], hidden: { cardId, reason: hidden } });
+  }
   // Not one of our cards — fall through to the legacy eBay-by-name route.
   if (!card) return next();
 
@@ -2872,7 +2925,7 @@ app.get('/api/scraper/test', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 app.get('/api/sets/lang/:lang', async (req, res) => {
   const lang = (req.params.lang || 'en').toLowerCase();
-  const key = `setlist_${lang}_v2`;
+  const key = `setlist_${lang}_v3`;
   try {
     const cached = cGet(key);
     if (cached) return res.json(cached);
@@ -2898,6 +2951,7 @@ app.get('/api/sets/lang/:lang', async (req, res) => {
                  (ARRAY_AGG(c.image_small ORDER BY c.api_card_id))[1] AS sample_image
           FROM cards c
           WHERE c.api_card_id LIKE $1
+            AND ${digital.visibleSql('c')}
           GROUP BY c.set_api_id
           ORDER BY MAX(c.set_name)
         `, [lang + '-%']);
@@ -2965,7 +3019,16 @@ app.get('/api/sets/lang/:lang', async (req, res) => {
 
     const r = await fetch(`${TCGDEX}/${fetchLang}/sets`);
     if (!r.ok) return res.status(502).json({ error: 'TCGdex ' + r.status, lang: fetchLang });
-    const list = await r.json();
+    // TCGdex's set list carries no series, so ask the series itself which
+    // sets are Pocket. 404 in ja/zh (no Pocket there) means none to hide.
+    const hideIds = new Set();
+    for (const sid of digital.POCKET_SERIES_IDS) {
+      try {
+        const sr = await fetch(`${TCGDEX}/${fetchLang}/series/${sid}`);
+        if (sr.ok) ((await sr.json()).sets || []).forEach(x => hideIds.add(x.id));
+      } catch (e) { /* no series in this language */ }
+    }
+    const list = (await r.json() || []).filter(s => !hideIds.has(s.id));
 
     const sets = (list || []).map(s => ({
       id: s.id,

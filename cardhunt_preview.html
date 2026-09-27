@@ -2164,6 +2164,16 @@ async function openSet(setId, apiSetId){
     var br = await fetch(BACKEND + '/api/sets/' + apiSetId + '/cards?lang=' + wantLang + '&uiSetId=' + encodeURIComponent(setId));
     if (br.ok) {
       var bd = await br.json();
+      // Hidden is the API's ANSWER (digital-only Pocket set). Falling through
+      // would redraw it from TCGdex-direct as estimates - the fallback must
+      // not overrule the filter.
+      if (bd.hidden) {
+        S.allCards = []; applyFilters();
+        var hg = document.getElementById('sd-grid');
+        hg.innerHTML = '<div style="grid-column:1/-1;padding:48px;text-align:center;color:var(--mu)"></div>';
+        hg.firstChild.textContent = bd.hidden.reason;
+        return;
+      }
       if (bd.data && bd.data.length) {
         // Backfill the English set name into the header if we have it
         var sEn = bd.data[0] && bd.data[0].set && bd.data[0].set.nameEn;
@@ -5643,6 +5653,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-3235503-livecm &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-96b193d-pocket &middot; click to hide</div>
 </body>
 </html>

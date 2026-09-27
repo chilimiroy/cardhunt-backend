@@ -1228,6 +1228,15 @@ function verifyCore(title, card, grade, opts) {
           return { ok: false, reason: `title names ${other}, eBay's grader field says ${sg.grader} — refused`,
                    gradeConflict: true };
         }
+        // A hoped-for grade is the title saying the card is UNGRADED — a
+        // disagreement, not silence. Measured live after deploy: "1999 Base
+        // Set Charizard 4/102 (PSA 10 Contender)", $6,100, arrived under the
+        // PSA | 10 filter; stripSpeculative removed the phrase, the title then
+        // looked silent, and the field kept it as a PSA 10 (real: ~$250,000).
+        if (stripSpeculative(t) !== t) {
+          return { ok: false, gradeConflict: true, reason: `title speculates about a grade ("contender"/"pot") — ` +
+            `it says the card is ungraded; eBay's grade fields say ${sg.grader} ${sg.grade}` };
+        }
         if (/\b(?:auto(?:graph(?:ed)?)?|signed|dna)\b/i.test(t)) {
           return { ok: false, reason: `title states no grade and mentions an autograph — eBay's ` +
             `"${sg.grader} ${sg.grade}" may grade the signature, not the card` };

@@ -21,6 +21,7 @@
 // ── Grading companies, with the spellings people actually type ──
 // Pocket (digital-only) cards are never a search candidate — digital.js.
 const digital = require('./digital');
+const cardid = require('./cardid');
 
 const GRADERS = [
   { id: 'PSA',  patterns: ['psa'] },
@@ -271,6 +272,7 @@ async function resolveCard(db, parsed, opts) {
     FROM cards c
     WHERE ${conds.join(' AND ')}
       AND ${digital.visibleSql('c')}
+      AND ${cardid.ourIdSql('c')}   -- a stray foreign-id row once won this search: me55c-33
     LIMIT 200`, params);
 
   // Score each candidate against everything the parse told us

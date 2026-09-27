@@ -24,6 +24,9 @@ const outlier = require('./outlier');
 // The rows stay in the database. See digital.js; preserve.test.js asserts
 // every `FROM cards` / `JOIN cards` here either filters or says why not.
 const digital = require('./digital');
+// A card id not matching ^(en|ja|zh-tw|zh-cn)- is a bug, not a card:
+// refused at every entry point that takes one, never served. cardid.js.
+const cardid = require('./cardid');
 
 const app = express();
 app.use(cors({ origin: '*' }));
@@ -596,7 +599,7 @@ app.get('/api/cards/:cardId', async (req, res) => {
           LIMIT 1
         ) lp ON TRUE
         WHERE c.api_card_id = ANY($1)
-          AND ${digital.visibleSql('c')} LIMIT 1`, [[...new Set(variants)]]);
+          AND ${digital.visibleSql('c')} AND ${cardid.ourIdSql('c')} LIMIT 1`, [[...new Set(variants)]]);
       if (!row.rows.length) {
         const hidden = await hiddenReason([...new Set(variants)]);
         if (hidden) return res.status(404).json({ error: 'hidden', hidden: { cardId, reason: hidden } });
@@ -629,20 +632,13 @@ app.get('/api/cards/:cardId', async (req, res) => {
         }});
       }
     }
-    const cached = cGet(`card_${cardId}`);
-    if (cached) return res.json(cached);
-    const r = await fetch(`${TCG_API}/cards/${cardId}`, { headers: TCG_H });
-    const d = await r.json();
-    cSet(`card_${cardId}`, d);
-
-    // ── This endpoint used to INSERT the pokemontcg.io card into `cards` ──
-    // under pokemontcg.io's OWN id. That is the writer of both stray rows —
-    // me2pt5-294 (2026-09-20) and me55c-33 (2026-09-24): each carries
-    // exactly this INSERT's columns (tcgplayer_data, a pokemontcg image) and
-    // nothing any ingest writes (no set_series, set_release, image_lang).
-    // It was the only `cards` writer in server.js. A read endpoint must
-    // never write; the catalogue is written by ingest, under our ids only.
-    res.json(d);
+    // ── Not one of ours: refuse, never fetch it from pokemontcg.io ──
+    // This used to fetch pokemontcg.io's card and (until 2fd8549) INSERT it
+    // under pokemontcg.io's own id — the writer of me2pt5-294 and me55c-33.
+    // Serving it without the INSERT was still serving a foreign-id card the
+    // page would then alert on. A foreign id is a bug, not a card.
+    if (!cardid.isOurCardId(cardId)) return res.status(400).json(cardid.refusal(cardId));
+    res.status(404).json({ error: 'card not in catalogue', cardId });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -702,13 +698,13 @@ app.get('/api/trending', async (req, res) => {
 
 // ── SEARCH ────────────────────────────────────────────────────
 app.get('/api/cards', async (req, res) => {
-  const { q, pageSize = 250, page = 1 } = req.query;
-  if (!q) return res.status(400).json({ error: 'q required' });
-  try {
-    const url = `${TCG_API}/cards?q=${encodeURIComponent(q)}&pageSize=${pageSize}&page=${page}&orderBy=-set.releaseDate`;
-    const r = await fetch(url, { headers: TCG_H });
-    res.json(await r.json());
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  // ── Retired 2026-09-27: this was a straight proxy to pokemontcg.io ──
+  // Every card it returned carried a pokemontcg.io id. Its only caller was
+  // the page's legacy "full catalogue" search (deleted, and never able to
+  // render). /api/search searches OUR catalogue under OUR ids; there is no
+  // second catalogue to fall back to.
+  res.status(410).json({ error: 'gone', data: [],
+    reason: 'This proxied pokemontcg.io search, whose card ids are not ours. Use /api/search.' });
 });
 
 // ── PRICE ─────────────────────────────────────────────────────
@@ -740,7 +736,7 @@ app.get('/api/price/:cardId', async (req, res) => {
         }
 
         const card = await db.query(
-          `SELECT * FROM cards WHERE api_card_id = ANY($1) AND ${digital.visibleSql()} LIMIT 1`,
+          `SELECT * FROM cards WHERE api_card_id = ANY($1) AND ${digital.visibleSql()} AND ${cardid.ourIdSql()} LIMIT 1`,
           [[...new Set(variants)]]);
         if (!card.rows.length) {
           const hidden = await hiddenReason([...new Set(variants)]);
@@ -1014,6 +1010,8 @@ app.post('/api/alerts', async (req, res) => {
     const b = req.body || {};
     if (!b.card_api_id || !b.alert_type)
       return res.status(400).json({ error: 'card_api_id and alert_type are required' });
+    // Alert 5 was created on me55c-33, a pokemontcg.io id. Never again.
+    if (!cardid.isOurCardId(b.card_api_id)) return res.status(400).json(cardid.refusal(b.card_api_id));
     const row = await db.query(`
       INSERT INTO alerts (user_id,card_api_id,card_name,card_img,set_name,grade,
         alert_type,target_price,marketplace,notify,status)
@@ -1061,6 +1059,7 @@ app.post('/api/portfolio', async (req, res) => {
   if (!db) return res.status(503).json({ error: 'database not configured' });
   try {
     const b = req.body || {};
+    if (!cardid.isOurCardId(b.card_api_id)) return res.status(400).json(cardid.refusal(b.card_api_id));
     const row = await db.query(`
       INSERT INTO portfolio (user_id,card_api_id,card_name,card_img,set_name,grade,quantity,purchase_price)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
@@ -1222,7 +1221,7 @@ async function resolveListingCard(cardId) {
     `SELECT api_card_id, name, name_en, number, rarity, set_api_id, set_name,
             set_name_en, set_total, set_release, image_small
      FROM cards WHERE api_card_id = ANY($1)
-       AND ${digital.visibleSql()} LIMIT 1`, [listingIdCandidates(cardId)]);
+       AND ${digital.visibleSql()} AND ${cardid.ourIdSql()} LIMIT 1`, [listingIdCandidates(cardId)]);
   return r.rows[0] || null;
 }
 
@@ -1247,7 +1246,7 @@ async function numberMatchedPrice(cardId) {
       LIMIT 1
     ) lp ON TRUE
     WHERE c.api_card_id = ANY($1)
-      AND ${digital.visibleSql('c')} LIMIT 1`, [listingIdCandidates(cardId)]);
+      AND ${digital.visibleSql('c')} AND ${cardid.ourIdSql('c')} LIMIT 1`, [listingIdCandidates(cardId)]);
   if (!r.rows.length) return null;
   const c = r.rows[0];
   const price = c.price_usd ? parseFloat(c.price_usd) : 0;

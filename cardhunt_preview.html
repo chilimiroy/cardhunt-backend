@@ -989,7 +989,9 @@ async function tcgdexFetchSet(setId, lang, printedTotal) {
       if (!c.rarity) rar = inferRarityFromNumber(num, printed, c.name) || rar;
       var est = mockP(rar, setId + '-' + num, c.name, num, printed);
       return {
-        id: setId + '-' + num,
+        // TCGdex's id space is ours ({lang}-{set}-{number}); this used to
+        // drop the language and hand out a foreign-shaped id.
+        id: l + '-' + ts + '-' + num,
         name: c.name,
         number: num,
         rarity: rar,
@@ -1059,19 +1061,42 @@ function enrichImages(cards, setId) {
   });
 }
 
+// ── A card id that is not OURS is a bug, not a card ──
+// Same pattern as cardid.js on the server (cardid.test.js asserts they match).
+// Alert 5 was saved on me55c-33, a pokemontcg.io id, from a card object the
+// legacy "full catalogue" search had drawn straight from pokemontcg.io.
+// Anything that would open, alert on or hold a card refuses a foreign id
+// out loud: console.error for whoever debugs it, a visible notice for the
+// person who clicked. Never rendered as if it were a card.
+var OUR_CARD_ID = /^(en|ja|zh-tw|zh-cn)-/;
+function refuseForeignId(id, where) {
+  if (OUR_CARD_ID.test(String(id == null ? '' : id))) return false;
+  console.error('[cardid] refused foreign card id "' + id + '" in ' + where
+    + ' - ids are {en|ja|zh-tw|zh-cn}-{set}-{number}. This is a bug: something resolved'
+    + ' the card in another source\'s id space.');
+  try {
+    var n = document.createElement('div');
+    n.setAttribute('role', 'alert');
+    n.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:10000;'
+      + 'background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B;padding:10px 16px;border-radius:8px;'
+      + 'font-size:13px;max-width:92vw;box-shadow:0 4px 16px rgba(0,0,0,.12)';
+    n.textContent = 'This card could not be opened: "' + id + '" is not a CardHunt card id. '
+      + 'It has been logged as a bug.';
+    document.body.appendChild(n);
+    setTimeout(function(){ n.remove(); }, 8000);
+  } catch (e) { /* the console line above still stands */ }
+  return true;
+}
+
 async function apiFetch(path) {
   try {
     var r = await fetch(BACKEND+path);
     if (r.ok) return r;
   } catch(e) { console.warn('Backend unavailable, using direct API'); }
-  // Direct fallback
+  // Direct fallback — SET LISTS only. Card lookups and card searches used
+  // to fall through to pokemontcg.io here too, and every card that came back
+  // carried a pokemontcg.io id. There is no second catalogue for cards.
   if (path==='/api/sets') return fetch(API+'/sets?pageSize=250&orderBy=-releaseDate',{headers:H});
-  if (path.startsWith('/api/sets/') && path.endsWith('/cards')) {
-    var sid=path.replace('/api/sets/','').replace('/cards','');
-    return fetch(API+'/cards?q=set.id:'+sid+'&pageSize=250&orderBy=number',{headers:H});
-  }
-  if (path.startsWith('/api/cards/')) return fetch(API+'/cards/'+path.replace('/api/cards/',''),{headers:H});
-  if (path.startsWith('/api/cards?')) return fetch(API+path.replace('/api',''),{headers:H});
   return fetch(BACKEND+path);
 }
 // ── BACKEND API (Render) ─────────────────────────────────
@@ -1339,6 +1364,16 @@ const ME2PT5_PREMIUM = [
   {id:'me2pt5-294',name:'Mega Charizard Y ex',number:'294',rarity:'Hyper Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/294/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/294/high.png'},tcgplayer:{prices:{holofoil:{market:480.0,low:310,mid:480.0,high:780}}}},
   {id:'me2pt5-295',name:'Mega Dragonite ex',number:'295',rarity:'Hyper Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/295/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/295/high.png'},tcgplayer:{prices:{holofoil:{market:320.0,low:205,mid:320.0,high:520}}}}
 ];
+// ── Re-keyed to OUR ids (2026-09-27) ──
+// These carried pokemontcg.io ids (me2pt5-251 ... me2pt5-295). mergePremium
+// splices any of them into the Ascended Heroes page when our set lacks that
+// number, and opening one called /api/cards/me2pt5-294 — which INSERTed the
+// stray me2pt5-294 row (Mega Charizard Y ex, 2026-09-20). Our id for the set
+// is me02.5, so the card id is en-me02.5-{number}.
+ME2PT5_PREMIUM.forEach(function(c){
+  c.id = 'en-me02.5-' + c.number;
+  c.set = Object.assign({}, c.set, { id: 'me02.5' });
+});
 
 const ZH_CN=[
   {id:'cn-gem5',n:'宝石包 Vol.5',en:'Gem Pack Vol.5',s:'Gem Pack',t:196,d:'2026/04/24',color:'#E91E8C',lt:'宝石包<br>VOL.5',aid:'sv10',isCN:true},
@@ -1857,12 +1892,20 @@ async function loadHome() {
 
 async function loadSearchTrending(){
   if(document.getElementById('search-trending').querySelector('img'))return;
+  // This drew 8 Surging Sparks cards straight from pokemontcg.io, and each
+  // tile opened a pokemontcg.io id (sv8pt5-*) — the same class of producer
+  // as the alert picker. Our own trending, under our ids.
   try{
-    const r=await fetch(`${API}/cards?q=set.id:sv8pt5 supertype:Pokémon&pageSize=16`,{headers:H});
+    const r=await fetch(BACKEND + '/api/trending?lang=en&sort=price-desc&limit=8');
+    if(!r.ok) throw new Error('HTTP ' + r.status);
     const d=await r.json();
-    const cards=(d.data||[]).filter(c=>isRare(c.rarity)).slice(0,8);
+    const cards=(d.cards||[]).filter(c=>OUR_CARD_ID.test(c.id)).map(c=>({
+      id: c.id, name: c.name, number: c.number, rarity: c.rarity,
+      set: { id: c.set && c.set.id, name: c.set && (c.set.nameEn || c.set.name) },
+      images: { small: c.image || '', large: c.image || '' },
+      _price: c.price, _priceIsReal: true, _priceSource: c.priceSource }));
     document.getElementById('search-trending').innerHTML=cards.map(c=>cardTile(c)).join('');
-  }catch(e){}
+  }catch(e){ console.warn('[search-trending] ' + e.message); }
 }
 
 let srCards=[];
@@ -1882,8 +1925,8 @@ let searchLang='all'; // 'all','en','ja','zh'
 // directly. Anything closer shows the candidates: guessing between near
 // ties is exactly how prices got scrambled before.
 //
-// doSearchLegacy is kept and used whenever our API is unreachable, so the
-// search bar degrades to the old behaviour instead of breaking.
+// There is no fallback search: doSearchLegacy (pokemontcg.io) was deleted
+// 2026-09-27. When our API is unreachable the page says so.
 // ══════════════════════════════════════════════════════════════
 var LAST_PARSE = null;
 
@@ -1938,8 +1981,18 @@ async function doSearch(q, lang) {
     if (!r.ok) throw new Error('search API returned ' + r.status);
     d = await r.json();
   } catch (err) {
-    console.warn('Search API unavailable, falling back to catalogue search:', err.message);
-    return doSearchLegacy(q, lang);
+    // There is no second catalogue to fall back to. This used to call
+    // doSearchLegacy, which searched pokemontcg.io for cards carrying
+    // pokemontcg.io ids (and then threw: renderResultsGrid never existed).
+    console.warn('Search API unavailable:', err.message);
+    document.getElementById('results-title').textContent = '"' + q + '"';
+    document.getElementById('results-sub').textContent = 'Search unavailable';
+    document.getElementById('results-filters').innerHTML = '';
+    document.getElementById('results-grid').innerHTML =
+      '<div style="grid-column:1/-1;padding:28px;text-align:center;color:var(--mu);font-size:13px">'
+      + 'Search could not reach the CardHunt database (' + liveEsc(err.message) + '). '
+      + 'The server may be waking up - try again in a few seconds.</div>';
+    return;
   }
 
   LAST_PARSE = d.parsed || null;
@@ -1955,8 +2008,6 @@ async function doSearch(q, lang) {
       + parseChips(LAST_PARSE)
       + '<div style="padding:28px;text-align:center;color:var(--mu);font-size:13px">'
       + liveEsc(d.message || 'No card matched that.')
-      + '<div style="margin-top:10px"><button class="btn sm" onclick="doSearchLegacy('
-      + JSON.stringify(q).replace(/"/g, '&quot;') + ')">Search the full catalogue instead</button></div>'
       + '</div></div>';
     return;
   }
@@ -2007,80 +2058,13 @@ async function doSearch(q, lang) {
   document.getElementById('results-grid').innerHTML = grid;
 }
 
-async function doSearchLegacy(q, lang) {
-  if (!q) return;
-  if (lang) searchLang = lang;
-  closeAutocomplete();
-
-  var gradeMatch = q.match(/\b(PSA|CGC|BGS|SGC)\s*(\d+(?:\.5)?)\b/i);
-  var gc = gradeMatch ? gradeMatch[1].toUpperCase() : null;
-  var gv = gradeMatch ? gradeMatch[2] : null;
-  var cardName = q.replace(/\b(PSA|CGC|BGS|SGC)\s*\d+(?:\.5)?\b/gi,'').replace(/\s+/g,' ').trim();
-
-  document.getElementById('results-q-bc').textContent = q;
-  document.getElementById('results-title').textContent = 'Searching...';
-  document.getElementById('results-sub').textContent = '';
-  var rfEl = document.getElementById('results-refine');
-  if (rfEl) rfEl.value = q;
-  document.getElementById('results-grid').innerHTML =
-    '<div style="grid-column:1/-1;padding:64px;text-align:center;color:var(--mu)">'
-    + '<div style="width:36px;height:36px;border:3px solid var(--bd);border-top-color:var(--t);'
-    + 'border-radius:50%;animation:sp .75s linear infinite;margin:0 auto 14px"></div>'
-    + '<div style="font-size:13px">Searching...</div></div>';
-  SS('results');
-
-  try {
-    var allCards = [];
-
-    // Strategy 1: exact name match
-    var r1 = await apiFetch('/api/cards?q=' + encodeURIComponent('name:"'+cardName+'"') + '&pageSize=250');
-    var d1 = await r1.json();
-    allCards = d1.data || [];
-
-    // Strategy 2: if <3 results, try wildcard on each word
-    if (allCards.length < 3 && cardName) {
-      var words = cardName.split(' ').filter(function(w){ return w.length > 2; });
-      for (var wi = 0; wi < words.length; wi++) {
-        var r2 = await apiFetch('/api/cards?q=' + encodeURIComponent('name:*'+words[wi]+'*') + '&pageSize=250');
-        var d2 = await r2.json();
-        if (d2.data && d2.data.length > 0) {
-          // Merge without duplicates
-          var existIds = new Set(allCards.map(function(c){return c.id;}));
-          d2.data.forEach(function(c){ if(!existIds.has(c.id)) allCards.push(c); });
-        }
-      }
-    }
-
-    // Language filter
-    if (searchLang === 'en') {
-      allCards = allCards.filter(function(c){ return c.set && !c.set.id.match(/^(jp|zh|cn)/i); });
-    }
-
-    srCards = allCards;
-    var gradeLabel = gc ? gc+' '+gv : 'Raw NM';
-    var mult = gradeMult(gradeLabel);
-    var langLabel = {all:'All languages',en:'English',ja:'Japanese',zh:'Chinese'}[searchLang] || 'All';
-
-    document.getElementById('results-title').textContent = '"' + q + '"';
-    document.getElementById('results-sub').textContent = srCards.length + ' cards · ' + langLabel + (gc ? ' · ' + gradeLabel + ' prices' : '');
-
-    // Rarity filter chips
-    var rarities = [];
-    srCards.forEach(function(c){ if(c.rarity && rarities.indexOf(c.rarity)<0) rarities.push(c.rarity); });
-    var filtersHTML = '<button class="fchip on" onclick="filterByRarity(\'All\',this)">All</button>';
-    rarities.slice(0,8).forEach(function(r3){
-      filtersHTML += '<button class="fchip" onclick="filterByRarity(&quot;'+r3+'&quot;,this)">'+r3+'</button>';
-    });
-    document.getElementById('results-filters').innerHTML = filtersHTML;
-    renderResultsGrid(srCards, mult);
-
-  } catch(err) {
-    console.error('Search error:', err);
-    document.getElementById('results-grid').innerHTML =
-      '<div style="grid-column:1/-1;padding:48px;text-align:center;color:var(--re)">Search failed - please try again</div>';
-  }
-}
-
+// doSearchLegacy was here: a second "catalogue" search against pokemontcg.io,
+// reached on any no-match search ("Search the full catalogue instead") or
+// whenever /api/search failed. Every card it fetched carried a pokemontcg.io
+// id. It could never draw them — renderResultsGrid, which it called, was
+// never defined in any commit — so it only ever ended at "Search failed".
+// Not the producer of the stray rows (see pickAlertCard and ME2PT5_PREMIUM);
+// dead, and pointed at the wrong id space. Deleted 2026-09-27.
 async function openSet(setId, apiSetId){
   S.tbType='all';
   document.getElementById('sd-sort').value='num';
@@ -2204,21 +2188,10 @@ async function openSet(setId, apiSetId){
     if (td && td.length) { finish(td, 'tcgdex'); return; }
   } catch(e) { console.warn('TCGdex direct failed'); }
 
-  // 3. pokemontcg.io direct (English + real prices)
-  try {
-    var cards = [], page = 1, total = 9999;
-    while (cards.length < total && page <= 10) {
-      var r = await fetch(API + '/cards?q=set.id:' + apiSetId + '&pageSize=250&page=' + page + '&orderBy=number', {headers:H});
-      if (!r.ok) break;
-      var d = await r.json();
-      if (!d.data || !d.data.length) break;
-      cards = cards.concat(d.data);
-      total = d.totalCount || cards.length;
-      if (cards.length) { S.allCards = cards.slice(); applyFilters(); }
-      page++;
-    }
-    if (cards.length) { finish(cards, 'pokemontcg'); return; }
-  } catch(e) { console.warn('pokemontcg direct failed'); }
+  // 3. pokemontcg.io direct — REMOVED 2026-09-27. Every card it drew carried
+  //    a pokemontcg.io id, which the card page, alerts and the listing
+  //    finder cannot resolve. A set neither our API nor TCGdex can answer
+  //    shows the note below rather than cards under a foreign id.
 
   // 4. Last resort: embedded premium cards only
   if (apiSetId === 'me2pt5' && typeof ME2PT5_PREMIUM !== 'undefined') {
@@ -2691,6 +2664,7 @@ function toggleWatch(){S.watching=!S.watching;document.getElementById('watch-btn
 // LISTINGS — real working buy links
 
 async function openCard(id){
+  if (refuseForeignId(id, 'openCard')) return;
   var oldBadge = document.getElementById('grade-badge'); if (oldBadge) oldBadge.remove();
   SS('card');
   if(S.chart){S.chart.destroy();S.chart=null;}
@@ -5018,12 +4992,32 @@ function updateAlertPreview(){
 async function pickAlertCard(){
   const q=prompt('Search for a card name:','Charizard');
   if(!q) return;
+  // ── THE PRODUCER OF ALERT 5 (found 2026-09-27) ──
+  // This searched pokemontcg.io DIRECTLY, newest set first, and took the
+  // first result. For "Pikachu & Zekrom-GX" that is me55c-33 — the 30th
+  // Classic Collection reprint in pokemontcg.io's numbering — so the alert
+  // was saved on a pokemontcg id with pokemontcg's set name, and the card
+  // fetch that followed INSERTed the me55c-33 row. It now asks OUR search,
+  // and only a confident match is taken: guessing between near ties is how
+  // this picked a reprint nobody asked for.
   try{
-    const r=await fetch(`${API}/cards?q=name:"${q}"&pageSize=6&orderBy=-set.releaseDate`,{headers:H});
+    const r=await fetch(BACKEND + '/api/search?listings=0&limit=6&q=' + encodeURIComponent(q));
+    if(!r.ok) throw new Error('HTTP ' + r.status);
     const d=await r.json();
-    const cards=d.data||[];
-    if(!cards.length){alert('No cards found');return;}
-    // Show first result for now
+    const cands=d.candidates||[];
+    if(!cands.length){alert('No card in the CardHunt catalogue matches "' + q + '".');return;}
+    if(!(d.confident && d.resolved)){
+      alert(cands.length + ' cards match "' + q + '" - add the collector number (e.g. "'
+        + cands[0].name + ' ' + cands[0].number + '/' + (cands[0].setTotal || '?')
+        + '"), or open the card and set the alert from its page.');
+      return;
+    }
+    const top=cands[0];
+    if (refuseForeignId(top.cardId, 'pickAlertCard')) return;
+    const cards=[{ id: top.cardId, name: top.name, number: top.number,
+                   set: { id: top.setId, name: top.setNameEn || top.setName },
+                   images: { small: top.image || '', large: top.image || '' },
+                   _price: top.price && top.price.value, _priceIsReal: !!(top.price && top.price.isReal) }];
     alertCardTarget=cards[0];
     document.getElementById('alert-card-name').textContent=cards[0].name+' · '+cards[0].set?.name;
     document.getElementById('alert-card-picker').style.borderColor='var(--t)';
@@ -5042,6 +5036,7 @@ async function saveAlert(){
   const market=document.getElementById('alert-market').value;
   const notify=document.getElementById('alert-notify').value;
   if(!alertCardTarget){alert('Please choose a card first');return;}
+  if (refuseForeignId(alertCardTarget.id, 'saveAlert')) return;
   if(!price||price<=0){alert('Please enter a target price');return;}
   // ── The alert is created on the SERVER, or not at all ──
   // This used to push onto the local ALERTS array and show a toast reading
@@ -5653,6 +5648,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-96b193d-pocket &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-2fd8549-cardid &middot; click to hide</div>
 </body>
 </html>

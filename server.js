@@ -1795,8 +1795,14 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   const gradeFilter = condFilter ? null : cm.ebayGradeFilter(grade);
   const aspectFilter = condFilter ? condFilter.aspectFilter : gradeFilter ? gradeFilter.aspectFilter : null;
   const gateOpts = gradeFilter ? { structuredGrade: { grader: gradeFilter.grader, grade: gradeFilter.grade } } : undefined;
+  // "mint" also matches every "Near Mint" title: live, Raw M on Base Set
+  // Charizard kept 11 rows of which 1 said Mint. eBay's own phrase exclusion
+  // keeps the cap for the titles that do. eBay syntax, so the eBay REQUEST
+  // only — other marketplaces read a leading "-" as literal text.
+  const tOnly = cm.titleOnlyCondition(grade);
+  const qAsk = (tOnly && tOnly.code === 'M') ? q + ' -"near mint"' : q;
   const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search'
-    + '?q=' + encodeURIComponent(q)
+    + '?q=' + encodeURIComponent(qAsk)
     + '&category_ids=183454&limit=' + Math.min(limit * 3, 100) + '&sort=price'
     + (aspectFilter ? '&aspect_filter=' + encodeURIComponent(aspectFilter) : '');
 
@@ -1959,7 +1965,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
                  keptOnEbayFieldAlone: listings.filter(l => l.gradeSource === 'ebay').length,
                  refusedOnDisagreement: dropped.filter(d => d.gradeConflict).length }
              : null,
-           query: q };
+           query: qAsk };
 }
 
 // Documented-unavailable sources. They stay in the registry so the response

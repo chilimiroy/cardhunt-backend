@@ -1706,6 +1706,35 @@ async function sourceYahoo(card, grade, limit) {
            printingDropped: rejectedPrinting.slice(0, 12) };
 }
 
+// The card as eBay's query and gate see it. ONE builder, used by sourceEbay
+// and by the probes, so a measurement asks exactly what a card view asks.
+function ebayMatchCard(card) {
+  const name = card.name_en || card.name;
+  return {
+    name, nameEn: card.name_en || null,
+    number: card.number,
+    setTotal: card.set_total,
+    setName: card.set_name_en || card.set_name,
+    // The reprint gate reads the SET ID, never the set name: "30th
+    // Celebration" containing "Celebration" is how that gate was disabled
+    // for 188 cards. Without this field every card here would be treated as
+    // belonging to no reprint family — and a Classic Collection card would
+    // reject its own listings.
+    setId: card.set_api_id,
+    // The release year separates a card from its own reprint. Celebrations
+    // (2021) reprints Base Set (1999) cards with the ORIGINAL 4/102
+    // numbering and the words "Base Set" in the title, so number, set size
+    // and set name all agree — and a live search returned 24 "matches"
+    // spanning $536 to $249,999. All 45,780 cards carry a release date.
+    setYear: card.set_release ? new Date(card.set_release).getUTCFullYear() : null,
+    // Korean prints share Japanese set codes and numbering, so a Korean
+    // Charizard ex is genuinely 201/165 from SV2a. A live search for the
+    // Japanese card returned 6 Korean listings among 25. Card ids are
+    // {lang}-{setId}-{number}, so the language is already in the id.
+    lang: gateLanguage(card)
+  };
+}
+
 async function sourceEbay(card, grade, limit, opts = {}) {
   const background = !!opts.background;
 
@@ -1748,29 +1777,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // setTotal and setName the query never sent — so eBay was asked for "any
   // Charizard VMAX" and whatever came back was shown. Same shape as the
   // estimator split: two implementations of one thing, drifting.
-  const matchCard = {
-    name, nameEn: card.name_en || null,
-    number: card.number,
-    setTotal: card.set_total,
-    setName: card.set_name_en || card.set_name,
-    // The reprint gate reads the SET ID, never the set name: "30th
-    // Celebration" containing "Celebration" is how that gate was disabled
-    // for 188 cards. Without this field every card here would be treated as
-    // belonging to no reprint family — and a Classic Collection card would
-    // reject its own listings.
-    setId: card.set_api_id,
-    // The release year separates a card from its own reprint. Celebrations
-    // (2021) reprints Base Set (1999) cards with the ORIGINAL 4/102
-    // numbering and the words "Base Set" in the title, so number, set size
-    // and set name all agree — and a live search returned 24 "matches"
-    // spanning $536 to $249,999. All 45,780 cards carry a release date.
-    setYear: card.set_release ? new Date(card.set_release).getUTCFullYear() : null,
-    // Korean prints share Japanese set codes and numbering, so a Korean
-    // Charizard ex is genuinely 201/165 from SV2a. A live search for the
-    // Japanese card returned 6 Korean listings among 25. Card ids are
-    // {lang}-{setId}-{number}, so the language is already in the id.
-    lang: gateLanguage(card)
-  };
+  const matchCard = ebayMatchCard(card);
 
   // cardmatch.buildQuery is the single query builder, shared with the
   // frontend's deep links so a link and an API call ask the same question.
@@ -3470,6 +3477,104 @@ app.get('/api/ebay/conditions/:cardId', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// ── What does filtering to NARROW cost, against the 75-row cap? A MEASUREMENT ──
+//
+//   GET /api/ebay/gradecost/:cardId?grade=PSA%208&pages=3
+//
+// Since 1849611 a graded search sends eBay's Professional Grader + Grade
+// aspect filter. The live net effect was +9 / -6 of 305, and none of the six
+// was refused by the disagreement rule: the filtered search never RETURNED
+// them — a listing whose seller left the grade fields empty cannot match a
+// filter on them. The old unfiltered search had its own loss: sorted by
+// price and capped at 75 rows (limit 25 x 3), cheap junk on a busy card
+// pushes wanted slabs past the cap. Which loses more?
+//
+// Pages BOTH searches deep (100 a page, same query, same sort), runs the real
+// gate on every row, and reports: wanted rows lost to missing aspects, lost to
+// the cap under each design, and what the two-call alternative ("filter to
+// verify": unfiltered list + filtered set) would deliver. Read-only; nothing
+// stored; takes a card id and a grade, never a URL. 2 x pages calls.
+const gradeCostCache = new Map();
+app.get('/api/ebay/gradecost/:cardId', async (req, res) => {
+  const cardId = req.params.cardId;
+  const grade = String(req.query.grade || '');
+  const pages = Math.max(1, Math.min(5, parseInt(req.query.pages, 10) || 3));
+  const CAP = 75;                                  // what /api/listings asks for at limit 25
+  const key = JSON.stringify([cardId, grade, pages]);
+  const hit = gradeCostCache.get(key);
+  if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') return res.json(hit.body);
+  try {
+    if (!ebay.ebayEnabled()) return res.status(503).json({ error: 'EBAY_ENABLED=false' });
+    const gf = cm.ebayGradeFilter(grade);
+    if (!gf || !gf.grade) return res.status(400).json({ error: 'needs a specific grade from a grader eBay names, e.g. PSA 8' });
+    const card = await resolveListingCard(cardId);
+    if (!card) return res.status(404).json({ error: 'card not in catalogue', cardId });
+    const auth = await getEbayTokenDetailed({});
+    if (!auth.token) return res.status(503).json({ error: auth.reason || auth.error || 'no token' });
+    const matchCard = ebayMatchCard(card);
+    const q = cm.buildQuery(matchCard, grade);
+    const base = 'https://api.ebay.com/buy/browse/v1/item_summary/search?q=' + encodeURIComponent(q)
+      + '&category_ids=183454&limit=100&sort=price';
+
+    async function scan(filtered) {
+      const rows = []; let total = null, calls = 0;
+      for (let p = 0; p < pages; p++) {
+        const url = base + '&offset=' + (p * 100)
+          + (filtered ? '&aspect_filter=' + encodeURIComponent(gf.aspectFilter) : '');
+        const r = await ebay.fetchEbay(db, { url, token: auth.token, kind: 'search',
+          meta: { cardId, grade, probe: 'gradecost' },
+          countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
+        calls++;
+        if (!r.ok) break;
+        total = r.data.total;
+        const its = r.data.itemSummaries || [];
+        its.forEach((it, i) => {
+          const price = parseFloat((it.price && it.price.value) || 0);
+          const v = cm.verify(it.title || '', matchCard, grade,
+            filtered ? { structuredGrade: { grader: gf.grader, grade: gf.grade } } : undefined);
+          rows.push({ id: it.itemId, title: it.title, price, pos: p * 100 + i, ok: !!v.ok,
+                      gradeSource: v.gradeSource || null, conflict: !!v.gradeConflict,
+                      reason: v.ok ? null : v.reason });
+        });
+        if (its.length < 100 || (p + 1) * 100 >= total) break;
+      }
+      return { rows, total, calls, complete: total != null && rows.length >= total };
+    }
+    const U = await scan(false), F = await scan(true);
+    const inF = new Set(F.rows.map(r => r.id));
+    const W = U.rows.filter(r => r.ok);                 // wanted, by the title gate (old design)
+    const N = F.rows.filter(r => r.ok);                 // wanted, by filter + disagreement rule (new)
+    const pick = rs => rs.slice(0, 8).map(r => ({ pos: r.pos, price: r.price, title: (r.title || '').slice(0, 90) }));
+    const aspectLost = F.complete ? W.filter(r => !inF.has(r.id)) : null;
+    const oldDelivered = W.filter(r => r.pos < CAP), newDelivered = N.filter(r => r.pos < CAP);
+    const hybrid = new Set(oldDelivered.map(r => r.id).concat(newDelivered.map(r => r.id)));
+    const body = {
+      cardId, grade, query: q, cap: CAP, filter: gf.aspectFilter,
+      unfiltered: { ebayTotal: U.total, scanned: U.rows.length, complete: U.complete, calls: U.calls,
+                    wanted: W.length, beyondCap: W.filter(r => r.pos >= CAP).length },
+      filtered: { ebayTotal: F.total, scanned: F.rows.length, complete: F.complete, calls: F.calls,
+                  wanted: N.length, beyondCap: N.filter(r => r.pos >= CAP).length,
+                  fieldOnly: N.filter(r => r.gradeSource === 'ebay').length,
+                  refusedOnDisagreement: F.rows.filter(r => r.conflict).length },
+      lost: {
+        // wanted by title, never returned by the filter (aspects empty/other)
+        toMissingAspects: aspectLost ? aspectLost.length : 'unknown — filtered scan incomplete',
+        toCapOld: W.filter(r => r.pos >= CAP).length,
+        toCapNew: N.filter(r => r.pos >= CAP).length
+      },
+      delivered: { old: oldDelivered.length, new: newDelivered.length,
+                   twoCallsFilterToVerify: hybrid.size },
+      samples: { missingAspects: aspectLost ? pick(aspectLost) : [],
+                 pastCapOld: pick(W.filter(r => r.pos >= CAP)),
+                 fieldOnly: pick(N.filter(r => r.gradeSource === 'ebay')),
+                 refused: F.rows.filter(r => r.conflict).slice(0, 6).map(r => ({ title: (r.title || '').slice(0, 80), reason: r.reason })) },
+      quotaSpent: U.calls + F.calls, stored: false
+    };
+    gradeCostCache.set(key, { at: Date.now(), body });
+    res.json(body);
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/ebay/quota', async (req, res) => {

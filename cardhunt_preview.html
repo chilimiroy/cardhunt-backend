@@ -161,6 +161,22 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--rs);font-size:13px;font-weight:500;border:1.5px solid var(--bd);background:var(--w);color:var(--tx);cursor:pointer;transition:all .15s;text-decoration:none;white-space:nowrap}
 .btn:hover{background:var(--bg)}.btn.p{background:var(--t);color:#fff;border-color:var(--t)}.btn.p:hover{background:var(--td)}.btn.sm{padding:5px 12px;font-size:12px;border-radius:8px}
 .av{width:34px;height:34px;border-radius:50%;background:var(--t);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;cursor:pointer;font-size:14px;flex-shrink:0}
+/* Phone: the nav WRAPS. Measured at 390px, every one of the nine screens
+   scrolled sideways (501-893px), and on each the page was exactly as wide
+   as its nav. Links stay on the first rows; the actions (search, Compare,
+   Set Alert, Watch, Login) take a full-width row of their own and wrap
+   again if they must. One rule for all nine navs, and a 16px gutter. */
+@media(max-width:640px){
+  .nav{height:auto;min-height:52px;flex-wrap:wrap;padding:8px 16px;row-gap:6px}
+  .logo{margin-right:8px;font-size:18px}
+  .logo-i{width:30px;height:30px;font-size:16px}
+  .nl{padding:6px 9px}
+  .nav-r{margin-left:0;width:100%;flex-wrap:wrap;gap:6px}
+  .nav .btn{padding:6px 10px;font-size:12px}
+  .nav-r .nsearch{flex:1 1 150px;min-width:0}
+  .nav-r .nsearch input,.nav-r .nsearch input:focus{width:100%}
+  .nav-r .tbq{width:auto!important;flex:1 1 150px;min-width:0}
+}
 #login-modal-overlay{display:none}
 
 /* A .lbox rule from an old login design used to sit here. Nothing carries
@@ -5709,6 +5725,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-b96f1e3-paging &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-7c3f856-phonenav &middot; click to hide</div>
 </body>
 </html>

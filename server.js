@@ -635,21 +635,13 @@ app.get('/api/cards/:cardId', async (req, res) => {
     const d = await r.json();
     cSet(`card_${cardId}`, d);
 
-    if (db && d.data) {
-      const c = d.data;
-      db.query(`
-        INSERT INTO cards (api_card_id,name,number,rarity,supertype,image_small,image_large,
-          set_api_id,set_name,set_total,tcgplayer_data,cardmarket_data)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-        ON CONFLICT (api_card_id) DO UPDATE SET
-          tcgplayer_data=EXCLUDED.tcgplayer_data,
-          cardmarket_data=EXCLUDED.cardmarket_data, updated_at=NOW()
-      `, [c.id, c.name, c.number, c.rarity, c.supertype,
-          c.images && c.images.small, c.images && c.images.large,
-          c.set && c.set.id, c.set && c.set.name, c.set && c.set.total,
-          JSON.stringify(c.tcgplayer || null), JSON.stringify(c.cardmarket || null)
-      ]).catch(() => {});
-    }
+    // ── This endpoint used to INSERT the pokemontcg.io card into `cards` ──
+    // under pokemontcg.io's OWN id. That is the writer of both stray rows —
+    // me2pt5-294 (2026-09-20) and me55c-33 (2026-09-24): each carries
+    // exactly this INSERT's columns (tcgplayer_data, a pokemontcg image) and
+    // nothing any ingest writes (no set_series, set_release, image_lang).
+    // It was the only `cards` writer in server.js. A read endpoint must
+    // never write; the catalogue is written by ingest, under our ids only.
     res.json(d);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

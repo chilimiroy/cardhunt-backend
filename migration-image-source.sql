@@ -1,0 +1,12 @@
+-- migration-image-source.sql — record WHERE a card's artwork came from
+--
+-- image_lang says which LANGUAGE the artwork is; nothing said which SOURCE.
+-- rarity_source already does this for rarity. Needed first by ccfill.js
+-- (2026-09-27), which fills the Classic Collection sets from pokemontcg.io —
+-- a source with form: it produced the stray me2pt5-294 / me55c-33 rows and
+-- the 176-set list. Every field it writes must say so.
+--
+-- Additive and nullable: NULL means "written before this column existed",
+-- which is every row until something records otherwise. Nothing reads it
+-- as a condition.
+ALTER TABLE cards ADD COLUMN IF NOT EXISTS image_source text;

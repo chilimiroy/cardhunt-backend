@@ -4,7 +4,7 @@ node_modules/
 # /estimator.js, so ignoring it meant a deployed server that crashed on boot
 # with MODULE_NOT_FOUND. A file the server requires is not local tooling.
 
-# Local ingest and tooling — never deployed
+# Local ingest and tooling ï¿½ never deployed
 ingest.js
 sourcerank.js
 jpreconcile.js
@@ -42,6 +42,8 @@ yahoogate.js
 # setlist.test.js asserts the file is tracked, which is the durable guard.
 !setaudit.js
 gradeprices.js
+ccfill.js
+ccfill-backup-*.json
 *.test.js
 jptest.js
 

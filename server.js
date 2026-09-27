@@ -3267,7 +3267,10 @@ app.get('/api/ebay/conditions/:cardId', async (req, res) => {
   const cardId = req.params.cardId;
   const grade = String(req.query.grade || 'Raw NM');
   const nItems = Math.max(0, Math.min(25, parseInt(req.query.items, 10) || 0));
-  const key = [cardId, grade, nItems].join('|');
+  // Every parameter that changes the answer is in the key. It used to be
+  // [cardId, grade, items] only, so ?aspects=1 could be answered from a run
+  // that never asked for aspects.
+  const key = JSON.stringify([cardId, Object.keys(req.query).filter(k => k !== 'refresh').sort().map(k => [k, String(req.query[k])])]);
   const hit = conditionProbeCache.get(key);
   if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') {
     return res.json(Object.assign({ cached: true, cachedAgeSec: Math.round((Date.now() - hit.at) / 1000) }, hit.body));
@@ -3379,6 +3382,55 @@ app.get('/api/ebay/conditions/:cardId', async (req, res) => {
         }
         aspects.condition.push(entry);
       }
+
+      // ?combo=N — grader AND grade in ONE filter (2026-09-27, T3). The
+      // single-aspect runs above agreed with each item's own descriptor
+      // 9/9 for PSA/BGS/CGC but 1/3 for Ace, and 13/15 on grade. Before
+      // building on a combined filter, measure it: for grader x grade pairs
+      // taken from eBay's OWN distribution (top N of each, plus any grader
+      // whose eBay name contains a ?graders= term, e.g. TAG), one filtered
+      // search each, then getItem on the first ?verify= results to compare
+      // the filter with the item's descriptor AND with its title.
+      if (req.query.combo) {
+        const n = Math.max(1, Math.min(4, parseInt(req.query.combo, 10) || 2));
+        const gd = dists.find(a => a.localizedAspectName === 'Professional Grader');
+        const gr = dists.find(a => a.localizedAspectName === 'Grade');
+        const vals = a => (a ? a.aspectValueDistributions || [] : []).map(v => [v.localizedAspectValue, v.matchCount]);
+        aspects.allValues = { 'Professional Grader': vals(gd), 'Grade': vals(gr) };
+        aspects.combo = [];
+        if (gd && gr) {
+          const want = String(req.query.graders || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+          const gvals = vals(gd).map(v => v[0]);
+          const graders = [...new Set(gvals.slice(0, n).concat(gvals.filter(g => want.some(w => g.toLowerCase().includes(w)))))];
+          const grades = vals(gr).sort((a, b) => b[1] - a[1]).slice(0, n).map(v => v[0])
+            .concat(String(req.query.grades || '').split(',').map(s => s.trim())
+              .filter(s => vals(gr).some(v => v[0] === s)));
+          const nVerify = Math.min(5, parseInt(req.query.verify, 10) || 0);
+          for (const g of graders) for (const v of [...new Set(grades)]) {
+            const af = `categoryId:183454,Professional Grader:{${g}},Grade:{${v}}`;
+            const rf = await ebay.fetchEbay(db, { url: url + '&aspect_filter=' + encodeURIComponent(af),
+              token: auth.token, kind: 'search', meta: { cardId, probe: 'grade-combo' },
+              countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
+            const its = (rf.ok && rf.data && rf.data.itemSummaries) || [];
+            const rows = [];
+            for (const it of its.slice(0, nVerify)) {
+              const gi = await ebay.fetchEbay(db, {
+                url: 'https://api.ebay.com/buy/browse/v1/item/' + encodeURIComponent(it.itemId),
+                token: auth.token, kind: 'item', meta: { cardId, probe: 'grade-combo-verify' }, countFrom: () => 1 });
+              aspectCalls++;
+              const ds = gi.ok ? descOf(gi.data.conditionDescriptors) : [];
+              const dv = name => ((ds.find(d => d.name === name) || {}).values || []).join('/') || null;
+              const titleGrades = cm.gradesIn(it.title || '');
+              rows.push({ title: (it.title || '').slice(0, 90),
+                          descriptor: { grader: dv('Professional Grader'), grade: dv('Grade') },
+                          title: titleGrades.map(x => x.grader + ' ' + x.grade) });
+            }
+            aspects.combo.push({ grader: g, grade: v, ok: rf.ok, total: rf.ok ? rf.data.total : null,
+                                 returned: its.length, rows,
+                                 titles: its.slice(0, 25).map(i => i.title) });
+          }
+        }
+      }
     }
 
     const body = {
@@ -3389,7 +3441,8 @@ app.get('/api/ebay/conditions/:cardId', async (req, res) => {
                  withDescriptors: itemsWithDescriptors,
                  condition: itemCondition, descriptors: itemDescriptors, samples },
       quotaSpent: 1 + itemsFetched + itemErrors +
-        (aspects ? 1 + aspects.condition.reduce((n, e) => n + e.filtered.length, 0) + aspectCalls : 0),
+        (aspects ? 1 + aspects.condition.reduce((n, e) => n + e.filtered.length, 0) + aspectCalls
+                     + (aspects.combo ? aspects.combo.length : 0) : 0),
       stored: false
     };
     conditionProbeCache.set(key, { at: Date.now(), body });

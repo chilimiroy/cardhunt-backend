@@ -3318,6 +3318,10 @@ function liveRow(l){
     // eBay's structured Card Condition, when the search was filtered on it.
     + (l.conditionSource === 'ebay' && l.sellerCondition && liveCM() && liveCM().EBAY_CARD_CONDITION
         ? ' \u00b7 ' + liveEsc(liveCM().EBAY_CARD_CONDITION[l.sellerCondition]) : '')
+    // A slab whose title states no grade ("TAG Graded 8") was kept on eBay's
+    // own grader + grade fields alone. Say so: it is the one row whose grade
+    // nothing on screen confirms.
+    + (l.gradeSource === 'ebay' ? ' \u00b7 grade from eBay\u2019s listing fields' : '')
     + ' \u00b7 '
     + liveEsc(when) + bids + (l.seller ? ' \u00b7 ' + liveEsc(l.seller) : '')
     // A shop's asking price is not a sale and not a bid. The row says so
@@ -5648,6 +5652,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-2fd8549-cardid &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-9f07cf7-grades &middot; click to hide</div>
 </body>
 </html>

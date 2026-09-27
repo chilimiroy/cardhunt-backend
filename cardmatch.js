@@ -355,6 +355,73 @@ function ebayConditionFilter(grade) {
   };
 }
 
+// ── A slab's grader and grade, asked of eBay's own aspects ──
+// Measured 2026-09-27 on live Base Set Charizard (/api/ebay/conditions
+// ?combo=3&verify=3): search summaries carry no grader or grade (0 of 100);
+// getItem does, at one call per listing. But `aspect_filter` narrows on
+// BOTH together at no extra cost: BGS 8 -> 28, CGC 8 -> 30, TAG 8 -> 5.
+// Of 25 filtered items checked against their own descriptor, 22 agreed; all
+// three misses were the filter returning a different GRADE (two BGS 9.5 under
+// "BGS | 10", a TAG 5.5 under "TAG | 10"), and in all three the TITLE stated
+// the true grade. So the filter narrows the search and the title is checked
+// against it: where they disagree, neither is authoritative and the row is
+// refused (verify, opts.structuredGrade). Where the title is silent — "TAG
+// Graded 8", which gradesIn cannot read — the field answers.
+//
+// eBay's names, verbatim from its Professional Grader distribution. Only
+// graders we hold a code for AND saw eBay name; any other grader keeps the
+// title-only gate it has always had.
+const EBAY_GRADER = {
+  PSA:  'Professional Sports Authenticator (PSA)',
+  BGS:  'Beckett Grading Services (BGS)',
+  BVG:  'Beckett Vintage Grading (BVG)',
+  BCCG: 'Beckett Collectors Club Grading (BCCG)',
+  CGC:  'Certified Guaranty Company (CGC)',
+  SGC:  'Sportscard Guaranty Corporation (SGC)',
+  AGS:  'Automated Grading Systems (AGS)',
+  GMA:  'Gem Mint Authentication (GMA)',
+  HGA:  'Hybrid Grading Approach (HGA)',
+  PCA:  'Professional Card Authenticator (PCA)',
+  TAG:  'Technical Authentication & Grading (TAG)',
+  ACE:  'Ace Grading (Ace)',
+  MNT:  'MNT Grading (MNT)'
+};
+
+function ebayGradeFilter(grade) {
+  const g = parseGrade(grade);
+  if (g.kind !== 'graded') return null;
+  const value = EBAY_GRADER[g.grader];
+  if (!value) return null;
+  // eBay's Grade values are the bare numbers, halves included ("9.5").
+  // "Authentic" and "Not Specified" exist too — never asked for.
+  if (!g.anyGrade && !/^(10|[1-9](\.5)?)$/.test(String(g.grade))) return null;
+  return {
+    grader: g.grader, grade: g.anyGrade ? null : String(g.grade), graderValue: value,
+    aspectFilter: 'categoryId:183454,Professional Grader:{' + value + '}' +
+                  (g.anyGrade ? '' : ',Grade:{' + g.grade + '}')
+  };
+}
+
+// Every grade a title CLAIMS, read more loosely than gradesIn: the grader,
+// then only grading filler words, then the number — "TAG Graded 8", "TAG
+// graded 5.5 population 10" (-> TAG 5.5, never the pop count), "SGC Gem Mint
+// 10". Used ONLY to detect disagreement with a structured grade; the strict
+// reader still decides everything else. A number followed by a digit, a dot
+// or a slash is a collector number or a fraction, not a grade.
+const GRADE_FILLER = '(?:\\s+(?:graded|grade|gem|mint|nm|mt|nm-mt|near|pristine))*';
+function titleGradeClaims(title) {
+  const t = stripSpeculative(String(title || ''));
+  const out = gradesIn(t).map(f => ({ grader: f.grader, grade: f.grade }));
+  for (const co of GRADERS) {
+    const re = new RegExp(boundedTerm(co) + GRADE_FILLER + '\\s*[-:]?\\s*(10|[1-9](?:\\.5)?)(?![\\d.\\/])', 'gi');
+    let m;
+    while ((m = re.exec(t))) {
+      if (!out.some(o => o.grader === co && o.grade === m[1])) out.push({ grader: co, grade: m[1] });
+    }
+  }
+  return out;
+}
+
 // Find every grader+number in a title. Boundary-checked, so BGS 9 does
 // not match "BGS 9.5" — a half grade sells well above a whole one.
 function gradesIn(title) {
@@ -1135,11 +1202,42 @@ function verifyCore(title, card, grade, opts) {
 
   // 2. Grade must match exactly — grader AND number
   const found = gradesIn(t);
+  let gradeSource = found.length ? 'title' : null;
   let anyHit = null;
-  // Every accepting return goes through here, so the grade grader-wide mode
-  // read rides on the verdict whichever branch accepted.
-  const accept = r => Object.assign(r, anyHit || {});
+  // Every accepting return goes through here, so the grade and where it came
+  // from ride on the verdict whichever branch accepted.
+  const accept = r => Object.assign(r, anyHit || {}, gradeSource ? { gradeSource } : {});
   if (want.kind === 'graded') {
+    // ── eBay's own grader + grade, where the search was filtered on them ──
+    // Honoured only when it is exactly what was asked (the filter is ours).
+    // Two seller-typed sources, neither authoritative: WHERE THEY DISAGREE,
+    // REFUSE. Where the title is silent, the field answers — but only for a
+    // specific grade, and never for a signed card, whose "Auto 10" is an
+    // autograph grade (measured: "PSA/DNA Auto 10 … SIGNED" under PSA | 10).
+    const sg = opts && opts.structuredGrade;
+    if (sg && sg.grader === want.grader && (want.anyGrade ? !sg.grade : sg.grade === want.grade)) {
+      const claims = titleGradeClaims(t);
+      const clash = claims.find(c => c.grader !== sg.grader || (sg.grade && c.grade !== sg.grade));
+      if (clash) {
+        return { ok: false, reason: `title says ${clash.grader} ${clash.grade}, eBay's grade fields say ` +
+          `${sg.grader} ${sg.grade || '(any)'} — they disagree and neither is authoritative`, gradeConflict: true };
+      }
+      if (!found.length && sg.grade) {
+        const other = GRADERS_UNAMBIGUOUS.find(co => co !== sg.grader && new RegExp(boundedTerm(co), 'i').test(t));
+        if (other) {
+          return { ok: false, reason: `title names ${other}, eBay's grader field says ${sg.grader} — refused`,
+                   gradeConflict: true };
+        }
+        if (/\b(?:auto(?:graph(?:ed)?)?|signed|dna)\b/i.test(t)) {
+          return { ok: false, reason: `title states no grade and mentions an autograph — eBay's ` +
+            `"${sg.grader} ${sg.grade}" may grade the signature, not the card` };
+        }
+        gradeSource = claims.length ? 'title+ebay' : 'ebay';
+        found.push({ grader: sg.grader, grade: sg.grade, structured: true });
+      } else if (found.length) {
+        gradeSource = 'title+ebay';
+      }
+    }
     if (!found.length) {
       return { ok: false, reason: `wants ${want.grader} ${want.anyGrade ? 'any grade' : want.grade}` +
         ', title states no grade' };
@@ -1360,6 +1458,7 @@ const API = {
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
   qualifiersIn, sellerCondition, stripHitPoints,
   EBAY_CARD_CONDITION, EBAY_CONDITION_CODES, ebayConditionFilter,
+  EBAY_GRADER, ebayGradeFilter, titleGradeClaims,
   GRADE_QUALIFIERS, RAW_CONDITIONS, RAW_CONDITION_PATTERNS,
   printingEvidence,
   languageOf, cardLanguage, languageFromCardId, namesAConflictingSet, printingConflict,

@@ -1383,6 +1383,7 @@ function normaliseListing(o) {
     // Condition (the search was filtered on it), 'title' is prose. Dropped
     // here, the page could not tell a marketplace field from a guess.
     conditionSource: o.conditionSource || null,
+    gradeSource: o.gradeSource || null,
     titleCondition: o.titleCondition || null
   };
 }
@@ -1779,10 +1780,18 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // item's descriptor 36 of 36 times. Same one call as before — each raw
   // condition was already its own search. See cardmatch.ebayConditionFilter.
   const condFilter = cm.ebayConditionFilter(grade);
+  // A slab's grader and grade are asked of eBay's own aspects the same way
+  // (cardmatch.ebayGradeFilter, measured before it was built). The filter
+  // NARROWS; the title is then checked against it, and where they disagree
+  // the row is refused — neither is authoritative. Where the title is silent
+  // ("TAG Graded 8") the field answers. No extra calls.
+  const gradeFilter = condFilter ? null : cm.ebayGradeFilter(grade);
+  const aspectFilter = condFilter ? condFilter.aspectFilter : gradeFilter ? gradeFilter.aspectFilter : null;
+  const gateOpts = gradeFilter ? { structuredGrade: { grader: gradeFilter.grader, grade: gradeFilter.grade } } : undefined;
   const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search'
     + '?q=' + encodeURIComponent(q)
     + '&category_ids=183454&limit=' + Math.min(limit * 3, 100) + '&sort=price'
-    + (condFilter ? '&aspect_filter=' + encodeURIComponent(condFilter.aspectFilter) : '');
+    + (aspectFilter ? '&aspect_filter=' + encodeURIComponent(aspectFilter) : '');
 
   const call = await ebay.fetchEbay(db, {
     url, token, kind: 'search', background,
@@ -1822,7 +1831,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
 
   for (const it of items) {
     const title = it.title || '';
-    const v = cm.verify(title, matchCard, grade);
+    const v = cm.verify(title, matchCard, grade, gateOpts);
 
     // Cross-check: two independent readers of the same title that should
     // agree. listingparse works from a parsed structure, cardmatch from the
@@ -1854,7 +1863,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       }
     } catch (e) { /* the parser must never break the gate */ }
 
-    if (!v.ok) { dropped.push({ title, reason: v.reason }); continue; }
+    if (!v.ok) { dropped.push({ title, reason: v.reason, gradeConflict: v.gradeConflict || undefined }); continue; }
 
     // eBay's own condition field, which the gate never read. A $1,114.99
     // slab sat in a Raw NM list because its title said "PCG 9" — not a
@@ -1909,7 +1918,10 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       sellerCondition: condFilter ? condFilter.code : sc.code,
       sellerStated: condFilter ? true : sc.stated,
       conditionSource: condFilter ? 'ebay' : (sc.stated ? 'title' : null),
-      titleCondition: sc.stated ? sc.code : null
+      titleCondition: sc.stated ? sc.code : null,
+      // 'ebay' = the title named no grade and eBay's grade fields answered;
+      // 'title+ebay' = both, and they agreed; 'title' = no filter applied.
+      gradeSource: v.gradeSource || null
     }));
   }
 
@@ -1927,6 +1939,13 @@ async function sourceEbay(card, grade, limit, opts = {}) {
            gate: cm.printingEvidence(matchCard),
            conditionFilter: condFilter
              ? { asked: condFilter.asked, ebay: condFilter.value, note: condFilter.note }
+             : null,
+           // Kept vs dropped BY the disagreement rule, so its net effect is
+           // visible on every response, not only in a one-off measurement.
+           gradeFilter: gradeFilter
+             ? { grader: gradeFilter.graderValue, grade: gradeFilter.grade,
+                 keptOnEbayFieldAlone: listings.filter(l => l.gradeSource === 'ebay').length,
+                 refusedOnDisagreement: dropped.filter(d => d.gradeConflict).length }
              : null,
            query: q };
 }
@@ -2023,6 +2042,7 @@ async function gatherListings(card, grade, limit, opts) {
       // Which structured condition eBay was asked for — and what it cannot
       // separate (Mint from Near Mint, Damaged from Heavily Played).
       if (r.value.conditionFilter) sources[s.id].conditionFilter = r.value.conditionFilter;
+      if (r.value.gradeFilter) sources[s.id].gradeFilter = r.value.gradeFilter;
 
       // Printing rejections (reprint / language / year) from a source that
       // does not use the `rejected` shape below. Reported even when zero:

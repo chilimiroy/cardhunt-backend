@@ -416,6 +416,8 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .selchip{padding:6px 13px;border:1px solid var(--border);border-radius:999px;font-size:12px;
   font-weight:600;color:var(--mu);background:var(--w);cursor:pointer;transition:all .15s;
   white-space:nowrap}
+/* A condition answered from the seller's title, not an eBay field. */
+.selchip.ss{border-style:dashed}
 .selchip.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);
   box-shadow:var(--sh)}
 .selchip:hover:not(.on){border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
@@ -2449,17 +2451,27 @@ function liveCM() {
   return (typeof window !== 'undefined' && window.CardMatch) ? window.CardMatch : CM;
 }
 
+// Raw conditions eBay has NO value for, and why. A literal because this runs
+// at parse time, before the async cardmatch may have arrived; selector.test.js
+// asserts it equals cardmatch.TITLE_ONLY_CONDITIONS[..].why.
+var TITLE_ONLY_RAW = {
+  M:   'eBay has no Mint value — its top is "Near mint or better"',
+  DMG: 'eBay has no Damaged value — its lowest is "Heavily played (Poor)"'
+};
+
 var STATUS_CONDITIONS = {
   // Raw sub-conditions are eBay's OWN "Card Condition", asked of search as
   // an aspect filter (T3, measured 2026-09-27: the coarse `condition` field
   // is binary, but every ungraded item carries a structured Card Condition,
   // and the filtered rows agreed with it 36 of 36 times). eBay's scale has
-  // four values: it does not separate Mint from Near Mint and has no
-  // Damaged, so M and DMG are not offered — a chip eBay cannot answer is a
-  // control backed by no data. The list is cardmatch's, not a copy.
-  // Built at parse time, when the module may not have arrived: the literal
-  // is cardmatch's EBAY_CONDITION_CODES, and selector.test.js asserts they match.
-  Raw:   ['All', 'NM', 'LP', 'MP', 'HP'],
+  // four values (its own condition POLICY, re-read 2026-09-27): no Mint, no
+  // Damaged. Those two were REMOVED from here once — wrong: a value eBay
+  // lacks is a reason to ask the title, not to take the option away. M and
+  // DMG are back, answered from the seller's own words and shown as
+  // seller-stated (dashed chip, note, row label). Never silently dropped.
+  // Built at parse time, when the module may not have arrived: the literal is
+  // M + cardmatch's EBAY_CONDITION_CODES + DMG, and selector.test.js asserts it.
+  Raw:   ['All', 'M', 'NM', 'LP', 'MP', 'HP', 'DMG'],
   // Every grade each company PUBLISHES, checked 2026-09-27 against its own
   // scale page rather than a summary of it. Three were not what we assumed:
   //   PSA  half grades exist - "between PSA 2 and PSA 9" (so 2.5-8.5, no
@@ -2568,7 +2580,12 @@ function renderSelector() {
   // ── CONDITION ── every option visible, no "more" button.
   h += '<div class="selbox"><div class="sellbl">Condition</div><div class="selopts">';
   conds.forEach(function (c) {
-    h += '<button class="selchip' + (SEL.condition === c ? ' on' : '') + '" '
+    // A raw condition eBay has no value for is answered from the seller's
+    // title. The chip SAYS so - dashed, with the reason on hover - so it is
+    // never mistaken for one of eBay's own four.
+    var tOnly = SEL.status === 'Raw' && TITLE_ONLY_RAW[c];
+    h += '<button class="selchip' + (SEL.condition === c ? ' on' : '') + (tOnly ? ' ss' : '') + '" '
+      + (tOnly ? 'title="Seller-stated: ' + liveEsc(TITLE_ONLY_RAW[c]) + '" ' : '')
       + 'onclick="setCondition(&quot;' + c + '&quot;)">' + c + '</button>';
   });
   h += '</div>';
@@ -2577,14 +2594,20 @@ function renderSelector() {
   // a grader-wide query is genuinely different from a specific grade.
   var note = '';
   var who = SEL.status === 'Other' ? otherG : SEL.status;   // name the grader, not 'Other'
-  if (SEL.status === 'Raw') {
+  if (SEL.status === 'Raw' && TITLE_ONLY_RAW[SEL.condition]) {
+    note = 'Ungraded, and the <strong>seller&rsquo;s own title says '
+      + (SEL.condition === 'M' ? 'Mint' : 'Damaged') + '</strong>. '
+      + liveEsc(TITLE_ONLY_RAW[SEL.condition]) + ', so this is <strong>seller-stated</strong>, not '
+      + 'a field eBay checks. Listings that state nothing are grouped as <em>unstated</em>, never dropped.';
+  } else if (SEL.status === 'Raw') {
     note = SEL.condition === 'All'
       ? 'Every ungraded listing. No slabs.'
       : 'Ungraded, and listed as <strong>'
         + liveEsc((liveCM() && liveCM().EBAY_CARD_CONDITION && liveCM().EBAY_CARD_CONDITION[SEL.condition]) || SEL.condition)
         + '</strong> in eBay&rsquo;s own Card Condition field &mdash; the seller&rsquo;s '
-        + 'declaration, in a structured field rather than the title. eBay does not separate Mint from '
-        + 'Near Mint. Shop listings with no such field are grouped as <em>unstated</em>, never dropped.';
+        + 'declaration, in a structured field rather than the title. eBay has no Mint or Damaged value: '
+        + 'M and DMG ask the seller&rsquo;s title instead. Shop listings with no such field are grouped as '
+        + '<em>unstated</em>, never dropped.';
   } else if (SEL.condition === 'All') {
     note = 'Every ' + liveEsc(who) + ' slab at any grade &mdash; and no other grader, and no raw. '
       + 'One query, not one per grade.';
@@ -3348,6 +3371,9 @@ function liveRow(l){
     // own grader + grade fields alone. Say so: it is the one row whose grade
     // nothing on screen confirms.
     + (l.gradeSource === 'ebay' ? ' \u00b7 grade from eBay\u2019s listing fields' : '')
+    // Mint and Damaged exist only in the seller's words - say so on the row.
+    + (l.conditionSource === 'title' && l.sellerStated && TITLE_ONLY_RAW[l.sellerCondition]
+        ? ' \u00b7 ' + (l.sellerCondition === 'M' ? 'Mint' : 'Damaged') + ', seller-stated' : '')
     + ' \u00b7 '
     + liveEsc(when) + bids + (l.seller ? ' \u00b7 ' + liveEsc(l.seller) : '')
     // A shop's asking price is not a sale and not a bid. The row says so
@@ -5678,6 +5704,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-0653b72-cdcol &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-16d767a-mdmg &middot; click to hide</div>
 </body>
 </html>

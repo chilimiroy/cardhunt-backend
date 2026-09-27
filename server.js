@@ -1947,6 +1947,11 @@ async function sourceEbay(card, grade, limit, opts = {}) {
            conditionFilter: condFilter
              ? { asked: condFilter.asked, ebay: condFilter.value, note: condFilter.note }
              : null,
+           // M and DMG: no eBay value, so the seller's word was searched for and
+           // the condition on every row is what the TITLE says — seller-stated.
+           titleCondition: cm.titleOnlyCondition(grade)
+             ? (t => ({ asked: t.code, label: t.label, searched: t.term, why: t.why, source: 'seller-stated' }))(cm.titleOnlyCondition(grade))
+             : null,
            // Kept vs dropped BY the disagreement rule, so its net effect is
            // visible on every response, not only in a one-off measurement.
            gradeFilter: gradeFilter
@@ -2050,6 +2055,7 @@ async function gatherListings(card, grade, limit, opts) {
       // separate (Mint from Near Mint, Damaged from Heavily Played).
       if (r.value.conditionFilter) sources[s.id].conditionFilter = r.value.conditionFilter;
       if (r.value.gradeFilter) sources[s.id].gradeFilter = r.value.gradeFilter;
+      if (r.value.titleCondition) sources[s.id].titleCondition = r.value.titleCondition;
 
       // Printing rejections (reprint / language / year) from a source that
       // does not use the `rejected` shape below. Reported even when zero:

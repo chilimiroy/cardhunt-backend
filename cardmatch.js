@@ -321,18 +321,45 @@ function sellerCondition(title) {
 // So a raw condition costs ONE search, the same as it always has; reading
 // descriptors per listing would cost 25-75 getItem calls per view.
 //
-// eBay's scale has four values. It does not separate Mint from Near Mint,
-// and has no Damaged; those two map to the nearest value and the source
-// block says so, rather than offering a distinction eBay cannot make.
+// eBay's scale, read from eBay's own condition POLICY for category 183454
+// (Sell Metadata get_item_condition_policies, 2026-09-27 — the list a seller
+// picks from, not a sample of results): Ungraded -> Card Condition (40001) =
+// Near mint or better | Lightly played (Excellent) | Moderately played (Very
+// good) | Heavily played (Poor). Four values. Five raw-heavy cards' live
+// distributions (401 to 3,328 listings each) showed nothing else.
+//
+// There is NO Mint and NO Damaged. Until 2026-09-27 this map answered M with
+// Near-Mint results and DMG with Heavily-Played ones — a silent substitution
+// — and then the M and DMG chips were removed. Both were wrong: eBay not
+// having a value is a reason to ask the TITLE, not to drop the option.
 const EBAY_CARD_CONDITION = {
-  M:   'Near Mint or Better',
   NM:  'Near Mint or Better',
   LP:  'Lightly Played (Excellent)',
   MP:  'Moderately Played (Very Good)',
-  HP:  'Heavily Played (Poor)',
-  DMG: 'Heavily Played (Poor)'
+  HP:  'Heavily Played (Poor)'
 };
 const EBAY_CONDITION_CODES = ['NM', 'LP', 'MP', 'HP'];   // what eBay can actually tell apart
+
+// Conditions eBay has no value for, offered from the SELLER'S OWN WORDS and
+// labelled seller-stated. The term goes into the search itself — measured
+// (T1, 2026-09-27): on a busy card the 75-row cap, not a missing field, is
+// what loses listings, and a mint raw copy sits at the expensive end of a
+// price sort; asking eBay for the word keeps it inside the cap. The title is
+// then read by sellerCondition, and the panel keeps rows that state it,
+// groups rows that state nothing, and counts rows that state another.
+// No aspect filter: a listing whose Card Condition field is empty still
+// counts if the seller's title says it.
+const TITLE_ONLY_CONDITIONS = {
+  M:   { term: 'mint',    label: 'Mint',
+         why: 'eBay has no Mint value — its top is "Near mint or better"' },
+  DMG: { term: 'damaged', label: 'Damaged',
+         why: 'eBay has no Damaged value — its lowest is "Heavily played (Poor)"' }
+};
+function titleOnlyCondition(grade) {
+  const g = parseGrade(grade);
+  if (g.kind !== 'raw' || !/^\s*raw\s+\S/i.test(String(grade))) return null;
+  return TITLE_ONLY_CONDITIONS[g.condition] ? Object.assign({ code: g.condition }, TITLE_ONLY_CONDITIONS[g.condition]) : null;
+}
 
 // The aspect_filter for a raw grade, or null (Raw All, a graded search, or
 // a condition eBay has no value for).
@@ -342,16 +369,13 @@ function ebayConditionFilter(grade) {
   // parseGrade reads a bare "Raw" as NM. That is "every raw listing", not
   // a filter — only an explicitly stated condition narrows.
   if (!/^\s*raw\s+\S/i.test(String(grade))) return null;
+  // M and DMG have no eBay value: null here, TITLE_ONLY_CONDITIONS instead.
   const value = EBAY_CARD_CONDITION[g.condition];
   if (!value) return null;
   return {
-    asked: g.condition,
-    code: g.condition === 'M' ? 'NM' : g.condition === 'DMG' ? 'HP' : g.condition,
-    value,
+    asked: g.condition, code: g.condition, value,
     aspectFilter: 'categoryId:183454,Card Condition:{' + value + '}',
-    note: g.condition === 'M' ? 'eBay does not separate Mint from Near Mint'
-        : g.condition === 'DMG' ? 'eBay has no Damaged value; its lowest is Heavily Played (Poor)'
-        : null
+    note: null
   };
 }
 
@@ -993,6 +1017,12 @@ function buildQuery(card, grade, opts) {
     else bits.push(g.grader + ' ' + g.grade + (g.qualifier ? ' ' + g.qualifier : ''));
   }
 
+  // A condition eBay has no value for is ASKED as the seller's own word, so
+  // the search itself narrows to it (see TITLE_ONLY_CONDITIONS). Every
+  // marketplace link asks it too — one question, wherever it is sent.
+  const tOnly = titleOnlyCondition(grade);
+  if (tOnly) bits.push(tOnly.term);
+
   if (opts.suffix !== false) bits.push('pokemon');
 
   let q = bits.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
@@ -1473,6 +1503,7 @@ const API = {
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
   qualifiersIn, sellerCondition, stripHitPoints,
   EBAY_CARD_CONDITION, EBAY_CONDITION_CODES, ebayConditionFilter,
+  TITLE_ONLY_CONDITIONS, titleOnlyCondition,
   EBAY_GRADER, ebayGradeFilter, titleGradeClaims,
   GRADE_QUALIFIERS, RAW_CONDITIONS, RAW_CONDITION_PATTERNS,
   printingEvidence,

@@ -356,14 +356,37 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 /* Two columns, two rows. Column one is the image's width in BOTH rows, so
    the information panel under the image matches it; column two carries the
    price boxes and position bar, then the graph beside the information. */
-.cdgrid{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:20px 28px;align-items:start;margin-bottom:20px}
-.cdgrid .cview{margin-bottom:0}
-.cdtop-r{min-width:0}
-.cdtop-r .pboxes{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px}
-.cd-info{align-self:start}
-.cd-chartcell{margin-bottom:0;min-width:0}
+/* ── ONE spacing rule down each column (2026-09-27) ──
+   This was a 2x2 grid with SHARED rows: row two could not begin until the
+   image ended, so the graph waited under a 502px image while the 217px
+   prices-and-bar cell above it left 305px of dead space (measured at
+   1366px). And the column had two spacing rules: 14px from .pboxes' own
+   margin, then the grid's 20px row gap.
+   Now each column flows on its own - image then information; prices, bar,
+   graph - through named areas: the image spans the price cell AND the
+   first part of the graph's span, so the graph starts directly under the
+   bar. Every gap in the column is --cd-gap and nothing else. The markup
+   and every element id are unchanged. */
+.cdgrid{--cd-gap:16px;display:grid;grid-template-columns:minmax(300px,380px) 1fr;
+  grid-template-areas:"img top" "img chart" "info chart";
+  grid-template-rows:auto auto 1fr;
+  gap:var(--cd-gap) 28px;align-items:start;margin-bottom:20px}
+/* Inside the grid, the gap is the ONLY spacing: every cell and every child
+   of the price column drops its own margin. [class] lifts this above single-
+   class rules defined later in the file - .chart-box's margin-bottom:20px
+   sits 60 lines below and had silently beaten the old .cd-chartcell reset
+   (measured: 36px from graph to info at 800px, where the rule says 16). */
+.cdgrid > [class], .cdtop-r > [class], .cdgrid .cview{margin:0}
+.cd-imgcell{grid-area:img}
+.cdtop-r{grid-area:top;min-width:0;display:flex;flex-direction:column;gap:var(--cd-gap)}
+.cdtop-r .pboxes{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.cd-info{grid-area:info;align-self:start}
+.cd-chartcell{grid-area:chart;min-width:0}
+/* Narrow: one column, and the PRICE story stays together - prices, bar,
+   graph - with the information panel after it. In DOM order the panel sat
+   between the bar and the graph, splitting the same column on phones. */
 @media(max-width:860px){
-  .cdgrid{grid-template-columns:1fr}
+  .cdgrid{grid-template-columns:1fr;grid-template-areas:"img" "top" "chart" "info";grid-template-rows:none}
   .cdtop-r .pboxes{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 }
 .cview{background:linear-gradient(145deg,var(--surface-2),var(--accent-soft));border:1px solid var(--border);border-radius:var(--r);padding:26px;text-align:center;margin-bottom:16px;box-shadow:var(--sh)}
@@ -408,7 +431,10 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .pbox{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh)}
 .pbl{font-size:10px;color:var(--ink-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.07em;font-weight:600}.pbv{font-size:26px;font-weight:600;letter-spacing:-.01em;color:var(--money)}.pbs{font-size:12px;font-weight:500;margin-top:3px}
 .chart-box{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:20px 22px;margin-bottom:20px;box-shadow:var(--sh)}
-.chart-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+/* Wraps rather than squeezes: at 390px the title was forced into a one-word
+   column beside the range chips. The chips drop under the title instead. */
+.chart-h{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 16px;margin-bottom:16px}
+.chart-h > div:first-child{flex:1 1 220px;min-width:0}
 .chart-t{font-size:15px;font-weight:700;letter-spacing:-.2px}.chart-s{font-size:11px;color:var(--mu);margin-top:3px}
 .rchips{display:flex;gap:4px}.rc{padding:4px 11px;border:1.5px solid var(--bd);border-radius:22px;font-size:11px;font-weight:600;color:var(--mu);background:var(--w);cursor:pointer;transition:all .15s}.rc.on{background:var(--t);color:#fff;border-color:var(--t)}
 .cwrap{position:relative;width:100%;height:178px}
@@ -5652,6 +5678,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-9f07cf7-grades &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260927-0653b72-cdcol &middot; click to hide</div>
 </body>
 </html>

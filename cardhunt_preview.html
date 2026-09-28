@@ -969,6 +969,53 @@ const BACKEND=(['localhost','127.0.0.1'].indexOf(location.hostname)>=0
   && location.search.indexOf('api=render')<0)
   ? location.origin : 'https://cardhunt-backend.onrender.com';
 
+// ── ?debug=1 — where the time goes, browser side (TASK T1) ────
+// Off unless the page URL carries debug=1. Then every call to our own API
+// carries debug=1 too, so the server's `timings` block comes back with it,
+// and each call is logged with the browser's own view: when it was asked,
+// time to first byte, time to done, bytes. perfMark() records the moments a
+// person sees: data arrived, grid drawn, listings drawn. All of it lands in
+// window.__perf and the console as "[perf]".
+var PERF_ON = /[?&]debug=1(&|$)/.test(location.search);
+window.__perf = { marks: [], api: [] };
+function perfMark(name, extra) {
+  if (!PERF_ON) return;
+  var m = Object.assign({ name: name, t: Math.round(performance.now()) }, extra || {});
+  window.__perf.marks.push(m);
+  console.log('[perf] ' + name + ' @' + m.t + 'ms', extra || '');
+}
+if (PERF_ON) {
+  var _fetch = window.fetch.bind(window);
+  window.fetch = function (url, init) {
+    var u = String(url);
+    if (u.indexOf(BACKEND + '/api/') !== 0) return _fetch(url, init);
+    u += (u.indexOf('?') < 0 ? '?' : '&') + 'debug=1';
+    var t0 = performance.now();
+    return _fetch(u, init).then(function (r) {
+      var ttfb = performance.now() - t0;
+      r.clone().json().then(function (j) {
+        var rt = performance.getEntriesByName(u).slice(-1)[0];
+        var e = { path: u.slice(BACKEND.length).replace(/[?&]debug=1/, ''),
+          startedAt: Math.round(t0), ttfbMs: Math.round(ttfb),
+          doneMs: Math.round(performance.now() - t0),
+          bytes: rt ? rt.encodedBodySize || rt.transferSize || null : null,
+          cached: j && j.cached, server: j && j.timings || null };
+        window.__perf.api.push(e);
+        console.log('[perf] api ' + e.path + ' ttfb ' + e.ttfbMs + 'ms, done ' + e.doneMs + 'ms'
+          + (e.server ? ', server ' + e.server.totalMs + 'ms' : ''), e.server ? e.server.totals : '');
+      }).catch(function () {});
+      return r;
+    });
+  };
+  window.addEventListener('load', function () {
+    var n = performance.getEntriesByType('navigation')[0] || {};
+    var fcp = performance.getEntriesByName('first-contentful-paint')[0];
+    perfMark('page load', { ttfbMs: Math.round(n.responseStart - n.requestStart),
+      firstPaintMs: fcp ? Math.round(fcp.startTime) : null,
+      domContentLoadedMs: Math.round(n.domContentLoadedEventEnd || 0) });
+  });
+}
+
 // ── TCGDEX: FREE MULTILINGUAL API (EN/JA/ZH-TW + new sets) ────
 // Docs: https://tcgdex.dev  |  No API key required
 var TCGDEX = 'https://api.tcgdex.net/v2';
@@ -2102,6 +2149,7 @@ async function doSearch(q, lang) {
 // Not the producer of the stray rows (see pickAlertCard and ME2PT5_PREMIUM);
 // dead, and pointed at the wrong id space. Deleted 2026-09-27.
 async function openSet(setId, apiSetId){
+  perfMark('set:open', { id: setId });
   S.tbType='all';
   document.getElementById('sd-sort').value='num';
   document.getElementById('sd-rar').value='all';
@@ -2373,6 +2421,8 @@ function applyFilters(){
   var grid = document.getElementById('sd-grid');
   grid.className = 'cgall';
   grid.innerHTML = tiles.join('');
+  perfMark('set:grid drawn', { tiles: tiles.length });
+  if (PERF_ON) requestAnimationFrame(function () { perfMark('set:grid painted'); });
 }
 
 function updateCardPrices(grade,base){ return updatePrices(grade,base); }
@@ -2722,6 +2772,7 @@ function toggleWatch(){S.watching=!S.watching;document.getElementById('watch-btn
 
 async function openCard(id){
   if (refuseForeignId(id, 'openCard')) return;
+  perfMark('card:open', { id: id });
   var oldBadge = document.getElementById('grade-badge'); if (oldBadge) oldBadge.remove();
   SS('card');
   if(S.chart){S.chart.destroy();S.chart=null;}
@@ -2775,6 +2826,7 @@ async function openCard(id){
     }
     if(!c)return;
     S.currentCard=c;
+    perfMark('card:data', { id: id });
     // Latest searches records IDENTITY only — never the price. A price in
     // localStorage goes stale silently and then cannot be told from a live
     // one, which is exactly what CARD_CACHE did from the set page.
@@ -3587,6 +3639,8 @@ async function renderLiveListings(card, grade){
   // The user may have changed card or grade while this was in flight.
   if (!LF.card || LF.card.id !== cardId || LF.grade !== grade) return;
 
+  perfMark('card:listings arrived', { id: cardId, grade: grade, rows: (d.listings || []).length, cached: !!d.cached });
+  if (PERF_ON) requestAnimationFrame(function () { perfMark('card:listings painted', { id: cardId }); });
   // The Lowest listing box reads the same gated answer this panel leads with.
   setLowestFromListings(d, grade);
 
@@ -5691,6 +5745,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-cd3ba77-t7honest &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-72d08e2-perftiming &middot; click to hide</div>
 </body>
 </html>

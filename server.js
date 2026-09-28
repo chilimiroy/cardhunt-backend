@@ -32,11 +32,34 @@ const app = express();
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
+// ?debug=1 — where the time goes (TASK T1). Every db.query, eBay call, gate
+// and outlier pass inside this request records into it; the JSON response
+// gains a `timings` key. Without the flag nothing is recorded.
+const timing = require('./timing');
+timing.instrumentFetch();
+app.use((req, res, next) => {
+  if (req.query.debug !== '1') return next();
+  timing.run(store => {
+    const json = res.json.bind(res);
+    res.json = body => {
+      if (body && typeof body === 'object' && !Array.isArray(body)) {
+        const a = timing.now();
+        JSON.stringify(body);
+        timing.add('serialise', timing.now() - a);
+        body = Object.assign({}, body, { timings: timing.report(store) });
+      }
+      return json(body);
+    };
+    next();
+  });
+});
+
 // ── DATABASE (Supabase) ───────────────────────────────────────
 const db = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 }) : null;
+timing.instrumentPool(db);
 
 // ── DATA SOURCES ──────────────────────────────────────────────
 const TCG_KEY = process.env.POKEMONTCG_KEY || '4c777c95-8a61-407e-b16e-48bd2f827478';
@@ -1493,11 +1516,52 @@ const YT_SET_TTL   = 60 * 60 * 1000;
 let ytIndex = null;                       // { at, map }
 const ytSetCache = new Map();             // code -> { at, entries }
 
+// The memory cache alone did not hold for a day: Render's free tier restarts
+// the process after ~15 idle minutes, so in practice every cold visit paid
+// the ~3.7s index fetch again. The index is OUR set id -> the shop's code —
+// no listing, no price — so it is kept in Supabase with its fetch time, and
+// a cold process reads it back in one small query. Refetched when older than
+// a day; if that refetch fails, the stored copy is used and its age logged,
+// rather than dropping Yuyu-tei for the whole view. Concurrent misses share
+// one fetch instead of each starting their own.
+let ytIndexInflight = null;
+async function ytIndexLoadStored() {
+  if (!db) return null;
+  try {
+    await db.query(`CREATE TABLE IF NOT EXISTS yuyutei_index (
+      id int PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+      entries jsonb NOT NULL, fetched_at timestamptz NOT NULL)`);
+    const r = await db.query('SELECT entries, fetched_at FROM yuyutei_index WHERE id = 1');
+    if (!r.rows.length) return null;
+    return { at: new Date(r.rows[0].fetched_at).getTime(), map: new Map(r.rows[0].entries) };
+  } catch (e) { console.warn('[yuyutei] stored index unreadable: ' + e.message); return null; }
+}
+async function ytIndexStore(idx) {
+  if (!db) return;
+  try {
+    await db.query(`INSERT INTO yuyutei_index (id, entries, fetched_at) VALUES (1, $1, $2)
+      ON CONFLICT (id) DO UPDATE SET entries = EXCLUDED.entries, fetched_at = EXCLUDED.fetched_at`,
+      [JSON.stringify([...idx.map]), new Date(idx.at)]);
+  } catch (e) { console.warn('[yuyutei] could not store index: ' + e.message); }
+}
 async function ytSetIndex() {
   if (ytIndex && Date.now() - ytIndex.at < YT_INDEX_TTL) return ytIndex.map;
-  const map = await yt.fetchSetIndex();
-  ytIndex = { at: Date.now(), map };
-  return map;
+  if (!ytIndexInflight) ytIndexInflight = (async () => {
+    if (!ytIndex) ytIndex = await timing.time('yuyutei:index-stored', ytIndexLoadStored);
+    if (ytIndex && Date.now() - ytIndex.at < YT_INDEX_TTL) return ytIndex.map;
+    try {
+      const map = await yt.fetchSetIndex();
+      ytIndex = { at: Date.now(), map };
+      ytIndexStore(ytIndex);                  // not awaited: the view does not wait on the write
+      return map;
+    } catch (e) {
+      if (!ytIndex) throw e;
+      console.warn('[yuyutei] index refetch failed (' + e.message + '); using the stored copy, '
+        + Math.round((Date.now() - ytIndex.at) / 3600e3) + 'h old');
+      return ytIndex.map;
+    }
+  })().finally(() => { ytIndexInflight = null; });
+  return ytIndexInflight;
 }
 
 async function ytSetEntries(code) {
@@ -1520,7 +1584,7 @@ async function sourceYuyutei(card, grade, limit, opts = {}) {
   }
 
   const setKey = String(card.set_api_id || '').toUpperCase();
-  const index = await ytSetIndex();
+  const index = await timing.time('yuyutei:index', () => ytSetIndex());
   const entry = index.get(setKey);
   if (!entry) {
     // A set this shop does not carry is not a failure, and must not look
@@ -1537,7 +1601,7 @@ async function sourceYuyutei(card, grade, limit, opts = {}) {
              gate: cm.printingEvidence(filterCard(card)) };
   }
 
-  const { entries, ageSec } = await ytSetEntries(entry.code);
+  const { entries, ageSec } = await timing.time('yuyutei:setpage', () => ytSetEntries(entry.code));
 
   // Everything at this collector number, then the variant rule: a
   // master-ball mirror shares the number and is a different product at up
@@ -1558,8 +1622,8 @@ async function sourceYuyutei(card, grade, limit, opts = {}) {
     // options — Japanese IS written in CJK, so inferring Chinese from
     // script would reject most of the feed, and the "wanted English,
     // title is CJK" rule is meaningless on a JP-only source.
-    const conflict = cm.printingConflict(title, fc,
-      { cjkIsChinese: false, scriptIsLanguageEvidence: false });
+    const conflict = timing.timeSync('gate:yuyutei', () => cm.printingConflict(title, fc,
+      { cjkIsChinese: false, scriptIsLanguageEvidence: false }));
     if (conflict) { dropped.push({ title, reason: conflict }); continue; }
 
     if (!(e.yen > 0)) { dropped.push({ title, reason: 'no usable price' }); continue; }
@@ -1759,7 +1823,8 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // point — it exists to debug the title gate, and that debugging should not
   // require live keys or spend quota.
   const dryRun = !!opts.dryRun;
-  const auth = dryRun ? { token: '<dry-run>' } : await getEbayTokenDetailed({ background });
+  const auth = dryRun ? { token: '<dry-run>' }
+    : await timing.time('ebay:token', () => getEbayTokenDetailed({ background }));
   if (!auth.token) {
     // `unconfigured` now means what it says. A rejected token exchange or
     // an unreachable eBay is an ERROR — reporting it as "not set" sent us
@@ -1892,7 +1957,9 @@ async function sourceEbay(card, grade, limit, opts = {}) {
 
   for (const it of items) {
     const title = it.title || '';
+    const tGate = timing.now();
     const v = cm.verify(title, matchCard, grade, gateOpts);
+    timing.add('gate:ebay', timing.now() - tGate);
 
     // Cross-check: two independent readers of the same title that should
     // agree. listingparse works from a parsed structure, cardmatch from the
@@ -1901,8 +1968,10 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     // than letting it pass silently.
     let parsed = null;
     try {
+      const tLp = timing.now();
       parsed = lp.parseListingTitle(title);
       const c = lp.compare(parsed, matchCard, grade);
+      timing.add('listingparse:ebay', timing.now() - tLp);
 
       // Only compare on dimensions BOTH readers actually examine.
       // listingparse.compare() checks number, set size, grade and
@@ -2069,7 +2138,8 @@ async function gatherListings(card, grade, limit, opts) {
   // behind another. Give eBay longer; the queue is bounded by pacing, not
   // by work.
   const results = await Promise.allSettled(
-    active.map(s => withTimeout(s.fetch(card, grade, limit, opts),
+    active.map(s => withTimeout(timing.time('source:' + s.id + (opts.noReprintCheck ? ':reprint' : ''),
+                                            () => s.fetch(card, grade, limit, opts)),
                                 s.id === 'ebay' ? 25000 : 12000, s.id))
   );
 
@@ -2192,7 +2262,7 @@ async function gatherListings(card, grade, limit, opts) {
   // genuine bargain exists, and this project has twice destroyed good
   // data with a filter written against bad data. The row stays, carries
   // its reason, and sorts last.
-  const judged = outlier.flagOutliers(listings);
+  const judged = timing.timeSync('outlier', () => outlier.flagOutliers(listings));
   listings = judged.listings;
 
   // ── Priced at a known reprint's level ─────────────────────────
@@ -2202,6 +2272,7 @@ async function gatherListings(card, grade, limit, opts) {
   // Reported per reprint in outliers.reprints, applied or not, and why.
   const reprintCards = cm.reprintCardsOf(card);
   if (reprintCards.length && !opts.noReprintCheck) {
+    const tReprint = timing.now();
     judged.stats.reprints = [];
     // The catalogue's own number-matched price: the second, independent
     // path to "this card prices apart from its reprint". Real prices only.
@@ -2234,6 +2305,7 @@ async function gatherListings(card, grade, limit, opts) {
       judged.stats.reprints.push(rj.stats);
       judged.stats.flagged += rj.stats.flagged;
     }
+    timing.span('reprint-check', tReprint, timing.now(), { reprints: reprintCards.length });
   }
 
   // Cheapest LANDED cost first. Rows whose shipping the source did not state

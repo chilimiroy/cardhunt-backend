@@ -27,6 +27,8 @@
 'use strict';
 
 const quota = require('./ebayquota');
+// ?debug=1 only; every call below is a no-op outside a debug request.
+const timing = require('./timing');
 
 // Minimum spacing between two eBay calls. eBay publishes a daily figure
 // for Browse but no per-second one, so this is deliberately conservative:
@@ -163,7 +165,9 @@ async function fetchEbay(db, opts) {
   }
 
   // Everything below happens one at a time, process-wide.
+  const tQueued = timing.now();
   return enqueue(async () => {
+    timing.span('ebay:queue-wait', tQueued, timing.now(), { kind });
     // Re-check the breaker inside the lock: a call ahead of us in the
     // queue may have tripped it while we waited.
     const b2 = breakerState();
@@ -171,7 +175,7 @@ async function fetchEbay(db, opts) {
 
     // THE quota check. Inside the lock, so two callers cannot both see
     // the same "allowed" for the same last remaining call.
-    const gate = await quota.check(db, { background });
+    const gate = await timing.time('ebay:quota-check', () => quota.check(db, { background }), { kind });
     if (!gate.allowed) {
       logCall({ ...meta, kind, status: 'quota', remaining: gate.remaining,
                 note: 'gate refused' });
@@ -181,13 +185,14 @@ async function fetchEbay(db, opts) {
 
     // Pace. Measured from the last call actually made.
     const since = Date.now() - lastCallAt;
-    if (since < MIN_INTERVAL_MS) await sleep(MIN_INTERVAL_MS - since);
+    if (since < MIN_INTERVAL_MS) await timing.time('ebay:pace', () => sleep(MIN_INTERVAL_MS - since));
 
     const doFetch = fetchImpl || fetch;
     let attempt = 0;
 
     for (;;) {
       const t0 = Date.now();
+      const tHttp = timing.now();
       let r;
       try {
         r = await doFetch(url, body === null ? { method, headers } : { method, headers, body });
@@ -203,7 +208,7 @@ async function fetchEbay(db, opts) {
       const ms = lastCallAt - t0;
 
       // The call happened, so it counts — whatever the status.
-      await quota.record(db, { headers: r.headers, kind });
+      await timing.time('ebay:quota-record', () => quota.record(db, { headers: r.headers, kind }), { kind });
 
       const remaining = headerInt(r.headers, 'x-ebay-c-ratelimit-remaining');
 
@@ -238,6 +243,7 @@ async function fetchEbay(db, opts) {
       // support existed and were not re-run after; a live stub found it
       // immediately.
       const responseText = await r.text().catch(() => '');
+      timing.span('ebay:http', tHttp, timing.now(), { kind, status: r.status });
       let data = null;
       try { data = responseText ? JSON.parse(responseText) : null; } catch (e) { /* not json */ }
 

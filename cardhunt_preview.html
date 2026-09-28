@@ -573,8 +573,11 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
       <div class="hero-stats">
         <div class="hstat" id="hstat-sets"><strong>&mdash;</strong>Sets tracked</div>
         <div class="hstat" id="hstat-cards"><strong>&mdash;</strong>Cards indexed</div>
-        <div class="hstat"><strong>6</strong>Markets live</div>
-        <div class="hstat"><strong>Real-time</strong>Price updates</div><div class="hstat" style="opacity:.35"><strong style="font-size:12px">v20260822-0833</strong>Build</div>
+        <!-- Three hand-typed stats stood here until 2026-09-28: "6 Markets live"
+             (eBay and Yuyu-tei are the only sources answering Render),
+             "Real-time price updates" (stored prices refresh nightly; only the
+             listings are live) and "v20260822-0833 Build", a month stale. The
+             two above are computed; the build stamp is bottom-left. -->
       </div>
     </div>
   </div>
@@ -5799,6 +5802,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-2b94d6c-phone390 &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-cef238e-herostats &middot; click to hide</div>
 </body>
 </html>

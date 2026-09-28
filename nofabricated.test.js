@@ -131,6 +131,10 @@ ok('the TCGdex fallback invents no low/high around its estimate', !/est\*0\.65|e
 ok('the portfolio holds no invented holdings', /var PORT = \[\];/.test(code) && !/paid:\s*\d/.test(code));
 ok('nothing claims to auto-refresh', !/Auto-refreshing/.test(code));
 ok('no stale hardcoded catalogue count', !/20,324 cards/.test(code));
+ok('no hand-typed hero stats (markets live, real-time, a stale build)',
+  !/Markets live|Real-time<\/strong>|v20260822-0833/.test(code));
+ok('the hero stats that remain are the two computed ones',
+  (code.match(/class="hstat"/g) || []).length === 2 && /id="hstat-sets"/.test(code) && /id="hstat-cards"/.test(code));
 
 (async () => {
   if (process.argv.includes('--deployed')) {

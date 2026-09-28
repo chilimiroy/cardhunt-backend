@@ -2485,7 +2485,16 @@ app.get('/api/search', async (req, res) => {
   if (!db) return res.status(503).json({ error: 'database not configured', query: q });
 
   const parsed = parseCardQuery(q);
-  if (!parsed || (!parsed.name && !parsed.number && !parsed.certId)) {
+  // setHint counts as identifying. "Shining Celebi", "Lost Remover",
+  // "Detective Pikachu", "Paldean Tauros": a set-marker word opens the name,
+  // so the parser offers the whole string as a SET hint and no name — and
+  // resolveCard scores that reading as a name too (2026-09-28). But this
+  // guard returned "Nothing identifying" before resolveCard ever ran, so the
+  // fix was installed in the resolver and never reached from the endpoint.
+  // cardparse.test.js --db called resolveCard directly and passed. The full
+  // search audit (2026-09-29) found 96 cards unreachable by their own name
+  // this way. TASK T9: a fix is not installed until every path HAS it.
+  if (!parsed || (!parsed.name && !parsed.setHint && !parsed.number && !parsed.certId)) {
     // Say why, rather than returning an empty list that reads like "no match".
     return res.json({
       query: q, parsed, candidates: [], grade: parsed ? parsed.gradeString : null,

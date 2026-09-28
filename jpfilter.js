@@ -27,7 +27,17 @@ const JP_LOT_WORDS = [
   'ジャンク', '傷あり', 'プレイ用', '複数', '各種', '全種'
 ];
 // A graded slab sells for a multiple of the raw card — a different product.
+//
+// JP_GRADED_WORDS is the Japanese-only half. The company names come from
+// cardmatch.SLAB_WORDS as well (below), because this list was a hand-typed
+// copy of the graders and had fallen behind: four companies of cardmatch's
+// nineteen. The same failure as SLAB_WORDS before it was derived (AiGrade
+// 9.5 passing a Raw NM search). Measured 2026-09-29 on 945 real Yahoo
+// titles: the derived rule refuses 10 more, all genuine "SGC 10 GM" /
+// "SGC 9.5" slabs, and none of the 50 TAG TEAM / ACE SPEC titles — the
+// ambiguous graders keep cardmatch's grade-number rule.
 const JP_GRADED_WORDS = ['PSA', 'BGS', 'CGC', 'ARS', '鑑定', '鑑定品'];
+const cardmatch = require('./cardmatch');
 
 // opts.allowGraded — keep slabs. Used only when the caller has ASKED for a
 // grade ("show me PSA 10s"), where a slab is the product, not contamination.
@@ -42,8 +52,10 @@ function jpTitleIsSingleRaw(title, opts = {}) {
   if (!title) return false;
   const t = String(title);
   for (const w of JP_LOT_WORDS) if (t.includes(w)) return false;
-  if (!opts.allowGraded)
+  if (!opts.allowGraded) {
     for (const w of JP_GRADED_WORDS) if (t.includes(w)) return false;
+    if (cardmatch.SLAB_WORDS.test(t)) return false;
+  }
   // "3枚" / "10点" style quantity markers
   if (/[0-9]{1,3}\s*(枚|点|パック|個)/.test(t)) return false;
 

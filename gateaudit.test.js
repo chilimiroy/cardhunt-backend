@@ -97,6 +97,17 @@ ok('gatherListings flags outliers on every source\'s rows', /outlier\.flagOutlie
   }
 }
 
+// ── One list of grading companies, reached from both marketplaces ──
+console.log('\n  graders — one list, both marketplaces');
+{
+  const jpsrc = stripComments(fs.readFileSync('jpfilter.js', 'utf8'));
+  ok('jpfilter.jpTitleIsSingleRaw refuses on cardmatch.SLAB_WORDS (not only its own hand-typed list)',
+    /cardmatch\.SLAB_WORDS\.test\(/.test(slice(jpsrc, 'jpTitleIsSingleRaw')));
+  const jpf = require('./jpfilter');
+  ok('...SGC is refused raw on Yahoo', !jpf.jpTitleIsSingleRaw('リザードン 旧裏 SGC 10'));
+  ok('...TAG TEAM is kept raw on Yahoo', jpf.jpTitleIsSingleRaw('コイキング&ホエルオーGX SR SM9 098/095 TAG TEAM'));
+}
+
 // ── No route hands back eBay rows that skipped the gate ────────
 console.log('\n  routes — nothing serves eBay search rows ungated');
 const nameRoute = route('get', '/api/listings/:cardName');

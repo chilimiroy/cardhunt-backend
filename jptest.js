@@ -35,6 +35,21 @@ const FILTER_CASES = [
     item: { ...CARD_CAT, title: 'ピカチュウ プロモ 極美品 送料無料' } },
   { keep: true,  card: 'ミュウツー',
     item: { ...CARD_CAT, title: 'ミュウツーex 134/108 SAR' } },
+  // The slab words now come from cardmatch (2026-09-29, T9). TAG and ACE
+  // are graders AND a mechanic / a rarity: real Yahoo titles, still kept.
+  { keep: true,  card: 'コイキング&ホエルオーGX',
+    item: { ...CARD_CAT, title: 'ポケモンカード コイキング&ホエルオーGX SR SM9 098/095 TAG TEAM' } },
+  { keep: true,  card: 'ピカチュウ&ゼクロムGX',
+    item: { ...CARD_CAT, title: '39-3 [現状品] ポケモンカードゲーム ピカチュウ&ゼクロムGX RR 041/173 C SM12a TAG TEAM GX タッグオールスターズ' } },
+  { keep: true,  card: 'マスターボール',
+    item: { ...CARD_CAT, title: 'ポケモンカード マスターボール ACE SPEC SV5K 070/071' } },
+  // ...and the companies the hand-typed list never had: real Yahoo titles.
+  { keep: false, card: 'クロバット',
+    item: { ...CARD_CAT, title: '2022 ポケモン ダークファンタズマ ホロ, 日本語版 #043 クロバット SGC 10 GM 海外 即決' } },
+  { keep: false, card: 'セレビィ',
+    item: { ...CARD_CAT, title: '2021 POKEMON SHINING FATES リバースホロfoil #003 セレビィ SGC 9.5 海外 即決' } },
+  { keep: false, card: 'リザードン',
+    item: { ...CARD_CAT, title: 'ポケモンカード リザードン 旧裏 TAG 10' } },
 
   // ── MUST REJECT: lots, sealed product, slabs, wrong card, non-cards ──
   { keep: false, card: 'リザードン',

@@ -176,6 +176,23 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   .nav-r .nsearch input,.nav-r .nsearch input:focus{width:100%}
   .nav-r .tbq{width:auto!important;flex:1 1 150px;min-width:0}
 }
+/* T4 (2026-09-28): the CONTENT under the nav, measured in a 390px iframe
+   (375px of content). Home was 354px too wide (four hero stats in one row,
+   five game tiles in five columns), Pokémon and Sets 19px (four language
+   tabs), Search 4px (the game picker), and the portfolio table clipped its
+   last two columns rather than scrolling. Grids use minmax(0,1fr) because a
+   bare 1fr has a min-content floor and was the whole overflow. */
+@media(max-width:640px){
+  .hero-stats{flex-wrap:wrap;gap:12px 22px}
+  .gg,.sgg{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .gc img{max-width:100%;height:auto}
+  .ltabs{flex-wrap:wrap}
+  .lt{padding:10px 12px}
+  /* .ptable-scoped: .pth/.ptr are defined LATER in this file, and a later
+     rule of equal specificity wins - the first cut changed nothing. */
+  .ptable .pth,.ptable .ptr{grid-template-columns:minmax(0,1.7fr) repeat(4,minmax(0,1fr));padding:10px 12px;column-gap:6px;font-size:12px}
+  .ptable .pth>:nth-child(6),.ptable .ptr>:nth-child(6){display:none}
+}
 
 /* A .lbox rule from an old login design used to sit here. Nothing carries
    that class except the card page listings panel, but its max-width:460px
@@ -711,7 +728,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
       <button class="btn p" style="padding:14px 28px;font-size:15px;border-radius:12px" onclick="doSearch(document.getElementById('search-main').value)">🔍 Search</button>
     </div>
     <div style="font-size:12px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px">Choose a game</div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:36px">
+    <div class="sgg" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:36px">
       <div onclick="pickGame('pokemon')" style="background:var(--tl);border:2px solid var(--t);border-radius:var(--r);padding:28px 20px;cursor:pointer;transition:all .18s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
         <div style="font-size:40px;margin-bottom:10px">🎴</div><div style="font-size:17px;font-weight:800;margin-bottom:4px">Pokémon TCG</div>
         <div style="font-size:12px;color:var(--mu)">English, Japanese, Chinese</div>
@@ -5782,6 +5799,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-dbeb1e1-marketwait &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-2b94d6c-phone390 &middot; click to hide</div>
 </body>
 </html>

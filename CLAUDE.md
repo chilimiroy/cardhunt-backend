@@ -1156,7 +1156,13 @@ a same-origin iframe of `/app`, since a Chrome window will not shrink that far
 — **all nine** screens scrolled sideways (501-893px), each exactly as wide as
 its nav. After: the nav fits on all nine. Still wider than 390, and it is
 CONTENT, not the nav: home stats ~464px, Pokémon/Sets tiles 394, alert stat
-boxes 428, portfolio 507. Not fixed.
+boxes 428, portfolio 507. **Fixed 2026-09-28 (T4)**, re-measured in a 390px
+iframe (375px of content): all nine screens 0px sideways. Home had been
++354 (hero stats in one row, five game tiles in five `1fr` columns — a bare
+`1fr` has a min-content floor), Pokémon/Sets +19 (four language tabs),
+Search +4, and the portfolio CLIPPED its last two columns rather than
+scrolling, which a scrollWidth check reports as 0 — check clipping too.
+Alerts already fit once T7 removed the invented fourth stat box.
 
 ### Grader-wide mode never checked the card (fixed `9f07cf7`)
 "PSA *" returned ok on the grade alone, before name/number/set/printing ran:

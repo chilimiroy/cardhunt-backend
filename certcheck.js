@@ -125,20 +125,49 @@ function psaCertUrl(cert) {
   return CERT_SHAPE.PSA.test(String(cert || '')) ? 'https://www.psacard.com/cert/' + cert : null;
 }
 
-// ── eBay's listing -> cert link: 15 minutes, in memory, never persisted ──
+// ── eBay's getItem answer: 15 minutes, in memory, never persisted ──
+// ONE entry per listing serves BOTH on-demand questions a person can ask of
+// a row — "what cert did the seller enter" and "show me the seller's
+// photos" — so pressing Verify and Photos on the same row spends one eBay
+// call, not two. Only what those two questions need is kept: the cert read
+// and the image URLs. Both are eBay's data about a live listing, so both
+// share the same 15-minute life (eBay's terms: served for a request, not
+// retained).
 const EBAY_ITEM_TTL_MS = 15 * 60 * 1000;
-const ebayItemCert = new Map();         // itemId -> { at, read }
+const ebayItemCache = new Map();        // itemId -> { at, read, images }
 function ebayCacheGet(itemId, now = Date.now()) {
-  const hit = ebayItemCert.get(itemId);
+  const hit = ebayItemCache.get(itemId);
   if (!hit) return null;
-  if (now - hit.at >= EBAY_ITEM_TTL_MS) { ebayItemCert.delete(itemId); return null; }
+  if (now - hit.at >= EBAY_ITEM_TTL_MS) { ebayItemCache.delete(itemId); return null; }
   return hit;
 }
-function ebayCacheSet(itemId, read, now = Date.now()) {
-  ebayItemCert.set(itemId, { at: now, read });
-  if (ebayItemCert.size > 5000) {           // bound memory; oldest first
-    for (const [k, v] of ebayItemCert) if (now - v.at >= EBAY_ITEM_TTL_MS || ebayItemCert.size > 4000) ebayItemCert.delete(k);
+// `entry` is fromItem(item): { read, images }.
+function ebayCacheSet(itemId, entry, now = Date.now()) {
+  ebayItemCache.set(itemId, Object.assign({ at: now }, entry));
+  if (ebayItemCache.size > 5000) {           // bound memory; oldest first
+    for (const [k, v] of ebayItemCache) if (now - v.at >= EBAY_ITEM_TTL_MS || ebayItemCache.size > 4000) ebayItemCache.delete(k);
   }
+}
+
+// ── The seller's own photos, from the same getItem ──
+// getItem carries `image` (the primary) and `additionalImages` (the rest),
+// each { imageUrl }. Returned in the seller's order, de-duplicated, and
+// NEVER padded: a listing with one photo has one photo. The catalogue's own
+// artwork is not a listing photo and must never stand in for one — that is
+// exactly what the old viewer did, filtered sepia to look like three.
+function readImages(item) {
+  const out = [];
+  const add = x => {
+    const u = x && typeof x.imageUrl === 'string' ? x.imageUrl.trim() : '';
+    if (/^https:\/\//.test(u) && out.indexOf(u) < 0) out.push(u);
+  };
+  if (item) { add(item.image); (item.additionalImages || []).forEach(add); }
+  return out;
+}
+
+// Everything the cache keeps from one getItem response.
+function fromItem(item) {
+  return { read: readCert(item), images: readImages(item) };
 }
 
 // ── PSA: grader + number -> record. PERMANENT once built. NOT BUILT. ──
@@ -153,5 +182,5 @@ function psaLookup(/* cert */) {
 // before a call is spent — the id is caller-supplied.
 const ITEM_ID = /^v1\|\d{6,20}\|\d{1,20}$/;
 
-module.exports = { readCert, graderCode, stateFromEbay, psaCertUrl, psaLookup,
+module.exports = { readCert, readImages, fromItem, graderCode, stateFromEbay, psaCertUrl, psaLookup,
                    ebayCacheGet, ebayCacheSet, EBAY_ITEM_TTL_MS, ITEM_ID, CERT_SHAPE };

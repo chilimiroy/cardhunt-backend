@@ -160,7 +160,6 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .nsearch input:focus{border-color:var(--t);width:250px;background:var(--w)}.nsearch-i{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none;opacity:.45}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--rs);font-size:13px;font-weight:500;border:1.5px solid var(--bd);background:var(--w);color:var(--tx);cursor:pointer;transition:all .15s;text-decoration:none;white-space:nowrap}
 .btn:hover{background:var(--bg)}.btn.p{background:var(--t);color:#fff;border-color:var(--t)}.btn.p:hover{background:var(--td)}.btn.sm{padding:5px 12px;font-size:12px;border-radius:8px}
-.av{width:34px;height:34px;border-radius:50%;background:var(--t);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;cursor:pointer;font-size:14px;flex-shrink:0}
 /* Phone: the nav WRAPS. Measured at 390px, every one of the nine screens
    scrolled sideways (501-893px), and on each the page was exactly as wide
    as its nav. Links stay on the first rows; the actions (search, Compare,
@@ -177,7 +176,6 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   .nav-r .nsearch input,.nav-r .nsearch input:focus{width:100%}
   .nav-r .tbq{width:auto!important;flex:1 1 150px;min-width:0}
 }
-#login-modal-overlay{display:none}
 
 /* A .lbox rule from an old login design used to sit here. Nothing carries
    that class except the card page listings panel, but its max-width:460px
@@ -494,30 +492,6 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .photo-main{width:100%;aspect-ratio:3/4;object-fit:contain;border-radius:12px;border:1px solid var(--bd);background:var(--bg);margin-bottom:12px}
 .photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}
 .photo-t{aspect-ratio:3/4;object-fit:cover;border-radius:8px;cursor:pointer;border:2.5px solid transparent;transition:all .15s;width:100%}.photo-t:hover,.photo-t.on{border-color:var(--t)}
-.co-hdr{background:var(--w);border-bottom:1px solid var(--bd);padding:18px 24px;display:flex;align-items:center;gap:16px}
-.step-bar{display:flex;align-items:center;max-width:520px;margin:28px auto 36px}
-.si2{display:flex;flex-direction:column;align-items:center;flex:1;position:relative}
-.si2:not(:last-child)::after{content:'';position:absolute;top:16px;left:50%;width:100%;height:2px;background:var(--bd);z-index:0}
-.si2.done::after,.si2.active::after{background:var(--t)}
-.sc3{width:32px;height:32px;border-radius:50%;background:var(--bd);border:2px solid var(--bd);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--mu);position:relative;z-index:1;transition:all .2s}
-.si2.done .sc3{background:var(--t);border-color:var(--t);color:#fff}.si2.active .sc3{background:#fff;border-color:var(--t);color:var(--t);box-shadow:0 0 0 4px rgba(0,184,160,.15)}
-.slbl{font-size:11px;font-weight:500;color:var(--mu);margin-top:6px;text-align:center}.si2.active .slbl{color:var(--t);font-weight:700}.si2.done .slbl{color:var(--td)}
-.co-body{max-width:560px;margin:0 auto;padding:0 24px 60px}
-.co-card{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:28px;margin-bottom:20px;box-shadow:var(--sh)}
-.co-card h3{font-size:17px;font-weight:700;margin-bottom:20px;letter-spacing:-.3px}
-.ff{margin-bottom:16px}.ff label{display:block;font-size:11px;font-weight:700;color:var(--mu);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
-.ff input,.ff select{width:100%;padding:11px 14px;border:1.5px solid var(--bd);border-radius:10px;font-size:14px;color:var(--tx);outline:none;transition:all .2s;background:var(--w)}
-.ff input:focus,.ff select:focus{border-color:var(--t);box-shadow:0 0 0 3px var(--accent-soft)}
-.frow{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.osum{background:var(--bg);border:1px solid var(--bd);border-radius:var(--rs);padding:18px 20px;margin-top:8px}
-.orow{display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--bd)}.orow:last-child{border-bottom:none;font-weight:700;font-size:15px;margin-top:6px;padding-top:12px}
-.pay-methods{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
-.pm{padding:14px;border:2px solid var(--bd);border-radius:var(--rs);cursor:pointer;text-align:center;transition:all .15s}.pm:hover,.pm.on{border-color:var(--t);background:var(--tl)}
-.pm-i{font-size:24px;margin-bottom:4px}.pm-n{font-size:12px;font-weight:600;color:var(--mu)}
-.cni{letter-spacing:3px;font-size:18px;font-weight:600}
-.suc{text-align:center;padding:48px 20px}
-.suc-i{width:80px;height:80px;background:linear-gradient(135deg,var(--t),var(--td));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;margin:0 auto 24px;box-shadow:0 8px 24px rgba(0,184,160,.3)}
-.suc h2{font-size:26px;font-weight:800;letter-spacing:-.5px;margin-bottom:8px}.suc p{font-size:14px;color:var(--mu);max-width:340px;margin:0 auto 28px;line-height:1.6}
 .ptable{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
 .pth{display:grid;grid-template-columns:2fr 90px 85px 96px 86px 76px;padding:10px 18px;background:var(--bg);border-bottom:1px solid var(--bd);font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.04em}
 .ptr{display:grid;grid-template-columns:2fr 90px 85px 96px 86px 76px;padding:13px 18px;border-bottom:1px solid var(--bd);align-items:center;font-size:13px;cursor:pointer;transition:background .12s}.ptr:hover{background:var(--bg)}.ptr:last-child{border-bottom:none}
@@ -537,7 +511,6 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <div class="nav-r">
       <div class="nsearch"><span class="nsearch-i">🔍</span><input id="nav-q" placeholder="Search any card…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
       <button class="btn" onclick="toggleCurrency()" id="currency-btn">🌐 USD</button><button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--re);color:#fff;font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button>
-      <button class="btn" onclick="openLoginModal()" style="font-size:12px;padding:6px 14px" class="login-nav-btn btn">👤 Login</button>
     </div>
   </nav>
   <div class="hero">
@@ -653,7 +626,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <div class="logo" onclick="SS('home')"><div class="logo-i">⚡</div>Card<em>Hunt</em></div>
     <button class="nl" onclick="SS('home')">Home</button><button class="nl on">Pokémon</button>
     <button class="nl" onclick="SS('sets')">Sets</button><button class="nl" onclick="SS('portfolio')">Portfolio</button>
-    <div class="nav-r"><div class="av">A</div></div>
+    <div class="nav-r"></div>
   </nav>
   <div class="content" style="padding-top:28px">
     <div class="bc"><span class="lnk" onclick="SS('home')">Home</span> › <span>Pokémon</span></div>
@@ -715,7 +688,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <button class="nl" onclick="SS('home')">Home</button><button class="nl on">Search</button>
     <button class="nl" onclick="SS('sets')">Sets</button><button class="nl" onclick="SS('portfolio')">Portfolio</button>
     <div class="nav-r"><div class="nsearch"><span class="nsearch-i">🔍</span><input id="search-q" placeholder="Search any card…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
-      <button class="btn p" onclick="doSearch(document.getElementById('search-q').value)">🔍 Search</button><div class="av">A</div></div>
+      <button class="btn p" onclick="doSearch(document.getElementById('search-q').value)">🔍 Search</button></div>
   </nav>
   <div class="content" style="padding-top:36px">
     <div style="font-size:26px;font-weight:800;letter-spacing:-.5px;margin-bottom:6px">Search</div>
@@ -741,7 +714,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:36px">
       <div onclick="pickGame('pokemon')" style="background:var(--tl);border:2px solid var(--t);border-radius:var(--r);padding:28px 20px;cursor:pointer;transition:all .18s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
         <div style="font-size:40px;margin-bottom:10px">🎴</div><div style="font-size:17px;font-weight:800;margin-bottom:4px">Pokémon TCG</div>
-        <div style="font-size:12px;color:var(--mu)">20,324 cards · EN, JP, ZH-TW, ZH-CN</div>
+        <div style="font-size:12px;color:var(--mu)">English, Japanese, Chinese</div>
         <div style="margin-top:14px;display:flex;gap:6px;flex-wrap:wrap"><span class="b bd2">Base Set</span><span class="b bd2">Scarlet & Violet</span><span class="b bd2">151</span></div>
       </div>
       <div onclick="alert('Coming soon!')" style="background:var(--w);border:2px solid var(--bd);border-radius:var(--r);padding:28px 20px;cursor:pointer;opacity:.6"><div style="font-size:40px;margin-bottom:10px">⚔️</div><div style="font-size:17px;font-weight:800">Magic: TG</div><div style="font-size:12px;color:var(--mu);margin-top:4px">Coming soon</div></div>
@@ -763,7 +736,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <button class="nl" onclick="SS('home')">Home</button><button class="nl on" onclick="SS('search')">Search</button>
     <button class="nl" onclick="SS('sets')">Sets</button>
     <div class="nav-r"><div class="nsearch"><span class="nsearch-i">🔍</span><input id="results-refine" placeholder="Refine…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
-      <button class="btn p" onclick="doSearch(document.getElementById('results-refine').value)">🔍</button><div class="av">A</div></div>
+      <button class="btn p" onclick="doSearch(document.getElementById('results-refine').value)">🔍</button></div>
   </nav>
   <div class="content" style="padding-top:28px">
     <div class="bc"><span class="lnk" onclick="SS('search')">Search</span> › <span id="results-q-bc">—</span></div>
@@ -793,7 +766,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <div class="logo" onclick="SS('home')"><div class="logo-i">⚡</div>Card<em>Hunt</em></div>
     <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
     <button class="nl on">Sets</button><button class="nl" onclick="SS('portfolio')">Portfolio</button>
-    <div class="nav-r"><input class="tbq" id="sets-q" style="width:210px;padding:8px 14px" placeholder="Search sets…" oninput="filterSets(this.value)"><div class="av">A</div></div>
+    <div class="nav-r"><input class="tbq" id="sets-q" style="width:210px;padding:8px 14px" placeholder="Search sets…" oninput="filterSets(this.value)"></div>
   </nav>
   <div class="content" style="padding-top:28px">
     <div style="font-size:22px;font-weight:800;letter-spacing:-.4px;margin-bottom:4px">Sets</div>
@@ -816,7 +789,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <div class="logo" onclick="SS('home')"><div class="logo-i">⚡</div>Card<em>Hunt</em></div>
     <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
     <button class="nl on" onclick="SS('sets')">Sets</button>
-    <div class="nav-r"><div class="av">A</div></div>
+    <div class="nav-r"></div>
   </nav>
   <div class="content" style="padding-top:28px">
     <div class="bc"><span class="lnk" onclick="SS('sets')">Sets</span> › <span id="sd-bc">—</span></div>
@@ -850,7 +823,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
       <button class="btn" onclick="openCompare()">⚖️ Compare</button>
       <button class="btn" onclick="addAlertFromCard()" style="border-color:var(--am);color:var(--am)" onmouseover="this.style.background='#FEF3C7'" onmouseout="this.style.background=''">🔔 Set Alert</button>
       <button class="btn" id="watch-btn" onclick="toggleWatch()">🤍 Watch</button>
-      <div class="av">A</div>
+      
     </div>
   </nav>
   <div class="content" style="padding-top:28px">
@@ -941,7 +914,6 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
               <button class="ltab" onclick="setLTab(this,'sold')">Recent sales</button>
               <button class="ltab" onclick="setLTab(this,'local')">Near you</button>
             </div>
-            <span style="font-size:11px;color:var(--mu);display:flex;align-items:center;gap:5px"><span class="ldot"></span>Auto-refreshing</span>
           </div>
           <div id="cd-listings"></div>
         </div>
@@ -958,7 +930,6 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <div class="nav-r">
       <button class="btn" onclick="toggleCurrency()" id="currency-btn2">&#127760; USD</button>
       <button class="btn" onclick="SS('alerts')">&#128276;</button>
-      <button class="btn login-nav-btn" onclick="openLoginModal()">&#128100; Login</button>
     </div>
   </nav>
   <div class="content" style="padding-top:28px">
@@ -1062,7 +1033,7 @@ async function tcgdexFetchSet(setId, lang, printedTotal) {
           small: c.image ? (c.image + '/low.png') : '',
           large: c.image ? (c.image + '/high.png') : ''
         },
-        tcgplayer: {prices:{holofoil:{market:est, low:+(est*0.65).toFixed(2), mid:est, high:+(est*1.7).toFixed(2)}}},
+        tcgplayer: {prices:{holofoil:{market:est}}},
         _price: est,
         _priceSource: 'estimate',
         _raritySource: c.rarity ? 'tcgdex' : 'inferred',
@@ -1379,52 +1350,55 @@ const ZH_TW=[
 // ── ASCENDED HEROES (me2pt5) PREMIUM CARDS #251-295 ────────────
 // Source: Official Pokémon TCG card list PDF (exact names + numbers)
 // Rarity symbols from PDF: ★ = ultra rare, ★★ = special illustration rare, ◇ = Mega hyper rare
+// NO PRICES. Each entry carried a hand-typed tcgplayer block (market 12.5,
+// low 8, high 20 ...) that no source produced; getBase() read it as a real
+// market price. Removed 2026-09-28 - an unpriced card is drawn as `est`.
 const ME2PT5_PREMIUM = [
-  {id:'me2pt5-251',name:'Sprigatito ex',number:'251',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/251/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/251/high.png'},tcgplayer:{prices:{holofoil:{market:12.5,low:8,mid:12.5,high:20}}}},
-  {id:'me2pt5-252',name:'Stunfisk ex',number:'252',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/252/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/252/high.png'},tcgplayer:{prices:{holofoil:{market:8.5,low:5,mid:8.5,high:15}}}},
-  {id:'me2pt5-253',name:'Mega Audino ex',number:'253',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/253/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/253/high.png'},tcgplayer:{prices:{holofoil:{market:10.0,low:6,mid:10.0,high:18}}}},
-  {id:'me2pt5-254',name:'Anthea & Concordia',number:'254',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/254/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/254/high.png'},tcgplayer:{prices:{holofoil:{market:22.0,low:14,mid:22.0,high:35}}}},
-  {id:'me2pt5-255',name:"Black Belt's Training",number:'255',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/255/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/255/high.png'},tcgplayer:{prices:{holofoil:{market:9.0,low:5,mid:9.0,high:16}}}},
-  {id:'me2pt5-256',name:"Boss's Orders",number:'256',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/256/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/256/high.png'},tcgplayer:{prices:{holofoil:{market:18.0,low:11,mid:18.0,high:30}}}},
-  {id:'me2pt5-257',name:'Canari',number:'257',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/257/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/257/high.png'},tcgplayer:{prices:{holofoil:{market:7.5,low:4,mid:7.5,high:13}}}},
-  {id:'me2pt5-258',name:'Cheren',number:'258',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/258/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/258/high.png'},tcgplayer:{prices:{holofoil:{market:8.0,low:5,mid:8.0,high:14}}}},
-  {id:'me2pt5-259',name:'Counter Gain',number:'259',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/259/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/259/high.png'},tcgplayer:{prices:{holofoil:{market:6.5,low:4,mid:6.5,high:11}}}},
-  {id:'me2pt5-260',name:'Glass Trumpet',number:'260',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/260/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/260/high.png'},tcgplayer:{prices:{holofoil:{market:7.0,low:4,mid:7.0,high:12}}}},
-  {id:'me2pt5-261',name:'Jamming Tower',number:'261',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/261/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/261/high.png'},tcgplayer:{prices:{holofoil:{market:8.5,low:5,mid:8.5,high:15}}}},
-  {id:'me2pt5-262',name:"N's PP Up",number:'262',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/262/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/262/high.png'},tcgplayer:{prices:{holofoil:{market:9.5,low:6,mid:9.5,high:17}}}},
-  {id:'me2pt5-263',name:"Team Rocket's Transceiver",number:'263',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/263/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/263/high.png'},tcgplayer:{prices:{holofoil:{market:11.0,low:7,mid:11.0,high:19}}}},
-  {id:'me2pt5-264',name:'Ultra Ball',number:'264',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/264/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/264/high.png'},tcgplayer:{prices:{holofoil:{market:14.0,low:9,mid:14.0,high:24}}}},
-  {id:'me2pt5-265',name:'Mega Froslass ex',number:'265',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/265/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/265/high.png'},tcgplayer:{prices:{holofoil:{market:35.0,low:22,mid:35.0,high:58}}}},
-  {id:'me2pt5-266',name:'Mega Eelektross ex',number:'266',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/266/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/266/high.png'},tcgplayer:{prices:{holofoil:{market:28.0,low:18,mid:28.0,high:46}}}},
-  {id:'me2pt5-267',name:'Mega Diancie ex',number:'267',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/267/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/267/high.png'},tcgplayer:{prices:{holofoil:{market:42.0,low:27,mid:42.0,high:68}}}},
-  {id:'me2pt5-268',name:'Mega Hawlucha ex',number:'268',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/268/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/268/high.png'},tcgplayer:{prices:{holofoil:{market:25.0,low:16,mid:25.0,high:40}}}},
-  {id:'me2pt5-269',name:'Mega Gengar ex',number:'269',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/269/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/269/high.png'},tcgplayer:{prices:{holofoil:{market:55.0,low:35,mid:55.0,high:90}}}},
-  {id:'me2pt5-270',name:'Mega Scrafty ex',number:'270',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/270/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/270/high.png'},tcgplayer:{prices:{holofoil:{market:22.0,low:14,mid:22.0,high:36}}}},
-  {id:'me2pt5-271',name:'Mega Dragonite ex',number:'271',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/271/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/271/high.png'},tcgplayer:{prices:{holofoil:{market:48.0,low:30,mid:48.0,high:80}}}},
-  {id:'me2pt5-272',name:'Mega Meganium ex',number:'272',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/272/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/272/high.png'},tcgplayer:{prices:{holofoil:{market:65.0,low:42,mid:65.0,high:108}}}},
-  {id:'me2pt5-273',name:'Mega Emboar ex',number:'273',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/273/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/273/high.png'},tcgplayer:{prices:{holofoil:{market:58.0,low:37,mid:58.0,high:96}}}},
-  {id:'me2pt5-274',name:'Mega Feraligatr ex',number:'274',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/274/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/274/high.png'},tcgplayer:{prices:{holofoil:{market:72.0,low:46,mid:72.0,high:120}}}},
-  {id:'me2pt5-275',name:'Mega Froslass ex',number:'275',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/275/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/275/high.png'},tcgplayer:{prices:{holofoil:{market:88.0,low:56,mid:88.0,high:145}}}},
-  {id:'me2pt5-276',name:'Pikachu ex',number:'276',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/276/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/276/high.png'},tcgplayer:{prices:{holofoil:{market:195.0,low:125,mid:195.0,high:320}}}},
-  {id:'me2pt5-277',name:'Pikachu ex',number:'277',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/277/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/277/high.png'},tcgplayer:{prices:{holofoil:{market:210.0,low:135,mid:210.0,high:345}}}},
-  {id:'me2pt5-278',name:'Mega Eelektross ex',number:'278',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/278/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/278/high.png'},tcgplayer:{prices:{holofoil:{market:62.0,low:40,mid:62.0,high:102}}}},
-  {id:'me2pt5-279',name:"Iono's Bellibolt ex",number:'279',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/279/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/279/high.png'},tcgplayer:{prices:{holofoil:{market:78.0,low:50,mid:78.0,high:128}}}},
-  {id:'me2pt5-280',name:"Lillie's Clefairy ex",number:'280',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/280/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/280/high.png'},tcgplayer:{prices:{holofoil:{market:95.0,low:61,mid:95.0,high:156}}}},
-  {id:'me2pt5-281',name:"Team Rocket's Mewtwo ex",number:'281',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/281/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/281/high.png'},tcgplayer:{prices:{holofoil:{market:185.0,low:118,mid:185.0,high:305}}}},
-  {id:'me2pt5-282',name:'Mega Diancie ex',number:'282',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/282/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/282/high.png'},tcgplayer:{prices:{holofoil:{market:110.0,low:70,mid:110.0,high:182}}}},
-  {id:'me2pt5-283',name:'Mega Hawlucha ex',number:'283',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/283/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/283/high.png'},tcgplayer:{prices:{holofoil:{market:68.0,low:44,mid:68.0,high:112}}}},
-  {id:'me2pt5-284',name:'Mega Gengar ex',number:'284',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/284/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/284/high.png'},tcgplayer:{prices:{holofoil:{market:145.0,low:92,mid:145.0,high:240}}}},
-  {id:'me2pt5-285',name:'Mega Scrafty ex',number:'285',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/285/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/285/high.png'},tcgplayer:{prices:{holofoil:{market:52.0,low:33,mid:52.0,high:86}}}},
-  {id:'me2pt5-286',name:"N's Zoroark ex",number:'286',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/286/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/286/high.png'},tcgplayer:{prices:{holofoil:{market:88.0,low:56,mid:88.0,high:145}}}},
-  {id:'me2pt5-287',name:"Marnie's Grimmsnarl ex",number:'287',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/287/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/287/high.png'},tcgplayer:{prices:{holofoil:{market:75.0,low:48,mid:75.0,high:124}}}},
-  {id:'me2pt5-288',name:'Fezandipiti ex',number:'288',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/288/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/288/high.png'},tcgplayer:{prices:{holofoil:{market:62.0,low:40,mid:62.0,high:102}}}},
-  {id:'me2pt5-289',name:"Steven's Metagross ex",number:'289',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/289/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/289/high.png'},tcgplayer:{prices:{holofoil:{market:82.0,low:52,mid:82.0,high:136}}}},
-  {id:'me2pt5-290',name:'Mega Dragonite ex',number:'290',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/290/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/290/high.png'},tcgplayer:{prices:{holofoil:{market:128.0,low:82,mid:128.0,high:210}}}},
-  {id:'me2pt5-291',name:'Canari',number:'291',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/291/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/291/high.png'},tcgplayer:{prices:{holofoil:{market:45.0,low:29,mid:45.0,high:74}}}},
-  {id:'me2pt5-292',name:"Iris's Fighting Spirit",number:'292',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/292/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/292/high.png'},tcgplayer:{prices:{holofoil:{market:55.0,low:35,mid:55.0,high:90}}}},
-  {id:'me2pt5-293',name:'Surfer',number:'293',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/293/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/293/high.png'},tcgplayer:{prices:{holofoil:{market:38.0,low:24,mid:38.0,high:62}}}},
-  {id:'me2pt5-294',name:'Mega Charizard Y ex',number:'294',rarity:'Hyper Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/294/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/294/high.png'},tcgplayer:{prices:{holofoil:{market:480.0,low:310,mid:480.0,high:780}}}},
-  {id:'me2pt5-295',name:'Mega Dragonite ex',number:'295',rarity:'Hyper Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/295/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/295/high.png'},tcgplayer:{prices:{holofoil:{market:320.0,low:205,mid:320.0,high:520}}}}
+  {id:'me2pt5-251',name:'Sprigatito ex',number:'251',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/251/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/251/high.png'}},
+  {id:'me2pt5-252',name:'Stunfisk ex',number:'252',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/252/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/252/high.png'}},
+  {id:'me2pt5-253',name:'Mega Audino ex',number:'253',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/253/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/253/high.png'}},
+  {id:'me2pt5-254',name:'Anthea & Concordia',number:'254',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/254/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/254/high.png'}},
+  {id:'me2pt5-255',name:"Black Belt's Training",number:'255',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/255/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/255/high.png'}},
+  {id:'me2pt5-256',name:"Boss's Orders",number:'256',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/256/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/256/high.png'}},
+  {id:'me2pt5-257',name:'Canari',number:'257',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/257/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/257/high.png'}},
+  {id:'me2pt5-258',name:'Cheren',number:'258',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/258/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/258/high.png'}},
+  {id:'me2pt5-259',name:'Counter Gain',number:'259',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/259/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/259/high.png'}},
+  {id:'me2pt5-260',name:'Glass Trumpet',number:'260',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/260/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/260/high.png'}},
+  {id:'me2pt5-261',name:'Jamming Tower',number:'261',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/261/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/261/high.png'}},
+  {id:'me2pt5-262',name:"N's PP Up",number:'262',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/262/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/262/high.png'}},
+  {id:'me2pt5-263',name:"Team Rocket's Transceiver",number:'263',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/263/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/263/high.png'}},
+  {id:'me2pt5-264',name:'Ultra Ball',number:'264',rarity:'Ultra Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/264/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/264/high.png'}},
+  {id:'me2pt5-265',name:'Mega Froslass ex',number:'265',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/265/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/265/high.png'}},
+  {id:'me2pt5-266',name:'Mega Eelektross ex',number:'266',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/266/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/266/high.png'}},
+  {id:'me2pt5-267',name:'Mega Diancie ex',number:'267',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/267/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/267/high.png'}},
+  {id:'me2pt5-268',name:'Mega Hawlucha ex',number:'268',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/268/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/268/high.png'}},
+  {id:'me2pt5-269',name:'Mega Gengar ex',number:'269',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/269/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/269/high.png'}},
+  {id:'me2pt5-270',name:'Mega Scrafty ex',number:'270',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/270/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/270/high.png'}},
+  {id:'me2pt5-271',name:'Mega Dragonite ex',number:'271',rarity:'Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/271/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/271/high.png'}},
+  {id:'me2pt5-272',name:'Mega Meganium ex',number:'272',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/272/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/272/high.png'}},
+  {id:'me2pt5-273',name:'Mega Emboar ex',number:'273',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/273/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/273/high.png'}},
+  {id:'me2pt5-274',name:'Mega Feraligatr ex',number:'274',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/274/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/274/high.png'}},
+  {id:'me2pt5-275',name:'Mega Froslass ex',number:'275',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/275/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/275/high.png'}},
+  {id:'me2pt5-276',name:'Pikachu ex',number:'276',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/276/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/276/high.png'}},
+  {id:'me2pt5-277',name:'Pikachu ex',number:'277',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/277/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/277/high.png'}},
+  {id:'me2pt5-278',name:'Mega Eelektross ex',number:'278',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/278/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/278/high.png'}},
+  {id:'me2pt5-279',name:"Iono's Bellibolt ex",number:'279',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/279/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/279/high.png'}},
+  {id:'me2pt5-280',name:"Lillie's Clefairy ex",number:'280',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/280/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/280/high.png'}},
+  {id:'me2pt5-281',name:"Team Rocket's Mewtwo ex",number:'281',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/281/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/281/high.png'}},
+  {id:'me2pt5-282',name:'Mega Diancie ex',number:'282',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/282/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/282/high.png'}},
+  {id:'me2pt5-283',name:'Mega Hawlucha ex',number:'283',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/283/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/283/high.png'}},
+  {id:'me2pt5-284',name:'Mega Gengar ex',number:'284',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/284/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/284/high.png'}},
+  {id:'me2pt5-285',name:'Mega Scrafty ex',number:'285',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/285/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/285/high.png'}},
+  {id:'me2pt5-286',name:"N's Zoroark ex",number:'286',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/286/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/286/high.png'}},
+  {id:'me2pt5-287',name:"Marnie's Grimmsnarl ex",number:'287',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/287/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/287/high.png'}},
+  {id:'me2pt5-288',name:'Fezandipiti ex',number:'288',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/288/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/288/high.png'}},
+  {id:'me2pt5-289',name:"Steven's Metagross ex",number:'289',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/289/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/289/high.png'}},
+  {id:'me2pt5-290',name:'Mega Dragonite ex',number:'290',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/290/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/290/high.png'}},
+  {id:'me2pt5-291',name:'Canari',number:'291',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/291/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/291/high.png'}},
+  {id:'me2pt5-292',name:"Iris's Fighting Spirit",number:'292',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/292/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/292/high.png'}},
+  {id:'me2pt5-293',name:'Surfer',number:'293',rarity:'Special Illustration Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/293/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/293/high.png'}},
+  {id:'me2pt5-294',name:'Mega Charizard Y ex',number:'294',rarity:'Hyper Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/294/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/294/high.png'}},
+  {id:'me2pt5-295',name:'Mega Dragonite ex',number:'295',rarity:'Hyper Rare',set:{id:'me2pt5',name:'Ascended Heroes',total:295},images:{small:'https://assets.tcgdex.net/en/me/me02.5/295/low.png',large:'https://assets.tcgdex.net/en/me/me02.5/295/high.png'}}
 ];
 // ── Re-keyed to OUR ids (2026-09-27) ──
 // These carried pokemontcg.io ids (me2pt5-251 ... me2pt5-295). mergePremium
@@ -3446,14 +3420,20 @@ var CERT_CHIP = {
 function certRowEligible(l){
   return l && l.source === 'ebay' && l.itemId && /^PSA\b/i.test(String(l.condition || ''));
 }
+// The on-demand controls under an eBay row: Photos on every row eBay gave
+// an item id, Verify on PSA ones. Both spend the SAME getItem (server-side
+// cache), so the line says "one eBay lookup" once, for both.
 function certLine(l){
-  if (!certRowEligible(l)) return '';
+  if (!(l && l.source === 'ebay' && l.itemId)) return '';
   var seen = CERT_SEEN[l.itemId];
   if (seen && Date.now() - seen.at > CERT_TTL_MS) { delete CERT_SEEN[l.itemId]; seen = null; }
-  return '<div class="certline" data-cert-item="' + liveEsc(l.itemId) + '" data-cert-grade="' + liveEsc(l.condition) + '">'
-    + (seen ? certResultHtml(seen.r)
-            : '<button type="button" class="certbtn" onclick="certVerify(this)">Verify PSA cert</button>'
-              + '<span>not checked · one eBay lookup, only if pressed</span>')
+  var cert = certRowEligible(l);
+  return '<div class="certline" data-cert-item="' + liveEsc(l.itemId) + '" data-cert-grade="' + liveEsc(l.condition) + '"'
+    + ' data-url="' + liveEsc(l.url || '') + '" data-title="' + liveEsc(l.title || '') + '" data-thumb="' + liveEsc(l.imageUrl || '') + '">'
+    + '<button type="button" class="certbtn" onclick="viewListing(this)">Photos</button>'
+    + (cert ? '<span class="certslot">' + (seen ? certResultHtml(seen.r)
+            : '<button type="button" class="certbtn" onclick="certVerify(this)">Verify PSA cert</button>') + '</span>' : '')
+    + (seen ? '' : '<span>' + (cert ? 'not checked · ' : '') + 'one eBay lookup, only if pressed</span>')
     + '</div>';
 }
 function certResultHtml(r){
@@ -3482,7 +3462,10 @@ async function certVerify(btn){
   if (r.error) r.state = 'error';
   // Errors are not remembered — pressing again should try again.
   if (r.state !== 'error') CERT_SEEN[itemId] = { at: Date.now(), r: r };
-  line.innerHTML = certResultHtml(r);
+  var slot = line.querySelector('.certslot');
+  (slot || line).innerHTML = certResultHtml(r);
+  var hint = slot && slot.nextElementSibling;
+  if (hint && r.state !== 'error') hint.remove();
 }
 
 // What the outlier check did — including when it did NOT run. "Not applied,
@@ -3757,55 +3740,32 @@ function buildMockListings(card,price,tab){
              + (gradeTerms(grade,'yahoo').text ? ' '+gradeTerms(grade,'yahoo').text : '');
   if(tab==='sold'){
     document.getElementById('cd-listings').innerHTML=`<div style="padding:20px 18px;display:flex;flex-direction:column;gap:10px">
-      <div style="font-size:13px;font-weight:700;margin-bottom:4px">Recent sales — ${card.name} ${grade}</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px">Recent sales — ${card.name} ${gradeText(grade)}</div>
       ${[
         {s:'se',l:'eBay Sold',sub:'View completed sold listings',url:`https://www.ebay.com/sch/i.html?_nkw=${ebayQ}&LH_Complete=1&LH_Sold=1&_sacat=183454`},
         {s:'s130',l:'130point',sub:'Aggregated eBay sold price history',url:`https://130point.com/sales/?s=${encQ}`},
         {s:'stc',l:'PriceCharting',sub:'Raw & graded price history charts',url:`https://www.pricecharting.com/search-products?q=${nameQ}&type=prices`},
       ].map(r=>`<a href="${r.url}" target="_blank" rel="noopener" class="lrow" style="text-decoration:none;color:inherit">
-        <span class="src ${r.s}">${r.l}</span><div class="li3"><div class="lt3">${card.name} ${grade}</div><div class="lsb">${r.sub}</div></div>
+        <span class="src ${r.s}">${r.l}</span><div class="li3"><div class="lt3">${card.name} ${gradeText(grade)}</div><div class="lsb">${r.sub}</div></div>
         <span style="color:var(--t);font-weight:600;font-size:13px">View →</span>
       </a>`).join('')}</div>`;return;
   }
   if(tab==='local'){
-    document.getElementById('cd-listings').innerHTML=`<div style="padding:20px 18px;display:flex;flex-direction:column;gap:10px">
-      <div style="font-size:13px;font-weight:700;margin-bottom:4px">Near you — ${card.name}</div>
-      ${[
-        {name:"Dragon's Lair Cards",dist:'4.2km',hrs:'Open · 10am–8pm',price:'$'+(price*.95).toFixed(0)},
-        {name:'The Gaming Vault',dist:'7.1km',hrs:'Open · 11am–9pm',price:'$'+(price*1.02).toFixed(0)},
-        {name:'Collector Corner',dist:'12.4km',hrs:'Closed · Opens 10am',price:'$'+(price*.9).toFixed(0)},
-      ].map(s=>`<div class="lrow" onclick="viewListing('${card.id}','${s.name}',${price},'${s.name}')">
-        <span class="src slo3">Local</span><div class="li3"><div class="lt3">${s.name}</div><div class="lsb">${s.dist} · ${s.hrs}</div></div>
-        <div style="text-align:right"><div style="font-size:15px;font-weight:800">${s.price}</div>
-        <button class="btn p sm" style="margin-top:4px" onclick="event.stopPropagation();viewListing('${card.id}','${s.name}',${price},'Local')">View →</button></div>
-      </div>`).join('')}</div>`;return;
+    // PLANNED, NOT BUILT. This tab listed three invented shops with
+    // distances, opening hours and prices of price x .95 / 1.02 / .9.
+    // None of them came from anywhere. Local stores need a real data source first (see
+    // CLAUDE.md, "Near you"); until then the tab says so and shows nothing.
+    document.getElementById('cd-listings').innerHTML=`<div style="padding:28px 18px;text-align:center">
+      <div style="font-size:14px;font-weight:700;margin-bottom:6px">Local card shops are coming</div>
+      <div style="font-size:12px;color:var(--mu);line-height:1.6;max-width:380px;margin:0 auto">We don't have a source for shops near you yet, so nothing is shown here rather than guessed. Live listings and recent sales are in the other two tabs.</div>
+    </div>`;return;
   }
-  // LIVE — real working links
-  const LDATA=[
-    {s:'se',l:'eBay',title:`${card.name} ${card.set?.name||''} #${card.number} — ${gradeText(grade)}`,sub:`eBay marketplace · ${isGraded?grStr+' graded':'Raw card'} · Fixed price listings`,pct:.86,sh:'+$12',d:'-14%',dc:'bd2',url:`https://www.ebay.com/sch/i.html?_nkw=${ebayQ}&_sacat=183454&LH_BIN=1&LH_ItemCondition=3000`},
-    {s:'stc',l:'TCGPlayer',title:`${card.name} — ${card.set?.name||''}`,sub:'TCGPlayer marketplace · Verified sellers · Buyer protection',pct:1.02,sh:'Free ship',d:'~avg',dc:'',url:`https://www.tcgplayer.com/search/pokemon/product?q=${encQ}&view=grid`},
-    {s:'sme',l:'Mercari',title:`${card.name} ${grade} ${card.set?.name||''}`,sub:'Mercari US · Private sellers · Offers available',pct:.91,sh:'+$8',d:'-9%',dc:'bd2',url:`https://www.mercari.com/search/?keyword=${encQ}`},
-    // Amazon sells Pokémon TOWELS, and "Pokemon Giratina Raw NM" asked for
-    // them. The collector number and set are what make a general
-    // marketplace answer about a card at all.
-    {s:'sam',l:'Amazon',title:`Pokémon ${card.name} ${grade}`,sub:'Amazon marketplace · Prime eligible · Fulfilled',pct:1.18,sh:'Free Prime',d:'+18%',dc:'bh',url:`https://www.amazon.com/s?k=${encQ}&i=toys-and-games`},
-    // Japanese sellers list under the Japanese name, so this one keeps the
-    // local name — but it goes through the builder too, for the number.
-    {s:'syj',l:'Yahoo JP',title:`${card.name} ポケモンカード ${grStr}${grNum}`,sub:'Yahoo Auctions Japan · Ships internationally · ~5–8 days',pct:null,sh:'~$12 intl',d:'-11%',dc:'bd2',url:`https://auctions.yahoo.co.jp/search/search?p=${encodeURIComponent(yahooQ)}&auccat=2084005070`},
-    {s:'s130',l:'130point',title:`${card.name} ${grade} — Price analytics`,sub:'130point.com · Aggregated eBay sold price data',pct:.97,sh:'Data',d:'history',dc:'',url:`https://130point.com/sales/?s=${encQ}`},
-  ];
-  document.getElementById('cd-listings').innerHTML=LDATA.map(row=>{
-    var p=row.pct?'$'+(price*row.pct).toFixed(0):'¥'+Math.round(price*(145+Math.random()*15)).toLocaleString();
-    var dc=row.dc==='bd2'?'<span class="b bd2">'+row.d+'</span>':row.dc==='bh'?'<span class="b bh">'+row.d+'</span>':'<span style="font-size:10px;color:var(--mu)">'+row.d+'</span>';
-    return`<div class="lrow">
-      <span class="src ${row.s}">${row.l}</span>
-      <div class="li3"><div class="lt3">${row.title}</div><div class="lsb">${row.sub}</div></div>
-      <div class="lrr">${dc}<div style="text-align:right"><div style="font-size:15px;font-weight:800">${p}</div><div style="font-size:11px;color:var(--mu)">${row.sh}</div></div>
-        <button class="btn sm" onclick="viewListing('${card.id}','${row.l}',${price*(row.pct||1)},'${row.l}')">Photos</button>
-        <a href="${row.url}" target="_blank" rel="noopener" class="btn p sm">Buy →</a>
-      </div>
-    </div>`;
-  }).join('');
+  // The "live" branch that sat here drew six marketplace rows with prices
+  // of price x .86 / 1.02 / .91 / 1.18 / .97, a Math.random() yen column,
+  // invented "-14%" deal badges and a Photos button onto our own artwork.
+  // setLTab and selGrade never call this for the live tab - renderListingFinder
+  // owns it - so it was unreachable, and dead code that writes the gated
+  // element is not inert (renderRealListings). Deleted 2026-09-28.
 }
 // The "Live listings" tab must show the REAL panel. It used to call
 // buildMockListings, which re-rendered simulated prices (price*pct, and a
@@ -3820,17 +3780,65 @@ function setLTab(el,tab){
   buildMockListings(S.currentCard,S.activeGradeBase,tab);
 }
 
-// PHOTOS MODAL
-function viewListing(cardId,source,price,srcName){
-  const c=S.currentCard;if(!c)return;
-  document.getElementById('photos-title').textContent=`${c.name} — ${S.activeGrade}`;
-  document.getElementById('photos-src').textContent=`Listed on ${srcName} · $${(+price).toFixed(0)} + shipping`;
-  document.getElementById('photo-main').src=c.images?.large||c.images?.small||'';
-  document.getElementById('photo-grid').innerHTML=[c.images?.large,c.images?.small,c.images?.small].filter(Boolean).map((src,i)=>`<img class="photo-t${i===0?' on':''}" src="${src}" onclick="selPhoto(this,'${src}')" style="${i===1?'filter:brightness(.9)':i===2?'filter:sepia(.15)':''}">`).join('');
-  document.getElementById('photos-buy-btn').onclick=()=>{closeM('photos-overlay');startCheckout(c,price,srcName);};
+// PHOTOS — the seller's own images of ONE eBay listing (TASK T7)
+// This used to show OUR catalogue artwork three times - one copy brightened,
+// one sepia - as if they were a seller's photos, beside an invented price,
+// with a Buy button into a fake checkout. Now it asks /api/photos for the
+// listing's real images: the same eBay getItem Verify uses, cached 15
+// minutes server-side, so Photos and Verify on one row cost one call. A
+// listing with one photo shows one. The row's own thumbnail (also eBay's)
+// is shown while the rest load, and nothing is kept past the window.
+var PHOTOS_SEEN = {};
+async function viewListing(btn){
+  var line = btn && btn.closest('.certline');
+  if (!line || !LF.card) return;
+  var itemId = line.getAttribute('data-cert-item');
+  var url = line.getAttribute('data-url') || '';
+  var thumb = line.getAttribute('data-thumb') || '';
+  var cardId = LF.card.id || LF.card.api_card_id;
+  document.getElementById('photos-title').textContent = line.getAttribute('data-title') || '';
+  document.getElementById('photos-src').textContent = 'Seller photos from eBay · loading…';
+  var link = document.getElementById('photos-link');
+  link.href = url; link.style.display = url ? '' : 'none';
+  drawPhotos(thumb ? [thumb] : []);
+  document.getElementById('photos-overlay').setAttribute('data-item', itemId);
   openM('photos-overlay');
+  var seen = PHOTOS_SEEN[itemId], r;
+  if (seen && Date.now() - seen.at < CERT_TTL_MS) r = seen.r;
+  else {
+    try {
+      var resp = await fetch(BACKEND + '/api/photos/' + encodeURIComponent(cardId)
+        + '?item=' + encodeURIComponent(itemId));
+      // A non-JSON answer (an HTML 404 from a server without this route) is
+      // an HTTP fact, not a network failure — report the status.
+      r = await resp.json().catch(function () { return { error: 'HTTP ' + resp.status }; });
+      if (!resp.ok && !r.error) r.error = 'HTTP ' + resp.status;
+    } catch (e) { r = { error: 'network: ' + e.message }; }
+    if (!r.error) PHOTOS_SEEN[itemId] = { at: Date.now(), r: r };
+  }
+  // The user may have closed it or opened another row meanwhile.
+  if (document.getElementById('photos-overlay').getAttribute('data-item') !== itemId) return;
+  if (r.error) {
+    document.getElementById('photos-src').textContent = 'Could not load the seller’s photos (' + r.error + '). The listing on eBay has them.';
+    return;
+  }
+  var imgs = r.images || [];
+  if (imgs.length) drawPhotos(imgs);
+  document.getElementById('photos-src').textContent = imgs.length
+    ? imgs.length + ' photo' + (imgs.length === 1 ? '' : 's') + ' from the seller’s eBay listing'
+    : 'This listing has no photos on eBay.';
 }
-function selPhoto(el,src){document.querySelectorAll('.photo-t').forEach(t=>t.classList.remove('on'));el.classList.add('on');document.getElementById('photo-main').src=src;}
+function drawPhotos(imgs){
+  var main = document.getElementById('photo-main');
+  var grid = document.getElementById('photo-grid');
+  main.style.display = imgs.length ? '' : 'none';
+  if (imgs.length) main.src = imgs[0];
+  // One image is one image: no thumbnail strip for a single photo.
+  grid.innerHTML = imgs.length > 1 ? imgs.map(function (src, i) {
+    return '<img class="photo-t' + (i === 0 ? ' on' : '') + '" src="' + liveEsc(src) + '" alt="" onclick="selPhoto(this)">';
+  }).join('') : '';
+}
+function selPhoto(el){document.querySelectorAll('.photo-t').forEach(t=>t.classList.remove('on'));el.classList.add('on');document.getElementById('photo-main').src=el.src;}
 
 // CHART
 // ── Price history: measured observations only ──
@@ -3978,83 +3986,14 @@ function openCompare(){
   openM('compare-overlay');
 }
 
-// CHECKOUT
-function startCheckout(card,price,source){
-  S.coStep=1;S.coListing={card,price,source};SS('checkout');renderCoStep(1);
-}
-const CO_STEPS=['Delivery','Account','Payment','Confirm'];
-function renderCoStep(step){
-  S.coStep=step;const {card,price,source}=S.coListing||{};
-  document.getElementById('co-steps').innerHTML=CO_STEPS.map((s,i)=>{
-    const cls=i+1<step?'done':i+1===step?'active':'';
-    return`<div class="si2 ${cls}"><div class="sc3">${i+1<step?'✓':i+1}</div><div class="slbl">${s}</div></div>`;
-  }).join('');
-  const sum=`<div class="osum"><div style="font-size:13px;font-weight:700;margin-bottom:12px">Order summary</div>
-    <div class="orow"><span>${card?.name||'Card'} — ${S.activeGrade}</span><span>$${(+price||0).toFixed(2)}</span></div>
-    <div class="orow"><span style="color:var(--mu)">Shipping</span><span style="color:var(--mu)">$4.99</span></div>
-    <div class="orow"><span style="color:var(--mu)">Protection</span><span style="color:var(--mu)">$0.89</span></div>
-    <div class="orow"><span>Total</span><span style="color:var(--t);font-weight:700">$${((+price||0)+5.88).toFixed(2)}</span></div>
-  </div>`;
-  let body='';
-  if(step===1){body=`<div class="co-card"><h3>📦 Delivery details</h3>
-    <div class="frow"><div class="ff"><label>First name</label><input value="Alex"></div><div class="ff"><label>Last name</label><input value="Cohen"></div></div>
-    <div class="ff"><label>Street address</label><input value="123 Dizengoff St"></div>
-    <div class="frow"><div class="ff"><label>City</label><input value="Tel Aviv"></div><div class="ff"><label>Country</label><select><option>Israel</option><option>United States</option><option>Japan</option><option>United Kingdom</option></select></div></div>
-    <div class="frow"><div class="ff"><label>Phone</label><input type="tel" value="+972 50 123 4567"></div><div class="ff"><label>Email</label><input type="email" value="collector@example.com"></div></div>
-    ${sum}</div>
-    <button class="btn p" style="width:100%;padding:14px;font-size:15px;justify-content:center" onclick="renderCoStep(2)">Continue to account →</button>`;}
-  else if(step===2){body=`<div class="co-card"><h3>👤 ${source?.toLowerCase().includes('ebay')?'eBay':'Store'} account</h3>
-    <div style="font-size:13px;color:var(--mu);margin-bottom:20px;line-height:1.6">Sign in to complete your purchase. Your order will be placed directly through ${source} with full buyer protection.</div>
-    <div class="ff"><label>Email / Username</label><input value="collector@example.com"></div>
-    <div class="ff"><label>Password</label><input type="password" value="password"></div>
-    <div style="display:flex;align-items:center;gap:8px;margin-top:4px;font-size:12px;color:var(--mu)"><input type="checkbox" checked style="accent-color:var(--t)"> Remember this account</div>
-    ${sum}</div>
-    <div style="display:flex;gap:12px"><button class="btn" style="padding:14px 24px;font-size:15px" onclick="renderCoStep(1)">← Back</button>
-    <button class="btn p" style="flex:1;padding:14px;font-size:15px;justify-content:center" onclick="renderCoStep(3)">Continue to payment →</button></div>`;}
-  else if(step===3){body=`<div class="co-card"><h3>💳 Payment</h3>
-    <div class="pay-methods"><div class="pm on" onclick="selPM(this)"><div class="pm-i">💳</div><div class="pm-n">Card</div></div><div class="pm" onclick="selPM(this)"><div class="pm-i">🍎</div><div class="pm-n">Apple Pay</div></div><div class="pm" onclick="selPM(this)"><div class="pm-i">🅿️</div><div class="pm-n">PayPal</div></div></div>
-    <div class="ff"><label>Card number</label><input class="cni" placeholder="1234  5678  9012  3456" value="4532 1234 5678 9012" maxlength="19"></div>
-    <div class="frow"><div class="ff"><label>Expiry</label><input placeholder="MM/YY" value="08/27" maxlength="5"></div><div class="ff"><label>CVV</label><input placeholder="•••" value="123" type="password" maxlength="4"></div></div>
-    <div class="ff"><label>Name on card</label><input value="Alex Cohen"></div>${sum}</div>
-    <div style="display:flex;gap:12px"><button class="btn" style="padding:14px 24px;font-size:15px" onclick="renderCoStep(2)">← Back</button>
-    <button class="btn p" style="flex:1;padding:14px;font-size:15px;justify-content:center" onclick="renderCoStep(4)">Review order →</button></div>`;}
-  else if(step===4){body=`<div class="co-card"><h3>✅ Review & confirm</h3>
-    <div style="display:flex;align-items:center;gap:16px;padding:20px;background:var(--bg);border-radius:12px;margin-bottom:20px">
-      <img src="${card?.images?.large||card?.images?.small||''}" style="width:80px;object-fit:contain;border-radius:8px;box-shadow:var(--sh2)" onerror="this.style.display='none'">
-      <div><div style="font-size:16px;font-weight:700">${card?.name||'Card'}</div><div style="font-size:13px;color:var(--mu);margin-top:2px">${card?.set?.name||''} · ${S.activeGrade}</div><div style="font-size:20px;font-weight:800;color:var(--t);margin-top:6px">$${((+price||0)+5.88).toFixed(2)}</div></div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--mu)">
-      <div style="display:flex;justify-content:space-between"><span>📦 Ship to</span><span style="color:var(--tx);font-weight:500">123 Dizengoff St, Tel Aviv, Israel</span></div>
-      <div style="display:flex;justify-content:space-between"><span>🏪 Seller</span><span style="color:var(--tx);font-weight:500">${source}</span></div>
-      <div style="display:flex;justify-content:space-between"><span>💳 Payment</span><span style="color:var(--tx);font-weight:500">•••• •••• •••• 9012</span></div>
-      <div style="display:flex;justify-content:space-between"><span>📬 Estimated delivery</span><span style="color:var(--tx);font-weight:500">3–7 business days</span></div>
-    </div>
-    <div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:10px;padding:12px 14px;margin-top:16px;font-size:12px;color:#92400E;line-height:1.6">⚡ You will be redirected to <strong>${source}</strong> to complete final payment. CardHunt does not process payments directly.</div>
-    </div>
-    <div style="display:flex;gap:12px"><button class="btn" style="padding:14px 24px;font-size:15px" onclick="renderCoStep(3)">← Back</button>
-    <button class="btn p" style="flex:1;padding:14px;font-size:16px;font-weight:700;justify-content:center" onclick="renderCoStep(5)">🔒 Place order — $${((+price||0)+5.88).toFixed(2)} →</button></div>`;}
-  else if(step===5){body=`<div class="suc"><div class="suc-i">✅</div><h2>Order confirmed!</h2>
-    <p>Your order for <strong>${card?.name||'your card'}</strong> (${S.activeGrade}) has been placed. You'll receive a confirmation email and can track shipping from your account.</p>
-    <div style="background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:20px;margin-bottom:24px;text-align:left;font-size:13px">
-      <div style="font-weight:700;margin-bottom:12px">Order #CH-${Math.floor(Math.random()*900000+100000)}</div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd)"><span style="color:var(--mu)">Card</span><span>${card?.name||'—'} · ${S.activeGrade}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd)"><span style="color:var(--mu)">Total paid</span><span style="color:var(--t);font-weight:700">$${((+price||0)+5.88).toFixed(2)}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:6px 0"><span style="color:var(--mu)">Estimated arrival</span><span>3–7 business days</span></div>
-    </div>
-    <button class="btn p" style="padding:14px 32px;font-size:15px;margin:0 auto;display:flex" onclick="SS('home')">← Back to CardHunt</button></div>`;}
-  document.getElementById('co-body').innerHTML=body;window.scrollTo(0,0);
-}
-function selPM(el){document.querySelectorAll('.pm').forEach(m=>m.classList.remove('on'));el.classList.add('on');}
 
 // PORTFOLIO
 function renderPortfolio(){
-  var PORT = [
-    {n:'Charizard',set:'Base Set',img:'https://images.pokemontcg.io/base1/4.png',g:'PSA 9',paid:3200,val:4200,id:'base1-4'},
-    {n:'Pikachu ex SIR',set:'151',img:'https://images.pokemontcg.io/sv3pt5/172.png',g:'CGC 9',paid:280,val:380,id:'sv3pt5-172'},
-    {n:'Umbreon VMAX Alt',set:'Evolving Skies',img:'https://images.pokemontcg.io/swsh7/215.png',g:'Raw NM',paid:240,val:198,id:'swsh7-215'},
-    {n:'Charizard ex SAR',set:'151',img:'https://images.pokemontcg.io/sv3pt5/207.png',g:'PSA 10',paid:95,val:118,id:'sv3pt5-207'},
-    {n:'Mega Charizard Y ex',set:'Ascended Heroes',img:'https://images.pokemontcg.io/me2pt5/294.png',g:'Raw NM',paid:410,val:480,id:'me2pt5-294'}
-  ];
+  // Five holdings used to be typed in here - Charizard PSA 9 "paid $3,200,
+  // worth $4,200" and four more, on pokemontcg.io ids - and summed into a
+  // total value and profit that belonged to nobody. The page cannot add a
+  // card to a portfolio yet, so the honest portfolio is an empty one.
+  var PORT = [];
   var totalVal=0, totalCost=0;
   var rows='';
   PORT.forEach(function(p){
@@ -4076,7 +4015,7 @@ function renderPortfolio(){
       + '</div>';
   });
   var rowsEl = document.getElementById('portfolio-rows');
-  if(rowsEl) rowsEl.innerHTML = rows;
+  if(rowsEl) rowsEl.innerHTML = rows || '<div style="padding:28px 18px;text-align:center;font-size:13px;color:var(--mu)">No cards in your portfolio. Adding cards is not built yet &mdash; nothing here is sample data.</div>';
   var pl = totalVal - totalCost;
   var setTxt = function(id,txt){ var el=document.getElementById(id); if(el) el.textContent=txt; };
   setTxt('pf-total', fmtCurrency(totalVal));
@@ -4095,24 +4034,6 @@ function closeM(id){document.getElementById(id).classList.remove('on');}
 
 
 
-function openLoginModal(){
-  const overlay=document.getElementById('login-modal-overlay');
-  overlay.style.display='flex';
-  setTimeout(()=>overlay.style.opacity='1',10);
-}
-function closeLoginModal(){
-  document.getElementById('login-modal-overlay').style.display='none';
-}
-function doLogin(){
-  closeLoginModal();
-  // Update all nav login buttons to show logged-in state
-  document.querySelectorAll('.login-nav-btn').forEach(b=>{
-    b.textContent='👤 Alex';
-    b.style.background='var(--tl)';
-    b.style.color='var(--t)';
-    b.style.borderColor='var(--t)';
-  });
-}
 
 
 function switchResultsLang(lang,el){
@@ -5058,7 +4979,6 @@ function updateAlertStats(){
   document.getElementById('alert-stat-active').textContent=active;
   document.getElementById('alert-stat-triggered').textContent=triggered;
   document.getElementById('alert-stat-watching').textContent=ALERTS.filter(a=>a.status!=='paused').length;
-  if(triggered>0) document.getElementById('alert-stat-savings').textContent=`~$${(Math.random()*200+50).toFixed(0)}`;
 }
 
 // ── Every alert mutation goes to the SERVER ──────────────────
@@ -5307,14 +5227,6 @@ document.getElementById('alert-price')?.addEventListener('input',updateAlertPrev
 document.getElementById('alert-grade')?.addEventListener('change',updateAlertPreview);
 document.getElementById('alert-market')?.addEventListener('change',updateAlertPreview);
 document.querySelectorAll('.overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('on');}));
-// Close on backdrop click
-document.getElementById('login-modal-overlay').addEventListener('click',function(e){
-  if(e.target===this) closeLoginModal();
-});
-// Close on Escape key
-document.addEventListener('keydown',function(e){
-  if(e.key==='Escape') closeLoginModal();
-});
 // Close autocomplete when clicking outside
 document.addEventListener('click',function(e){
   if(!e.target.closest('#hero-ac,#nav-ac,#main-ac,[id="hero-q"],[id="nav-q"],[id="search-main"]')) closeAutocomplete();
@@ -5618,37 +5530,16 @@ function cleanSeries(name) {
 
 </script>
 
-<!-- ══ LOGIN MODAL ══ -->
-<div id="login-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(6px)">
-  <div style="background:linear-gradient(145deg,#0D0D18,#141428 50%,#0A1A14);border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:48px 44px;width:100%;max-width:440px;position:relative;box-shadow:0 24px 64px rgba(0,0,0,.6)">
-    <button onclick="closeLoginModal()" style="position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.6);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:32px;justify-content:center">
-      <div style="width:48px;height:48px;background:var(--t);border-radius:13px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px">⚡</div>
-      <div style="font-size:28px;font-weight:800;color:#fff;letter-spacing:-.5px">Card<em style="color:var(--t);font-style:normal">Hunt</em></div>
-    </div>
-    <div style="font-size:22px;font-weight:700;color:#fff;margin-bottom:5px;text-align:center;letter-spacing:-.4px">Welcome back</div>
-    <div style="font-size:13px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:28px;line-height:1.6">Sign in to track prices, set alerts and buy smarter.</div>
-    <div style="margin-bottom:13px">
-      <label style="display:block;font-size:11px;font-weight:700;color:rgba(255,255,255,.4);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Email</label>
-      <input id="modal-email" type="email" value="collector@example.com" placeholder="you@example.com" style="width:100%;padding:12px 15px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.12);border-radius:10px;font-size:14px;color:#fff;outline:none;transition:all .2s" onfocus="this.style.borderColor='var(--t)'" onblur="this.style.borderColor='rgba(255,255,255,.12)'">
-    </div>
-    <div style="margin-bottom:16px">
-      <label style="display:block;font-size:11px;font-weight:700;color:rgba(255,255,255,.4);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em">Password</label>
-      <input id="modal-pass" type="password" value="password" placeholder="••••••••" style="width:100%;padding:12px 15px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.12);border-radius:10px;font-size:14px;color:#fff;outline:none;transition:all .2s" onfocus="this.style.borderColor='var(--t)'" onblur="this.style.borderColor='rgba(255,255,255,.12)'">
-    </div>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;font-size:12px">
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;color:rgba(255,255,255,.4)"><input type="checkbox" checked style="accent-color:var(--t)"> Keep me signed in</label>
-      <a style="color:var(--t);cursor:pointer">Forgot password?</a>
-    </div>
-    <button onclick="doLogin()" style="width:100%;padding:14px;background:var(--t);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;transition:all .15s;letter-spacing:-.2px" onmouseover="this.style.background='var(--td)';this.style.transform='translateY(-1px)'" onmouseout="this.style.background='var(--t)';this.style.transform=''">Sign in to CardHunt →</button>
-    <div style="display:flex;align-items:center;gap:14px;margin:22px 0;color:rgba(255,255,255,.2);font-size:12px">
-      <div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div>or continue with<div style="flex:1;height:1px;background:rgba(255,255,255,.08)"></div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">
-      <button onclick="doLogin()" style="padding:11px;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='rgba(255,255,255,.06)'">🌐 Google</button>
-      <button onclick="doLogin()" style="padding:11px;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='rgba(255,255,255,.06)'">🍎 Apple</button>
-    </div>
-    <div style="text-align:center;font-size:12px;color:rgba(255,255,255,.3)">No account? <a onclick="doLogin()" style="color:var(--t);cursor:pointer">Create one free →</a></div>
+<!-- ══ PHOTOS — the seller's own images of one eBay listing ══ -->
+<div id="photos-overlay" class="overlay" data-item="">
+  <div class="modal" style="max-width:560px;max-height:90vh;overflow:auto">
+    <button class="modal-x" onclick="closeM('photos-overlay')" aria-label="Close">&#10005;</button>
+    <div id="photos-title" style="font-size:14px;font-weight:700;padding-right:40px;margin-bottom:4px"></div>
+    <div id="photos-src" style="font-size:12px;color:var(--mu);margin-bottom:14px"></div>
+    <img id="photo-main" class="photo-main" alt="">
+    <div id="photo-grid" class="photo-grid"></div>
+    <a id="photos-link" class="btn p" target="_blank" rel="noopener" style="margin-top:16px;justify-content:center;width:100%">View this listing on eBay &#8599;</a>
+    <div style="font-size:10px;color:var(--fa);margin-top:8px;text-align:center">Images are the seller&rsquo;s, from eBay, shown with their listing.</div>
   </div>
 </div>
 
@@ -5661,7 +5552,7 @@ function cleanSeries(name) {
     <button class="nl" onclick="SS('sets')">Sets</button>
     <button class="nl" onclick="SS('portfolio')">Portfolio</button>
     <button class="nl on">🔔 Alerts</button>
-    <div class="nav-r"><button class="btn login-nav-btn" onclick="openLoginModal()" style="font-size:12px;padding:6px 14px">👤 Login</button></div>
+    <div class="nav-r"></div>
   </nav>
   <div class="content" style="padding-top:28px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -5673,11 +5564,10 @@ function cleanSeries(name) {
     </div>
 
     <!-- Alert stats bar -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:24px 0">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:24px 0">
       <div class="pbox"><div class="pbl">Active alerts</div><div class="pbv" id="alert-stat-active">0</div></div>
       <div class="pbox"><div class="pbl">Triggered today</div><div class="pbv" id="alert-stat-triggered" style="color:var(--gr)">0</div></div>
       <div class="pbox"><div class="pbl">Cards watching</div><div class="pbv" id="alert-stat-watching">0</div></div>
-      <div class="pbox"><div class="pbl">Avg savings found</div><div class="pbv" id="alert-stat-savings">—</div></div>
     </div>
 
     <!-- Alert filters -->
@@ -5801,6 +5691,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-785ed60-certverify &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-cd3ba77-t7honest &middot; click to hide</div>
 </body>
 </html>

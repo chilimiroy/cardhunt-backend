@@ -3736,6 +3736,30 @@ app.get('/api/ebay/certprobe/:cardId', async (req, res) => {
 // never scraped. Takes a catalogue card id and an eBay item id of the Browse
 // shape — never a URL.
 const certcheck = require('./certcheck');
+
+// ONE getItem per listing, shared by Verify and Photos (TASK T7). Returns
+// { hit, calls } or { status, body } on refusal. The cache entry holds both
+// the cert read and the image URLs, so whichever button is pressed first
+// pays the call and the other is free for the next 15 minutes.
+async function ebayItemOnDemand(itemId, cardId, purpose) {
+  let hit = certcheck.ebayCacheGet(itemId);
+  if (hit) return { hit, calls: 0 };
+  if (!ebay.ebayEnabled()) return { status: 503, body: { error: 'EBAY_ENABLED=false' } };
+  // Foreground: a person is waiting on this one call.
+  const auth = await getEbayTokenDetailed({ background: false });
+  if (!auth.token) return { status: 503, body: { error: auth.reason || auth.error || 'eBay token unavailable', status: auth.blocked || 'error' } };
+  const call = await ebay.fetchEbay(db, {
+    url: 'https://api.ebay.com/buy/browse/v1/item/' + encodeURIComponent(itemId),
+    token: auth.token, kind: 'item', background: false,
+    meta: { cardId, probe: purpose }, countFrom: () => 1 });
+  if (call.blocked) return { status: 503, body: { error: call.reason, status: call.blocked } };
+  if (!call.ok) return { status: 502, body: { error: call.reason || 'eBay getItem failed' } };
+  certcheck.ebayCacheSet(itemId, certcheck.fromItem(call.data));
+  return { hit: certcheck.ebayCacheGet(itemId), calls: 1 };
+}
+const ebayItemMeta = (hit, calls) => ({ calls, cached: calls === 0,
+  ageSec: Math.round((Date.now() - hit.at) / 1000), keptFor: '15 minutes, in memory only' });
+
 app.get('/api/cert/:cardId', async (req, res) => {
   const cardId = req.params.cardId;
   const itemId = String(req.query.item || '');
@@ -3746,24 +3770,9 @@ app.get('/api/cert/:cardId', async (req, res) => {
   try {
     const card = await resolveListingCard(cardId);
     if (!card) return res.status(404).json(Object.assign(base, { error: 'card not in catalogue' }));
-
-    let hit = certcheck.ebayCacheGet(itemId);
-    let calls = 0;
-    if (!hit) {
-      if (!ebay.ebayEnabled()) return res.status(503).json(Object.assign(base, { error: 'EBAY_ENABLED=false' }));
-      // Foreground: a person is waiting on this one call.
-      const auth = await getEbayTokenDetailed({ background: false });
-      if (!auth.token) return res.status(503).json(Object.assign(base, { error: auth.reason || auth.error || 'eBay token unavailable', status: auth.blocked || 'error' }));
-      const call = await ebay.fetchEbay(db, {
-        url: 'https://api.ebay.com/buy/browse/v1/item/' + encodeURIComponent(itemId),
-        token: auth.token, kind: 'item', background: false,
-        meta: { cardId, probe: 'cert-verify' }, countFrom: () => 1 });
-      calls = 1;
-      if (call.blocked) return res.status(503).json(Object.assign(base, { error: call.reason, status: call.blocked }));
-      if (!call.ok) return res.status(502).json(Object.assign(base, { error: call.reason || 'eBay getItem failed' }));
-      certcheck.ebayCacheSet(itemId, certcheck.readCert(call.data));
-      hit = certcheck.ebayCacheGet(itemId);
-    }
+    const got = await ebayItemOnDemand(itemId, cardId, 'cert-verify');
+    if (!got.hit) return res.status(got.status).json(Object.assign(base, got.body));
+    const { hit, calls } = got;
     const read = hit.read;
     const st = certcheck.stateFromEbay(read, 'PSA');
     res.json(Object.assign(base, {
@@ -3773,9 +3782,36 @@ app.get('/api/cert/:cardId', async (req, res) => {
       // For the person's own browser; the server never fetches it.
       psaUrl: read.grader === 'PSA' ? certcheck.psaCertUrl(read.cert) : null,
       psa: certcheck.psaLookup(read.cert),
-      ebay: { calls, cached: calls === 0, ageSec: Math.round((Date.now() - hit.at) / 1000),
-              keptFor: '15 minutes, in memory only' },
+      ebay: ebayItemMeta(hit, calls),
       attribution: 'Cert number as entered by the seller on eBay'
+    }));
+  } catch (e) { res.status(500).json(Object.assign(base, { error: e.message })); }
+});
+
+// ── The seller's own photos of ONE listing, when a person asks (TASK T7) ──
+//
+//   GET /api/photos/:cardId?item=v1|167236883977|0
+//
+// Replaces a viewer that showed our catalogue artwork three times, one copy
+// brightened and one sepia, beside an invented price. The images are eBay's,
+// shown with their listing and a link to it, and kept no longer than the
+// 15-minute window. The same getItem as /api/cert — one call answers both.
+// Returns exactly the images the listing has: one is one.
+app.get('/api/photos/:cardId', async (req, res) => {
+  const cardId = req.params.cardId;
+  const itemId = String(req.query.item || '');
+  const base = { cardId, itemId, stored: false };
+  if (!certcheck.ITEM_ID.test(itemId)) return res.status(400).json(Object.assign(base, { error: 'item must be an eBay Browse item id, e.g. v1|167236883977|0' }));
+  try {
+    const card = await resolveListingCard(cardId);
+    if (!card) return res.status(404).json(Object.assign(base, { error: 'card not in catalogue' }));
+    const got = await ebayItemOnDemand(itemId, cardId, 'photos');
+    if (!got.hit) return res.status(got.status).json(Object.assign(base, got.body));
+    const images = got.hit.images || [];
+    res.json(Object.assign(base, {
+      images, count: images.length,
+      ebay: ebayItemMeta(got.hit, got.calls),
+      attribution: 'Photos from the seller’s eBay listing'
     }));
   } catch (e) { res.status(500).json(Object.assign(base, { error: e.message })); }
 });

@@ -1409,6 +1409,28 @@ every card view**, plus an ungated `ebayActive` name search spending API
 quota. That is the same scrape `node ingest.js scrape` is banned for.
 Needs a decision, not a quiet fix.
 
+## "None" is not "Common" — manifest's rarity map (2026-09-28, TASK T5)
+`TCGDEX_RARITY` in ingest.js mapped TCGdex's `"None"` to `"Common"`. "None"
+is TCGdex saying it HAS no rarity (591 English, 2,110 Japanese cards —
+`/v2/{lang}/cards?rarity=None`), so every manifest run wrote Common over
+whatever we held. That is what stopped the Classic Collection fix, and
+"Classic Collection" itself was missing from the map, so `normRarity()`
+returned null and manifest silently skipped all 25. Now: None is dropped
+before mapping, Classic Collection maps, and manifest records
+`rarity_source='tcgdex'` (ingest 5.7.1; `manifestmap.test.js`, SKIP where
+ingest.js is absent). Run on cel25cc: 25 -> Classic Collection, and a
+whole-catalogue before/after diff of 46,088 rows changed exactly those 25,
+none to Common.
+
+**Damage from earlier runs, measured, NOT repaired:** 1,737 Japanese cards
+read "Common" where TCGdex says None (188 with `rarity_source='tcgdex'`),
+**201 of them numbered past their set's printed total** — secret-rare slots
+in SV8a, M2a, S12a, SV7a, SV9a… stored as Common (`ja-SV8a-232` ネリネ
+232/187). 198 of the 201 have real prices, so the harm is the label and any
+estimate; Yuyu-tei carries the real rarity per card and is the fix. English:
+430 visible cards, mostly genuinely unrated products (McDonald's, trainer
+kits, energies), where Common is at worst imprecise.
+
 ## Invented data, the fourth sweep (2026-09-28, TASK T7)
 After the fake last-sold, price graph and position bar: the Photos viewer
 (our artwork three times, one sepia, as "seller photos"), a checkout

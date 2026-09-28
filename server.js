@@ -1384,7 +1384,10 @@ function normaliseListing(o) {
     // here, the page could not tell a marketplace field from a guess.
     conditionSource: o.conditionSource || null,
     gradeSource: o.gradeSource || null,
-    titleCondition: o.titleCondition || null
+    titleCondition: o.titleCondition || null,
+    // eBay Browse item id — the handle for an on-demand cert check. Served
+    // with the row like the url is; never stored (eBay's terms).
+    itemId: o.itemId || null
   };
 }
 
@@ -1952,6 +1955,8 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       condition: jpf.isRawGrade(grade) ? (it.condition || 'Raw') : String(grade),
       seller: it.seller && it.seller.username,
       url: it.itemWebUrl,
+      // eBay's own item id, so a row can be Verified on demand (certcheck.js).
+      itemId: it.itemId || null,
       imageUrl: it.image && it.image.imageUrl,
       country: it.itemLocation && it.itemLocation.country,
       listingType: (it.buyingOptions || []).includes('AUCTION') ? 'auction' : 'fixed',
@@ -3713,6 +3718,66 @@ app.get('/api/ebay/certprobe/:cardId', async (req, res) => {
     certProbeCache.set(key, { at: Date.now(), body });
     res.json(body);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Verify ONE listing's cert, when a person asks (TASK T2) ──
+//
+//   GET /api/cert/:cardId?item=v1|167236883977|0&grade=PSA%2010
+//
+// One eBay getItem per press, spent only because someone pressed Verify on
+// that row — never on page load, never for a list. certcheck.js holds the
+// rules and the storage split: eBay's listing->cert link lives 15 minutes in
+// memory and is never persisted; PSA's answer (grader + number -> card,
+// grade) would be permanent, and is NOT BUILT until PSA's key, limit and
+// storage terms are answered. So today the answer stops at "what the seller
+// entered", and says that is all it is.
+//
+// PSA only: Beckett, CGC, SGC and TAG have no API, and their cert pages are
+// never scraped. Takes a catalogue card id and an eBay item id of the Browse
+// shape — never a URL.
+const certcheck = require('./certcheck');
+app.get('/api/cert/:cardId', async (req, res) => {
+  const cardId = req.params.cardId;
+  const itemId = String(req.query.item || '');
+  const grade = String(req.query.grade || '');
+  const base = { cardId, itemId, grade, stored: false };
+  if (!certcheck.ITEM_ID.test(itemId)) return res.status(400).json(Object.assign(base, { error: 'item must be an eBay Browse item id, e.g. v1|167236883977|0' }));
+  if (!/^PSA\b/i.test(grade)) return res.status(400).json(Object.assign(base, { error: 'cert checks are PSA only — Beckett, CGC, SGC and TAG publish no API' }));
+  try {
+    const card = await resolveListingCard(cardId);
+    if (!card) return res.status(404).json(Object.assign(base, { error: 'card not in catalogue' }));
+
+    let hit = certcheck.ebayCacheGet(itemId);
+    let calls = 0;
+    if (!hit) {
+      if (!ebay.ebayEnabled()) return res.status(503).json(Object.assign(base, { error: 'EBAY_ENABLED=false' }));
+      // Foreground: a person is waiting on this one call.
+      const auth = await getEbayTokenDetailed({ background: false });
+      if (!auth.token) return res.status(503).json(Object.assign(base, { error: auth.reason || auth.error || 'eBay token unavailable', status: auth.blocked || 'error' }));
+      const call = await ebay.fetchEbay(db, {
+        url: 'https://api.ebay.com/buy/browse/v1/item/' + encodeURIComponent(itemId),
+        token: auth.token, kind: 'item', background: false,
+        meta: { cardId, probe: 'cert-verify' }, countFrom: () => 1 });
+      calls = 1;
+      if (call.blocked) return res.status(503).json(Object.assign(base, { error: call.reason, status: call.blocked }));
+      if (!call.ok) return res.status(502).json(Object.assign(base, { error: call.reason || 'eBay getItem failed' }));
+      certcheck.ebayCacheSet(itemId, certcheck.readCert(call.data));
+      hit = certcheck.ebayCacheGet(itemId);
+    }
+    const read = hit.read;
+    const st = certcheck.stateFromEbay(read, 'PSA');
+    res.json(Object.assign(base, {
+      state: st.state, says: st.says,
+      cert: read.cert, grader: read.grader, sellerGrade: read.grade,
+      certLooksValid: read.certLooksValid,
+      // For the person's own browser; the server never fetches it.
+      psaUrl: read.grader === 'PSA' ? certcheck.psaCertUrl(read.cert) : null,
+      psa: certcheck.psaLookup(read.cert),
+      ebay: { calls, cached: calls === 0, ageSec: Math.round((Date.now() - hit.at) / 1000),
+              keptFor: '15 minutes, in memory only' },
+      attribution: 'Cert number as entered by the seller on eBay'
+    }));
+  } catch (e) { res.status(500).json(Object.assign(base, { error: e.message })); }
 });
 
 // ── What does filtering to NARROW cost, against the 75-row cap? A MEASUREMENT ──

@@ -426,6 +426,24 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   font-weight:700;background:var(--accent);color:var(--accent-ink);white-space:nowrap}
 .lrow2:hover .lrow2-go{background:var(--accent-strong)}
 .lrow2:hover .lrow2-t{color:var(--accent)}
+/* Cert check (T2): a sibling of the row's link, never inside it. Each state
+   looks different — above all, a MISMATCH must never read as "not checked". */
+.lrow-wrap{border-bottom:1px solid var(--bd)}
+.lrow-wrap > .lrow2{border-bottom:none !important}
+.certline{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 0 12px 86px;font-size:11px;color:var(--mu)}
+.certbtn{font:inherit;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;cursor:pointer;
+  border:1px solid var(--bd);background:transparent;color:inherit}
+.certbtn:hover{border-color:var(--accent);color:var(--accent)}
+.certbtn[disabled]{opacity:.6;cursor:wait}
+.certchip{font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.certchip.no-cert{background:#E2E8F0;color:#334155}
+.certchip.entered{background:transparent;color:#B45309;border:1px dashed #B45309}
+.certchip.verified{background:#166534;color:#fff}
+.certchip.mismatch{background:#B91C1C;color:#fff}
+.certchip.error{background:transparent;color:#B91C1C;border:1px solid #B91C1C}
+.certsays{flex-basis:100%;color:var(--mu);line-height:1.4}
+.certline a{color:var(--accent);font-weight:600}
+@media (max-width:640px){.certline{padding-left:0}}
 .sellbl{font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;
   letter-spacing:.07em;margin-bottom:8px}
 .selopts{display:flex;flex-wrap:wrap;gap:6px}
@@ -3363,7 +3381,7 @@ function liveRow(l){
     ? ' \u00b7 \u00a5' + Number(l.priceOriginal).toLocaleString() : '';
   var when = l.live ? (l.listingType === 'auction' ? liveEndsIn(l.endsAt) : 'buy it now') : 'ended';
   var bids = (l.bids != null && l.bids > 0) ? ' \u00b7 ' + l.bids + ' bid' + (l.bids === 1 ? '' : 's') : '';
-  return '<a href="' + liveEsc(l.url) + '" target="_blank" rel="noopener" '
+  return '<div class="lrow-wrap"><a href="' + liveEsc(l.url) + '" target="_blank" rel="noopener" '
     + 'class="lrow2" style="display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--bd);'
     + 'text-decoration:none;color:inherit'
     + (l.suspect ? ';opacity:.55;background:rgba(245,158,11,.06)' : '') + '">'
@@ -3406,7 +3424,65 @@ function liveRow(l){
     + '<div style="font-size:10px;color:var(--mu)">' + liveEsc(ship) + orig + '</div>'
     // The whole row is the link; this makes it LOOK like one, at a size
     // that is easy to hit.
-    + '<span class="lrow2-go">View listing &#8599;</span></div></a>';
+    + '<span class="lrow2-go">View listing &#8599;</span></div></a>'
+    + certLine(l) + '</div>';
+}
+
+// ── Cert check, on demand (TASK T2) ──
+// Its own control beside the link, never the link: clicking the link sends
+// the browser to eBay and there is nothing left to attach a check to. One
+// eBay call per press, spent only when pressed. The server's certcheck.js
+// holds the storage split; this map is only what this page has been told,
+// kept no longer than the server's own 15 minutes.
+var CERT_SEEN = {};
+var CERT_TTL_MS = 15 * 60 * 1000;
+var CERT_CHIP = {
+  'no-cert':  'No cert entered',
+  'entered':  'Cert entered — not checked with PSA',
+  'verified': '✓ PSA record matches',
+  'mismatch': '⚠ Cert mismatch',
+  'error':    'Could not check'
+};
+function certRowEligible(l){
+  return l && l.source === 'ebay' && l.itemId && /^PSA\b/i.test(String(l.condition || ''));
+}
+function certLine(l){
+  if (!certRowEligible(l)) return '';
+  var seen = CERT_SEEN[l.itemId];
+  if (seen && Date.now() - seen.at > CERT_TTL_MS) { delete CERT_SEEN[l.itemId]; seen = null; }
+  return '<div class="certline" data-cert-item="' + liveEsc(l.itemId) + '" data-cert-grade="' + liveEsc(l.condition) + '">'
+    + (seen ? certResultHtml(seen.r)
+            : '<button type="button" class="certbtn" onclick="certVerify(this)">Verify PSA cert</button>'
+              + '<span>not checked · one eBay lookup, only if pressed</span>')
+    + '</div>';
+}
+function certResultHtml(r){
+  var state = CERT_CHIP[r.state] ? r.state : 'error';
+  return '<span class="certchip ' + state + '">' + CERT_CHIP[state] + '</span>'
+    + (r.psaUrl ? '<a href="' + liveEsc(r.psaUrl) + '" target="_blank" rel="noopener">Look it up on psacard.com &#8599;</a>' : '')
+    + '<span class="certsays">' + liveEsc(r.says || r.error || 'No answer.')
+    + (r.psa && r.psa.built === false && r.state === 'entered' ? ' ' + liveEsc(r.psa.reason) : '')
+    + '</span>';
+}
+async function certVerify(btn){
+  var line = btn && btn.closest('.certline');
+  if (!line || !LF.card) return;
+  var itemId = line.getAttribute('data-cert-item');
+  // The row's own grade — what the panel was asked for, as the server echoed it.
+  var grade = line.getAttribute('data-cert-grade') || 'PSA';
+  var cardId = LF.card.id || LF.card.api_card_id;
+  btn.disabled = true; btn.textContent = 'Checking…';
+  var r;
+  try {
+    var resp = await fetch(BACKEND + '/api/cert/' + encodeURIComponent(cardId)
+      + '?item=' + encodeURIComponent(itemId) + '&grade=' + encodeURIComponent(grade));
+    r = await resp.json();
+    if (!resp.ok && !r.error) r.error = 'HTTP ' + resp.status;
+  } catch (e) { r = { error: 'network: ' + e.message }; }
+  if (r.error) r.state = 'error';
+  // Errors are not remembered — pressing again should try again.
+  if (r.state !== 'error') CERT_SEEN[itemId] = { at: Date.now(), r: r };
+  line.innerHTML = certResultHtml(r);
 }
 
 // What the outlier check did — including when it did NOT run. "Not applied,
@@ -5725,6 +5801,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-7c3f856-phonenav &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-785ed60-certverify &middot; click to hide</div>
 </body>
 </html>

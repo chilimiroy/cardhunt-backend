@@ -410,6 +410,17 @@ TCGplayer's store locator if reachable, or manual curation starting with one
 city. Whatever it is: one function, a stated source on every row, and no
 price unless the shop published one.
 
+## Sold data — NO SOURCE, and the page says so
+Since T8 (2026-09-29) nothing supplies realised sale prices: the eBay
+sold-page scrape is gone and must not return in any form, server or ingest.
+Legitimate routes, none built:
+- **eBay Marketplace Insights API** — sold items, but a RESTRICTED API
+  needing a business application to eBay. Probe/read the terms first.
+- **PriceCharting** — paid; `search-products` answers JSON from Render
+  (see WHICH SOURCES ANSWER), carries graded sale history.
+Whatever it is: one function, a stated source on every row, and the Last
+sold box stays "no licensed sold source" until it exists.
+
 ## Checkout and login — DISABLED, preserved outside the page
 `checkout-disabled.js` (asked for an eBay password and a card number, then
 confirmed an order that was never placed) and `login-disabled.js` (accepted
@@ -547,6 +558,7 @@ node reprintpricing.test.js  # 13   reprints priced by printed number in their o
 node manifestmap.test.js     # 12   manifest never maps "None" to Common (SKIP w/o ingest.js)
 node marketwait.test.js      # 18   one /api/listings per card+grade; market waits for it
 node nofabricated.test.js    # 48   no password/card input, no invented shops/holdings/prices (--deployed: Render's HTML too)
+node nosoldscrape.test.js    # 16   no eBay sold-page scrape; real getMarketPrice, network stubbed (--live: +3)
 ```
 
 Run them all:
@@ -1414,11 +1426,18 @@ the gate (18ms summed per view). Left alone deliberately: eBay paging (2 of
 family only, +1.2-3.2s). Yuyu-tei's index now survives restarts
 (Supabase `yuyutei_index`): 4,601 -> 172ms after a restart.
 
-**Open, and not a speed issue: `/api/market` scrapes eBay's completed-
+**Closed 2026-09-29 (TASK T8): `/api/market` scraped eBay's completed-
 listings HTML (`ebaySold`, `www.ebay.com/sch/...LH_Sold=1`) from Render on
-every card view**, plus an ungated `ebayActive` name search spending API
-quota. That is the same scrape `node ingest.js scrape` is banned for.
-Needs a decision, not a quiet fix.
+every card view** — the scrape `node ingest.js scrape` is banned for, and
+worse, because we hold eBay API credentials under eBay's terms. `ebaySold`
+is DELETED, not switched off; `/api/market` returns `sold: SOLD_UNAVAILABLE`
+(`available: false`, with the reason), `/api/market/:name/sold` answers 410,
+and the card page's Last sold box says "no licensed sold source". Nothing
+was lost — it never wrote to the database. `nosoldscrape.test.js` runs the
+real `getMarketPrice` with the network stubbed and fails on any sold fetch;
+watched failing (12) against the pre-fix files. Still there, and legitimate:
+the ungated `ebayActive` name search (our key, Browse API), and the page's
+"eBay — sold" deep link, which opens in the user's own browser.
 
 ## Reprints were priced by catalogue number (2026-09-29, TASK T6)
 30th Classic Collection held 30 cards: 19 real prices, 11 estimate-only.

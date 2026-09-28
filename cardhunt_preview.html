@@ -2454,7 +2454,7 @@ function updateCardPrices(grade,base){ return updatePrices(grade,base); }
 // empty and is filled only by something real:
 //   Lowest listing  <- the cheapest GATED live listing (setLowestFromListings),
 //                      or /api/market's by-name lowest, labelled ungated
-//   Last sold       <- /api/market's recent sales, labelled by name
+//   Last sold       <- nothing: no licensed sold source (T8). It says so.
 //   the badge       <- renderMarketData's collector-number match
 // and the graph and its stats <- /api/history (loadHistory).
 function updatePrices(grade,base){
@@ -2475,7 +2475,7 @@ function updatePrices(grade,base){
   document.getElementById('cd-lowsrc').textContent = 'checking ' + gradeText(grade) + ' listings…';
   if (!S._soldShown) {
     document.getElementById('cd-sold').textContent = '—';
-    document.getElementById('cd-soldd').textContent = 'no sold data for this card';
+    document.getElementById('cd-soldd').textContent = 'no licensed sold source';
   }
 }
 
@@ -3025,13 +3025,21 @@ function renderMarketData(m) {
     if (lo) lo.textContent = fmtCurrency(m.lowestActive);
     if (ls) ls.textContent = m.activeCount + ' active on eBay · by name, ungated';
   }
-  // Most recent sold
-  if (m.recentSales && m.recentSales.length) {
+  // Last sold: there is NO legitimate source (TASK T8, 2026-09-29). This box
+  // used to show m.recentSales[0], which came from scraping eBay's sold pages
+  // from the server on every card view. The scrape is gone; the server says
+  // why in m.sold, and the box says so rather than showing a number. The
+  // "eBay — sold" deep link below opens the real sold search in the user's
+  // own browser. Do not refill this box from anything but a licensed source.
+  if (m.sold && m.sold.available === false) {
     var sd = document.getElementById('cd-sold');
     var sdd = document.getElementById('cd-soldd');
     S._soldShown = true;
-    if (sd) sd.textContent = fmtCurrency(m.recentSales[0].price);
-    if (sdd) sdd.textContent = (m.recentSales[0].date || 'recent sale') + ' · by name';
+    if (sd) sd.textContent = '—';
+    if (sdd) {
+      sdd.textContent = 'no licensed sold source · see eBay sold link';
+      sdd.title = m.sold.reason || '';
+    }
   }
   // Confidence badge. m.confidence describes the NAME-MATCHED aggregate, so
   // it may only describe the headline when the aggregate IS the headline.
@@ -5802,6 +5810,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-cef238e-herostats &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260929-17695f4-nosoldscrape &middot; click to hide</div>
 </body>
 </html>

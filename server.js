@@ -2802,50 +2802,31 @@ async function ebayActive(query, marketplace = 'EBAY_US', limit = 50) {
   return out;
 }
 
-// SOLD comps — scraped from eBay's public completed-listings page
-async function ebaySold(query) {
-  const key = `eb_sold_${query}`;
-  const hit = sGet(key); if (hit) return hit;
-
-  await throttle('www.ebay.com');
-  const url = 'https://www.ebay.com/sch/i.html'
-    + '?_nkw=' + encodeURIComponent(query)
-    + '&_sacat=183454&LH_Complete=1&LH_Sold=1&_sop=13&_ipg=60';
-  try {
-    const r = await fetch(url, { headers: { 'User-Agent': SUA, 'Accept-Language':'en-US,en;q=0.9' } });
-    if (!r.ok) return { sales: [], source:'ebay_sold', error:'HTTP '+r.status };
-    const html = await r.text();
-
-    const sales = [];
-    // Each result row carries a price and a sold date
-    const priceRe = /class="s-item__price"[^>]*>(?:<span[^>]*>)?\$([\d,]+\.\d{2})/g;
-    const dateRe  = /class="s-item__caption--signal[^"]*"[^>]*>[\s\S]{0,120}?Sold\s+([A-Z][a-z]{2}\s+\d{1,2},\s+\d{4})/g;
-    const titleRe = /class="s-item__title"[^>]*>(?:<span[^>]*>)?([^<]{6,140})</g;
-
-    const prices = [], dates = [], titles = [];
-    let m;
-    while ((m = priceRe.exec(html)) && prices.length < 60) prices.push(parseFloat(m[1].replace(/,/g,'')));
-    while ((m = dateRe.exec(html))  && dates.length  < 60) dates.push(m[1]);
-    while ((m = titleRe.exec(html)) && titles.length < 60) titles.push(m[1].trim());
-
-    for (let i = 0; i < prices.length; i++) {
-      if (prices[i] > 0) sales.push({ price: prices[i], date: dates[i] || null, title: titles[i] || null });
-    }
-
-    const vals = sales.map(s => s.price).sort((a,b) => a-b);
-    const out = {
-      sales,
-      source: 'ebay_sold',
-      count: sales.length,
-      lowest:  vals[0] || 0,
-      median:  vals.length ? vals[Math.floor(vals.length/2)] : 0,
-      highest: vals[vals.length-1] || 0,
-      average: vals.length ? +(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2) : 0
-    };
-    sSet(key, out);
-    return out;
-  } catch (e) { return { sales: [], source:'ebay_sold', error: e.message }; }
-}
+// ── SOLD comps: there is no legitimate source, so there are none ──
+// `ebaySold()` used to live here. It fetched eBay's completed-listings HTML
+// (www.ebay.com/sch/... with LH_Sold=1) from Render on EVERY card view via
+// /api/market, and parsed it with regexes: the same scrape `node ingest.js
+// scrape` has been banned for since the start, and worse — a public URL,
+// every view, while we hold eBay API credentials under eBay's terms. It risked
+// the keyset, not just the IP. Disabled 2026-09-29 (TASK T8) and DELETED
+// rather than switched off: a scraper left in place is one call site away from
+// running again (the renderRealListings lesson).
+//
+// Nothing was lost: /api/market never wrote to price_history, so the scraped
+// sales were displayed and discarded. The legitimate routes to sold data are
+// eBay's Marketplace Insights API (restricted — a business application) or a
+// paid source such as PriceCharting; see CLAUDE.md "Sold data". Until one is
+// built, every response SAYS there is no sold source rather than showing a
+// number. The page's "eBay — sold" deep link is unaffected: it opens eBay in
+// the user's own browser, which is the sanctioned shape.
+const SOLD_UNAVAILABLE = Object.freeze({
+  available: false,
+  source: null,
+  reason: 'No licensed sold-price source. eBay completed sales need the '
+        + "Marketplace Insights API (restricted); scraping eBay's sold pages "
+        + 'is not done.',
+  disabledOn: '2026-09-29'
+});
 
 // ── 3. TCGPLAYER public price page ────────────────────────────
 async function tcgplayerPrice(cardName, setName) {
@@ -2923,21 +2904,18 @@ async function getMarketPrice(cardName, setName, grade) {
   const q = [cardName, setName, grade].filter(Boolean).join(' ') + ' pokemon';
   const results = await Promise.allSettled([
     ebayActive(q),
-    ebaySold(q),
     tcgplayerPrice(cardName, setName),
     priceChartingGraded(cardName, setName)
   ]);
 
-  const [act, sold, tcg, pc] = results.map(r => r.status === 'fulfilled' ? r.value : null);
+  const [act, tcg, pc] = results.map(r => r.status === 'fulfilled' ? r.value : null);
 
-  // Priority: recent sold median > TCGPlayer market > lowest active listing
+  // Priority: TCGPlayer market > median active listing. A "recent sold
+  // median" tier used to lead this chain; its only input was the eBay sold
+  // scrape, removed in T8 — see SOLD_UNAVAILABLE.
   let marketValue = null, confidence = 'none', basis = null;
 
-  if (sold && sold.median > 0 && sold.count >= 3) {
-    marketValue = sold.median;
-    confidence = sold.count >= 10 ? 'high' : 'medium';
-    basis = `${sold.count} recent eBay sales`;
-  } else if (tcg && tcg.market > 0) {
+  if (tcg && tcg.market > 0) {
     marketValue = tcg.market;
     confidence = 'high';
     basis = 'TCGPlayer market price';
@@ -2946,10 +2924,6 @@ async function getMarketPrice(cardName, setName, grade) {
     marketValue = vals[Math.floor(vals.length/2)];
     confidence = 'low';
     basis = `${act.listings.length} active listings (median)`;
-  } else if (sold && sold.average > 0) {
-    marketValue = sold.average;
-    confidence = 'low';
-    basis = 'few eBay sales';
   }
 
   return {
@@ -2957,13 +2931,16 @@ async function getMarketPrice(cardName, setName, grade) {
     marketValue, confidence, basis,
     lowestActive: act && act.listings.length ? Math.min(...act.listings.map(l=>l.price)) : null,
     activeCount: act ? act.listings.length : 0,
-    soldCount: sold ? sold.count : 0,
-    soldMedian: sold ? sold.median : null,
-    soldRange: sold && sold.count ? { low: sold.lowest, high: sold.highest } : null,
+    // Sold fields stay in the envelope, empty, so an older page reading
+    // them gets "nothing" rather than undefined — and `sold` says why.
+    soldCount: 0,
+    soldMedian: null,
+    soldRange: null,
+    sold: SOLD_UNAVAILABLE,
     tcgplayer: tcg ? { market: tcg.market, lowest: tcg.lowest } : null,
     graded: pc ? pc.grades : null,
     listings: act ? act.listings.slice(0, 20) : [],
-    recentSales: sold ? sold.sales.slice(0, 20) : [],
+    recentSales: [],
     fetchedAt: new Date().toISOString()
   };
 }
@@ -2971,7 +2948,7 @@ async function getMarketPrice(cardName, setName, grade) {
 
 
 const scraper = {
-  ebayActive, ebaySold, tcgplayerPrice, priceChartingGraded,
+  ebayActive, tcgplayerPrice, priceChartingGraded,
   getMarketPrice, ebayToken: scrEbayToken
 };
 
@@ -3060,14 +3037,10 @@ app.get('/api/market/:cardName', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// GET /api/market/:cardName/sold  - eBay sold comparables only
-app.get('/api/market/:cardName/sold', async (req, res) => {
-  if (!scraper) return res.status(503).json({ error: 'scraper not loaded' });
-  try {
-    const q = [req.params.cardName, req.query.set, req.query.grade]
-      .filter(Boolean).join(' ') + ' pokemon';
-    res.json(await scraper.ebaySold(q));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+// GET /api/market/:cardName/sold  - GONE (T8). It served the eBay sold-page
+// scrape. 410 rather than 404 so a caller learns it was withdrawn on purpose.
+app.get('/api/market/:cardName/sold', (req, res) => {
+  res.status(410).json({ error: 'sold comparables withdrawn', sold: SOLD_UNAVAILABLE });
 });
 
 // GET /api/market/:cardName/active - live eBay listings only
@@ -3092,11 +3065,7 @@ app.get('/api/scraper/test', async (req, res) => {
     out.sources.ebay_api = t ? 'OK - token acquired' : 'NOT configured (add EBAY_CLIENT_ID + EBAY_CLIENT_SECRET)';
   } catch (e) { out.sources.ebay_api = 'FAIL ' + e.message; }
 
-  try {
-    const s = await scraper.ebaySold(`${card} ${set} pokemon`);
-    out.sources.ebay_sold = s.error ? 'FAIL ' + s.error
-      : `OK - ${s.count} sales, median $${s.median}, range $${s.lowest}-$${s.highest}`;
-  } catch (e) { out.sources.ebay_sold = 'FAIL ' + e.message; }
+  out.sources.ebay_sold = 'DISABLED - ' + SOLD_UNAVAILABLE.reason;
 
   try {
     const t = await scraper.tcgplayerPrice(card, set);
@@ -3306,11 +3275,7 @@ app.get('/api/health/full', async (req, res) => {
     out.checks.ebay_api = a.token ? 'OK - authenticated'
       : (a.unconfigured ? 'not configured' : 'FAIL ' + a.error);
   } catch (e) { out.checks.ebay_api = 'FAIL ' + e.message; }
-  try {
-    const s = await ebaySold('Charizard Base Set pokemon');
-    out.checks.ebay_sold_scrape = s.error ? 'FAIL ' + s.error
-      : `OK - ${s.count} sales, median $${s.median}`;
-  } catch (e) { out.checks.ebay_sold_scrape = 'FAIL ' + e.message; }
+  out.checks.ebay_sold_scrape = 'DISABLED - ' + SOLD_UNAVAILABLE.reason;
   try {
     const t = await tcgplayerPrice('Charizard', 'Base Set');
     out.checks.tcgplayer_scrape = t.error ? 'FAIL ' + t.error : `OK - $${t.market}`;

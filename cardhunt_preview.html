@@ -2748,7 +2748,7 @@ function selGrade(grade,base){
   // writers, one of them ungated", reintroduced by wiring the selector into
   // selGrade. The other tabs still need this.
   if (S.ltab && S.ltab !== 'live') buildMockListings(S.currentCard,base,S.ltab);
-  fetchMarketPrice(S.currentCard, grade).then(function(m){
+  marketAfterListings(S.currentCard, grade).then(function(m){
     if (m && m.marketValue > 0) renderMarketData(m);
   });
 
@@ -2854,7 +2854,7 @@ async function openCard(id){
     try { renderListingFinder(c); }
     catch (err) { console.warn('listing finder failed:', err.message); }
     // Pull real market data in the background
-    fetchMarketPrice(c, S.activeGrade).then(function(m){
+    marketAfterListings(c, S.activeGrade).then(function(m){
       if (m && m.marketValue > 0) renderMarketData(m);
     });
     updateValueBar(base);
@@ -2920,6 +2920,27 @@ async function fetchArtist(c) {
     } catch (e) { /* unreachable - fall through to "not recorded" */ }
   }
   return (ARTIST_CACHE[c.id] = null);
+}
+
+// ── /api/market WAITS for /api/listings (TASK T1, measured 2026-09-28) ──
+// Both went out together on every card view. Every eBay call on the server
+// is serialised through one queue, and /api/market reaches it first (the
+// listings route does a DB lookup before its search), so the GATED listings
+// a buyer is waiting for queued behind an ungated name search whose result
+// only feeds a fallback headline. On Render, 12 cold views: queue-wait was
+// 512ms of a 1,669ms mean (31%); the same listings requested alone took
+// 544-832ms with zero queue-wait. So market starts once that card+grade's
+// listings request has settled, whichever way it settled.
+var LIVE_INFLIGHT = {};
+// Any in-flight listings for THIS card, whatever its grade: openCard resets
+// S.activeGrade while the listings keep LF.grade, so keying on one grade
+// let the two race again whenever they differed (seen in the browser).
+function marketAfterListings(card, grade) {
+  var prefix = card ? card.id + '|' : null, waits = [];
+  if (prefix) Object.keys(LIVE_INFLIGHT).forEach(function (k) {
+    if (k.indexOf(prefix) === 0) waits.push(LIVE_INFLIGHT[k].then(function () {}, function () {}));
+  });
+  return Promise.all(waits).then(function () { return fetchMarketPrice(card, grade); });
 }
 
 // ── REAL MARKET PRICE from scraper backend ────────────────────
@@ -3370,6 +3391,30 @@ function renderListingFinder(card) {
 var LIVE_CACHE = {};
 var LIVE_TTL   = 15 * 60 * 1000;      // mirrors the server's cache
 
+// THE way this page asks /api/listings for one card at one grade. Opening a
+// card fired it TWICE, ~110ms apart: the panel, and the Latest-searches tile
+// average (cardListingAvg) for the same card at the same grade. The server
+// does not merge concurrent identical requests, so it ran the whole eBay
+// search twice and the panel's copy queued behind its twin — 739-1,473ms of
+// queue-wait on Render (browser, 2026-09-28), plus 1-3 eBay calls of quota
+// per view for nothing. Now one request: a fresh cached answer, else the
+// one already in flight, else a new one (published in LIVE_INFLIGHT so
+// marketAfterListings() can wait on it too).
+function fetchListings(cardId, grade) {
+  var key = cardId + '|' + grade;
+  var hit = LIVE_CACHE[key];
+  if (hit && Date.now() - hit.ts < LIVE_TTL) return Promise.resolve(hit.data);
+  if (LIVE_INFLIGHT[key]) return LIVE_INFLIGHT[key];
+  var pr = fetch(BACKEND + '/api/listings/' + encodeURIComponent(cardId)
+                 + '?grade=' + encodeURIComponent(grade) + '&limit=25')
+    .then(function (r) { if (!r.ok) throw new Error('API returned ' + r.status); return r.json(); })
+    .then(function (d) { LIVE_CACHE[key] = { ts: Date.now(), data: d }; return d; });
+  LIVE_INFLIGHT[key] = pr;
+  var clear = function () { if (LIVE_INFLIGHT[key] === pr) delete LIVE_INFLIGHT[key]; };
+  pr.then(clear, clear);
+  return pr;
+}
+
 function liveEsc(x){ return String(x==null?'':x).replace(/[&<>"']/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
@@ -3618,22 +3663,15 @@ async function renderLiveListings(card, grade){
   host.innerHTML = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd);'
     + 'font-size:11px;color:var(--mu)">Checking marketplaces for real listings\u2026</div>';
 
-  var d, hit = LIVE_CACHE[key];
-  if (hit && Date.now() - hit.ts < LIVE_TTL) { d = hit.data; }
-  else {
-    try {
-      var r = await fetch(BACKEND + '/api/listings/' + encodeURIComponent(cardId)
-                          + '?grade=' + encodeURIComponent(grade) + '&limit=25');
-      if (!r.ok) throw new Error('API returned ' + r.status);
-      d = await r.json();
-      LIVE_CACHE[key] = { ts: Date.now(), data: d };
-    } catch (err) {
-      host.innerHTML = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd);'
-        + 'font-size:11px;color:var(--mu);background:rgba(239,68,68,.06)">'
-        + 'Live listings unavailable &mdash; ' + liveEsc(err.message)
-        + '. The search links below still work.</div>';
-      return;
-    }
+  var d;
+  try {
+    d = await fetchListings(cardId, grade);
+  } catch (err) {
+    host.innerHTML = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd);'
+      + 'font-size:11px;color:var(--mu);background:rgba(239,68,68,.06)">'
+      + 'Live listings unavailable &mdash; ' + liveEsc(err.message)
+      + '. The search links below still work.</div>';
+    return;
   }
 
   // The user may have changed card or grade while this was in flight.
@@ -4416,9 +4454,8 @@ function listingAvgKey(cardId, grade) { return cardId + '@@' + (grade || 'Raw NM
 // the tile paints from /api/cards first and fills this in when it arrives.
 async function cardListingAvg(cardId, grade) {
   try {
-    const r = await fetch(BACKEND + '/api/listings/' + encodeURIComponent(cardId)
-      + '?grade=' + encodeURIComponent(grade || 'Raw NM'));
-    const j = await r.json();
+    // The SAME request the card panel makes — shared, never duplicated.
+    const j = await fetchListings(cardId, grade || 'Raw NM');
     // Outlier-flagged rows are excluded from the average for the same
     // reason `cheapest` skips them: $2.08 against a $750 median is not a
     // price for this card, and averaging it in moves the number people act
@@ -5745,6 +5782,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-72d08e2-perftiming &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260928-dbeb1e1-marketwait &middot; click to hide</div>
 </body>
 </html>

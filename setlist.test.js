@@ -125,7 +125,9 @@ const fnSrc = name => {
   // index is the guarantee, so ask the index — about EVERY suite on disk,
   // not a list that a new suite could be missing from.
   const fs2 = require('fs');
-  const mustTrack = ['CLAUDE.md', 'PROGRESS.md', 'jptest.js']
+  // ingest.js joined 2026-09-29 (TASK T2): it held the T5/T6 pricing fixes
+  // on one machine only, and has been reverted twice by a download.
+  const mustTrack = ['CLAUDE.md', 'PROGRESS.md', 'jptest.js', 'ingest.js']
     .concat(fs2.readdirSync(__dirname).filter(f => /\.test\.js$/.test(f)));
   const untracked = mustTrack.filter(f => {
     try {
@@ -134,7 +136,7 @@ const fnSrc = name => {
       return false;
     } catch (e) { return true; }
   });
-  ok('CLAUDE.md, PROGRESS.md and all ' + (mustTrack.length - 3) + ' *.test.js files are tracked',
+  ok('CLAUDE.md, PROGRESS.md, ingest.js and all ' + (mustTrack.length - 4) + ' *.test.js files are tracked',
     untracked.length === 0, 'not in the index: ' + untracked.join(', '));
 
   const loadAll = fnSrc('loadAllSets');

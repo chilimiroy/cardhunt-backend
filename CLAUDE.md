@@ -32,7 +32,7 @@ TCGdex · pokemontcg.io · Limitless
 | Frontend | `cardhunt_preview.html` | Render, at **`/app`** — local file is the fallback |
 | API | `server.js` v5.6.0 | Render |
 | Database | Supabase Postgres | `cards`, `price_history`, `alerts`, `portfolio`, `users` |
-| Ingestion | `ingest.js` v5.7.0 | Local only — never deploy |
+| Ingestion | `ingest.js` v5.7.2 | Local only — never deploy. **Tracked** in git (T2) |
 
 ## The module map
 
@@ -75,8 +75,17 @@ package.json  .gitignore
 ```
 
 Gitignored, because each needs a database URL or a residential IP:
-`ingest.js`, `sourcerank.js`, `jpreconcile.js`, `tcgdexprobe.js`,
+`sourcerank.js`, `jpreconcile.js`, `tcgdexprobe.js`,
 `tcgdexharvest.js`, `ebayprobe.js`, `yahoogate.js`, `gradeprices.js`.
+
+**`ingest.js` is TRACKED since 2026-09-29 (TASK T2) — and still never
+deployed.** Those are different questions. Render runs `npm start` →
+`server.js`; nothing requires `ingest.js` and `/ingest.js` 404s
+(`approute.test.js`). Ignoring it bought nothing and cost twice: it was
+silently reverted by downloads landing on it, and it held the T5/T6 pricing
+fixes on one machine with no backup. `setlist.test.js` asserts it is in the
+index. It reads `DATABASE_URL` from the environment and carries no secret —
+keep it that way.
 
 **`*.test.js`, `jptest.js`, `CLAUDE.md` and `PROGRESS.md` are TRACKED**
 (since 2026-09-28, TASK T3). All four were gitignored as "local tooling",

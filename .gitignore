@@ -4,8 +4,15 @@ node_modules/
 # /estimator.js, so ignoring it meant a deployed server that crashed on boot
 # with MODULE_NOT_FOUND. A file the server requires is not local tooling.
 
-# Local ingest and tooling � never deployed
-ingest.js
+# ingest.js USED to be the first line here, as "local ingest -- never
+# deployed". Deploying and versioning are different questions: Render runs
+# `npm start` -> server.js, nothing requires ingest.js, and /ingest.js is
+# never served (approute.test.js asserts the 404). Meanwhile it was silently
+# reverted twice by a download landing on it, and by 2026-09-29 held the T5
+# and T6 pricing fixes on one machine with no backup. Tracked since then
+# (TASK T2). It reads DATABASE_URL from the environment and holds no secret.
+
+# Local tooling -- needs a database URL or a residential IP
 sourcerank.js
 jpreconcile.js
 

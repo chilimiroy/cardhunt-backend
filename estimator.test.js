@@ -78,18 +78,22 @@ console.log('\nONE IMPLEMENTATION — no caller may keep a private copy\n');
 // This is the test that would have caught the original split. Documentation
 // said the vintage multiplier was a property of the system; it lived in one
 // file. A grep is crude, and it is what noticed nothing for months.
+// ingest.js is local-only (gitignored: it needs DATABASE_URL), so a clone
+// does not have it. Say so and check the rest, rather than crash.
+const HAVE_INGEST = fs.existsSync(__dirname + '/ingest.js');
+if (!HAVE_INGEST) console.log('  SKIP  ingest.js checks — ingest.js is local-only and not in this checkout');
 const callers = {
   'server.js': fs.readFileSync(__dirname + '/server.js', 'utf8'),
-  'ingest.js': fs.readFileSync(__dirname + '/ingest.js', 'utf8'),
   'cardhunt_preview.html': fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8')
 };
+if (HAVE_INGEST) callers['ingest.js'] = fs.readFileSync(__dirname + '/ingest.js', 'utf8');
 for (const [f, src] of Object.entries(callers)) {
   const ownTable = /(const|var|let)\s+RP\s*=\s*\{[^}]*'Rare Holo'/.test(src) &&
                    f !== 'cardhunt_preview.html';
   chk(f + ' keeps no private price table', !ownTable);
 }
 chk('server.js requires the module',  /require\('\.\/estimator'\)/.test(callers['server.js']));
-chk('ingest.js requires the module',  /require\('\.\/estimator'\)/.test(callers['ingest.js']));
+if (HAVE_INGEST) chk('ingest.js requires the module',  /require\('\.\/estimator'\)/.test(callers['ingest.js']));
 chk('the frontend delegates to window.Estimator',
     /window\.Estimator\s*&&\s*window\.Estimator\.estimatePrice/.test(callers['cardhunt_preview.html']));
 chk('the frontend declares RP exactly once',

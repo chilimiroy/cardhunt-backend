@@ -7,6 +7,13 @@
  * SKIP: a nightly `refresh ja` must not put a Yahoo mirror price back over
  * the Yuyu-tei price that corrected it.
  */
+// sourcerank.js is local-only (gitignored: ingest's price writer), so a
+// clone does not have it. Say so plainly instead of throwing
+// MODULE_NOT_FOUND; there is nothing here to test without it.
+if (!require('fs').existsSync(__dirname + '/sourcerank.js')) {
+  console.log('  SKIP  sourcerank.test.js — sourcerank.js is local-only and not in this checkout');
+  process.exit(0);
+}
 const sr = require('./sourcerank');
 
 let pass = 0, fail = 0;

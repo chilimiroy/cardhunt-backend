@@ -44,8 +44,12 @@ yahoogate.js
 gradeprices.js
 ccfill.js
 ccfill-backup-*.json
-*.test.js
-jptest.js
+
+# *.test.js and jptest.js USED to be here, as "local tooling". They are not:
+# they are the project's measured behaviour, and ignoring them meant a fresh
+# clone had no test suite at all. Tracked since 2026-09-28 (TASK T3). Some
+# read files a clone does not have (ingest.js, DATABASE_URL); those say so
+# when they run, which is better than not existing.
 
 # Frontend is opened locally
 yahoo.html
@@ -55,10 +59,12 @@ yahoo.html
 *.cmd
 .task-watch-state
 
-# Notes
-CLAUDE.md
+# Notes. CLAUDE.md and PROGRESS.md USED to be here too. CLAUDE.md is the
+# handoff document — its whole purpose is that a new session or a new machine
+# can pick the work up — and it existed on one machine. Tracked since
+# 2026-09-28 (TASK T3), with PROGRESS.md, its dated record. TASK.md is only
+# the current piece of work, i.e. scratch.
 TASK.md
-PROGRESS.md
 *.bak-*
 
 # Data, logs, backups
@@ -69,6 +75,8 @@ PROGRESS.md
 ingest-progress*.json
 pokedex-ja-en.json
 task-watch.log
+sa-*.json
+searchaudit-*.json
 scratchpad/
 
 # Secrets

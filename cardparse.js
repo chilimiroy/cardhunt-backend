@@ -23,13 +23,17 @@
 const digital = require('./digital');
 const cardid = require('./cardid');
 
+// `needsGrade`: the word is also an ordinary card-name word, so it counts as
+// a grader only with a grade number beside it — "tag 10", never "Spell Tag",
+// "Tag Call" or "Ace Trainer". The same rule as cardmatch's
+// GRADERS_AMBIGUOUS; searchaudit.js found the bare forms eating 5 names.
 const GRADERS = [
   { id: 'PSA',  patterns: ['psa'] },
   { id: 'BGS',  patterns: ['bgs', 'beckett'] },
   { id: 'CGC',  patterns: ['cgc'] },
   { id: 'SGC',  patterns: ['sgc'] },
-  { id: 'TAG',  patterns: ['tag'] },
-  { id: 'ACE',  patterns: ['ace'] },
+  { id: 'TAG',  patterns: ['tag'], needsGrade: true },
+  { id: 'ACE',  patterns: ['ace'], needsGrade: true },
   { id: 'AGS',  patterns: ['ags'] },
   { id: 'ARS',  patterns: ['ars'] }
 ];
@@ -97,7 +101,7 @@ function parseCardQuery(input) {
   let text = ' ' + original.toLowerCase().replace(/\s+/g, ' ') + ' ';
   const out = {
     raw: original, grader: null, grade: null, gradeLabel: null,
-    certId: null, number: null, printedTotal: null, rarity: null, setCode: null,
+    certId: null, number: null, numberFrom: null, printedTotal: null, rarity: null, setCode: null,
     setHint: null, name: null, condition: null, language: null
   };
 
@@ -119,7 +123,7 @@ function parseCardQuery(input) {
       }
       // Grader named with no number — "psa graded"
       const bare = new RegExp('\\b' + p + '\\b');
-      if (!out.grader && bare.test(text)) {
+      if (!out.grader && !g.needsGrade && bare.test(text)) {
         out.grader = g.id;
         text = text.replace(bare, ' ');
       }
@@ -159,13 +163,18 @@ function parseCardQuery(input) {
 
   // ── 5. Collector number — "074/073", "199/165", "#294", "TG12/TG30" ──
   m = text.match(/\b([a-z]{0,4}\d{1,4})\s*\/\s*([a-z]{0,4}\d{1,4})\b/i);
+  // `numberFrom` says how sure that is. Only "N/T" is certain. "#2" and a
+  // bare trailing number are guesses — "Blaine's Quiz #2", "Alakazam 4",
+  // "Metal Cube 01" carry the number in the NAME — so resolveCard accepts
+  // a card whose name holds it, not only one whose collector number is it.
   if (m) {
     out.number = m[1].toUpperCase();
     out.printedTotal = m[2].toUpperCase();
+    out.numberFrom = 'slash';
     text = text.replace(m[0], ' ');
   } else {
     m = text.match(/#\s*([a-z]{0,4}\d{1,4})\b/i);
-    if (m) { out.number = m[1].toUpperCase(); text = text.replace(m[0], ' '); }
+    if (m) { out.number = m[1].toUpperCase(); out.numberFrom = 'hash'; text = text.replace(m[0], ' '); }
     else {
       // A bare trailing number is almost always the collector number:
       // "Pikachu ex 276", "Mega Charizard Y ex 294 Ascended Heroes".
@@ -177,6 +186,7 @@ function parseCardQuery(input) {
         const n = parseInt(last);
         if (n >= 1 && n <= 999 && !/\d\.\d/.test(text)) {
           out.number = last;
+          out.numberFrom = 'bare';
           const idx = text.lastIndexOf(' ' + last + ' ');
           text = text.slice(0, idx) + ' ' + text.slice(idx + last.length + 2);
         }
@@ -198,7 +208,8 @@ function parseCardQuery(input) {
   // ── 8. What survives is the card name, plus possibly a set hint ──
   // Keep CJK ranges — \w excludes kana and kanji, which erased
   // "リザードンex" down to "ex".
-  const KEEP = /[^\w'&é.\-\u3040-\u30ff\u4e00-\u9faf\uff66-\uff9f]/g;
+  // δ ◇ ☆ ♀ ♂ are card identity (see normName), not punctuation.
+  const KEEP = /[^\w'’&é.\-δ◇☆♀♂\u3040-\u30ff\u4e00-\u9faf\uff66-\uff9f]/g;
   const words = text.split(/\s+/).map(w => w.replace(new RegExp('^' + KEEP.source + '+|' + KEEP.source + '+$', 'g'), ''))
                     .filter(w => w && !NOISE.has(w));
 
@@ -229,6 +240,10 @@ function parseCardQuery(input) {
 
   out.name = nameWords.join(' ').trim() || null;
   out.setHint = (setWords.join(' ').trim() || (codes.length ? codes[0] : null)) || null;
+  // Words split off by SET_MARKERS may be the card's own name — "Paldean
+  // Clodsire ex", "Shining Lugia", "Lost City", "Iron Crown ex". The parser
+  // cannot know; resolveCard asks the database, so it needs the source.
+  out.setHintFrom = setWords.length ? 'words' : (codes.length ? 'code' : null);
 
   // Normalise the grade into the app's canonical form
   if (out.grader && out.grade) out.gradeString = out.grader + ' ' + out.grade;
@@ -238,24 +253,103 @@ function parseCardQuery(input) {
   return out;
 }
 
+// ── One normaliser for both sides of a name comparison ────────
+// Measured 2026-09-28 (searchaudit.js): the name reached SQL as one
+// substring, LIKE '%pikachu zekrom gx%', against "Pikachu & Zekrom GX" —
+// so any difference in punctuation between what was typed and what is
+// stored meant NO candidates at all, not a worse rank. Both sides now go
+// through the same folding and are compared word by word:
+//   é -> e (the only accent in our English names), apostrophes and periods
+//   DELETED ("Farfetch'd" -> farfetchd, "Mr. Mime" -> mr mime — people type
+//   it without, and spacing it gives "farfetch d"), everything else that is
+//   not a letter, digit, CJK or an identity symbol becomes a space.
+// δ ◇ ☆ ♀ ♂ are KEPT: Delta Species, Prism Star, Gold Star, Nidoran's sex.
+// They are card identity, not decoration.
+//
+// The SQL side does only the FOLD — lower case, accents, apostrophes and
+// periods deleted — in one TRANSLATE (a from-string longer than its
+// to-string deletes the extras). It does not split on punctuation, and does
+// not need to: a query word never contains a space or punctuation, so it is
+// a substring of the fully normalised name exactly when it is a substring
+// of the folded one. The first cut ran the whole normaliser as two
+// REGEXP_REPLACEs over all 46k rows, per word and per column: 3.5s of a
+// 3.6s query (EXPLAIN ANALYZE, 2026-09-28).
+//
+// foldSql must fold exactly as fold() does — cardparse.test.js --db asserts
+// the two agree on real names. No backslashes in either, deliberately (see
+// the '\D' and 0x08 lessons in CLAUDE.md).
+const ACCENTS_FROM = 'éèêëáàâäíìîïóòôöúùûüñç';
+const ACCENTS_TO   = 'eeeeaaaaiiiioooouuuunc';
+const DELETED      = "'’.";
+const KEEP_CLASS   = 'a-z0-9δ◇☆♀♂぀-ヿ一-龯ｦ-ﾟ';
+function fold(s) {
+  let o = '';
+  for (const ch of String(s || '').toLowerCase()) {
+    if (DELETED.includes(ch)) continue;
+    const k = ACCENTS_FROM.indexOf(ch);
+    o += k >= 0 ? ACCENTS_TO[k] : ch;
+  }
+  return o;
+}
+function normName(s) {
+  return fold(s).replace(new RegExp('[^' + KEEP_CLASS + ']+', 'g'), ' ').trim();
+}
+function foldSql(col) {
+  return `TRANSLATE(LOWER(COALESCE(${col},'')), '${ACCENTS_FROM}${DELETED.replace(/'/g, "''")}', '${ACCENTS_TO}')`;
+}
+// Words that decide identity. NOISE comes out of BOTH sides, so "Urn of
+// Vitality" and "urn vitality" compare equal, and "Pikachu and Zekrom GX"
+// meets "Pikachu & Zekrom GX". An identity symbol is its own word, so
+// "Shaymin◇" and "Shaymin ◇" agree.
+function nameTokens(s) {
+  return normName(s).replace(/([δ◇☆♀♂])/g, ' $1 ')
+    .split(' ').filter(w => w && !NOISE.has(w));
+}
+
 // ── Resolve a parse against the database ──────────────────────
 // Returns candidates ranked by how much of the parse they satisfy.
+//
+// The parser GUESSES in two places, and a guess must never be a filter:
+//   · words after a SET_MARKERS word become a set hint — but "Paldean",
+//     "Shining", "Lost", "Crown", "Fossil" begin 99 card names;
+//   · a bare or "#" number becomes the collector number — but it is part of
+//     35 names ("Alakazam 4", "Metal Cube 01", "Blaine's Quiz #2").
+// So each card is scored under every reading of those words and keeps its
+// best, and the SQL admits a card under any of them. 209 of 4,512 English
+// names were altered by the parser before this; all were unreachable
+// by their own name.
 async function resolveCard(db, parsed, opts) {
   opts = opts || {};
   if (!db || !parsed) return [];
   const limit = opts.limit || 10;
 
+  const qName = nameTokens(parsed.name);
+  const qSet  = parsed.setHintFrom === 'words' ? nameTokens(parsed.setHint) : [];
+  const softNum = parsed.number && parsed.numberFrom !== 'slash'
+    ? String(parsed.number).toLowerCase() : null;
+
+  // With no name words left, the "set" words WERE the name ("Shining Lugia").
+  const filterTokens = qName.length ? qName : qSet;
+
   const conds = [], params = [];
   let i = 1;
+  const nm = foldSql('c.name'), nmEn = foldSql('c.name_en');
 
-  if (parsed.name) {
-    conds.push(`(LOWER(c.name) LIKE $${i} OR LOWER(COALESCE(c.name_en,'')) LIKE $${i})`);
-    params.push('%' + parsed.name.toLowerCase() + '%'); i++;
+  for (const t of filterTokens) {
+    conds.push(`(${nm} LIKE $${i} OR ${nmEn} LIKE $${i})`);
+    params.push('%' + t + '%'); i++;
   }
   if (parsed.number) {
-    conds.push(`(c.number = $${i} OR c.number = LPAD($${i}, 3, '0')
-                 OR REGEXP_REPLACE(c.number, '^0+', '') = REGEXP_REPLACE($${i}, '^0+', ''))`);
+    const numMatch = `(c.number = $${i} OR c.number = LPAD($${i}, 3, '0')
+                 OR REGEXP_REPLACE(c.number, '^0+', '') = REGEXP_REPLACE($${i}, '^0+', ''))`;
     params.push(parsed.number); i++;
+    if (softNum) {
+      // The number as a whole word of the name: "#2" and "4" count, "42" and
+      // "v4" do not. softNum is [a-z0-9] only (the parser's own pattern), so
+      // it is safe inside a regex and needs no escaping.
+      conds.push(`(${numMatch} OR ${nm} ~ $${i} OR ${nmEn} ~ $${i})`);
+      params.push('(^|[^a-z0-9])' + softNum + '([^a-z0-9]|$)'); i++;
+    } else conds.push(numMatch);
   }
   if (parsed.language) {
     conds.push(`c.api_card_id LIKE $${i}`);
@@ -263,59 +357,97 @@ async function resolveCard(db, parsed, opts) {
   }
   if (!conds.length) return [];
 
+  // The cap applies AFTER a rough rank, never before. "Pikachu" alone
+  // matches 304 rows; an unordered LIMIT 200 dropped an arbitrary hundred,
+  // so whether the plain Pikachu you meant was a candidate was chance.
+  // Rank: most of the typed words present in the name, then the shortest
+  // name (the closest to exactly what was typed).
+  const allTokens = [...new Set(qName.concat(qSet, softNum ? [softNum] : []))];
+  const rankParts = allTokens.map(t => {
+    params.push('%' + t + '%');
+    const p = `$${i++}`;
+    return `(CASE WHEN ${nm} LIKE ${p} OR ${nmEn} LIKE ${p} THEN 1 ELSE 0 END)`;
+  });
+  const rankSql = rankParts.length ? rankParts.join(' + ') : '0';
+
   const rows = await db.query(`
     SELECT c.api_card_id, c.name, c.name_en, c.number, c.rarity,
            c.set_api_id, c.set_name, c.set_name_en, c.set_total, c.image_small,
            (SELECT price_usd FROM price_history p
             WHERE p.card_api_id = c.api_card_id AND p.source NOT LIKE 'estimate%'
             ORDER BY recorded_at DESC LIMIT 1) AS price
-    FROM cards c
-    WHERE ${conds.join(' AND ')}
-      AND ${digital.visibleSql('c')}
-      AND ${cardid.ourIdSql('c')}   -- a stray foreign-id row once won this search: me55c-33
-    LIMIT 200`, params);
+    FROM (SELECT c.* FROM cards c
+          WHERE ${conds.join(' AND ')}
+            AND ${digital.visibleSql('c')}
+            AND ${cardid.ourIdSql('c')}   -- a stray foreign-id row once won this search: me55c-33
+          ORDER BY ${rankSql} DESC, LENGTH(c.name) ASC, c.api_card_id
+          LIMIT 200) c`, params);
 
-  // Score each candidate against everything the parse told us
+  const queryHasCJK = /[぀-ヿ一-龯]/.test(parsed.raw || '');
+  const same = (a, b) => a.length === b.length && a.every((w, k) => w === b[k]);
+
+  // How well a set of wanted words names this card. A card's OWN name is
+  // stronger evidence than a translation of it. name_en is a backfilled
+  // convenience field and it has been wrong: ja-SV2a-199 マサキの転送
+  // (Bill's Transfer) carried name_en "Charizard ex", which tied it 172-172
+  // with the real Charizard ex for the query "Charizard ex 199/165 151".
+  // Scoring the two identically means a translation error becomes a
+  // resolution error.
+  function nameScore(want, own, en) {
+    if (!want.length) return 0;
+    if (same(own, want)) return 50;
+    if (en.length && same(en, want)) return 42;
+    const starts = (have) => want.every((w, k) => have[k] === w);
+    if (starts(own)) return 30;
+    if (en.length && starts(en)) return 25;
+    const has = (have) => want.every(w => have.some(h => h.includes(w)));
+    if (has(own)) return 20;
+    if (en.length && has(en)) return 16;
+    return 10;                      // admitted by SQL on a looser reading
+  }
+  const numEq = (r) => parsed.number &&
+    String(r.number).replace(/^0+/, '').toLowerCase() === String(parsed.number).replace(/^0+/, '').toLowerCase();
+
+  // Every reading of the guessed words: [name words, set words, number counts?]
+  const readings = [];
+  const pushReading = (n, s, useNum) => { if (n.length || (useNum && parsed.number)) readings.push([n, s, useNum]); };
+  pushReading(qName, qSet, true);
+  if (qSet.length) pushReading(qName.concat(qSet), [], true);
+  if (softNum) {
+    pushReading(qName.concat([softNum]), qSet, false);
+    if (qSet.length) pushReading(qName.concat(qSet, [softNum]), [], false);
+  }
+
   const scored = rows.rows.map(r => {
-    let score = 0;
-    const nm = String(r.name || '').toLowerCase();
-    const nmEn = String(r.name_en || '').toLowerCase();
-
-    // A card's OWN name is stronger evidence than a translation of it.
-    // name_en is a backfilled convenience field and it has been wrong:
-    // ja-SV2a-199 マサキの転送 (Bill's Transfer) carried name_en
-    // "Charizard ex", which tied it 172-172 with the real Charizard ex for
-    // the query "Charizard ex 199/165 151". Scoring the two identically
-    // means a translation error becomes a resolution error.
-    if (parsed.name) {
-      const want = parsed.name.toLowerCase();
-      if (nm === want) score += 50;
-      else if (nmEn === want) score += 42;
-      else if (nm.startsWith(want)) score += 30;
-      else if (nmEn.startsWith(want)) score += 25;
-      else score += 10;
+    const own = nameTokens(r.name), en = nameTokens(r.name_en);
+    const sn = normName(r.set_name), sne = normName(r.set_name_en);
+    let best = -1;
+    for (const [n, s, useNum] of readings) {
+      let score = nameScore(n, own, en);
+      if (useNum && numEq(r)) score += 40;
+      if (s.length) {
+        const hint = s.join(' ');
+        if (sn.includes(hint) || sne.includes(hint)) score += 35;
+        else if (s.some(w => w.length > 3 && (sn.includes(w) || sne.includes(w)))) score += 15;
+      } else if (parsed.setHintFrom === 'code' && parsed.setHint) {
+        const hint = normName(parsed.setHint);
+        if (sn.includes(hint) || sne.includes(hint)) score += 35;
+      }
+      if (score > best) best = score;
     }
+    let score = best;
     // Script affinity: a query typed in Latin script with no explicit
     // language is far more likely to mean the English printing, and vice
     // versa. Deliberately small — it breaks ties, it never outranks the
     // printed total.
     if (!parsed.language) {
       const isJaCard = String(r.api_card_id).startsWith('ja-');
-      const queryHasCJK = /[぀-ヿ一-龯]/.test(parsed.raw || '');
       if (queryHasCJK === isJaCard) score += 8;
     }
-    if (parsed.number && String(r.number).replace(/^0+/, '') === String(parsed.number).replace(/^0+/, '')) score += 40;
     // Printed total is the strongest disambiguator across sets sharing a number
     if (parsed.printedTotal && r.set_total &&
         String(r.set_total).replace(/^0+/, '') === String(parsed.printedTotal).replace(/^0+/, '')) score += 45;
     if (parsed.rarity && r.rarity === parsed.rarity) score += 25;
-    if (parsed.setHint) {
-      const hint = parsed.setHint.toLowerCase();
-      const sn = String(r.set_name || '').toLowerCase();
-      const sne = String(r.set_name_en || '').toLowerCase();
-      if (sn.includes(hint) || sne.includes(hint)) score += 35;
-      else if (hint.split(' ').some(w => w.length > 3 && (sn.includes(w) || sne.includes(w)))) score += 15;
-    }
     if (r.price) score += 2;   // a card with market data is the likelier intent
     return Object.assign({}, r, { score });
   });
@@ -324,4 +456,4 @@ async function resolveCard(db, parsed, opts) {
   return scored.slice(0, limit);
 }
 
-module.exports = { parseCardQuery, resolveCard, GRADERS, RARITY_TERMS };
+module.exports = { parseCardQuery, resolveCard, fold, normName, nameTokens, foldSql, GRADERS, RARITY_TERMS };

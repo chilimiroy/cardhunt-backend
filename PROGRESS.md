@@ -3267,3 +3267,15 @@ open fired /api/listings TWICE (panel + tile average) and /api/market with
 it, all into one serial eBay queue. Fix: one shared fetchListings(); market
 after listings. Browser after: 1 request, qwait 0, painted 0.9-2.7s.
 Flagged, not touched: /api/market scrapes eBay completed-listings HTML.
+
+## 2026-09-29 — T5, T6; T2 stopped
+
+- T5: cel25cc 25 -> Classic Collection; "None"->"Common" removed from
+  manifest's map; whole-catalogue diff clean. 201 JA secret-rare slots found
+  stored as Common from earlier runs — measured, not repaired.
+- T6: 30th-c 19 real / 11 estimate -> 30 / 30 real. Pricing now uses the
+  printed number and TCGPlayer's exact reprint set; safeprices' undeclared
+  `force` fixed. Charizard $0.71 -> $205.58, Lugia $41.90 -> $383.76.
+- T2: search audit reached 5,500 of 21,272 numbered queries, then was
+  stopped by the system for low memory (~400MB free; Chrome held 3.2GB).
+  Checkpoint in sa-20260928.json; resume with --resume. No failure count yet.

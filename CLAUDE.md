@@ -534,6 +534,8 @@ node cdlayout.test.js        # 17   one spacing rule down the card page's price 
 node ebaypaging.test.js      # 19   the REAL sourceEbay pages past 75, capped at 3, says so
 node unspaced.test.js        # 41   "PSA10" read; TAG TEAM / ACE SPEC still reachable raw
 node certcheck.test.js       # 47   cert + photos from one getItem; never claims verified; never padded; nothing eBay persisted
+node reprintpricing.test.js  # 13   reprints priced by printed number in their own TCGPlayer set (SKIP w/o ingest.js)
+node manifestmap.test.js     # 12   manifest never maps "None" to Common (SKIP w/o ingest.js)
 node marketwait.test.js      # 18   one /api/listings per card+grade; market waits for it
 node nofabricated.test.js    # 48   no password/card input, no invented shops/holdings/prices (--deployed: Render's HTML too)
 ```
@@ -1408,6 +1410,33 @@ listings HTML (`ebaySold`, `www.ebay.com/sch/...LH_Sold=1`) from Render on
 every card view**, plus an ungated `ebayActive` name search spending API
 quota. That is the same scrape `node ingest.js scrape` is banned for.
 Needs a decision, not a quiet fix.
+
+## Reprints were priced by catalogue number (2026-09-29, TASK T6)
+30th Classic Collection held 30 cards: 19 real prices, 11 estimate-only.
+The 19 were RIGHT — all TCGPlayer's own "ME: 30th Celebration Classic
+Collection" products, within a few % of live — but only by luck: they
+matched on name alone, because pricing searched with our catalogue number
+(`001`) while the card and TCGPlayer say `4/102`. Every repeated name was
+refused, so the chase cards sat on estimates from the ORIGINAL's rarity
+("LEGEND", "Rare Prime" — no estimator entry, $1 base): Charizard $0.71
+(live $205.58), Gengar Prime $0.55 ($78.05), Lugia $41.90 ($383.76).
+
+The listings path had `REPRINT_OF` since 2026-09-26; the pricing path did
+not — rule 5 again. And the printed number is NOT enough on its own:
+"Charizard 4/102" is three TCGPlayer products — Base Set, 2021
+"Celebrations: Classic Collection" ($155) and 2026 "ME: 30th Celebration
+Classic Collection" ($206). Now (ingest 5.7.2): `reprintPricing()` searches
+with the printed number, accepts only a hit whose TCGPlayer set name equals
+`TCG_REPRINT_SET[set]` exactly, and a reprint gets NO name-only eBay /
+Cardmarket fallback. Replayed on 55 cards (30th-c + cel25cc): 55 matched by
+number in the right set. Re-priced 30th-c: 11 written, all equal to the
+replay, **30 of 30 real**. `refresh` goes through the same `safePriceFor`.
+A new reprint set needs a `TCG_REPRINT_SET` entry — `reprintpricing.test.js`
+fails until it has one.
+
+Found on the way: `safeprices` read a `force` flag it never declared
+(copied from refresh), so **every `safeprices` run threw "force is not
+defined" at the first card it priced**. Declared now.
 
 ## "None" is not "Common" — manifest's rarity map (2026-09-28, TASK T5)
 `TCGDEX_RARITY` in ingest.js mapped TCGdex's `"None"` to `"Common"`. "None"

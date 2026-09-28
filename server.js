@@ -1704,6 +1704,12 @@ async function sourceYahoo(card, grade, limit) {
   // than silently dropped. This is the only way anyone will notice if the
   // Korean listings stop being caught again.
   const rejectedPrinting = [];
+  // EVERY refusal, with its reason — jpfilter's as well as the printing
+  // gate's. Until 2026-09-29 (TASK T9) a jpfilter refusal and an out-of-range
+  // price were a bare `continue`: Yahoo was the one source whose main gate
+  // reported no rejection count, so "Yahoo kept 3" could not be told apart
+  // from "Yahoo had 3".
+  const dropped = [];
 
   for (const feed of feeds) {
     const r = await fetch(feed.url, { headers: {
@@ -1726,7 +1732,8 @@ async function sourceYahoo(card, grade, limit) {
     scanned += items.length;
 
     for (const it of items) {
-      if (!jpf.jpItemMatchesRequest(it, fc, grade)) continue;
+      const why = jpf.jpItemRejectReason(it, fc, grade);
+      if (why) { dropped.push({ title: it.title, reason: why }); continue; }
 
       // The printing gate, the SAME one eBay runs. jpfilter checks that the
       // title names this card; it has no opinion on whether the title names
@@ -1745,10 +1752,17 @@ async function sourceYahoo(card, grade, limit) {
       // Hangul and an explicit 韓国 stay evidence, which is the point.
       const conflict = cm.printingConflict(it.title || '', fc,
         { cjkIsChinese: false, scriptIsLanguageEvidence: false });
-      if (conflict) { rejectedPrinting.push({ title: it.title, reason: conflict }); continue; }
+      if (conflict) {
+        rejectedPrinting.push({ title: it.title, reason: conflict });
+        dropped.push({ title: it.title, reason: conflict });
+        continue;
+      }
 
       const yen = parseInt(it.price || it.bidOrBuy || it.currentPrice || 0);
-      if (!(yen >= 100 && yen <= 2000000)) continue;
+      if (!(yen >= 100 && yen <= 2000000)) {
+        dropped.push({ title: it.title, reason: 'price outside ¥100-¥2,000,000: ' + yen });
+        continue;
+      }
       const base = jpf.yahooItemToListing(it, yen);
       if (feed.live) liveCount++; else endedCount++;
       out.push(normaliseListing({
@@ -1764,6 +1778,12 @@ async function sourceYahoo(card, grade, limit) {
   const seen = new Set();
   const deduped = out.filter(l => (l.url && !seen.has(l.url)) ? seen.add(l.url) : false);
   return { listings: deduped, scanned, live: liveCount, ended: endedCount,
+           // The shape every other source reports. `kept` is before the
+           // cross-feed dedupe (a row in both feeds is one listing), which
+           // `duplicatesSkipped` states so the arithmetic closes.
+           kept: out.length, rejected: dropped.length, dropped: dropped.slice(0, 40),
+           duplicatesSkipped: out.length - deduped.length,
+           query: q,
            printingRejected: rejectedPrinting.length,
            // Same reporting as the eBay path: what the gate had, not only
            // what it did. Yahoo is the marketplace where Korean prints
@@ -2577,79 +2597,20 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// GET /api/listings/:cardName?grade=PSA%209&limit=20   (legacy, eBay by name)
-app.get('/api/listings/:cardName', async (req, res) => {
-  const { cardName } = req.params;
-  const grade = req.query.grade || '';
-  const setName = req.query.set || '';
-  const limit = Math.min(parseInt(req.query.limit) || 20, 50);
-
-  const auth = await getEbayTokenDetailed();
-  const token = auth.token;
-  if (!token) {
-    // `configured` reports whether the credentials exist, which is not the
-    // same question as whether they work. Conflating the two is what made
-    // the /api/listings response blame unset variables that were set.
-    return res.json({
-      listings: [],
-      configured: !auth.unconfigured,
-      message: auth.unconfigured
-        ? 'eBay API not configured. Add EBAY_CLIENT_ID and EBAY_CLIENT_SECRET to enable live listings.'
-        : `eBay credentials are set but did not work: ${auth.error}`
-    });
-  }
-
-  try {
-    const q = [cardName, setName, grade, 'pokemon card'].filter(Boolean).join(' ');
-    const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search'
-      + '?q=' + encodeURIComponent(q)
-      + '&category_ids=183454'
-      + '&limit=' + limit
-      + '&sort=price';
-    // Guarded like every other eBay call. This legacy route was the last
-    // path that could still reach eBay unqueued and uncounted.
-    const call = await ebay.fetchEbay(db, {
-      url, token, kind: 'search', background: false,
-      meta: { cardId: cardName, grade, query: q, marketplace: req.query.marketplace || 'EBAY_US' },
-      countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0)
-    });
-    if (call.blocked) {
-      return res.json({ listings: [], configured: true, status: call.blocked,
-                        reason: call.reason, remaining: call.remaining ?? null,
-                        resetsInMinutes: call.resetsInMinutes ?? null });
-    }
-    if (!call.ok) return res.json({ listings: [], configured: true, error: call.reason });
-    const d = call.data || {};
-    const listings = (d.itemSummaries || []).map(it => ({
-      title: it.title,
-      price: parseFloat(it.price && it.price.value) || 0,
-      currency: (it.price && it.price.currency) || 'USD',
-      shipping: it.shippingOptions && it.shippingOptions[0] &&
-                it.shippingOptions[0].shippingCost
-                ? parseFloat(it.shippingOptions[0].shippingCost.value) : 0,
-      condition: it.condition || '',
-      url: it.itemWebUrl,
-      image: it.image && it.image.imageUrl,
-      seller: it.seller && it.seller.username,
-      feedback: it.seller && it.seller.feedbackPercentage,
-      location: it.itemLocation && it.itemLocation.country,
-      buyingOption: (it.buyingOptions || []).join(',')
-    })).filter(l => l.price > 0);
-
-    const prices = listings.map(l => l.price).sort((a,b) => a-b);
-    const median = prices.length ? prices[Math.floor(prices.length/2)] : 0;
-
-    res.json({
-      listings,
-      configured: true,
-      count: listings.length,
-      lowest: prices[0] || 0,
-      median,
-      highest: prices[prices.length-1] || 0
-    });
-  } catch (err) {
-    res.json({ listings: [], configured: true, error: err.message });
-  }
+// GET /api/listings/:anything-that-is-not-a-card — REFUSED (TASK T9, 2026-09-29)
+// A legacy handler here caught every id /api/listings/:cardId could not
+// resolve and answered with an eBay search on the raw string: no cardmatch
+// gate, no rejection count, no outlier flag — a listings path that had never
+// run the gate, reachable by any typo or stale id. Nothing in the page, the
+// audits or the tools called it by name. A card we cannot identify gets no
+// listings, and the response says why rather than handing back ungated rows.
+app.get('/api/listings/:cardName', (req, res) => {
+  res.status(404).json({
+    cardId: req.params.cardName, listings: [], count: 0,
+    error: 'not a card in our catalogue — listings are only served for a catalogue id '
+         + '({lang}-{setId}-{number}), because only a known card can be gated',
+    hint: 'GET /api/search?q=' + encodeURIComponent(req.params.cardName) + ' finds the card id'
+  });
 });
 
 // ══════════════════════════════════════════════════════════════

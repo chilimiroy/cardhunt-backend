@@ -49,6 +49,77 @@ ok('the "nothing identifying" guard accepts a setHint-only parse',
   }
 }
 
+// ── Every listing source reports what its gate refused ─────────
+// "A source returning listings with no rejection count has not run the gate."
+console.log('\n  listing sources — each one reports rejected + dropped');
+const registry = /const LISTING_SOURCES = \[([\s\S]*?)\n\];/.exec(server);
+ok('LISTING_SOURCES found', !!registry);
+const fetchers = registry ? [...registry[1].matchAll(/fetch:\s*([A-Za-z0-9_]+)/g)].map(m => m[1]) : [];
+ok('registry names sourceYahoo, sourceYuyutei, sourceEbay',
+  ['sourceYahoo', 'sourceYuyutei', 'sourceEbay'].every(f => fetchers.includes(f)), fetchers.join(','));
+for (const f of fetchers) {
+  const src = slice(server, f);
+  ok(`${f} returns rejected:`, /\brejected:\s/.test(src));
+  ok(`${f} returns dropped:`, /\bdropped:\s/.test(src));
+  ok(`${f} returns gate: (what the gate had)`, /\bgate:\s/.test(src));
+}
+const yahoo = slice(server, 'sourceYahoo');
+ok('sourceYahoo gates through jpItemRejectReason (the reason, not a bare boolean)', /jpf\.jpItemRejectReason\(/.test(yahoo));
+ok('sourceYahoo has no silent `continue` on the jpfilter gate', !/if \(!jpf\.jpItemMatchesRequest\([^)]*\)\) continue;/.test(yahoo));
+ok('sourceYahoo runs printingConflict (language / year / reprint)', /cm\.printingConflict\(/.test(yahoo));
+ok('sourceYuyutei runs printingConflict', /cm\.printingConflict\(/.test(slice(server, 'sourceYuyutei')));
+ok('sourceEbay runs cm.verify', /cm\.verify\(/.test(slice(server, 'sourceEbay')));
+ok('gatherListings flags outliers on every source\'s rows', /outlier\.flagOutliers\(listings\)/.test(slice(server, 'gatherListings')));
+{
+  const jpf = require('./jpfilter');
+  ok('jpfilter exports jpItemRejectReason', typeof jpf.jpItemRejectReason === 'function');
+  if (typeof jpf.jpItemRejectReason === 'function') {
+  // One decision, two faces: the boolean is "no reason" on every case.
+  const card = { name: 'リザードンex', number: '201', setTotal: '165', setId: 'SV2a' };
+  const cat = { category: { name: jpf.JP_CARD_CATEGORY } };   // the real category string, not a guess
+  const cases = [
+    ['ポケモンカード リザードンex SAR 201/165 SV2a', 'Raw NM'],
+    ['ポケモンカード リザードンex SAR 201/165 まとめ 3枚', 'Raw NM'],
+    ['ポケモンカード リザードンex 201/165 PSA10', 'Raw NM'],
+    ['ポケモンカード リザードンex 201/165 PSA10', 'PSA 10'],
+    ['ポケモンカード リザードンex 200/165', 'Raw NM'],
+    ['ポケモンカード ピカチュウ 201/165', 'Raw NM']
+  ];
+  let agree = 0, kept = 0;
+  for (const [title, g] of cases) {
+    const it = Object.assign({ title }, cat);
+    const why = jpf.jpItemRejectReason(it, card, g);
+    if ((why === null) === jpf.jpItemMatchesRequest(it, card, g)) agree++;
+    if (why === null) kept++;
+  }
+  ok(`jpItemMatchesRequest === (jpItemRejectReason === null) on ${cases.length} cases`, agree === cases.length, agree + ' agree');
+  ok('...and it KEEPS the genuine raw and the genuine PSA 10 (2 of 6)', kept === 2, kept + ' kept');
+  }
+}
+
+// ── No route hands back eBay rows that skipped the gate ────────
+console.log('\n  routes — nothing serves eBay search rows ungated');
+const nameRoute = route('get', '/api/listings/:cardName');
+ok('/api/listings/:cardName (unresolvable id) answers 404', /status\(404\)/.test(nameRoute));
+ok('...and never calls eBay', !/fetchEbay|item_summary|getEbayToken/.test(nameRoute));
+// Every eBay Browse search in the server, by the function that makes it.
+// sourceEbay is gated. The rest are named here so a new one cannot appear
+// unnoticed: ebayActive is the KNOWN ungated name search behind /api/market's
+// "lowest listing · by name, ungated" (labelled as such on the page); the
+// /api/ebay/* routes are diagnostics that report, never render as listings.
+const searchSites = [];
+{
+  const re = /item_summary\/search/g; let m;
+  while ((m = re.exec(server))) {
+    const before = server.slice(0, m.index);
+    const fn = [...before.matchAll(/\n(?:async\s+)?function\s+([A-Za-z0-9_$]+)\s*\(|\napp\.get\('([^']+)'/g)].pop();
+    searchSites.push(fn ? (fn[1] || fn[2]) : '?');
+  }
+}
+const ALLOWED = ['sourceEbay', 'ebayActive', '/api/ebay/conditions/:cardId', '/api/ebay/certprobe/:cardId', '/api/ebay/gradecost/:cardId', '/api/ebay/conditionvalues'];
+const unknown = searchSites.filter(s => !ALLOWED.includes(s));
+ok('every eBay search site is a known one', unknown.length === 0, 'unexpected: ' + unknown.join(', '));
+
 (async () => {
   if (process.argv.includes('--live')) {
     const base = process.env.CARDHUNT_API || 'http://localhost:3001';
@@ -61,6 +132,17 @@ ok('the "nothing identifying" guard accepts a setHint-only parse',
         const r = await get('/api/search?q=' + encodeURIComponent(q) + '&listings=0&limit=25');
         const ids = (r.candidates || []).map(c => c.cardId);
         ok(`live search "${q}" finds ${id}`, ids.includes(id), ids.length + ' candidates');
+      }
+      const nr = await fetch(base + '/api/listings/Charizard');
+      ok('live /api/listings/Charizard (not an id) is 404, no listings', nr.status === 404, 'HTTP ' + nr.status);
+      // Yahoo only answers a residential IP; from Render it is an error, and
+      // that is reported as such rather than asserted on.
+      const jl = await get('/api/listings/ja-SV2a-201?grade=Raw%20NM');
+      const y = (jl.sources || {}).yahoo || {};
+      if (y.status === 'ok') ok('live Yahoo reports "kept, rejected of scanned"', /kept, \d+ rejected of \d+ scanned/.test(y.summary || ''), y.summary);
+      else console.log('  skip  Yahoo not reachable from this server (' + (y.reason || y.status) + ')');
+      for (const [id, s] of Object.entries(jl.sources || {})) {
+        if (s.status === 'ok') ok(`live ${id} carries a rejected count`, typeof s.rejected === 'number', JSON.stringify(s).slice(0, 120));
       }
     } catch (e) { ok('live server reachable', false, e.message); }
   }

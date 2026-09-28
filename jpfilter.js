@@ -322,15 +322,28 @@ function isRawGrade(grade) {
 }
 
 // The gate the listings endpoint uses. Raw behaves exactly as pricing does.
-function jpItemMatchesRequest(item, card, grade) {
+//
+// jpItemRejectReason is the decision; jpItemMatchesRequest is "no reason".
+// It exists because sourceYahoo used to `continue` past every refusal with
+// nothing counted — the one listing source whose main gate reported no
+// rejection count (TASK T9, 2026-09-29), which is this project's own
+// definition of a gate that has not run. Same checks, same order, so the
+// boolean and the reason cannot disagree.
+function jpItemRejectReason(item, card, grade) {
   const c = (typeof card === 'string') ? { name: card } : (card || {});
-  if (isRawGrade(grade)) return jpItemIsSingleCard(item, c);
+  const raw = isRawGrade(grade);
   const title = (item && item.title) || '';
-  return jpItemIsCardCategory(item)
-    && jpTitleMentionsCard(title, c.name)
-    && jpTitleIsSingleRaw(title, { allowGraded: true })
-    && jpTitleMatchesNumber(title, c.number, c.setTotal, c.setId, c.setName)
-    && jpTitleHasGrade(title, grade);
+  if (!jpItemIsCardCategory(item)) return 'not in the single-card category';
+  if (!jpTitleMentionsCard(title, c.name)) return 'title does not name ' + (c.name || 'the card');
+  if (!jpTitleIsSingleRaw(title, raw ? {} : { allowGraded: true }))
+    return raw ? 'lot, sealed product or slab (jpfilter vocabulary)' : 'lot or sealed product (jpfilter vocabulary)';
+  if (!jpTitleMatchesNumber(title, c.number, c.setTotal, c.setId, c.setName))
+    return 'number/set does not match #' + (c.number || '?') + (c.setTotal ? '/' + c.setTotal : '');
+  if (!raw && !jpTitleHasGrade(title, grade)) return 'title does not state ' + grade;
+  return null;
+}
+function jpItemMatchesRequest(item, card, grade) {
+  return jpItemRejectReason(item, card, grade) === null;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -431,7 +444,7 @@ module.exports = {
   jpTitleIsSingleRaw, jpItemIsCardCategory, jpTitleMentionsCard,
   jpTitleMatchesNumber, jpItemIsSingleCard, yahooItemToListing, escapeRe,
   titleNamesSet, titleHasBareNumber,
-  jpTitleHasGrade, isRawGrade, jpItemMatchesRequest,
+  jpTitleHasGrade, isRawGrade, jpItemMatchesRequest, jpItemRejectReason,
   JP_CARD_CATEGORY_IDS, JP_EXCLUDED_CATEGORY_IDS, parseYahooLiveHtml,
   EN_LOT_WORDS, EN_GRADED_WORDS,
   enTitleIsSingleRaw, enTitleMentionsCard, enItemMatchesRequest

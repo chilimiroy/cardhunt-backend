@@ -1968,7 +1968,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   const pageSize = Math.min(limit * 3, 100);
   const pageUrl = offset => 'https://api.ebay.com/buy/browse/v1/item_summary/search'
     + '?q=' + encodeURIComponent(qAsk)
-    + '&category_ids=183454&limit=' + pageSize + '&sort=price'
+    + (opts.noCategory ? '' : '&category_ids=183454') + '&limit=' + pageSize + '&sort=price'
     + (offset ? '&offset=' + offset : '')
     + (aspectFilter ? '&aspect_filter=' + encodeURIComponent(aspectFilter) : '');
   const url = pageUrl(0);
@@ -1976,6 +1976,8 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // /api/ebay/marketprobe does (T1, 2026-09-30: measuring what the other
   // sites add before deciding whether /api/listings should ask them).
   const mp = opts.marketplace || 'EBAY_US';
+  // marketprobe only: the same search without category_ids=183454, to ask
+  // whether US listings filed in another category are what other sites add.
 
   const call = await ebay.fetchEbay(db, {
     url, token, kind: 'search', background,
@@ -3809,7 +3811,8 @@ app.get('/api/ebay/gradecost/:cardId', async (req, res) => {
 // yields at the soft stop rather than eating the user reserve.
 // ══════════════════════════════════════════════════════════════
 const MARKETPROBE_SITES = ['EBAY_US', 'EBAY_GB', 'EBAY_DE', 'EBAY_AU', 'EBAY_CA',
-                           'EBAY_FR', 'EBAY_IT', 'EBAY_ES', 'EBAY_JP'];
+                           'EBAY_FR', 'EBAY_IT', 'EBAY_ES', 'EBAY_JP',
+                           'EBAY_US_NOCAT'];   // US, no category filter
 const marketProbeCache = new Map();
 app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
   const cardId = req.params.cardId;
@@ -3828,7 +3831,8 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
     const per = {};
     for (const mp of sites) {
       try {
-        const r = await sourceEbay(card, grade, 25, { marketplace: mp, background: true, allDropped: true });
+        const r = await sourceEbay(card, grade, 25, { marketplace: mp.replace(/_NOCAT$/, ''),
+          noCategory: /_NOCAT$/.test(mp), background: true, allDropped: true });
         const reasons = {};
         for (const d of r.dropped) {
           const k = /title says (\w+)/.test(d.reason) ? 'language:' + d.reason.match(/title says (\w+)/)[1]

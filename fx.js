@@ -43,7 +43,14 @@ const FX_API = 'https://api.frankfurter.dev/v1/latest';
 // ECB reference rates, 2026-09-03.
 const PINNED = {
   EUR: 1.1615,        // USD per 1 EUR
-  JPY: 1 / 157        // USD per 1 JPY — matches jpfilter.js JPY_PER_USD
+  JPY: 1 / 157,       // USD per 1 JPY — matches jpfilter.js JPY_PER_USD
+  // eBay GB / AU / CA price in their own currency (T1 marketprobe,
+  // 2026-09-30: every GB/AU/CA search was spent and then thrown away here).
+  // Read from frankfurter.dev/v1/2026-09-03 — the same date as the pins
+  // above; that endpoint returns EUR 1.1615 for it, so one stamp holds.
+  GBP: 1.3497,
+  AUD: 0.71933,
+  CAD: 0.72508
 };
 const PINNED_AT = '2026-09-03';
 

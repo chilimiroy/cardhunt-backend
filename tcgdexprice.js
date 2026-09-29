@@ -238,7 +238,87 @@ const SOURCE = {
   tcgplayerReverse: 'tcgdex_tcgplayer_reverse'
 };
 
+// ── Which printings a card exists in (TASK T10) ───────────────
+// Read from a real response 2026-09-29, not the docs. variants_detailed[]
+// entries carry { type, size, foil?, subtype?, stamp?, thirdParty }:
+//   type     normal | holo | reverse                  -> the printing
+//   foil     pokeball | masterball | cosmos | energy   -> the reverse pattern
+//   subtype  unlimited | shadowless | 1999-2000-copyright -> print RUN, not printing
+//   stamp    ["1st-edition"] -> print run; ["set-logo"] -> a stamped product
+//   size     standard | jumbo -> jumbo is a different product
+// So: standard size, no product stamp, key = type(-foil), one per key.
+// The `variants` booleans are used ONLY when variants_detailed is absent,
+// and they cannot see patterns — so a card read that way says so
+// (`from: 'booleans'`) rather than implying it has no mirrors.
+// Never invents: a card TCGdex lists only as holo gets exactly ['holo'].
+function printingsFromTcgdex(card) {
+  const out = new Map();
+  const det = card && card.variants_detailed;
+  if (Array.isArray(det) && det.length) {
+    for (const v of det) {
+      if (!v || !v.type) continue;
+      if (v.size && v.size !== 'standard') continue;
+      const stamps = Array.isArray(v.stamp) ? v.stamp : [];
+      if (stamps.some(s => s !== '1st-edition')) continue;
+      const key = String(v.type).toLowerCase() + (v.foil ? '-' + String(v.foil).toLowerCase() : '');
+      if (!/^[a-z0-9-]+$/.test(key)) continue;
+      if (!out.has(key)) {
+        out.set(key, { key, tcgplayer: (v.thirdParty && v.thirdParty.tcgplayer) || null });
+      } else if (!out.get(key).tcgplayer && v.thirdParty && v.thirdParty.tcgplayer) {
+        out.get(key).tcgplayer = v.thirdParty.tcgplayer;
+      }
+    }
+    return { printings: [...out.values()], from: 'variants_detailed' };
+  }
+  const b = card && card.variants;
+  if (b && typeof b === 'object') {
+    for (const k of ['normal', 'holo', 'reverse']) if (b[k] === true) out.set(k, { key: k, tcgplayer: null });
+    return { printings: [...out.values()], from: 'booleans' };
+  }
+  return { printings: [], from: null };
+}
+
+// ── Prices for the NON-base printings (TASK T10) ──────────────
+// [{ variant, price, productId, printing }] — variant is the printing key
+// stored in price_history.variant ('reverse', 'reverse-pokeball', ...).
+//
+//   plain reverse   -> the card-level `reverse-holofoil` block (splitTcgplayer)
+//   patterned       -> that variants_detailed entry's OWN pricing, and only
+//                      when the block's productId equals the entry's own
+//                      thirdParty.tcgplayer id. Measured 2026-09-29 on
+//                      sv08.5-001: normal/reverse repeat the card blob
+//                      (product 610356, $0.04 / $0.21); the Poké Ball and
+//                      Master Ball entries carry products 610536 / 610637 at
+//                      $0.31 / $1.32. A pattern whose block names another
+//                      product is the repeated blob, and is NOT its price.
+// The base printing is parsePricing().tcgplayerBase, unchanged.
+function printingPrices(card) {
+  const out = [];
+  const p = parsePricing(card);
+  if (p.tcgplayerReverse) {
+    out.push({ variant: 'reverse', price: p.tcgplayerReverse.price,
+               productId: p.tcgplayerReverse.productId, printing: p.tcgplayerReverse.printing });
+  }
+  for (const v of (card && Array.isArray(card.variants_detailed) ? card.variants_detailed : [])) {
+    if (!v || v.type !== 'reverse' || !v.foil || (v.size && v.size !== 'standard')) continue;
+    const own = v.thirdParty && v.thirdParty.tcgplayer;
+    const tp = v.pricing && v.pricing.tcgplayer;
+    if (!own || !tp) continue;
+    for (const k of ['holofoil', 'reverse-holofoil', 'normal']) {
+      const blk = tp[k];
+      if (!blk || blk.productId !== own) continue;
+      const price = firstPrice(blk, ['marketPrice', 'midPrice', 'lowPrice']);
+      if (price === null) continue;
+      const variant = 'reverse-' + String(v.foil).toLowerCase();
+      if (!out.some(o => o.variant === variant)) out.push({ variant, price, productId: own, printing: k });
+      break;
+    }
+  }
+  return out;
+}
+
 module.exports = {
+  printingsFromTcgdex, printingPrices,
   BASE_PRINTINGS, REVERSE_PRINTINGS, SOURCE, PRICING_LANGS,
   isUsablePrice, firstPrice, splitTcgplayer, readCardmarket, parsePricing,
   pricingAllowedFor

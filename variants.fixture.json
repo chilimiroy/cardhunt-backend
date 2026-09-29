@@ -1,0 +1,561 @@
+{
+ "_note": "Real TCGdex responses captured 2026-09-29 (pricing stripped). T10: read the real shape, not the docs.",
+ "en/ecard1-1": {
+  "id": "ecard1-1",
+  "name": "Alakazam",
+  "rarity": "Holo Rare",
+  "variants": {
+   "firstEdition": false,
+   "holo": true,
+   "normal": false,
+   "reverse": true,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "holo",
+    "size": "standard",
+    "thirdParty": {
+     "tcgplayer": 83497,
+     "cardmarket": 274876
+    },
+    "variantId": "jr7oetx1mqug9"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "thirdParty": {
+     "tcgplayer": 83497,
+     "cardmarket": 274876
+    },
+    "variantId": "cm4kqul3x1bwlz1f"
+   },
+   {
+    "type": "reverse",
+    "size": "jumbo",
+    "thirdParty": {
+     "cardmarket": 362878,
+     "tcgplayer": 180715
+    },
+    "variantId": "i9mbmj3vu33ud"
+   }
+  ]
+ },
+ "en/ecard1-33": {
+  "id": "ecard1-33",
+  "name": "Alakazam",
+  "rarity": "Rare",
+  "variants": {
+   "firstEdition": false,
+   "holo": false,
+   "normal": true,
+   "reverse": true,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "normal",
+    "size": "standard",
+    "thirdParty": {
+     "tcgplayer": 83500,
+     "cardmarket": 274876
+    },
+    "variantId": "endfynwn4n10gzq"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "thirdParty": {
+     "tcgplayer": 83500,
+     "cardmarket": 274876
+    },
+    "variantId": "cm4kqul3x1bwlz1f"
+   }
+  ]
+ },
+ "en/sv03.5-001": {
+  "id": "sv03.5-001",
+  "name": "Bulbasaur",
+  "rarity": "Common",
+  "variants": {
+   "firstEdition": false,
+   "holo": false,
+   "normal": true,
+   "reverse": true,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "normal",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 733596,
+     "tcgplayer": 502552,
+     "cardtrader": 261065
+    },
+    "variantId": "endfynwn4n10gzq"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 733596,
+     "tcgplayer": 502552,
+     "cardtrader": 261065
+    },
+    "variantId": "cm4kqul3x1bwlz1f"
+   },
+   {
+    "type": "normal",
+    "size": "standard",
+    "stamp": [
+     "set-logo"
+    ],
+    "thirdParty": {
+     "cardmarket": 720365
+    },
+    "variantId": "3takscxpcqodqyjzqnsbuwq6"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "foil": "cosmos",
+    "thirdParty": {
+     "cardmarket": 794908
+    },
+    "variantId": "3ts5hd5swdcuwzv63t639rp"
+   }
+  ]
+ },
+ "en/sv03.5-199": {
+  "id": "sv03.5-199",
+  "name": "Charizard ex",
+  "rarity": "Special illustration rare",
+  "variants": {
+   "firstEdition": false,
+   "holo": true,
+   "normal": false,
+   "reverse": false,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "holo",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 733794,
+     "tcgplayer": 517045,
+     "cardtrader": 261377
+    },
+    "variantId": "jr7oetx1mqug9"
+   }
+  ]
+ },
+ "en/sv08.5-001": {
+  "id": "sv08.5-001",
+  "name": "Exeggcute",
+  "rarity": "Common",
+  "variants": {
+   "firstEdition": false,
+   "holo": false,
+   "normal": true,
+   "reverse": true,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "normal",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 805390,
+     "tcgplayer": 610356
+    },
+    "variantId": "endfynwn4n10gzq"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 805390,
+     "tcgplayer": 610356
+    },
+    "variantId": "cm4kqul3x1bwlz1f"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "foil": "pokeball",
+    "thirdParty": {
+     "cardmarket": 806408,
+     "tcgplayer": 610536
+    },
+    "variantId": "3739bbtj3i910y5ynn9xc6ryf"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "foil": "masterball",
+    "thirdParty": {
+     "cardmarket": 806409,
+     "tcgplayer": 610637
+    },
+    "variantId": "2asus05yghmpd1ud1sdmlq3as4e"
+   }
+  ]
+ },
+ "en/sv08.5-161": {
+  "id": "sv08.5-161",
+  "name": "Umbreon ex",
+  "rarity": "Special illustration rare",
+  "variants": {
+   "firstEdition": false,
+   "holo": true,
+   "normal": false,
+   "reverse": false,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "holo",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 805555,
+     "tcgplayer": 610516
+    },
+    "variantId": "jr7oetx1mqug9"
+   }
+  ]
+ },
+ "en/base1-4": {
+  "id": "base1-4",
+  "name": "Charizard",
+  "rarity": "Rare",
+  "variants": {
+   "firstEdition": true,
+   "holo": true,
+   "normal": false,
+   "reverse": false,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "holo",
+    "subtype": "unlimited",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 273699,
+     "tcgplayer": 42382
+    },
+    "variantId": "4ffrmhcfiaejakhepqdkx7o"
+   },
+   {
+    "type": "holo",
+    "subtype": "shadowless",
+    "size": "standard",
+    "stamp": [
+     "1st-edition"
+    ],
+    "thirdParty": {
+     "tcgplayer": 106999,
+     "cardmarket": 660224
+    },
+    "variantId": "mtltux8qtgdu4exu903oasum21juxbvx6lx"
+   },
+   {
+    "type": "holo",
+    "subtype": "shadowless",
+    "size": "standard",
+    "thirdParty": {
+     "tcgplayer": 106999,
+     "cardmarket": 660224
+    },
+    "variantId": "3takscxpcqoqcfnxk1ivs2y6"
+   },
+   {
+    "type": "holo",
+    "subtype": "1999-2000-copyright",
+    "size": "standard",
+    "variantId": "zqq5g2u9n0st0gren5bssktmac2ywqaw"
+   }
+  ]
+ },
+ "en/base1-58": {
+  "id": "base1-58",
+  "name": "Pikachu",
+  "rarity": "Common",
+  "variants": {
+   "firstEdition": true,
+   "holo": false,
+   "normal": true,
+   "reverse": false,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "normal",
+    "subtype": "unlimited",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 273753,
+     "tcgplayer": 42402
+    },
+    "variantId": "3a83wf50tz7q114spsx7dw6v5"
+   },
+   {
+    "type": "normal",
+    "subtype": "shadowless",
+    "size": "standard",
+    "stamp": [
+     "1st-edition"
+    ],
+    "thirdParty": {
+     "tcgplayer": 107055,
+     "cardmarket": 660169
+    },
+    "variantId": "gx8bq2hefwadd3utcibq3oc56sjf4jqdz709e"
+   },
+   {
+    "type": "normal",
+    "subtype": "shadowless",
+    "size": "standard",
+    "thirdParty": {
+     "tcgplayer": 107055,
+     "cardmarket": 660169
+    },
+    "variantId": "2tszcx1bpt4e79y5us0p570b9n"
+   },
+   {
+    "type": "normal",
+    "subtype": "shadowless-red-cheek",
+    "size": "standard",
+    "thirdParty": {
+     "tcgplayer": 147229,
+     "cardmarket": 660170
+    },
+    "variantId": "mtltux8qussk4naabf2sjstrcyez6fa4nvy"
+   },
+   {
+    "type": "normal",
+    "subtype": "shadowless-red-cheek",
+    "size": "standard",
+    "stamp": [
+     "1st-edition"
+    ],
+    "thirdParty": {
+     "tcgplayer": 147229,
+     "cardmarket": 660170
+    },
+    "variantId": "3skqdujv9jyo7ijcqeiufs8ut5ygkjq1y1bpa3mn9q4bbjp"
+   },
+   {
+    "type": "normal",
+    "subtype": "1999-2000-copyright",
+    "size": "standard",
+    "variantId": "qi4g3e7tzbkcyhfflvx7zmvunxwjcq3pvp"
+   },
+   {
+    "type": "normal",
+    "size": "jumbo",
+    "thirdParty": {
+     "cardmarket": 362859
+    },
+    "variantId": "l7orfpmicmyc"
+   },
+   {
+    "type": "normal",
+    "subtype": "unlimited",
+    "size": "standard",
+    "stamp": [
+     "poketour-99"
+    ],
+    "thirdParty": {
+     "cardmarket": 275586
+    },
+    "variantId": "jnhspmmj4h1e7ohhxunqpao96lgmqwtl2ts1"
+   }
+  ]
+ },
+ "en/svp-085": {
+  "id": "svp-085",
+  "name": "Pikachu with Grey Felt Hat",
+  "rarity": "Promo",
+  "variants": {
+   "firstEdition": false,
+   "holo": false,
+   "normal": true,
+   "reverse": false,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "normal",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 735302,
+     "tcgplayer": 518861
+    },
+    "variantId": "endfynwn4n10gzq"
+   }
+  ]
+ },
+ "en/swsh1-1": {
+  "id": "swsh1-1",
+  "name": "Celebi V",
+  "rarity": "Holo Rare V",
+  "variants": {
+   "firstEdition": false,
+   "holo": true,
+   "normal": false,
+   "reverse": false,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "holo",
+    "size": "standard",
+    "variantId": "generated"
+   }
+  ]
+ },
+ "ja/SV2a-001": {
+  "id": "SV2a-001",
+  "name": "フシギダネ",
+  "rarity": "Common",
+  "variants": {
+   "firstEdition": false,
+   "holo": false,
+   "normal": true,
+   "reverse": true,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "normal",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 719442
+    },
+    "variantId": "endfynwn4n10gzq"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "foil": "pokeball",
+    "thirdParty": {
+     "cardmarket": 837230
+    },
+    "variantId": "3739bbtj3i910y5ynn9xc6ryf"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "foil": "masterball",
+    "thirdParty": {
+     "cardmarket": 837231
+    },
+    "variantId": "2asus05yghmpd1ud1sdmlq3as4e"
+   }
+  ]
+ },
+ "ja/SV2a-201": {
+  "id": "SV2a-201",
+  "name": "リザードンex",
+  "rarity": "Special illustration rare",
+  "variants": {
+   "firstEdition": false,
+   "holo": true,
+   "normal": false,
+   "reverse": false,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "holo",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 719654
+    },
+    "variantId": "jr7oetx1mqug9"
+   }
+  ]
+ },
+ "ja/SV8a-002": {
+  "id": "SV8a-002",
+  "name": "リーフィア",
+  "rarity": "None",
+  "variants": {
+   "firstEdition": false,
+   "holo": false,
+   "normal": true,
+   "reverse": true,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "normal",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 803115,
+     "tcgplayer": 602321
+    },
+    "variantId": "endfynwn4n10gzq"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "foil": "masterball",
+    "thirdParty": {
+     "tcgplayer": 604503
+    },
+    "variantId": "2asus05yghmpd1ud1sdmlq3as4e"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "thirdParty": {
+     "tcgplayer": 602322
+    },
+    "variantId": "cm4kqul3x1bwlz1f"
+   }
+  ]
+ },
+ "ja/M2a-001": {
+  "id": "M2a-001",
+  "name": "ヒビキのカイロス",
+  "rarity": "None",
+  "variants": {
+   "firstEdition": false,
+   "holo": false,
+   "normal": true,
+   "reverse": true,
+   "wPromo": false
+  },
+  "variants_detailed": [
+   {
+    "type": "normal",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 861245
+    },
+    "variantId": "endfynwn4n10gzq"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "foil": "energy",
+    "thirdParty": {
+     "cardmarket": 861526
+    },
+    "variantId": "3wehmjjju11cdaad92gj82f"
+   },
+   {
+    "type": "reverse",
+    "size": "standard",
+    "thirdParty": {
+     "cardmarket": 861527
+    },
+    "variantId": "cm4kqul3x1bwlz1f"
+   }
+  ]
+ }
+}

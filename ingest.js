@@ -37,7 +37,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.7.3';   // bump when this file changes
+const VERSION = '5.8.0';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -3922,6 +3922,8 @@ async function buildManifest(lang, arg1, arg2) {
 
   let checked = 0, changed = 0, failed = 0;
   let pricesWritten = 0, pricesSkipped = 0, reverseSeen = 0;
+  let variantsWritten = 0, multiPrinting = 0;
+  const tdxv = require('./tcgdexprice.js');
 
   for (const set of sets.rows) {
     const setId = set.set_api_id;
@@ -3936,11 +3938,11 @@ async function buildManifest(lang, arg1, arg2) {
       [setId, lang + '-%'])).rows.map(r => [r.card_api_id, r.source])) : null;
 
     const cards = await db.query(
-      `SELECT api_card_id, number, name, rarity FROM cards
+      `SELECT api_card_id, number, name, rarity, variants FROM cards
        WHERE set_api_id=$1 AND api_card_id LIKE $2 ORDER BY number`,
       [setId, lang + '-%']);
 
-    let setChanged = 0, setFailed = 0;
+    let setChanged = 0, setFailed = 0, setVariants = 0;
     const rarityCounts = {};
 
     for (const c of cards.rows) {
@@ -3969,6 +3971,24 @@ async function buildManifest(lang, arg1, arg2) {
         }
       }
 
+      // ── Printings (TASK T10) — from the fetch we just made ──
+      // Stored BEFORE the rarity check below, which `continue`s on a card
+      // TCGdex gives no rarity: 2,110 Japanese cards say "None", and their
+      // printings are just as real.
+      {
+        const pv = tdxv.printingsFromTcgdex(d);
+        if (pv.from) {
+          const next = JSON.stringify(pv);
+          if (JSON.stringify(c.variants || null) !== next) {
+            await db.query(
+              `UPDATE cards SET variants=$2::jsonb, variants_checked_at=NOW() WHERE api_card_id=$1`,
+              [c.api_card_id, next]).catch(e => console.log('  variants write failed ' + c.api_card_id + ': ' + e.message));
+            setVariants++; variantsWritten++;
+          }
+          if (pv.printings.length > 1) multiPrinting++;
+        }
+      }
+
       // "None" is absent data (see TCGDEX_RARITY). Checked here as well as by
       // leaving it out of the map, because normRarity() would otherwise get a
       // chance at it — and must never be the thing that decides.
@@ -3990,12 +4010,13 @@ async function buildManifest(lang, arg1, arg2) {
 
     const top = Object.entries(rarityCounts).sort((a,b) => b[1]-a[1]).slice(0,3)
       .map(([r,n]) => `${r} ${n}`).join(', ');
-    console.log(`${String(setChanged).padStart(4)} rarities corrected`
+    console.log(`${String(setChanged).padStart(4)} rarities corrected, ${String(setVariants).padStart(4)} printings stored`
       + (setFailed ? `, ${setFailed} not found` : '')
       + (top ? `   [${top}]` : ''));
   }
 
   console.log(`\n  ${checked} cards checked, ${changed} rarities corrected, ${failed} not found on TCGdex`);
+  console.log(`  ${variantsWritten} cards' printings stored; ${multiPrinting} exist in more than one printing`);
   if (withPrices) {
     console.log(`  ${pricesWritten} TCGdex TCGplayer prices written, ${pricesSkipped} skipped as lower confidence`);
     console.log(`  ${reverseSeen} reverse-holo prices seen and deliberately NOT written`);

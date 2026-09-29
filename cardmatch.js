@@ -989,6 +989,108 @@ function namesAConflictingSet(title, setName) {
   return null;
 }
 
+// ── Printings — the variant a copy of the card was printed as ─
+// Rarity belongs to the CARD; printing belongs to the COPY. Expedition
+// Alakazam #1 is Holo Rare printed as holo and as reverse; #33 is Rare
+// printed as normal and as reverse — four products, two numbers (TASK T10).
+//
+// Keys are TCGdex's own words, read from a real response (2026-09-29), not
+// its docs: variants_detailed[].type is normal | holo | reverse, and a
+// reverse carries `foil` for its pattern — pokeball, masterball, cosmos,
+// energy. The `variants` booleans HIDE those patterns (ja SV2a-001 says only
+// "reverse: true" for what are the Poké Ball and Master Ball mirrors), so
+// the key is `type` + `-` + `foil`. Print RUN (subtype unlimited/shadowless,
+// the 1st-edition stamp) is a separate dimension — gradeprice.byPrintRun —
+// and size "jumbo" is a different product; neither is a printing.
+const PRINTINGS = {
+  'normal':             { label: 'Normal (non-holo)' },
+  'holo':               { label: 'Holo' },
+  'reverse':            { label: 'Reverse Holo' },
+  'reverse-pokeball':   { label: 'Poké Ball reverse', jp: 'モンスターボール' },
+  'reverse-masterball': { label: 'Master Ball reverse', jp: 'マスターボール' },
+  'reverse-cosmos':     { label: 'Cosmos reverse' },
+  'reverse-energy':     { label: 'Energy reverse' }
+};
+// A key TCGdex adds later still gets a readable label rather than vanishing.
+function printingLabel(key) {
+  if (PRINTINGS[key]) return PRINTINGS[key].label;
+  const m = /^reverse-(.+)$/.exec(String(key || ''));
+  return m ? 'Reverse (' + m[1] + ')' : String(key || 'unstated');
+}
+
+// What a TITLE says about its printing: { key, stated, said }.
+//
+// THE MASTER BALL TRAP — the tag/ace lesson again. "Master Ball" and "Poké
+// Ball" are pattern words AND card names: "Master Ball ACE SPEC 153/167" is
+// the Master Ball card, not a Master Ball mirror of something. So the card's
+// OWN name is removed from the title before any pattern word is read, the
+// way GENUINE_ART_PHRASES protects "Alt Art Card" from `art card`.
+//
+// Order matters: a pattern before "reverse" ("Poke Ball Reverse Holo" is
+// the pattern), "reverse" before "holo" ("Reverse Holo" is not Holo), and
+// "non-holo" before "holo".
+const PRINTING_WORDS = [
+  ['reverse-masterball', /\bmaster\s*-?\s*ball\b|マスターボール/i],
+  ['reverse-pokeball',   /\bpoke\s*-?\s*ball\b|モンスターボール/i],
+  ['reverse-cosmos',     /\bcosmos\s*(?:holo|foil|reverse)?\b/i],
+  ['reverse',            /\breverse\b|\brev\.?\s*holo\b|ミラー/i],
+  ['normal',             /\bnon[\s-]*(?:holo|foil)\b/i],
+  ['holo',               /\bholo(?:foil|graphic)?\b|キラ/i]
+];
+// NFKD to drop Latin accents (Poké -> Poke), then NFC to RECOMPOSE kana:
+// NFKD splits ボ into ホ + a combining dakuten, and a composed pattern like
+// マスターボール can then never match — measured, "マスターボールミラー" read
+// as a bare mirror until this recomposed.
+function foldPrintingText(s) {
+  return String(s || '').normalize('NFKD').replace(/[̀-ͯ]/g, '').normalize('NFC')
+    .toLowerCase().replace(/[’'`]/g, '');
+}
+function printingKeysOf(card) {
+  const p = card && card.printings;
+  return Array.isArray(p) && p.length ? p : null;       // null = not yet read
+}
+function printingClaim(title, card) {
+  let t = foldPrintingText(title);
+  // The card's own name out first — every spelling a seller uses for it.
+  for (const n of [card && card.name, card && card.nameEn]) {
+    const f = foldPrintingText(n).replace(/\b(?:ex|gx|v|vmax|vstar)\b/g, '').trim();
+    if (f.length < 3) continue;
+    const loose = f.replace(/[^a-z0-9぀-ヿ一-鿿]+/g, '\\s*-?\\s*');
+    t = t.replace(new RegExp(loose, 'gi'), ' ~ ');
+  }
+  for (const [key, re] of PRINTING_WORDS) {
+    const m = t.match(re);
+    if (m) {
+      // A bare "holo" on a card with NO holo printing but a reverse one is
+      // the seller's word for the reverse: Expedition Alakazam #33 exists
+      // only as normal and reverse, so "33/165 Holo" is the reverse.
+      const keys = printingKeysOf(card);
+      if (key === 'holo' && keys && !keys.includes('holo') && keys.includes('reverse')) {
+        return { key: 'reverse', stated: true, said: m[0], reading: 'holo on a card with no holo printing' };
+      }
+      return { key, stated: true, said: m[0] };
+    }
+  }
+  return { key: null, stated: false, said: null };
+}
+// Refuse only a STATED different printing. Silence is kept and marked
+// unstated — as raw conditions are — never assumed to be the one asked for.
+function printingRefusal(claim, want, card) {
+  if (!want || !claim || !claim.key || claim.key === want) return null;
+  const keys = printingKeysOf(card);
+  // "Mirror" / "reverse holo" with no pattern, on a card whose only
+  // reverses ARE patterns (JP SV2a: pokeball + masterball): ambiguous, not
+  // a conflict. Unknown printings -> also not a conflict.
+  if (claim.key === 'reverse' && want.startsWith('reverse-') && (!keys || !keys.includes('reverse'))) return null;
+  return `title says ${printingLabel(claim.key)} ("${claim.said}"), wanted ${printingLabel(want)} — a different printing`;
+}
+// A printing key as asked for in a request: a known key or reverse-<word>.
+function parsePrintingParam(p) {
+  const k = String(p || '').trim().toLowerCase();
+  if (!k || k === 'all') return null;
+  return (PRINTINGS[k] || /^reverse-[a-z]+$/.test(k)) ? k : null;
+}
+
 // eBay's search keyword field is capped at 300 characters; anything past
 // that is dropped without a word. Only deep links are affected — the API
 // query carries no negative keywords and comes nowhere near it.
@@ -1056,6 +1158,14 @@ function buildQuery(card, grade, opts) {
   // marketplace link asks it too — one question, wherever it is sent.
   const tOnly = titleOnlyCondition(grade);
   if (tOnly) bits.push(tOnly.term);
+
+  // A printing asked for is asked of the marketplace too (TASK T10) — the
+  // 225-row cap otherwise fills with the base printing before a reverse is
+  // reached. Normal and holo add nothing: sellers rarely write "normal", and
+  // "holo" is on half of every holo-only chase card's titles anyway.
+  const PRINTING_TERMS = { 'reverse': 'reverse holo', 'reverse-pokeball': 'poke ball',
+                           'reverse-masterball': 'master ball', 'reverse-cosmos': 'cosmos' };
+  if (opts.printing && PRINTING_TERMS[opts.printing]) bits.push(PRINTING_TERMS[opts.printing]);
 
   if (opts.suffix !== false) bits.push('pokemon');
 
@@ -1228,6 +1338,15 @@ function printingEvidence(card) {
 function verify(title, card, grade, opts) {
   const r = verifyCore(title, card, grade, opts) || { ok: false, reason: 'no verdict' };
   r.evidence = printingEvidence(card);
+  // Printing (TASK T10): every verdict says what the title claimed, so kept
+  // rows can be grouped stated / unstated. Only opts.printing refuses.
+  const claim = printingClaim(title, card);
+  r.printing = claim.key;
+  r.printingStated = claim.stated;
+  if (r.ok && opts && opts.printing) {
+    const why = printingRefusal(claim, opts.printing, card);
+    if (why) { r.ok = false; r.reason = why; r.printingConflict = true; }
+  }
   return r;
 }
 
@@ -1550,6 +1669,7 @@ const API = {
   SET_NAME_PHRASES, GENUINE_ART_PHRASES, boundedTerm,
   REPRINT_FAMILIES, REPRINT_OF, setIdOf, familyOfSet, familyNamedBy, familiesReprinting, reprintCardsOf,
   reprintOf, asPrinted,
+  PRINTINGS, printingLabel, printingClaim, printingRefusal, parsePrintingParam,
   EBAY_KEYWORD_LIMIT
 };
 

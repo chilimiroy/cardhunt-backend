@@ -1798,6 +1798,9 @@ async function evaluateAlerts(lang, ...flags) {
              WHERE p.card_api_id = a.card_api_id
                AND p.grade IS NULL
                AND p.source NOT LIKE 'estimate%'
+               -- the card page's base-printing rule: an "above" alert must
+               -- not fire on a reverse price the card page never shows (T2)
+               AND ${require('./printsql').basePrintingSql('p', 'c')}
              ORDER BY recorded_at DESC LIMIT 1) AS market_price
     FROM alerts a
     LEFT JOIN cards c ON c.api_card_id = a.card_api_id

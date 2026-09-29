@@ -51,6 +51,10 @@
 // Pocket (digital-only) cards never rank — digital.js. 33 of them carry
 // tcgplayer_market rows up to $498.88 matched against physical promos.
 const digital = require('./digital');
+// The card page's base-printing rule (T10). Trending read the latest real
+// row of ANY printing, so a card whose only real price was a reverse showed
+// it here while its own page showed an estimate — T2, 2026-09-30, 6 cards.
+const printsql = require('./printsql');
 
 const SORTS = {
   'price-desc': { label: 'Price: high to low',               kind: 'price' },
@@ -106,8 +110,9 @@ function priceSql(p) {
       WITH latest AS (
         SELECT DISTINCT ON (ph.card_api_id)
                ph.card_api_id, ph.price_usd, ph.source, ph.recorded_at
-        FROM price_history ph
+        FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
         WHERE ${REAL} AND ph.card_api_id LIKE $1
+          AND ${printsql.basePrintingSql('ph', 'c')}
         ORDER BY ph.card_api_id, ph.recorded_at DESC)
       SELECT ${CARD_COLS}, l.price_usd AS price, l.source AS price_source,
              l.recorded_at AS price_date,
@@ -131,8 +136,9 @@ function moverSql(p) {
         SELECT DISTINCT ON (ph.card_api_id)
                ph.card_api_id, ph.source, ph.edition, ph.variant,
                ph.price_usd, ph.recorded_at
-        FROM price_history ph
+        FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
         WHERE ${REAL} AND ph.card_api_id LIKE $1
+          AND ${printsql.basePrintingSql('ph', 'c')}
           AND ph.recorded_at > NOW() - make_interval(days => $2)
         ORDER BY ph.card_api_id, ph.recorded_at DESC),
       prev AS (

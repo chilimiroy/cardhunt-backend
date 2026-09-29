@@ -167,6 +167,18 @@ console.log('\n  3b. the page');
   ok('printsql: ...but IS on a card that exists only in reverse', ps.isBasePrintingRow('reverse', { printings: [{ key: 'reverse' }] }));
   ok('printsql: a holo / null row is always base-eligible', ps.isBasePrintingRow('holo', null) && ps.isBasePrintingRow(null, null));
   ok('every headline reader in server.js applies basePrintingSql (5)', (server.match(/printsql\.basePrintingSql\(/g) || []).length === 5);
+  // T2, 2026-09-30: the readers OUTSIDE server.js. Trending and the alert
+  // evaluator read the latest real row of any printing, so 6 cards whose
+  // only real price was a reverse showed it there and an estimate on their
+  // own page.
+  const T = require('./trending');
+  ok('trending: top-by-price applies basePrintingSql', /NOT LIKE 'reverse%'/.test(T.priceSql(T.parseParams({})).text));
+  ok('trending: movers apply basePrintingSql', /NOT LIKE 'reverse%'/.test(T.moverSql(T.parseParams({ sort: 'gain-pct' })).text));
+  if (fs.existsSync('ingest.js')) {
+    const ing = fs.readFileSync('ingest.js', 'utf8');
+    const ev = ing.slice(ing.indexOf('async function evaluateAlerts'), ing.indexOf('AS market_price', ing.indexOf('async function evaluateAlerts')));
+    ok("evaluateAlerts' market price applies basePrintingSql", /basePrintingSql\('p', 'c'\)/.test(ev));
+  }
   const PX = JSON.parse(fs.readFileSync('variants.pricing.fixture.json', 'utf8'));
   const pp = id => tdx.printingPrices(PX[id]).map(o => o.variant + ':' + o.price).join(' ');
   ok('printingPrices: Alakazam #1 reverse $122.74, #33 reverse $71.39 (real response)',

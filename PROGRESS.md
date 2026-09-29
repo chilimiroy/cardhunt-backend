@@ -1,5 +1,73 @@
 # CardHunt — Progress Log
 
+## 2026-09-30 — pushed; JA both-source check; eBay marketplaces measured; readers aligned
+
+**T0.** 6 commits pushed; `/app` byte-identical to local (359,993 bytes,
+`BUILD 20260929-28ea4be-typicalprinting`); `Porygon 103a/147` resolves live.
+`cac7384` `jpcheck ja --both` (read-only). 191 JA cards hold both a base
+Yahoo and a Yuyu-tei price; 148 differ >5x (143 Yahoo higher), 54 >20x;
+every Yahoo row predates the printing split. Re-derived from both sources:
+- **MIRROR 48** — no base Yahoo sale now, only a mirror; **42 of 48 store
+  exactly today's mirror median** (39 Master Ball, 3 Poké Ball), all SV2a /
+  SV8a. The T4 contamination, card by card. None is a headline (Yuyu-tei
+  newer) but each is a "Yahoo" series on /api/history.
+- **GONE 53** — no Yahoo comparable now; stored value unsupported. 3 are
+  headlines, 2 clearly wrong: ja-SM1M-63 ブラッキーGX shows $30.57 vs
+  Yuyu-tei $444.59, ja-XY4-92 $5.73 vs $38.09 (SR vs RR shape).
+- **HOLDS 44** — Yahoo reproduces; mostly ¥300-600 Yahoo commons vs
+  ¥30-120 Yuyu-tei ticks (28 at <=¥80) — two floors, not a wrong card. 12
+  are headlines.
+- MOVED 3, and 4 where Yahoo sits BELOW Yuyu-tei (EX/GX; ask vs auction).
+**Not repaired** — deletion is Roy's call. Proposed: back up + delete the
+Yahoo base rows of the 48 MIRROR cards; re-price the 3 GONE headlines.
+
+**T1 — eBay marketplaces, measured** (`/api/ebay/marketprobe`, read-only,
+real sourceEbay per site; 10 cards + 2 graded; ~500 calls over 5 runs).
+- **EBAY_JP: eBay answers 409 "12019: marketplace not supported".**
+- GB/AU/CA first failed in OUR code: fx.js had no GBP/AUD/CAD pin, so the
+  calls were spent and discarded. `f98108b` pins them (ECB 2026-09-03).
+- Marginal kept rows over US alone (839 rows, 23 calls):
+  GB +432 (+51%, 22 calls) · DE +274 (+33%, 16) · AU +161 (+19%, 21) ·
+  CA +55 (+7%, 22) · FR +79 (+9%, 12) · IT +417 · ES +108.
+- **eBay machine-translates US titles for IT/ES/FR/DE, and the gate reads
+  the translation.** IT/ES each kept 41 items the US search RETURNED AND
+  REFUSED: "(Portachiavi)" (a keychain), "30° Celebrazione" (the 30th
+  reprint US refused 47x), "DANNEGGIATO" / "Molto Giocato" in Raw NM. IT/ES
+  are not addable without a translated-vocabulary gate.
+- IT/ES also return ~630 US-seller rows US never returns. Not category
+  (EBAY_US_NOCAT: +0-2) and not the set name in the query (EBAY_US_NOSET:
+  +0-26, recovers none of IT's). Cause unknown; they arrive translated.
+- **DE language gate is NOT ready**: LANG_WORDS is English-only. DE kept
+  "…Spanisch", "…Italienisch", "…BASE SET ITA", "Neo Genesis🇩🇪", plus
+  "Metallkarte … Goldcard" (a metal replica) and "POKELOTTERIE" (a lottery).
+- Shipping on a non-US site is to THAT site's buyer — not measured; needs
+  X-EBAY-C-ENDUSERCTX before any landed cost from GB/DE is comparable.
+- Paging: US hit its 3-page cap on 3 of 12 cases (both busy raw EN cards
+  and JP Leafeon); GB 4, IT/ES 6. No per-view page log exists, so the share
+  of REAL views at the cap cannot be measured yet.
+**Recommendation:** GB first (English titles, +51%, one more call per page).
+AU next if the quota allows. DE only after a German-vocabulary gate measured
+both ways. Not IT/ES/FR. Nothing built in /api/listings yet.
+
+**T2.** `7826d35`: trending (both queries) and `evaluateAlerts` now use
+`printsql.basePrintingSql`. Measured over every priced card: they agreed
+with the card page except 6 EN cards whose only real row is a reverse (the
+6 of 241: xy9-97/99/105 on estimates, basep-34/35 and bw6-118 none — all
+without `variants`, so `manifest en` decides) and 33 hidden Pocket cards.
+Alerts: 6 of 7 current_price = card page; the 7th is one refresh stale.
+Portfolio renders nothing (adding holdings not built).
+`c58b3d7` pricecheck fixed three ways (card page's number; the writer's
+exact search — it sent the set ID as text; pre-2016 sets checked by value,
+not an empty table). 151 0/12 -> **12/12 within 6%**, Silver Tempest 12/12,
+Ascended Heroes 10/12 (Gengar #284 $864.53 vs $861.49), Base Set 11/12.
+Alakazam #1 $233.32 (+ reverse $122.74), #33 $19.23 (+ reverse $71.39) —
+the $67.18 is superseded. Found: **the internal-API fallback flips between
+products night to night** — Base Set Clefairy Doll 8.39 / 71.91 / 7.27 /
+9.30 / 82.66, Impostor Oak, SM1 Umbreon GX 101.85 <-> 239 — TCGdex-first
+(after the harvest) is the fix; recheck after. And **10 cards show a
+tcgplayer_1stEdition price as the headline** (no unlimited row) — the
+reverse-as-base shape on the edition axis, not fixed.
+
 ## 2026-09-29 (later) — stored prices measured; set-blind match found; printings finished
 
 **T1, measured first.** 3,684 cards (2,767 EN: 12 per set + all e-Card;

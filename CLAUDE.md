@@ -238,6 +238,7 @@ machine via `node sourceprobe.js`. **Do not re-derive these — re-run the probe
 |---|---|---|---|
 | **Yuyu-tei** | 200 | **200, markers present** | **LIVE in production** — listings + prices |
 | **eBay Browse API** | 200 | **200** | **LIVE in production** — credentials work |
+| eBay Browse, other sites | — | GB/DE/AU/CA/FR/IT/ES 200; **JP 409** | US only in production. `EBAY_JP`: "12019: marketplace not supported" (2026-09-30) |
 | PriceCharting | 200, JSON | **200, JSON** | viable, not built — `search-products` returns `{"products":[…]}` |
 | Troll and Toad | 200, 61 KB | **200, 61 KB** | viable, not built — needs an HTML parser |
 | Card Kingdom | 200, 201 KB | **200, 201 KB** | viable, not built — needs an HTML parser |
@@ -1688,6 +1689,31 @@ existed and **were not re-run after it landed**. A live 429 stub found it on the
 first call. Integration tests find what unit tests written against an earlier
 shape cannot.
 
+## Another eBay site shows US listings with MACHINE-TRANSLATED titles (2026-09-30)
+Every search sends `X-EBAY-C-MARKETPLACE-ID: EBAY_US`. Measured with
+`/api/ebay/marketprobe` (real `sourceEbay` per site, overlap by item id,
+10 cards + 2 graded): over US's 839 kept rows, GB adds +51%, DE +33%, AU
++19%, CA +7%, FR +9% (each marginal on the sites before it).
+
+**IT and ES cannot simply be added.** eBay translates US sellers' titles
+for those sites and our gate reads the translation: IT kept items the US
+search had returned and REFUSED — "(Portachiavi)" (a keychain), "30°
+Celebrazione" (the 30th reprint, refused 47x on US), "DANNEGGIATO" in a Raw
+NM search. Every English-vocabulary rule (reprint, junk, condition,
+language) is defeated by a translated title. IT/ES also return ~630 US
+rows the US search never returns — not the category (`EBAY_US_NOCAT` +0-2)
+and not the set name in the query (`EBAY_US_NOSET`); cause unknown.
+
+**DE needs a German-vocabulary language gate first.** `LANG_WORDS` is
+English words only, so a German seller's "Spanisch", "Italienisch", "ITA"
+or a 🇩🇪 flag is silence and the card is kept. Also seen on DE:
+"Metallkarte … Goldcard" (metal replica) and "POKELOTTERIE" (a lottery).
+
+Before any other site reaches `/api/listings`: every currency through
+`fx.js` (GBP/AUD/CAD pinned since `f98108b` — fx refuses an unpinned
+currency, which first threw away every GB/AU/CA call), and shipping is to
+THAT site's buyer unless `X-EBAY-C-ENDUSERCTX` says otherwise — unmeasured.
+
 ## eBay listings are cached, never stored
 eBay's terms allow serving item data for a request, not retaining it. So:
 - The 15-minute in-memory cache is the limit. `price_history` receives **no**
@@ -2454,6 +2480,17 @@ matched until the fold ended in NFC.
 `variants.test.js` 71 (+6 `--db`); 19 wiring assertions watched failing.
 
 ---
+
+## The base-price rule lives outside server.js too (T2, 2026-09-30)
+`variants.test.js` counted `basePrintingSql` in server.js (5) and was
+green while `trending.js` and `ingest.js evaluateAlerts` read the latest
+real row of ANY printing — 6 cards whose only real price was a reverse
+showed it in trending and in an alert's current price, and an estimate on
+their own page. And `pricecheck` checked a number the page never showed
+(any grade, any printing) against a search the writer never makes (set ID
+as text, no set check), reading "no match" on 151 where both agree to the
+cent. **A verification tool is a reader: give it the page's rule and the
+writer's question.**
 
 # CONVENTIONS
 - Card ids: `{lang}-{setId}-{number}` — `en-me02.5-294`, `ja-M5-081`.

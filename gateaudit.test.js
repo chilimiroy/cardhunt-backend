@@ -108,6 +108,40 @@ console.log('\n  graders — one list, both marketplaces');
   ok('...TAG TEAM is kept raw on Yahoo', jpf.jpTitleIsSingleRaw('コイキング&ホエルオーGX SR SM9 098/095 TAG TEAM'));
 }
 
+// ── The path that STORES prices reaches the same gates ─────────
+// T6 was REPRINT_OF reaching listings and not pricing. The same audit of
+// ingest found the Yahoo median never ran printingConflict, refresh dropped
+// set_total on the floor, and two NAME-ONLY fallbacks (an ungated eBay median
+// — storing eBay data — and a Cardmarket scrape) waited behind TCGPlayer.
+console.log('\n  ingest — the pricing path');
+if (fs.existsSync('ingest.js')) {
+  const ing = stripComments(fs.readFileSync('ingest.js', 'utf8'));
+  const ys = slice(ing, 'yahooJapanSearch');
+  ok('yahooJapanSearch runs cmatch.printingConflict on every single', /cmatch\.printingConflict\(/.test(ys));
+  ok('...with the Yahoo options (CJK is not Chinese; script is not language)',
+    /cjkIsChinese:\s*false,\s*scriptIsLanguageEvidence:\s*false/.test(ys));
+  const jc = slice(ing, 'jpCtx');
+  ok('jpCtx carries setYear AND lang (else those checks skip silently)', /setYear:/.test(jc) && /lang:/.test(jc));
+  ok('every yahooJapanSearch caller builds its context with jpCtx',
+    [...ing.matchAll(/yahooJapanSearch\(([^;]*?)\)\)?;?\n/g)].length > 0 &&
+    !/yahooJapanSearch\([^)]*\{\s*setTotal:/.test(ing));
+  ok('refreshDue copies set_total and set_api_id into the card it prices',
+    /set_total:\s*r\.set_total,\s*set_api_id:\s*r\.set_api_id/.test(slice(ing, 'refreshDue')));
+  const spf = slice(ing, 'safePriceFor');
+  ok('safePriceFor has no eBay fallback (eBay data must never be stored)', !/ebay/i.test(spf.replace(/\/\/.*$/gm, '')));
+  ok('safePriceFor has no name-only Cardmarket fallback', !/cardmarketSearch/.test(spf));
+  ok('ingest defines no eBay Browse search at all', !/item_summary\/search/.test(ing));
+  ok('the Chinese branch returns nothing rather than a Japanese price', /if \(isCN\) \{\s*return null;/.test(spf));
+  // The gate CAN fire through that exact context — measured on 25 real
+  // cards it refused nothing, and a guard that never fires proves nothing.
+  const cm = require('./cardmatch');
+  const ctx = { name: 'リザードンex', number: '201', setTotal: '165', setId: 'SV2a', setYear: 2023, lang: 'ja' };
+  const opts = { cjkIsChinese: false, scriptIsLanguageEvidence: false };
+  ok('...it refuses a Korean print through that context',
+    !!cm.printingConflict('韓国版 ポケモンカード リザードンex SAR 201/165', ctx, opts));
+  ok('...and keeps the Japanese one', !cm.printingConflict('ポケモンカード リザードンex SAR 201/165 SV2a', ctx, opts));
+} else console.log('  skip  ingest.js not present');
+
 // ── No route hands back eBay rows that skipped the gate ────────
 console.log('\n  routes — nothing serves eBay search rows ungated');
 const nameRoute = route('get', '/api/listings/:cardName');

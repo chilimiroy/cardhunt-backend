@@ -37,7 +37,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.7.2';   // bump when this file changes
+const VERSION = '5.7.3';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -946,26 +946,7 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
 }
 
 
-// ── 2. CARDMARKET — European market, strong on EN and JP singles.
-async function cardmarketSearch(cardName) {
-  if (/[\u3040-\u30ff\u4e00-\u9faf]/.test(cardName)) return null;
-  await hostDelay('cardmarket', 2500);
-  try {
-    const r = await fetch('https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=' +
-      encodeURIComponent(cardName), {
-        headers: { 'User-Agent': UA_SAFE },
-        redirect: 'manual'          // their redirects resolve to bad hostnames
-      });
-    if (!r.ok) return null;
-    const html = await r.text();
-    // "From 12,34 €" in the results table
-    const m = html.match(/From\s*([\d.,]+)\s*&nbsp;€/) || html.match(/([\d.,]+)\s*€/);
-    if (!m) return null;
-    const eur = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
-    if (!eur || eur <= 0) return null;
-    return { price: +(eur * 1.09).toFixed(2), source: 'cardmarket_low', currency: 'EUR->USD' };
-  } catch (e) { return null; }
-}
+// ── 2. (Cardmarket name-only scrape deleted 2026-09-29, T9 — see safePriceFor)
 
 // ── 3. YAHOO AUCTIONS JAPAN — the real market for Japanese singles.
 //     Far more JP price signal than eBay will ever have.
@@ -997,7 +978,8 @@ const {
 async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
   await hostDelay('yahoo', 3000);
   const cardCtx = { name: cardName, number: cardNumber,
-                    setTotal: opts.setTotal, setId: opts.setId };
+                    setTotal: opts.setTotal, setId: opts.setId,
+                    setYear: opts.setYear || null, lang: opts.lang || null };
 
   // Yahoo embeds the whole search result as JSON in __NEXT_DATA__.
   // Far more reliable than parsing their (frequently changing) markup.
@@ -1045,7 +1027,15 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
       // Keep only listings that look like a single raw card
       // Keep only listings that are a single raw copy OF THIS CARD.
       // Title alone is not enough -- see jpItemIsSingleCard.
-      const singles = items.filter(it => jpItemIsSingleCard(it, cardCtx));
+      // ...and not a different PRINTING of it. The listings path has run
+      // cardmatch.printingConflict on Yahoo since 2026-09-22 (Korean prints
+      // share Japanese set codes and numbering); this, the path that STORES
+      // a price, never did — T9, 2026-09-29, the T6 shape again. Same options
+      // as server.js sourceYahoo: Japanese is written in CJK, so script alone
+      // is not language evidence; hangul and 韓国版 are.
+      const singles = items.filter(it => jpItemIsSingleCard(it, cardCtx)
+        && !cmatch.printingConflict(it.title || '', cardCtx,
+             { cjkIsChinese: false, scriptIsLanguageEvidence: false }));
       const rejected = items.length - singles.length;
 
       const priced = singles
@@ -1118,52 +1108,7 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
 }
 
 
-// ── 4. EBAY BROWSE API — active listings. Free tier, fully sanctioned.
-//     Only runs when credentials are present. No scraping involved.
-let ebTokenCache = null, ebTokenExp = 0;
-async function ebayBrowseToken() {
-  const id = process.env.EBAY_CLIENT_ID, secret = process.env.EBAY_CLIENT_SECRET;
-  if (!id || !secret) return null;
-  if (ebTokenCache && Date.now() < ebTokenExp) return ebTokenCache;
-  try {
-    const auth = Buffer.from(`${id}:${secret}`).toString('base64');
-    const r = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Authorization': `Basic ${auth}` },
-      body: 'grant_type=client_credentials&scope=' + encodeURIComponent('https://api.ebay.com/oauth/api_scope')
-    });
-    if (!r.ok) return null;
-    const d = await r.json();
-    ebTokenCache = d.access_token;
-    ebTokenExp = Date.now() + (d.expires_in - 60) * 1000;
-    return ebTokenCache;
-  } catch (e) { return null; }
-}
-
-async function ebayBrowseActive(cardName, setName, marketplace) {
-  const token = await ebayBrowseToken();
-  if (!token) return null;
-  await hostDelay('ebayapi', 250);          // API allows far more than this
-  const q = `${cardName} ${setName || ''} pokemon`.trim();
-  try {
-    const r = await fetch('https://api.ebay.com/buy/browse/v1/item_summary/search?q=' +
-      encodeURIComponent(q) + '&category_ids=183454&limit=50&sort=price', {
-      headers: { 'Authorization': `Bearer ${token}`,
-                 'X-EBAY-C-MARKETPLACE-ID': marketplace || 'EBAY_US' }
-    });
-    if (!r.ok) return null;
-    const d = await r.json();
-    const prices = (d.itemSummaries || [])
-      .map(i => parseFloat(i.price?.value)).filter(v => v > 0).sort((a, b) => a - b);
-    if (prices.length < 3) return null;
-    return {
-      price: prices[Math.floor(prices.length / 2)],
-      low: prices[0],
-      count: prices.length,
-      source: `ebay_active_${prices.length}`
-    };
-  } catch (e) { return null; }
-}
+// ── 4. (eBay Browse fallback deleted 2026-09-29, T9 — see safePriceFor)
 
 // ── AGGREGATE ─────────────────────────────────────────────────
 // Detects the failure mode where a source returns the same price for
@@ -1199,7 +1144,11 @@ function looksLikeJunk(price) {
 function jpCtx(card) {
   return {
     setTotal: card.set_total || null,
-    setId: card.set_api_id || setIdFromCardId(card.api_card_id) || null
+    setId: card.set_api_id || setIdFromCardId(card.api_card_id) || null,
+    // The printing gate's two inputs. Absent, cardmatch skips the year and
+    // language checks without a word — the dead-year-gate failure.
+    setYear: card.set_release ? new Date(card.set_release).getUTCFullYear() : null,
+    lang: cmatch.languageFromCardId(card.api_card_id)
   };
 }
 
@@ -1236,11 +1185,11 @@ async function yahooTest(arg, cardNumber) {
   let name = arg, number = cardNumber, ctx = {};
   if (/^(en|ja|zh-tw|zh-cn)-/.test(arg) && db) {
     const r = await db.query(
-      'SELECT name, number, set_api_id, set_total, rarity FROM cards WHERE api_card_id=$1', [arg]);
+      'SELECT api_card_id, name, number, set_api_id, set_total, set_release, rarity FROM cards WHERE api_card_id=$1', [arg]);
     if (!r.rows.length) { console.log('  no such card: ' + arg); return; }
     const c = r.rows[0];
     name = c.name; number = c.number;
-    ctx = { setTotal: c.set_total, setId: c.set_api_id };
+    ctx = jpCtx(c);
     console.log('\n  ' + arg + '  ' + c.name + '  #' + c.number + '  ' + (c.rarity || '') +
                 '  (set total ' + (c.set_total || '?') + ')');
   }
@@ -1292,7 +1241,7 @@ async function jpCheck(lang, ...flags) {
   if (setId) { conds.push('c.set_api_id = $' + (params.length + 1)); params.push(setId); }
 
   const rows = await db.query(
-    'SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_api_id, c.set_total, p.price_usd, p.source ' +
+    'SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_api_id, c.set_total, c.set_release, p.price_usd, p.source ' +
     'FROM cards c JOIN LATERAL (SELECT price_usd, source FROM price_history ph ' +
     ' WHERE ph.card_api_id = c.api_card_id AND ph.grade IS NULL ' +
     '   AND ph.source NOT LIKE \'estimate%\' ' +
@@ -1331,7 +1280,7 @@ async function jpCheck(lang, ...flags) {
 
     if (/^yahoojp/.test(src)) {
       checkedAgainst = 'Yahoo';
-      const r = await yahooJapanSearch(c.name, c.number, { setTotal: c.set_total, setId: c.set_api_id });
+      const r = await yahooJapanSearch(c.name, c.number, jpCtx(c));
       if (r) rechecked = r.price;
       // Yahoo genuinely losing a listing is a real signal for a Yahoo price:
       // it means the comparable that justified this number is gone.
@@ -1638,7 +1587,7 @@ async function evaluateAlerts(lang, ...flags) {
   if (lang && lang !== 'all') { params.push(lang + '-%'); where += ` AND a.card_api_id LIKE $1`; }
 
   const alerts = await db.query(`
-    SELECT a.*, c.name, c.number, c.set_api_id, c.set_total,
+    SELECT a.*, c.name, c.number, c.set_api_id, c.set_total, c.set_release,
            (SELECT price_usd FROM price_history p
              WHERE p.card_api_id = a.card_api_id
                AND p.grade IS NULL
@@ -1666,7 +1615,7 @@ async function evaluateAlerts(lang, ...flags) {
     let cheapest = null;
     if (needsListing && a.name && String(a.card_api_id).startsWith('ja-')) {
       const r = await yahooJapanSearch(a.name, a.number,
-        { setTotal: a.set_total, setId: a.set_api_id, withItems: true }).catch(() => null);
+        Object.assign(jpCtx(Object.assign({}, a, { api_card_id: a.card_api_id })), { withItems: true })).catch(() => null);
       const items = (r && r.items) || [];
       if (items.length) cheapest = items.reduce((m, l) => (l.landed < m.landed ? l : m), items[0]);
     }
@@ -1977,11 +1926,11 @@ async function safePriceFor(card) {
             || String(card.api_card_id).startsWith('zh-');
 
   if (isCN) {
-    // Chinese cards barely appear on Yahoo Auctions — it is a Japanese
-    // marketplace. eBay carries some; without credentials there is no
-    // legitimate source, so return nothing rather than a wrong number.
-    res = await attempt(() => ebayBrowseActive(card.name, card.set_name, 'EBAY_US'));
-    if (!res) res = await attempt(() => yahooJapanSearch(card.name, card.number, jpCtx(card)));
+    // Chinese is parked (T5) and has NO price source. This branch used to
+    // try an ungated eBay name search, then Yahoo JAPAN by name — a Japanese
+    // card's price written onto a Chinese one, which "never substitute
+    // across languages" forbids. Nothing, rather than a wrong number.
+    return null;
   } else if (isJP) {
     // Yahoo Auctions is the real Japanese market. Nothing else is close.
     res = await attempt(() => yahooJapanSearch(card.name, card.number, jpCtx(card)));
@@ -1993,9 +1942,16 @@ async function safePriceFor(card) {
       // which is exactly how an original's price lands on a reprint.
       res = await attempt(() => tcgPlayerSearch(card.name, rp.tcgSet, rp.number, card.rarity, { reprint: rp }));
     } else {
+      // TCGPlayer by collector number, and nothing else. Two fallbacks
+      // followed until 2026-09-29 (T9), both NAME ONLY, which is the
+      // Phantasmal Flames failure this file exists to prevent:
+      //   ebayBrowseActive — median of an ungated eBay search, stored as
+      //     ebay_active_N. eBay's terms forbid storing it, and it bypassed
+      //     ebaycall/ebayquota. Latent only because the keys live on Render.
+      //   cardmarketSearch — an HTML scrape Cloudflare refuses, converted
+      //     at the hardcoded 1.09 CLAUDE.md records as 6.6% wrong.
+      // Both deleted. A wrong price is worse than no price.
       res = await attempt(() => tcgPlayerSearch(card.name, card.set_name, card.number, card.rarity));
-      if (!res) res = await attempt(() => ebayBrowseActive(card.name, card.set_name, 'EBAY_US'));
-      if (!res) res = await attempt(() => cardmarketSearch(card.name));
     }
   }
 
@@ -2262,13 +2218,6 @@ async function testSources(arg1, arg2) {
                     : await tcgPlayerSearch(card.name, card.set_name, card.number);
       console.log(t ? `OK  $${t.price}   matched "${t.matched}" #${t.matchedNumber} via ${t.matchedBy}` : 'no data');
 
-      process.stdout.write('  Cardmarket ........ ');
-      const c = await cardmarketSearch(card.name);
-      console.log(c ? `OK  $${c.price}` : 'no data');
-
-      process.stdout.write('  eBay Browse API ... ');
-      const e = await ebayBrowseActive(card.name, card.set_name, 'EBAY_US');
-      console.log(e ? `OK  $${e.price}  (${e.count} listings)` : 'no data / not configured');
     }
 
     const agg = await safePriceFor(card);
@@ -4835,6 +4784,10 @@ async function refreshDue(lang, ...flags) {
       due.push({
         api_card_id: r.api_card_id, name: r.name, number: r.number,
         rarity: r.rarity, set_name: r.set_name, set_release: r.set_release,
+        // SELECTed above and dropped here until 2026-09-29 (T9): every
+        // nightly Yahoo match ran with setTotal null, which jpfilter fails
+        // CLOSED on — valid comparables silently lost, every night.
+        set_total: r.set_total, set_api_id: r.set_api_id,
         price: parseFloat(r.price_usd) || 0,
         tier: tier.name,
         neverPriced: age === Infinity,

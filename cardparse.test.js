@@ -105,6 +105,15 @@ const PARSE_CASES = [
   { q: 'Alakazam 4',        want: { number: '4', numberFrom: 'bare', name: 'alakazam' } },
   { q: "Blaine's Quiz #2",  want: { number: '2', numberFrom: 'hash' } },
   { q: 'Alakazam 4 1/111',  want: { number: '1', numberFrom: 'slash', printedTotal: '111', name: 'alakazam 4' } },
+  // A letter-suffixed collector number (T4, 2026-09-29): 32 English cards,
+  // 0 of them findable by number before. Aquapolis Porygon 103a and 103b are
+  // two cards. KEEPS: a plain number, a prefixed one, a decimal name.
+  { q: 'Porygon 103a/147',  want: { number: '103A', numberFrom: 'slash', printedTotal: '147', name: 'porygon' } },
+  { q: 'Porygon 103b',      want: { number: '103B', numberFrom: 'bare', name: 'porygon' } },
+  { q: 'Porygon #103a',     want: { number: '103A', numberFrom: 'hash', name: 'porygon' } },
+  { q: 'Jolteon-EX 28a/83', want: { number: '28A', numberFrom: 'slash', printedTotal: '83' } },
+  { q: 'Pikachu ex 276',    want: { number: '276', numberFrom: 'bare' } },
+  { q: 'TG12/TG30 Umbreon', want: { number: 'TG12', printedTotal: 'TG30', name: 'umbreon' } },
   // Set-marker words are recorded as such, so the resolver can try them as name.
   { q: 'Paldean Clodsire ex', want: { name: null, setHint: 'paldean clodsire ex', setHintFrom: 'words' } },
   { q: 'リザードン s12a 105',   want: { setHintFrom: 'code' } },
@@ -250,6 +259,9 @@ const FIND_CASES = [
   ['Iron Crown ex',         'en-sv05-081'], // set-marker word mid-name
   ['Alakazam 4',            'en-pl2-103'],  // number in the name
   ['Metal Cube 01',         'en-ecard2-129'],
+  ['Porygon 103a/147',      'en-ecard2-103a'], // letter suffix, and NOT 103b or #103
+  ['Porygon 103b/147',      'en-ecard2-103b'],
+  ['N 105a/124',            'en-xy10-105a'],
   ["Blaine's Quiz #2",      'en-gym2-111'],
   ['Spell Tag',             'en-sm8-190'],  // bare TAG
   ['Ace Trainer',           'en-xy7-69'],   // bare ACE

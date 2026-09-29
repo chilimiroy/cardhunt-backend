@@ -162,7 +162,9 @@ function parseCardQuery(input) {
   }
 
   // ── 5. Collector number — "074/073", "199/165", "#294", "TG12/TG30" ──
-  m = text.match(/\b([a-z]{0,4}\d{1,4})\s*\/\s*([a-z]{0,4}\d{1,4})\b/i);
+  // [a-z]? after the digits: a letter-suffixed collector number — "103a/147"
+  // (Aquapolis Porygon 103a and 103b are two cards), "28a/83", "105a/124".
+  m = text.match(/\b([a-z]{0,4}\d{1,4}[a-z]?)\s*\/\s*([a-z]{0,4}\d{1,4})\b/i);
   // `numberFrom` says how sure that is. Only "N/T" is certain. "#2" and a
   // bare trailing number are guesses — "Blaine's Quiz #2", "Alakazam 4",
   // "Metal Cube 01" carry the number in the NAME — so resolveCard accepts
@@ -173,19 +175,21 @@ function parseCardQuery(input) {
     out.numberFrom = 'slash';
     text = text.replace(m[0], ' ');
   } else {
-    m = text.match(/#\s*([a-z]{0,4}\d{1,4})\b/i);
+    m = text.match(/#\s*([a-z]{0,4}\d{1,4}[ab]?)\b/i);
     if (m) { out.number = m[1].toUpperCase(); out.numberFrom = 'hash'; text = text.replace(m[0], ' '); }
     else {
       // A bare trailing number is almost always the collector number:
       // "Pikachu ex 276", "Mega Charizard Y ex 294 Ascended Heroes".
       // Skip it when it is part of the card's own name — Pokegear 3.0,
       // Rotom V, Team Rocket's Meowth.
-      const trailing = text.match(/\s(\d{1,4})(?=\s)/g);
+      // An a/b suffix only ("Porygon 103b"): every suffixed card we hold is
+      // a or b, and a wider letter would read "4x" and the like.
+      const trailing = text.match(/\s(\d{1,4}[ab]?)(?=\s)/gi);
       if (trailing && trailing.length) {
         const last = trailing[trailing.length - 1].trim();
         const n = parseInt(last);
         if (n >= 1 && n <= 999 && !/\d\.\d/.test(text)) {
-          out.number = last;
+          out.number = last.toUpperCase();
           out.numberFrom = 'bare';
           const idx = text.lastIndexOf(' ' + last + ' ');
           text = text.slice(0, idx) + ' ' + text.slice(idx + last.length + 2);
@@ -340,8 +344,12 @@ async function resolveCard(db, parsed, opts) {
     params.push('%' + t + '%'); i++;
   }
   if (parsed.number) {
-    const numMatch = `(c.number = $${i} OR c.number = LPAD($${i}, 3, '0')
-                 OR REGEXP_REPLACE(c.number, '^0+', '') = REGEXP_REPLACE($${i}, '^0+', ''))`;
+    // UPPER: the parser upper-cases ("103A", "TG12") and 32 English cards
+    // store a lower-case suffix ("103a" / "103b" — Aquapolis Porygon, 2026-09-29).
+    // GREATEST: Postgres LPAD TRUNCATES — LPAD('103A', 3) is '103', which
+    // matched plain #103, and LPAD('TG12', 3) is 'TG1'. Pad, never cut.
+    const numMatch = `(UPPER(c.number) = $${i} OR UPPER(c.number) = LPAD($${i}, GREATEST(3, LENGTH($${i})), '0')
+                 OR REGEXP_REPLACE(UPPER(c.number), '^0+', '') = REGEXP_REPLACE($${i}, '^0+', ''))`;
     params.push(parsed.number); i++;
     if (softNum) {
       // The number as a whole word of the name: "#2" and "4" count, "42" and

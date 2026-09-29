@@ -3847,6 +3847,19 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
     }
     const usIds = new Set(((per.EBAY_US && per.EBAY_US.keptRows) || []).map(k => k.itemId));
     const allIds = new Set(usIds);
+    // The outlier test production runs in gatherListings, over the union in
+    // USD — without it "cheapest new" was a $7.31 row on a $300 card.
+    const union = new Map();
+    for (const mp of sites) for (const k of ((per[mp] && per[mp].keptRows) || []))
+      if (k.usd && !union.has(k.itemId)) union.set(k.itemId, { itemId: k.itemId, price: k.usd });
+    const judged = outlier.flagOutliers([...union.values()]);
+    const suspect = new Set(judged.listings.filter(l => l.suspect).map(l => l.itemId));
+    // US pages stop at EBAY_MAX_PAGES under sort=price, so a row dearer than
+    // the dearest US row examined may simply be past US's cap. Only a row
+    // INSIDE the range US examined is one US genuinely did not have.
+    const usP = per.EBAY_US && per.EBAY_US.pages;
+    const usCapped = !!(usP && usP.stoppedAtCap);
+    const usMax = Math.max(0, ...(((per.EBAY_US && per.EBAY_US.keptRows) || []).map(k => k.usd || 0)));
     const summary = {};
     for (const mp of sites) {
       const p = per[mp];
@@ -3858,11 +3871,15 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
       p.keptRows.forEach(k => { countries[k.country || '?'] = (countries[k.country || '?'] || 0) + 1; });
       const currencies = {};
       p.keptRows.forEach(k => { currencies[k.currency] = (currencies[k.currency] || 0) + 1; });
-      const cheapest = rows => rows.filter(k => k.usd).sort((a, b) => a.usd - b.usd)[0] || null;
+      const cheapest = rows => rows.filter(k => k.usd && !suspect.has(k.itemId)).sort((a, b) => a.usd - b.usd)[0] || null;
+      const clean = fresh.filter(k => !suspect.has(k.itemId));
       summary[mp] = {
         ebayTotal: p.pages && p.pages.ebayTotal, scanned: p.scanned, kept: p.kept, rejected: p.rejected,
         stoppedAtCap: p.pages && p.pages.stoppedAtCap, pagesFetched: p.pages && p.pages.fetched,
         notOnUs: fresh.length, newVsAllEarlier: freshAll.length,
+        notOnUsUnflagged: clean.length,
+        notOnUsInUsRange: usCapped ? clean.filter(k => k.usd <= usMax).length : clean.length,
+        foreignLocated: p.keptRows.filter(k => k.country && k.country !== 'US').length,
         keptCountries: countries, keptCurrencies: currencies,
         rejectReasons: p.rejectReasons,
         cheapestKeptUsd: cheapest(p.keptRows), cheapestNewUsd: cheapest(fresh),
@@ -3871,6 +3888,7 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
     }
     const calls = sites.reduce((n, mp) => n + ((per[mp] && per[mp].pages && per[mp].pages.fetched) || 0), 0);
     const body = { cardId, grade, sites, summary, union: allIds.size, usKept: usIds.size,
+                   usCapped, usMaxExaminedUsd: usMax, outliers: judged.stats,
                    quotaSpentSearch: calls, stored: false, at: new Date().toISOString() };
     marketProbeCache.set(key, { at: Date.now(), body });
     res.json(body);

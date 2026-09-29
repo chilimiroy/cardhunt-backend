@@ -1972,11 +1972,15 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     + (offset ? '&offset=' + offset : '')
     + (aspectFilter ? '&aspect_filter=' + encodeURIComponent(aspectFilter) : '');
   const url = pageUrl(0);
+  // Which eBay site is asked. EBAY_US unless a caller names another — only
+  // /api/ebay/marketprobe does (T1, 2026-09-30: measuring what the other
+  // sites add before deciding whether /api/listings should ask them).
+  const mp = opts.marketplace || 'EBAY_US';
 
   const call = await ebay.fetchEbay(db, {
     url, token, kind: 'search', background,
     dryRun,
-    meta: { cardId: card.api_card_id, grade, query: q },
+    meta: { cardId: card.api_card_id, grade, query: q, marketplace: mp },
     countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0)
   });
 
@@ -2011,7 +2015,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
          && (d.itemSummaries || []).length >= pageSize) {
     const more = await ebay.fetchEbay(db, {
       url: pageUrl(pagesFetched * pageSize), token, kind: 'search', background,
-      meta: { cardId: card.api_card_id, grade, query: q, page: pagesFetched + 1 },
+      meta: { cardId: card.api_card_id, grade, query: q, page: pagesFetched + 1, marketplace: mp },
       countFrom: x => (x && x.itemSummaries ? x.itemSummaries.length : 0)
     });
     if (!more.ok) { pageError = more.reason || more.blocked || 'page fetch failed'; break; }
@@ -2157,7 +2161,8 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // year check sat dead on every live route. Reported even when complete.
   return { listings, scanned: items.length,
            kept: listings.length, rejected: dropped.length,
-           dropped: dropped.slice(0, 40),
+           dropped: opts.allDropped ? dropped : dropped.slice(0, 40),
+           marketplace: mp,
            parserDisagreements: disagreements.slice(0, 20),
            gate: cm.printingEvidence(matchCard),
            conditionFilter: condFilter
@@ -3781,6 +3786,93 @@ app.get('/api/ebay/gradecost/:cardId', async (req, res) => {
       quotaSpent: U.calls + F.calls, stored: false
     };
     gradeCostCache.set(key, { at: Date.now(), body });
+    res.json(body);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ══════════════════════════════════════════════════════════════
+// GET /api/ebay/marketprobe/:cardId?grade=Raw%20NM&mp=EBAY_GB,EBAY_DE
+//
+// T1, 2026-09-30. Every eBay search sends X-EBAY-C-MARKETPLACE-ID: EBAY_US.
+// Before asking more sites from /api/listings (each one its own call, 1-3
+// pages), measure what each ADDS after the gate: the REAL sourceEbay per
+// marketplace, then overlap by eBay's global item id against EBAY_US.
+//
+// Read-only, nothing stored (eBay's terms), cached 30 min. Takes a
+// catalogue id and marketplace ids from MARKETPROBE_SITES — never a URL
+// (the /api/probe/sources SSRF rule). Background priority, so a probe
+// yields at the soft stop rather than eating the user reserve.
+// ══════════════════════════════════════════════════════════════
+const MARKETPROBE_SITES = ['EBAY_US', 'EBAY_GB', 'EBAY_DE', 'EBAY_AU', 'EBAY_CA',
+                           'EBAY_FR', 'EBAY_IT', 'EBAY_ES', 'EBAY_JP'];
+const marketProbeCache = new Map();
+app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
+  const cardId = req.params.cardId;
+  const grade = String(req.query.grade || 'Raw NM');
+  const asked = String(req.query.mp || MARKETPROBE_SITES.join(',')).split(',').map(s => s.trim().toUpperCase());
+  const bad = asked.filter(m => !MARKETPROBE_SITES.includes(m));
+  if (bad.length) return res.status(400).json({ error: 'unknown marketplace', bad, allowed: MARKETPROBE_SITES });
+  const sites = ['EBAY_US'].concat(asked.filter(m => m !== 'EBAY_US'));
+  const key = JSON.stringify([cardId, grade, sites]);
+  const hit = marketProbeCache.get(key);
+  if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') return res.json(hit.body);
+  try {
+    if (!ebay.ebayEnabled()) return res.status(503).json({ error: 'EBAY_ENABLED=false' });
+    const card = await resolveListingCard(cardId);
+    if (!card) return res.status(404).json({ error: 'card not in catalogue', cardId });
+    const per = {};
+    for (const mp of sites) {
+      try {
+        const r = await sourceEbay(card, grade, 25, { marketplace: mp, background: true, allDropped: true });
+        const reasons = {};
+        for (const d of r.dropped) {
+          const k = /title says (\w+)/.test(d.reason) ? 'language:' + d.reason.match(/title says (\w+)/)[1]
+                  : String(d.reason || '').replace(/[:(].*$/, '').slice(0, 48);
+          reasons[k] = (reasons[k] || 0) + 1;
+        }
+        const kept = [];
+        for (const l of r.listings) {
+          const conv = l.currency === 'USD' ? { usd: l.price, rate: 1 } : await fx.toUsd(l.price, l.currency);
+          const shipConv = l.shipping == null ? null
+            : l.currency === 'USD' ? { usd: l.shipping } : await fx.toUsd(l.shipping, l.currency);
+          kept.push({ itemId: l.itemId, price: l.price, currency: l.currency, usd: conv && conv.usd,
+                      rate: conv && conv.rate, shippingUsd: l.shipping === 0 ? 0 : (shipConv ? shipConv.usd : null),
+                      country: l.country, title: l.title.slice(0, 90) });
+        }
+        per[mp] = { scanned: r.scanned, kept: r.kept, rejected: r.rejected, pages: r.pages,
+                    rejectReasons: reasons, keptRows: kept };
+      } catch (e) {
+        per[mp] = { error: e.message, status: e.ebayStatus || null };
+      }
+    }
+    const usIds = new Set(((per.EBAY_US && per.EBAY_US.keptRows) || []).map(k => k.itemId));
+    const allIds = new Set(usIds);
+    const summary = {};
+    for (const mp of sites) {
+      const p = per[mp];
+      if (!p || p.error) { summary[mp] = p; continue; }
+      const fresh = p.keptRows.filter(k => !usIds.has(k.itemId));
+      const freshAll = fresh.filter(k => !allIds.has(k.itemId));
+      fresh.forEach(k => allIds.add(k.itemId));
+      const countries = {};
+      p.keptRows.forEach(k => { countries[k.country || '?'] = (countries[k.country || '?'] || 0) + 1; });
+      const currencies = {};
+      p.keptRows.forEach(k => { currencies[k.currency] = (currencies[k.currency] || 0) + 1; });
+      const cheapest = rows => rows.filter(k => k.usd).sort((a, b) => a.usd - b.usd)[0] || null;
+      summary[mp] = {
+        ebayTotal: p.pages && p.pages.ebayTotal, scanned: p.scanned, kept: p.kept, rejected: p.rejected,
+        stoppedAtCap: p.pages && p.pages.stoppedAtCap, pagesFetched: p.pages && p.pages.fetched,
+        notOnUs: fresh.length, newVsAllEarlier: freshAll.length,
+        keptCountries: countries, keptCurrencies: currencies,
+        rejectReasons: p.rejectReasons,
+        cheapestKeptUsd: cheapest(p.keptRows), cheapestNewUsd: cheapest(fresh),
+        newSample: fresh.slice(0, 5)
+      };
+    }
+    const calls = sites.reduce((n, mp) => n + ((per[mp] && per[mp].pages && per[mp].pages.fetched) || 0), 0);
+    const body = { cardId, grade, sites, summary, union: allIds.size, usKept: usIds.size,
+                   quotaSpentSearch: calls, stored: false, at: new Date().toISOString() };
+    marketProbeCache.set(key, { at: Date.now(), body });
     res.json(body);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

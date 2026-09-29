@@ -1341,6 +1341,7 @@ async function yahooTest(arg, cardNumber) {
 // ══════════════════════════════════════════════════════════════
 async function jpCheck(lang, ...flags) {
   if (!db) { console.log('  DATABASE_URL required'); return; }
+  if (flags.includes('--both')) return jpCheckBoth(lang || 'ja', ...flags);
   lang = lang || 'ja';
   const n     = parseInt((flags.find(f => f.startsWith('--n=')) || '--n=20').slice(4)) || 20;
   const setId = (flags.find(f => f.startsWith('--set=')) || '').replace('--set=', '') || null;
@@ -1441,6 +1442,101 @@ async function jpCheck(lang, ...flags) {
   if (checkable) console.log('\n  Of ' + checkable + ' checkable, ' +
     Math.round(100 * tally.agree / checkable) + '% agree.');
   console.log('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// node ingest.js jpcheck ja --both [--min-ratio=5] [--json=out.json]
+//
+// The cards holding BOTH a base Yahoo median and a Yuyu-tei price, where
+// the two disagree by more than --min-ratio (either direction). Re-derives
+// each side from its source with the CURRENT filter — the T4 printing split
+// included, so a stored median that was really Master Ball mirror sales
+// shows up as "base none now, mirror $X".
+//
+// Read-only. It classifies; jppurge / a re-price is a separate decision.
+// Measured 2026-09-29: 191 such cards, 148 more than 5x apart, 54 > 20x,
+// every Yahoo row written before the printing split (28ea4be).
+// ══════════════════════════════════════════════════════════════
+async function jpCheckBoth(lang, ...flags) {
+  const minRatio = parseFloat((flags.find(f => f.startsWith('--min-ratio=')) || '--min-ratio=5').slice(12)) || 5;
+  const jsonOut  = (flags.find(f => f.startsWith('--json=')) || '').slice(7) || null;
+  const base = require('./printsql').basePrintingSql;
+  const rows = (await db.query(
+    `WITH y AS (SELECT DISTINCT ON (card_api_id) card_api_id, price_usd, source, recorded_at FROM price_history
+        WHERE card_api_id LIKE $1 AND source LIKE 'yahoojp%' AND grade IS NULL AND COALESCE(variant,'') NOT LIKE 'reverse%'
+        ORDER BY card_api_id, recorded_at DESC),
+      t AS (SELECT DISTINCT ON (card_api_id) card_api_id, price_usd FROM price_history
+        WHERE card_api_id LIKE $1 AND source = 'yuyutei_shop' AND grade IS NULL AND COALESCE(variant,'') NOT LIKE 'reverse%'
+        ORDER BY card_api_id, recorded_at DESC),
+      h AS (SELECT DISTINCT ON (ph.card_api_id) ph.card_api_id, ph.source FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
+        WHERE ph.card_api_id LIKE $1 AND ph.grade IS NULL AND ph.source NOT LIKE 'estimate%' AND ${base('ph', 'c')}
+        ORDER BY ph.card_api_id, ph.recorded_at DESC)
+     SELECT c.api_card_id, c.name, c.name_en, c.number, c.rarity, c.set_api_id, c.set_total, c.set_release, c.variants,
+            y.price_usd AS yp, y.source AS ysrc, y.recorded_at AS yat, t.price_usd AS tp, h.source AS headline
+       FROM y JOIN t USING (card_api_id) JOIN cards c ON c.api_card_id = y.card_api_id
+       LEFT JOIN h ON h.card_api_id = y.card_api_id`, [lang + '-%'])).rows
+    .map(r => Object.assign(r, { yp: +r.yp, tp: +r.tp }))
+    .filter(r => Math.max(r.yp / r.tp, r.tp / r.yp) > minRatio)
+    .sort((a, b) => (b.yp / b.tp) - (a.yp / a.tp));
+
+  console.log('\n' + '='.repeat(100));
+  console.log(`  JP BOTH-SOURCE RECHECK -- ${lang}   ${rows.length} cards whose Yahoo and Yuyu-tei base differ > ${minRatio}x`);
+  console.log('  Each side re-derived from its own source, current filter (printing split included). Nothing written.');
+  console.log('='.repeat(100) + '\n');
+
+  const yt = require('./yuyutei');
+  let ytIndex = null; const ytSetCache = new Map();
+  async function ytEntriesFor(setApiId) {
+    if (ytSetCache.has(setApiId)) return ytSetCache.get(setApiId);
+    if (!ytIndex) { try { ytIndex = await yt.fetchSetIndex(); } catch { ytIndex = new Map(); } }
+    const hit = ytIndex.get(String(setApiId).toUpperCase());
+    let entries = null;
+    if (hit) { try { entries = await yt.fetchSet(hit.code); } catch { entries = null; } }
+    ytSetCache.set(setApiId, entries);
+    return entries;
+  }
+
+  const out = [];
+  const tally = {};
+  for (const c of rows) {
+    const y = await yahooJapanSearch(c.name, c.number, jpCtx(c));
+    const yNow = y && y.price ? y.price : null;
+    const mirrors = (y && y.variantPrices) || [];
+    let tNow = null;
+    const entries = await ytEntriesFor(c.set_api_id);
+    if (entries) {
+      const k = String(c.number).replace(/^0+/, '') || '0';
+      const pick = yt.pickVariant(entries.filter(e =>
+        (String(e.number).replace(/^0+/, '') || '0') === k && yt.matchesOurCard(e, c)), c.name);
+      if (pick) tNow = +(pick.yen / JPY_PER_USD).toFixed(2);
+    }
+    const near = (a, b) => a && b && a / b > 0.6 && a / b < 1.67;
+    let cls;
+    if (yNow == null && mirrors.length) cls = 'MIRROR — base none now, only another printing sold';
+    else if (yNow == null)             cls = 'GONE — no Yahoo base comparable now';
+    else if (near(yNow, c.yp) && tNow && Math.max(yNow / tNow, tNow / yNow) > minRatio)
+                                        cls = 'HOLDS — Yahoo reproduces, still far from Yuyu-tei';
+    else if (tNow && Math.max(yNow / tNow, tNow / yNow) <= minRatio)
+                                        cls = 'RESOLVED — Yahoo now agrees with Yuyu-tei';
+    else if (!near(yNow, c.yp))         cls = 'MOVED — Yahoo now differs from what we stored';
+    else                                cls = 'HOLDS — Yahoo reproduces (Yuyu-tei no longer lists it)';
+    const key = cls.split(' ')[0];
+    tally[key] = (tally[key] || 0) + 1;
+    out.push({ id: c.api_card_id, name: c.name, rarity: c.rarity, headline: c.headline,
+               storedYahoo: c.yp, storedYahooSrc: c.ysrc, storedYuyutei: c.tp,
+               yahooNow: yNow, yahooNowN: y && y.count, mirrorsNow: mirrors, yuyuteiNow: tNow, cls });
+    console.log('  ' + c.api_card_id.padEnd(16) + String(c.rarity || '').slice(0, 6).padEnd(7) +
+      ('Y $' + c.yp.toFixed(2)).padEnd(12) + ('T $' + c.tp.toFixed(2)).padEnd(11) +
+      ('Ynow ' + (yNow != null ? '$' + yNow.toFixed(2) : '—')).padEnd(14) +
+      ('Tnow ' + (tNow != null ? '$' + tNow.toFixed(2) : '—')).padEnd(13) +
+      (mirrors.length ? '[' + mirrors.map(m => m.variant.replace('reverse-', '') + ' $' + m.price).join(', ') + '] ' : '') + cls);
+  }
+
+  console.log('\n  ' + rows.length + ' cards');
+  for (const [k, v] of Object.entries(tally)) console.log('    ' + String(v).padStart(4) + '  ' + k);
+  console.log('    (' + rows.filter(r => /^yahoojp/.test(r.headline || '')).length +
+              ' of them show the Yahoo row as the card\'s headline price)\n');
+  if (jsonOut) { fs.writeFileSync(jsonOut, JSON.stringify(out, null, 1)); console.log('  wrote ' + jsonOut + '\n'); }
 }
 
 // ==============================================================

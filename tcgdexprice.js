@@ -317,7 +317,112 @@ function printingPrices(card) {
   return out;
 }
 
+// ══════════════════════════════════════════════════════════════
+// ONE PRODUCT, TWO CARDS — trusted for neither (TASK T1 / T4, 2026-09-29)
+//
+// TCGdex's price is keyed by the marketplace's own product id, which is
+// why it beat our name-and-number matching on 90% agreement. But the
+// MAPPING from TCGdex card to product is TCGdex's, and it is sometimes
+// wrong. Measured:
+//
+//   en swsh9tg-TG16 Mimikyu V  TCGplayer 263784 = the MAIN-SET 068/172
+//                              ($3.62); the Trainer Gallery card is $86.55
+//   en ecard1-1 / ecard1-33    Alakazam holo and rare, ONE Cardmarket
+//                              product 274876
+//
+// A price that is right for one card and wrong for the other cannot be
+// told apart from here, so a product id claimed by two different cards
+// is used for neither. Holo and reverse of ONE card share a product
+// legitimately — the test is distinct CARD ids, never rows.
+//
+// claims: [{ cardId, tcgplayer, cardmarket }] (ids may be null)
+// returns { tcgplayer: Map(pid -> [cardIds]), cardmarket: Map(...) },
+// holding only the ids claimed by 2+ distinct cards.
+function productConflicts(claims) {
+  const out = { tcgplayer: new Map(), cardmarket: new Map() };
+  for (const mk of ['tcgplayer', 'cardmarket']) {
+    const by = new Map();
+    for (const c of claims) {
+      const pid = c[mk];
+      if (pid === null || pid === undefined || pid === '') continue;
+      const k = String(pid);
+      if (!by.has(k)) by.set(k, new Set());
+      by.get(k).add(c.cardId);
+    }
+    for (const [k, ids] of by) if (ids.size > 1) out[mk].set(k, [...ids].sort());
+  }
+  return out;
+}
+
+const CONFLICT_TABLE = `
+  CREATE TABLE IF NOT EXISTS tcgdex_product_conflicts (
+    lang text NOT NULL, marketplace text NOT NULL, product_id text NOT NULL,
+    card_ids text[] NOT NULL, recorded_at timestamptz NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (lang, marketplace, product_id))`;
+
+// The DB half. A harvest of ONE set cannot see the other card of a pair in
+// another set (TG16's twin is in swsh9), so the batch is merged with every
+// claim already stored — the productId on earlier tcgdex rows' source_meta —
+// and with conflicts recorded by earlier runs. A full-language run replaces
+// that language's recorded conflicts; a partial run only adds to them.
+async function recordProductClaims(db, lang, claims, { dry = false, fullRun = false } = {}) {
+  await db.query(CONFLICT_TABLE);
+  const inBatch = new Set(claims.map(c => c.cardId));
+  const hist = await db.query(`
+    SELECT DISTINCT card_api_id AS "cardId",
+           CASE WHEN source LIKE 'tcgdex_tcgplayer_%' THEN source_meta->>'productId' END AS tcgplayer,
+           CASE WHEN source = 'tcgdex_cardmarket' THEN source_meta->>'idProduct' END AS cardmarket
+    FROM price_history
+    WHERE card_api_id LIKE $1 AND variant IS NULL AND source_meta IS NOT NULL
+      AND (source LIKE 'tcgdex_tcgplayer_%' OR source = 'tcgdex_cardmarket')`, [lang + '-%']);
+  const all = claims.concat(hist.rows.filter(r => !inBatch.has(r.cardId)));
+  const found = productConflicts(all);
+  if (!fullRun) {
+    const prev = await db.query(
+      `SELECT marketplace, product_id, card_ids FROM tcgdex_product_conflicts WHERE lang=$1`, [lang]);
+    for (const r of prev.rows) {
+      const m = found[r.marketplace];
+      if (m && !m.has(r.product_id)) m.set(r.product_id, r.card_ids);
+    }
+  }
+  let persisted = false;
+  if (!dry) {
+    if (fullRun) {
+      await db.query(`DELETE FROM tcgdex_product_conflicts WHERE lang=$1`, [lang]);
+      // A marker, so "a full run found nothing shared" is distinguishable
+      // from "no full run has ever happened".
+      await db.query(`INSERT INTO tcgdex_product_conflicts (lang, marketplace, product_id, card_ids)
+                      VALUES ($1,'_run','full','{}')`, [lang]);
+    }
+    for (const mk of ['tcgplayer', 'cardmarket']) {
+      for (const [pid, ids] of found[mk]) {
+        await db.query(`
+          INSERT INTO tcgdex_product_conflicts (lang, marketplace, product_id, card_ids)
+          VALUES ($1,$2,$3,$4)
+          ON CONFLICT (lang, marketplace, product_id)
+          DO UPDATE SET card_ids = EXCLUDED.card_ids, recorded_at = NOW()`, [lang, mk, pid, ids]);
+      }
+    }
+    persisted = true;
+  }
+  return { ...found, persisted };
+}
+
+// For readers (ingest's refresh): every product id recorded as shared, as
+// Sets. `ready` is false when no full run has ever been recorded — the
+// caller must then NOT trust TCGdex blindly, and must say so.
+async function loadProductConflicts(db, lang) {
+  await db.query(CONFLICT_TABLE);
+  const r = await db.query(
+    `SELECT marketplace, product_id FROM tcgdex_product_conflicts WHERE lang=$1`, [lang]);
+  const out = { tcgplayer: new Set(), cardmarket: new Set(),
+                ready: r.rows.some(x => x.marketplace === '_run') };
+  for (const x of r.rows) if (out[x.marketplace]) out[x.marketplace].add(x.product_id);
+  return out;
+}
+
 module.exports = {
+  productConflicts, recordProductClaims, loadProductConflicts,
   printingsFromTcgdex, printingPrices,
   BASE_PRINTINGS, REVERSE_PRINTINGS, SOURCE, PRICING_LANGS,
   isUsablePrice, firstPrice, splitTcgplayer, readCardmarket, parsePricing,

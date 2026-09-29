@@ -132,9 +132,9 @@ async function waitForBoot(server, ms = 20000) {
       '/fx.js', '/approute.test.js', '/cardhunt_preview.html',
       // T7: preserved, disabled, and never to reach a browser.
       '/checkout-disabled.js', '/login-disabled.js',
-      // Tracked 2026-09-29, and never served — a design mockup full of
-      // sample prices.
-      '/cardhunt-redesign.html',
+      // T3 (2026-09-29): tracked, and still never served — a design mockup
+      // full of sample prices, and a script that writes prices.
+      '/cardhunt-redesign.html', '/tcgdexharvest.js', '/tcgsetname.js',
       '/server.js.bak-v4.1-20260820',
       // traversal, both spellings a client can send
       '/app/../package.json', '/app%2f..%2fpackage.json',

@@ -829,10 +829,57 @@ const TCG_REPRINT_SET = {
   '30th-c':  'ME: 30th Celebration Classic Collection',
   'cel25cc': 'Celebrations: Classic Collection'
 };
+// ── TCGplayer's set name for OUR set (TASK T1, 2026-09-29) ──
+// tcgPlayerSearch matched the collector number in ANY set. Our set name
+// "Expedition Base Set" makes TCGplayer rank Base Set products first, so
+// Expedition Alakazam 001 took Base Set 2 001/130 ($55.51) or Base Set
+// 001/102 ($69.72) on alternate nights — the stored history swings between
+// exactly those two — while the card is $233.32. Butterfree #5 ($180) held
+// $0.35: SM Base Set 3/149. Measured on 2,767 English cards: Expedition
+// 27 of 59 wrong by >40%, every other era 1-3%. Aquapolis and Skyridge,
+// the H-numbered sets, agreed 54 of 54 — H-numbering was not the cause.
+//
+// A hit now counts only in TCGplayer's own name for our set — see
+// tcgsetname.js, which holds the rule and the measured exceptions.
+const { sameTcgSet } = require('./tcgsetname.js');
+
 function reprintPricing(card) {
   const rp = cmatch.reprintOf({ api_card_id: card.api_card_id, number: card.number });
   if (!rp) return null;
   return { number: rp.number, printed: rp.printed, tcgSet: TCG_REPRINT_SET[rp.set] || null };
+}
+
+// ── 1a. TCGdex: TCGplayer's price, keyed by TCGplayer's own productId ──
+// The English primary since TASK T1 (2026-09-29). Refuses — returns null,
+// so the caller falls back — when no full `tcgdexharvest.js en` has recorded
+// which products TCGdex maps to two cards: without that list, Trainer
+// Gallery TG16 would take the main-set card's $3.62 for an $86.55 card.
+const tdxp = require('./tcgdexprice.js');
+let _tdxConflicts = null, _tdxWarned = false;
+async function tcgdexPriceFor(card) {
+  if (!card.set_api_id || !String(card.api_card_id).startsWith('en-')) return null;
+  if (!_tdxConflicts) {
+    _tdxConflicts = await tdxp.loadProductConflicts(db, 'en').catch(() => ({ ready: false }));
+  }
+  if (!_tdxConflicts.ready) {
+    if (!_tdxWarned) {
+      _tdxWarned = true;
+      console.log('\n  TCGdex pricing NOT used: no full harvest has recorded shared products.');
+      console.log('  Run  node tcgdexharvest.js en  once. Falling back to TCGplayer search.\n');
+    }
+    return null;
+  }
+  await hostDelay('tcgdex', DELAY_TCGDEX);
+  const d = await get(`${TCGDEX}/en/cards/${card.set_api_id}-${card.number}`);
+  if (!d) return null;
+  const p = tdxp.parsePricing(d);
+  const b = p.tcgplayerBase;
+  if (!b || _tdxConflicts.tcgplayer.has(String(b.productId))) return null;
+  return {
+    price: b.price, source: `tcgdex_tcgplayer_${b.printing}`, marketplace: 'tcgplayer',
+    matched: d.name, matchedBy: 'productId',
+    meta: { printing: b.printing, productId: b.productId, currency: 'USD', updated: p.tcgplayerUpdated }
+  };
 }
 
 async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts = {}) {
@@ -869,6 +916,7 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
     const usable = hits.filter(h => {
       if (!h.marketPrice || h.marketPrice <= 0 || h.marketPrice > 50000) return false;
       if (opts.reprint && String(h.setName || '').toLowerCase() !== opts.reprint.tcgSet.toLowerCase()) return false;
+      if (!opts.reprint && opts.setId && !sameTcgSet(h.setName, opts.setId, setName)) return false;
       const got = String(h.productName || '').toLowerCase();
       if (sealed.test(got)) return false;
       const gotClean = got.replace(/[^a-z0-9]/g, '');
@@ -1951,10 +1999,22 @@ async function safePriceFor(card) {
       //   cardmarketSearch — an HTML scrape Cloudflare refuses, converted
       //     at the hardcoded 1.09 CLAUDE.md records as 6.6% wrong.
       // Both deleted. A wrong price is worse than no price.
-      res = await attempt(() => tcgPlayerSearch(card.name, card.set_name, card.number, card.rarity));
+      // TASK T1 (2026-09-29): TCGdex FIRST — TCGplayer's price keyed by
+      // TCGplayer's own productId, 90% within 10% of what we held and right
+      // where the two disagreed (Expedition), EXCEPT where TCGdex gives two
+      // cards one product (recorded by tcgdexharvest.js; see tcgdexprice.js).
+      // The internal search API remains the fallback only, and must now
+      // match the set as well as the number.
+      res = await attempt(() => tcgdexPriceFor(card));
+      if (!res) res = await attempt(() => tcgPlayerSearch(card.name, card.set_name, card.number, card.rarity,
+                                                         { setId: card.set_api_id }));
     }
   }
 
+  // A result with only other printings' prices (T4) carries them to
+  // writeVariantPrices and no base price.
+  if (res && !(res.price > 0) && Array.isArray(res.variantPrices) && res.variantPrices.length)
+    return { price: null, source: null, variantPrices: res.variantPrices };
   if (!res || !res.price || res.price <= 0) return null;
 
   // Reject implausible single-card prices
@@ -2060,9 +2120,10 @@ async function safePrices(langFilter, ...flags) {
         continue;
       }
       await db.query(
-        `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition)
-         VALUES ($1,$2,$3,$4,'raw_nm')`,
-        [card.api_card_id, res.price, res.source, res.source.split('_')[0]]).catch(() => {});
+        `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition, source_meta)
+         VALUES ($1,$2,$3,$4,'raw_nm',$5)`,
+        [card.api_card_id, res.price, res.source, res.marketplace || res.source.split('_')[0],
+         res.meta ? JSON.stringify(res.meta) : null]).catch(() => {});
       hit++;
       bySource[res.source.split('_')[0]] = (bySource[res.source.split('_')[0]] || 0) + 1;
       console.log(`  [${pct}%] ${card.name.slice(0,24).padEnd(26)} $${String(res.price).padEnd(9)} ${res.source.padEnd(18)} eta ${eta}m`);
@@ -4891,9 +4952,10 @@ async function refreshDue(lang, ...flags) {
         continue;
       }
       await db.query(
-        `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition)
-         VALUES ($1,$2,$3,$4,'raw_nm')`,
-        [card.api_card_id, res.price, res.source, res.source.split('_')[0]]).catch(() => {});
+        `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition, source_meta)
+         VALUES ($1,$2,$3,$4,'raw_nm',$5)`,
+        [card.api_card_id, res.price, res.source, res.marketplace || res.source.split('_')[0],
+         res.meta ? JSON.stringify(res.meta) : null]).catch(() => {});
       priced++;
       const delta = card.price ? ((res.price - card.price) / card.price) * 100 : 0;
       if (Math.abs(delta) >= 10) {

@@ -30,7 +30,9 @@ jpreconcile.js
 # implementations of one parser is how every other pair in this project
 # drifted apart.
 tcgdexprobe.js
-tcgdexharvest.js
+# tcgdexharvest.js was here until 2026-09-29 (TASK T3): it WRITES prices,
+# and existed on one machine -- the ingest.js case exactly. Tracked; never
+# deployed (nothing server.js requires loads it; approute asserts the 404).
 ebayprobe.js
 yahoogate.js
 

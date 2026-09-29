@@ -1,0 +1,90 @@
+// pricesource.test.js — which stored English price source may be believed (TASK T1, 2026-09-29)
+//   node pricesource.test.js
+//
+// Two defects, both measured on 2,767 English cards against TCGdex:
+//  1. tcgPlayerSearch matched a collector number in ANY set. "Expedition Base
+//     Set" ranked Base Set products first: Alakazam #1 held $55-71 (Base Set 2
+//     and Base Set 001) for a $233.32 card. tcgsetname.js now decides the set.
+//  2. TCGdex maps some cards to ANOTHER card's product: Trainer Gallery TG16
+//     Mimikyu V -> main-set 068/172 ($3.62, the card is $86.55). A product id
+//     claimed by two cards is trusted for neither (tcgdexprice.productConflicts).
+// Each half asserts what it KEEPS as well as what it refuses.
+'use strict';
+const fs = require('fs');
+const S = require('./tcgsetname.js');
+const T = require('./tcgdexprice.js');
+let pass = 0, fail = 0;
+const ok = (n, c, d) => { c ? pass++ : fail++; console.log('  ' + (c ? 'ok  ' : 'FAIL') + '  ' + n + (c || !d ? '' : '  — ' + d)); };
+
+console.log('\nSET — the hit must be in OUR set (real TCGplayer set names, probed 2026-09-29)');
+// Refused: the exact hits that produced the stored Expedition prices.
+ok('Expedition Alakazam: Base Set 2 hit refused', !S.sameTcgSet('Base Set 2', 'ecard1', 'Expedition Base Set'));
+ok('Expedition Alakazam: Base Set hit refused', !S.sameTcgSet('Base Set', 'ecard1', 'Expedition Base Set'));
+ok('Expedition Butterfree: SM Base Set hit refused', !S.sameTcgSet('SM Base Set', 'ecard1', 'Expedition Base Set'));
+ok('Base Set (Shadowless) is not Base Set', !S.sameTcgSet('Base Set (Shadowless)', 'base1', 'Base Set'));
+ok('Brilliant Stars main set is not its Trainer Gallery',
+  !S.sameTcgSet('SWSH09: Brilliant Stars', 'swsh9tg', 'Brilliant Stars Trainer Gallery'));
+ok('EX Dragon Frontiers is not EX Dragon', !S.sameTcgSet('EX Dragon Frontiers', 'ex3', 'Dragon'));
+ok('an empty set name is refused', !S.sameTcgSet('', 'base1', 'Base Set'));
+// Kept: the names that differ only in form.
+ok('Expedition hit accepted for Expedition Base Set (measured alias)', S.sameTcgSet('Expedition', 'ecard1', 'Expedition Base Set'));
+ok('"Black and White" == "Black & White"', S.sameTcgSet('Black and White', 'bw1', 'Black & White'));
+ok('"SWSH09: Brilliant Stars Trainer Gallery" == ours',
+  S.sameTcgSet('SWSH09: Brilliant Stars Trainer Gallery', 'swsh9tg', 'Brilliant Stars Trainer Gallery'));
+ok('"SV03: Obsidian Flames" == "Obsidian Flames"', S.sameTcgSet('SV03: Obsidian Flames', 'sv03', 'Obsidian Flames'));
+ok('"EX Holon Phantoms" == "Holon Phantoms"', S.sameTcgSet('EX Holon Phantoms', 'ex13', 'Holon Phantoms'));
+ok('"EX FireRed & LeafGreen" == "FireRed & LeafGreen"', S.sameTcgSet('EX FireRed & LeafGreen', 'ex6', 'FireRed & LeafGreen'));
+ok('"SM Base Set" == "Sun & Moon" (measured alias)', S.sameTcgSet('SM Base Set', 'sm1', 'Sun & Moon'));
+ok('"Base Set" == "Base Set"', S.sameTcgSet('Base Set', 'base1', 'Base Set'));
+ok('"Base Set 2" == "Base Set 2"', S.sameTcgSet('Base Set 2', 'base4', 'Base Set 2'));
+ok("McDonald's Promos 2011 (measured alias)", S.sameTcgSet("McDonald's Promos 2011", '2011bw', "McDonald's Collection 2011"));
+
+ok('"Pokemon GO" == "Pokémon GO" by the normaliser alone', S.sameTcgSet('Pokemon GO', 'no-alias', 'Pokémon GO'));
+ok('trainer kits are NOT aliased (both halves number from 1)',
+  !S.sameTcgSet('BW Trainer Kit: Excadrill & Zoroark', 'tk-bw-e', 'BW trainer Kit (Excadrill)'));
+
+console.log('\nPRODUCT — one product id claimed by two cards is trusted for neither');
+const c1 = T.productConflicts([
+  { cardId: 'en-swsh9tg-TG16', tcgplayer: 263784, cardmarket: null },
+  { cardId: 'en-swsh9-68', tcgplayer: 263784, cardmarket: 612 },
+  { cardId: 'en-ecard1-1', tcgplayer: 84100, cardmarket: 274876 },
+  { cardId: 'en-ecard1-33', tcgplayer: 84133, cardmarket: 274876 },
+  { cardId: 'en-base1-4', tcgplayer: 42382, cardmarket: 1 },
+  { cardId: 'en-base1-4', tcgplayer: 42382, cardmarket: 1 },    // holo + reverse rows of ONE card
+  { cardId: 'en-sv03-223', tcgplayer: null, cardmarket: null },
+]);
+ok('TG16 and 068 share 263784 -> conflict', c1.tcgplayer.has('263784'));
+ok('...naming both cards', JSON.stringify(c1.tcgplayer.get('263784')) === '["en-swsh9-68","en-swsh9tg-TG16"]');
+ok('Alakazam #1 and #33 share Cardmarket 274876 -> conflict', c1.cardmarket.has('274876'));
+ok('Alakazam #1 and #33 keep their OWN TCGplayer products', !c1.tcgplayer.has('84100') && !c1.tcgplayer.has('84133'));
+ok('two rows of ONE card are not a conflict', !c1.tcgplayer.has('42382') && !c1.cardmarket.has('1'));
+ok('null ids are never a shared product', ![...c1.tcgplayer.keys(), ...c1.cardmarket.keys()].includes('null'));
+ok('exactly 1 + 1 conflicts found', c1.tcgplayer.size === 1 && c1.cardmarket.size === 1,
+  `${c1.tcgplayer.size} / ${c1.cardmarket.size}`);
+ok('number and string ids compare equal', T.productConflicts([
+  { cardId: 'a', tcgplayer: 5 }, { cardId: 'b', tcgplayer: '5' }]).tcgplayer.has('5'));
+
+console.log('\nWIRING — the paths actually use both');
+const H = fs.readFileSync(__dirname + '/tcgdexharvest.js', 'utf8');
+ok('harvest records claims before writing', H.indexOf('recordProductClaims') > 0
+  && H.indexOf('recordProductClaims') < H.indexOf('INSERT INTO price_history'));
+ok('harvest skips a shared TCGplayer product', /p\.tcgplayerBase && !tpShared/.test(H));
+ok('harvest skips a shared Cardmarket product', /p\.cardmarket && !cmShared/.test(H));
+ok('harvest skips a shared product\'s printing rows', /tpShared \? \[\] :/.test(H));
+if (fs.existsSync(__dirname + '/ingest.js')) {
+  const I = fs.readFileSync(__dirname + '/ingest.js', 'utf8');
+  const spf = I.slice(I.indexOf('async function safePriceFor'), I.indexOf('async function safePrices('));
+  ok('safePriceFor asks TCGdex first', spf.indexOf('tcgdexPriceFor(card)') > 0
+    && spf.indexOf('tcgdexPriceFor(card)') < spf.lastIndexOf('tcgPlayerSearch('));
+  ok('safePriceFor fallback passes the set id', /tcgPlayerSearch\(card\.name, card\.set_name, card\.number, card\.rarity,\s*\{ setId: card\.set_api_id \}\)/.test(spf));
+  const tps = I.slice(I.indexOf('async function tcgPlayerSearch'), I.indexOf('async function tcgPlayerSearch') + 3000);
+  ok('tcgPlayerSearch filters hits by set', /opts\.setId && !sameTcgSet\(h\.setName, opts\.setId, setName\)/.test(tps));
+  const tpf = I.slice(I.indexOf('async function tcgdexPriceFor'), I.indexOf('async function tcgPlayerSearch'));
+  ok('tcgdexPriceFor refuses without a recorded full harvest', /if \(!_tdxConflicts\.ready\)/.test(tpf));
+  ok('tcgdexPriceFor refuses a shared product', /_tdxConflicts\.tcgplayer\.has\(String\(b\.productId\)\)/.test(tpf));
+  ok('the writers record marketplace and source_meta',
+    (I.match(/res\.marketplace \|\| res\.source\.split\('_'\)\[0\],\s*res\.meta/g) || []).length === 2);
+} else console.log('  SKIP  ingest.js wiring — not in this checkout');
+
+console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
+process.exitCode = fail ? 1 : 0;

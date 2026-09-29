@@ -627,7 +627,7 @@ node marketwait.test.js      # 12   no /api/market request; one /api/listings pe
 node nofabricated.test.js    # 48   no password/card input, no invented shops/holdings/prices (--deployed: Render's HTML too)
 node nosoldscrape.test.js    # 17   no eBay sold-page scrape; real /api/market handler, network stubbed (--live: +3)
 node gateaudit.test.js       # 57   T9: every path reaches the gates it needs, and reports (--live: +8)
-node variants.test.js        # 71   T10: printings from the REAL TCGdex shape; the gate; every reader; the page (--db: +6)
+node variants.test.js        # 72   T10: printings from the REAL TCGdex shape; the gate; every reader; the page (--db: +6)
 ```
 
 Run them all:

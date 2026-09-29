@@ -1435,7 +1435,13 @@ function normaliseListing(o) {
     titleCondition: o.titleCondition || null,
     // eBay Browse item id — the handle for an on-demand cert check. Served
     // with the row like the url is; never stored (eBay's terms).
-    itemId: o.itemId || null
+    itemId: o.itemId || null,
+    // What the title states about its PRINTING (T10). Dropped here on the
+    // first deploy, exactly as `edition` once was: the gate refused
+    // correctly on live eBay, and every kept row still arrived "unstated",
+    // so the page grouped a "Reverse Holo" title as printing-not-stated.
+    printing: o.printing || null,
+    printingStated: o.printingStated === true
   };
 }
 

@@ -119,6 +119,17 @@ ok('sourceYuyutei serves the asked mirror, else the base rule', /wantMirror/.tes
 ok('every source reports printing', ['sourceEbay', 'sourceYahoo', 'sourceYuyutei'].every(f => /printingReport\(/.test(fnOf(f))));
 ok('gatherListings copies the printing report into sources', /sources\[s\.id\]\.printing = r\.value\.printing/.test(fnOf('gatherListings')));
 {
+  // The REAL normaliseListing — it returns a fixed shape and silently drops
+  // any field not in it. On the first deploy it dropped these two: the gate
+  // refused correctly on live eBay, and every kept row arrived "unstated".
+  const src = fnOf('normaliseListing');
+  let row = {};
+  try { row = new Function(src + '; return normaliseListing;')()({ source: 'ebay', title: 't', price: 1,
+    printing: 'reverse', printingStated: true }); } catch (e) { row = { err: e.message }; }
+  ok('normaliseListing carries printing + printingStated to the row (run, not grepped)',
+    row.printing === 'reverse' && row.printingStated === true, JSON.stringify(row).slice(0, 120));
+}
+{
   const i = server.indexOf("app.get('/api/listings/:cardId'");
   const route = server.slice(i, server.indexOf('\napp.', i + 5));
   ok('/api/listings keys its cache on the printing too', /listingCacheGet\(key, cacheGrade\)/.test(route) && /listingCacheSet\(key, cacheGrade/.test(route));

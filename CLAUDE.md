@@ -258,6 +258,72 @@ that can be hammered is an excellent way to earn the block it is testing for.
 
 ---
 
+# THE GATES — which path reaches which (T9 audit, 2026-09-29)
+
+Traced from the code, not from this file. The question asked of every row:
+**is it called on every path that produces a listing or a stored price, does
+it get the inputs it needs, and does it report what it refused?** A gate
+that is right and not reached is not a gate. `gateaudit.test.js` pins the
+structure (57 offline, +8 `--live`).
+
+## The paths
+
+| id | path | what it produces |
+|---|---|---|
+| **E** | `/api/listings/:cardId` and `/api/search` → `gatherListings` → `sourceEbay` | live eBay rows (Render only — the keys live there) |
+| **Y** | same → `sourceYuyutei` | Japanese shop asks, `ja-` cards |
+| **H** | same → `sourceYahoo` | Yahoo JP rows — **local only** (Render is 403'd) |
+| **D** | the page's deep links, `cardQuery` → `cm.buildQuery(forLink)` | a search string; results never return to us, so nothing can gate them — shown under UNFILTERED SEARCHES |
+| **P** | ingest `safePriceFor` / `refresh` → `tcgPlayerSearch` (or `reprintPricing`) | stored English prices, by collector number |
+| **Q** | ingest `yahooJapanSearch` (safeprices, refresh, jpcheck, ytest, alerts) | stored Japanese medians |
+| **T** | ingest `tcgdexprices` / `manifest --prices` | stored prices keyed by TCGdex card id |
+| **G** | `gradeprices.js` | stored grade aggregates — reads **E/Y/H via `/api/listings`**, so it inherits every row below |
+
+Gone, and why: `/api/listings/:cardName` (ungated eBay name search on any
+id that did not resolve — 404 now), `/api/market`'s `ebayActive` /
+`tcgplayerPrice` / `ebaySold` / PriceCharting scrape, ingest's `ebayBrowseActive`
+and `cardmarketSearch` name-only fallbacks, jpfilter's second English gate.
+
+## The gates
+
+| gate | checks | E | Y | H | P | Q | needs | reports |
+|---|---|---|---|---|---|---|---|---|
+| **lot / sealed / merch** | not one card: lots, boxes, playsets, x4, merch, fakes | `NOT_A_SINGLE_CARD` | `jpfilter` lot words via `matchesOurCard` | `JP_LOT_WORDS` + 枚/点 | n/a — TCGplayer product catalogue | `JP_LOT_WORDS` | title | E/Y/H `dropped[]` |
+| **card name** | the title names this card; ex/GX/V/VMAX/VSTAR agree | `verify` §3 | `pickVariants(name)` | `jpTitleMentionsCard` | number match, name tiebreak | `jpTitleMentionsCard` | `name` / `nameEn` | E/Y/H |
+| **number + set total** | our N/M, not another set's (master-ball mirror class) | `verify` §4-5 | `matchesOurCard` | `jpTitleMatchesNumber` | `tcgPlayerSearch` by number, rarity tiebreak, else nothing | `jpTitleMatchesNumber` — **fails closed without `setTotal`** | `number`, `setTotal` (**refresh dropped it until T9**) | E/Y/H |
+| **set-name conflict** | "Base Set 2" is not "Base Set" | `namesAConflictingSet` | n/a (set page) | via `jpTitleMatchesNumber` | — | via `jpTitleMatchesNumber` | `setName` | E |
+| **reprint family** | Celebrations / 30th / Classic Collection, both directions | `printingConflict` | `printingConflict` | `printingConflict` | `reprintPricing` + `TCG_REPRINT_SET` (T6) | `printingConflict` (**T9**) | `setId` | `gate.unchecked` |
+| **year** | a stated year ±1 of the set's | `printingConflict` | same | same | n/a | same (**T9**) | `setYear` ← `set_release` (**must be SELECTed**) | `gate.unchecked` |
+| **language** | Korean/Chinese/etc. print of a JP/EN card | `printingConflict` | same, CJK not evidence | same, CJK not evidence | n/a (EN catalogue) | same (**T9**) | `lang` ← card id | `gate.unchecked`, `gateWarning` |
+| **grade + grader** | exact grade, qualifiers, one grader; eBay's aspect fields cross-checked | `verify` §2 + `ebayGradeFilter` | raw only — says so | `jpTitleHasGrade` | raw only | raw only | grade string | E `gradeFilter{}` |
+| **raw vs slab** | a raw search refuses slabs | `SLAB_WORDS` + `conditionSaysGraded` | shop singles | `jpTitleIsSingleRaw` ← `SLAB_WORDS` (**T9**) | n/a | same (**T9**) | title (+ eBay `condition`) | E/H |
+| **raw condition** | NM/LP/MP/HP (M/DMG seller-stated) | eBay aspect filter | page groups: unstated | page groups: unstated | NM only | — | selection | page: "N stated otherwise", UNSTATED group |
+| **outliers** | an order of magnitude below the card's own median — **flags, never removes** | `flagOutliers` in `gatherListings` | same | same | — | IQR + `YAHOO_MAX_SPREAD` refusal | ≥5 priced, ≥$15 median | `outliers{}` |
+| **reprint-priced** | a row at the known reprint's price level | `flagReprintPriced` where `REPRINT_OF` | same | same | — | — | the reprint's own listings | `outliers.reprints[]` |
+| **variant** | reverse / holo / master-ball / poké-ball printing | **NONE — labelled only** (`listingparse`) | `pickVariants` (base only) | **NONE** | holofoil/normal key choice | **NONE** | — | — → **T10** |
+
+**Reporting.** Every registered listing source now returns `kept`,
+`rejected`, `dropped[]` (reasons), `gate` (what the gate had) — Yahoo did not
+until T9 (`jpItemRejectReason`). Stored-price paths report to the console
+only; that is a script run deliberately, the `gradeprices.js` shape.
+
+## Open, and a decision rather than a fix
+- **`tcgPlayerSearch` (path P) uses TCGplayer's internal search API** —
+  `mp-search-api.tcgplayer.com`, the endpoint withdrawn from Render on
+  2026-09-29 — from the home IP, nightly. It is the source of
+  **72,174 `tcgplayer_market` rows** (last written 2026-09-28); TCGdex has
+  supplied ~220. The premise "we get TCGplayer prices via TCGdex and
+  pokemontcg.io" is true of the Render path and not of the stored prices.
+  Moving P to TCGdex (`tcgdexprices`, validated 37/37 at 1.020x) is the
+  legitimate route; it has not been run at catalogue scale.
+- **`yahoojp_avg_N`** — Yahoo's own average, lots and slabs included, used
+  only when a search returns no items. Ungated by construction; 0 rows held.
+- **`node ingest.js scrape`** still exists (`scrapeEbaySold`). Banned, never
+  run — T8's reasoning says delete it.
+- **Variant is gated nowhere** except Yuyu-tei's base-printing rule. T10.
+
+---
+
 # TASKS
 
 ## T1 · Verify English and Japanese — standing check, not a one-off
@@ -513,13 +579,13 @@ node ingest.js imgscrape <lang> [--force]
 node ingest.js imgreport <lang>
 ```
 
-## The test suite — 21 files, all green 2026-09-22
+## The test suite — all green 2026-09-29
 
 Standalone by design, so a revert of `ingest.js` cannot take them with it.
 Counts are today's; a suite that suddenly reports fewer has lost assertions.
 
 ```powershell
-node approute.test.js        # 45   /app serves, and the project root does not leak
+node approute.test.js        # 47   /app serves, and the project root does not leak
 node cardmatch.test.js       # 27   the gate
 node cardmatch2.test.js      # 29
 node cardmatch3.test.js      # 44   NOT_A_SINGLE_CARD word boundaries, both directions
@@ -530,7 +596,7 @@ node ebayquota.test.js       # 25   the quota gate
 node ebaytoken.test.js       # 49   which failure is reported, not merely that one was
 node estimator.test.js       # 31   the one estimator
 node gradeprice.test.js      # 27
-node jptest.js               # 81   35 of them assert the filter KEEPS a valid listing
+node jptest.js               # 88   39 of them assert the filter KEEPS; English cases run cardmatch.verify
 node listingparse.test.js    # 26
 node matchparity.test.js     # 102  /api/listings and /api/search cannot disagree
 node outlier.test.js         # 12   the price test, on the real Giratina #186 spread
@@ -542,7 +608,7 @@ node selector.test.js        # 517  every grader, every published grade, through
 node rawgate.test.js         # 69   every grader's slab refused from a raw search — AND
                              #      TAG TEAM / ACE SPEC / Alt Art kept
 node scopeguard.test.js      # 28
-node setlist.test.js         # 26   the browsed set list resolves; set page == card page
+node setlist.test.js         # 27   the browsed set list resolves; set page == card page; ingest.js tracked
 node sourcerank.test.js      # 48   9 of 15 decision cases PERMITTED, not only blocked
 node tcgdexprice.test.js     # 70
 node digital.test.js         # 49   Pocket hidden at every read; server never writes `cards`
@@ -556,9 +622,10 @@ node unspaced.test.js        # 41   "PSA10" read; TAG TEAM / ACE SPEC still reac
 node certcheck.test.js       # 47   cert + photos from one getItem; never claims verified; never padded; nothing eBay persisted
 node reprintpricing.test.js  # 13   reprints priced by printed number in their own TCGPlayer set (SKIP w/o ingest.js)
 node manifestmap.test.js     # 12   manifest never maps "None" to Common (SKIP w/o ingest.js)
-node marketwait.test.js      # 18   one /api/listings per card+grade; market waits for it
+node marketwait.test.js      # 12   no /api/market request; one /api/listings per card+grade
 node nofabricated.test.js    # 48   no password/card input, no invented shops/holdings/prices (--deployed: Render's HTML too)
-node nosoldscrape.test.js    # 16   no eBay sold-page scrape; real getMarketPrice, network stubbed (--live: +3)
+node nosoldscrape.test.js    # 17   no eBay sold-page scrape; real /api/market handler, network stubbed (--live: +3)
+node gateaudit.test.js       # 57   T9: every path reaches the gates it needs, and reports (--live: +8)
 ```
 
 Run them all:
@@ -1435,9 +1502,17 @@ is DELETED, not switched off; `/api/market` returns `sold: SOLD_UNAVAILABLE`
 and the card page's Last sold box says "no licensed sold source". Nothing
 was lost — it never wrote to the database. `nosoldscrape.test.js` runs the
 real `getMarketPrice` with the network stubbed and fails on any sold fetch;
-watched failing (12) against the pre-fix files. Still there, and legitimate:
-the ungated `ebayActive` name search (our key, Browse API), and the page's
-"eBay — sold" deep link, which opens in the user's own browser.
+watched failing (12) against the pre-fix files. The page's "eBay — sold"
+deep link stays: it opens in the user's own browser.
+
+**And the rest of `/api/market` went the same day** (`8cd01bb`, decided):
+the ungated `ebayActive` name search (the "Lowest listing" fallback — now
+only `/api/listings`' gated `cheapestLive` writes that box, one eBay call
+fewer per view), `tcgplayerPrice` (TCGplayer's internal search API from
+Render — the T8 terms question; we hold their prices via TCGdex and
+pokemontcg.io) and the dead PriceCharting HTML scrape. `/api/market` now
+answers from the stored number-matched price and the sold status with no
+outbound call, and **the page no longer calls it at all**.
 
 ## Reprints were priced by catalogue number (2026-09-29, TASK T6)
 30th Classic Collection held 30 cards: 19 real prices, 11 estimate-only.

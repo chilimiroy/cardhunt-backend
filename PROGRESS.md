@@ -1,5 +1,40 @@
 # CardHunt — Progress Log
 
+## 2026-09-29 — ingest.js tracked; sold scrape gone; every gate audited
+
+**T2.** `17695f4`. ingest.js tracked (scanned first: env-only credentials,
+0x08 clean). Never deployed: Render runs server.js, `/ingest.js` 404s.
+
+**T8.** `9b8b3d9`, live. eBay sold-page scrape deleted; Last sold says "no
+licensed sold source". Then `8cd01bb` (decided): `/api/market`'s ungated
+`ebayActive`, TCGplayer internal-API call and dead PriceCharting scrape
+deleted; Lowest listing comes only from `/api/listings`' `cheapestLive`;
+the page makes no `/api/market` request. Browser: 0 market requests,
+Charizard Lowest "$104.51 · checked listing", PSA 10 via the selector
+"$775.00", no console errors.
+
+**T2a.** Full English search audit: exact 102 / 21,272 fail, typed 126 /
+1,946, numbered 70. 96 exact failures were `/api/search`'s guard refusing
+setHint-only parses before `resolveCard` ran — the 2026-09-28 fix was in the
+resolver and the test called the resolver directly. `cd9da50`: 102 -> 6 on
+a recheck of all 218. New group: 69 alphanumeric numbers (`24a/119`).
+
+**T9.** Table in CLAUDE.md "THE GATES". Holes closed, one commit each:
+`/api/listings/:cardName` ungated fall-through (404); Yahoo's uncounted
+rejections (`jpItemRejectReason`, "29 kept, 55 rejected of 84");
+jpfilter's four-name grader list (+10 SGC slabs refused of 945 titles, 0
+TAG TEAM lost); ingest's Yahoo median never ran `printingConflict` (0
+changed on the 25 dearest — closed, not repaired); refresh dropped
+`set_total`; ingest's name-only eBay (would have STORED eBay data — 0 rows,
+keys absent locally) and Cardmarket fallbacks deleted; Chinese no longer
+priced from Yahoo JP; jpfilter's second English gate deleted (dropped 4/4
+genuine titles) — its cases now run `cardmatch.verify` and found "x4
+Playset" kept and "$74" read as #74 (fixed; 0 of 516 kept titles changed).
+
+**Found, not acted on:** ingest's `tcgPlayerSearch` uses TCGplayer's
+internal search API from the home IP — source of 72,174 `tcgplayer_market`
+rows. Decision for Roy.
+
 ## 2026-09-28 — search reaches cards by their own name; cert check, eBay half
 
 **T1.** "Pikachu Zekrom GX" found nothing. Parser over all 4,512 English

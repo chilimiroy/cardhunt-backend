@@ -678,7 +678,13 @@ const REPRINT_FAMILIES = [
   { id: '30th', label: '30th Celebration (2026)', year: 2026,
     sets: ['30th', '30th-c'],
     says: [/\b30th\b/i, /\b30c\b/i],
-    ask: '30th Celebration' },
+    ask: '30th Celebration',
+    // eBay negative keywords for a DEEP LINK on a card this family reprinted
+    // (T0, 2026-09-30). A link has no gate: the Aquapolis Lugia link returned
+    // the 30th reprints the API search refused (10 of 132). The FromReprint
+    // list is what is safe on ANOTHER family's reprint card — "celebration"
+    // is in every 30th title, so a 30th card cannot exclude Celebrations by it.
+    linkMinus: ['-30th'], linkMinusFromReprint: ['-30th'] },
   // "25th Anniversary" is how sellers describe a Celebrations reprint too —
   // live, "Charizard 4/102 Base Set Holo 25th Anniversary" at $195 was kept
   // on the 1999 card. But McDonald's 2021 is ALSO a 25th Anniversary set,
@@ -689,11 +695,15 @@ const REPRINT_FAMILIES = [
     sets: ['cel25', 'cel25cc'],
     says: [/\bcelebrations?\b/i, /\bclassic collection\b/i],
     saysOnOriginal: [/\b25th\b/i],
-    ask: 'Celebrations' },
+    ask: 'Celebrations',
+    linkMinus: ['-celebrations', '-25th', '-"classic collection"'],
+    linkMinusFromReprint: ['-25th'] },
   { id: 'lc', label: 'Legendary Collection (2002)', year: 2002,
     sets: ['lc'],
     says: [/\blegendary collection\b/i],
-    ask: 'Legendary Collection' }
+    ask: 'Legendary Collection',
+    linkMinus: ['-"legendary collection"'],
+    linkMinusFromReprint: ['-"legendary collection"'] }
 ];
 
 // Classic Collection cards: our catalogue number -> [original card, the
@@ -1105,6 +1115,19 @@ function buildQuery(card, grade, opts) {
   // family's name ("Lugia 149/147 30th Celebration"): sellers write "30th
   // Celebration CC", rarely the full set name, and eBay needs every word.
   const rp = reprintOf(card);
+  // Reprint families a deep link excludes: on an original, every family that
+  // reprinted it; on a reprint, the other families that reprinted its
+  // original. Read before asPrinted rewrites the number.
+  const reprintMinus = [];
+  if (opts.forLink) {
+    const orig = rp ? { cardId: rp.originalId, number: rp.number } : card;
+    for (const f of familiesReprinting(orig)) {
+      if (rp && f === rp.family) continue;
+      for (const t of (rp ? f.linkMinusFromReprint : f.linkMinus) || []) {
+        if (!reprintMinus.includes(t)) reprintMinus.push(t);
+      }
+    }
+  }
   card = asPrinted(card);
   if (rp) card = Object.assign({}, card, { setName: rp.family.ask });
   const bits = [];
@@ -1208,7 +1231,9 @@ function buildQuery(card, grade, opts) {
     // PSA 10" plus the full list measured 305 characters, and eBay would
     // have silently dropped the tail — which is where the grade exclusions
     // were. Fit what fits, best first.
-    for (const term of gradeMinus.concat(langMinus, junkMinus)) {
+    // A reprint is the next expensive mistake after a wrong grade: Aquapolis
+    // Lugia ~$400, its 30th reprint a fraction of that.
+    for (const term of gradeMinus.concat(reprintMinus, langMinus, junkMinus)) {
       if (q.length + 1 + term.length <= EBAY_KEYWORD_LIMIT) q += ' ' + term;
     }
   }

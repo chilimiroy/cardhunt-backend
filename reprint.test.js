@@ -229,6 +229,33 @@ async function catalogue() {
   } finally { await db.end(); }
 }
 
+// T0 (2026-09-30): the gate refused the 30th reprints on Aquapolis Lugia, but
+// the eBay DEEP LINK — which nothing gates — handed eBay the same string and
+// showed them. Every one of the 20 refused titles said "30th".
+{
+  console.log('\n6. DEEP LINKS EXCLUDE THE CARD\'S REPRINTS\n');
+  const Q = (c, g) => cm.buildQuery(c, g || 'Raw NM', { forLink: true });
+  const lugia = { cardId: 'en-ecard2-149', name: 'Lugia', number: '149', setTotal: 147, setName: 'Aquapolis' };
+  const zard  = { cardId: 'en-base1-4', name: 'Charizard', number: '4', setTotal: 102, setName: 'Base Set' };
+  const l30   = { cardId: 'en-30th-c-029', name: 'Lugia', number: '029', setTotal: 30 };
+  const z30   = { cardId: 'en-30th-c-001', name: 'Charizard', number: '001', setTotal: 30 };
+  const zcel  = { cardId: 'en-cel25cc-CC002', name: 'Charizard', number: 'CC002', setTotal: 25 };
+  const pins  = { cardId: 'en-sv10-1', name: "Ethan's Pinsir", number: '1', setTotal: 182, setName: 'Destined Rivals' };
+  ok('Aquapolis Lugia link excludes -30th', / -30th\b/.test(Q(lugia)));
+  ok('Aquapolis Lugia link excludes -30th at PSA 10 too', / -30th\b/.test(Q(lugia, 'PSA 10')));
+  ok('Aquapolis Lugia link does not exclude Celebrations (never reprinted it)', !/-celebrations/.test(Q(lugia)));
+  ok('Base Set Charizard link excludes both families',
+     / -30th\b/.test(Q(zard)) && /-celebrations/.test(Q(zard)) && /-25th/.test(Q(zard)));
+  // What the link KEEPS: a reprint's own link must not exclude its own family.
+  ok('30th Lugia link does not exclude its own family', !/-30th|-celebration/.test(Q(l30)) && /30th Celebration/.test(Q(l30)));
+  ok('30th Charizard link excludes Celebrations by -25th only, never -celebrations',
+     /-25th/.test(Q(z30)) && !/-celebrations|-"classic collection"/.test(Q(z30)));
+  ok('Celebrations Charizard link excludes -30th, not itself', / -30th\b/.test(Q(zcel)) && !/-celebrations|-25th/.test(Q(zcel)));
+  ok('a card nobody reprinted gains no reprint terms', !/-30th|-celebrations|-25th|legendary/.test(Q(pins)));
+  ok('the API query (no forLink) is unchanged — the gate still decides', !/ -/.test(cm.buildQuery(lugia, 'Raw NM')));
+  ok('the link fits eBay\'s keyword limit', Q(zard, 'PSA 10').length <= 300, Q(zard, 'PSA 10').length);
+}
+
 catalogue().then(() => {
   console.log(`\n  ${pass} passed, ${fail} failed\n`);
   process.exit(fail ? 1 : 0);

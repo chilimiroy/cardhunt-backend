@@ -24,6 +24,7 @@ const outlier = require('./outlier');
 // The rows stay in the database. See digital.js; preserve.test.js asserts
 // every `FROM cards` / `JOIN cards` here either filters or says why not.
 const digital = require('./digital');
+const printsql = require('./printsql');   // T10: which stored row is a card's BASE price
 // A card id not matching ^(en|ja|zh-tw|zh-cn)- is a bug, not a card:
 // refused at every entry point that takes one, never served. cardid.js.
 const cardid = require('./cardid');
@@ -393,6 +394,7 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
             FROM price_history ph
             WHERE ph.card_api_id = c.api_card_id
               AND ph.grade IS NULL          -- the ungraded card, not a slab
+              AND ${printsql.basePrintingSql('ph', 'c')}   -- never a reverse as the base (T10)
             ORDER BY (ph.source NOT LIKE 'estimate%') DESC, ph.recorded_at DESC
             LIMIT 1
           ) lp ON TRUE
@@ -618,6 +620,7 @@ app.get('/api/cards/:cardId', async (req, res) => {
           FROM price_history ph
           WHERE ph.card_api_id = c.api_card_id
             AND ph.grade IS NULL            -- the ungraded card, not a slab
+            AND ${printsql.basePrintingSql('ph', 'c')}   -- never a reverse as the base (T10)
           ORDER BY (ph.source NOT LIKE 'estimate%') DESC, ph.recorded_at DESC
           LIMIT 1
         ) lp ON TRUE
@@ -631,7 +634,21 @@ app.get('/api/cards/:cardId', async (req, res) => {
         const c = row.rows[0];
         const price = c.price_usd ? parseFloat(c.price_usd) : 0;
         const isEstimate = !c.price_source || /^estimate/.test(c.price_source);
+        // T10: the printings this card exists in, and each NON-base
+        // printing's latest real price. The headline (_price) is the base
+        // printing — printsql.basePrintingSql — and these never replace it.
+        const pkeys = printingsOf(c);
+        const other = await db.query(`
+          SELECT DISTINCT ON (variant) variant, price_usd::float AS price, source, recorded_at
+          FROM price_history
+          WHERE card_api_id = $1 AND grade IS NULL AND variant LIKE 'reverse%'
+            AND source NOT LIKE 'estimate%' AND price_usd > 0
+          ORDER BY variant, recorded_at DESC`, [c.api_card_id]).catch(() => ({ rows: [] }));
+        const printingPrices = other.rows.map(r => ({ printing: r.variant, label: cm.printingLabel(r.variant),
+          price: r.price, source: r.source, date: r.recorded_at }));
         return res.json({ data: {
+          printings: pkeys ? pkeys.map(k => ({ key: k, label: cm.printingLabel(k) })) : null,
+          printingPrices,
           id: c.api_card_id, name: c.name, nameEn: c.name_en || null,
           number: c.number, rarity: c.rarity,
           supertype: c.supertype,
@@ -643,9 +660,12 @@ app.get('/api/cards/:cardId', async (req, res) => {
                  nameEn: c.set_name_en || null, total: c.set_total,
                  logo: c.set_logo || null, serie: c.set_series || null,
                  releaseDate: c.set_release || null },
-          tcgplayer: c.tcgplayer_data || (price > 0 ? { prices: { holofoil: {
-            market: price, low: +(price * 0.65).toFixed(2),
-            mid: price, high: +(price * 1.7).toFixed(2) } } } : null),
+          // What we hold, or nothing. This used to INVENT a TCGplayer block
+          // when none was held — low = price x 0.65, high = price x 1.7,
+          // labelled `tcgplayer` — the T7 fabricated-numbers pattern on the
+          // server side (found 2026-09-29, T10). The page never drew it; any
+          // other reader of this API would have taken it as TCGplayer's.
+          tcgplayer: c.tcgplayer_data || null,
           cardmarket: c.cardmarket_data || null,
           _price: price,
           _priceSource: c.price_source || 'estimate',
@@ -769,9 +789,13 @@ app.get('/api/price/:cardId', async (req, res) => {
           const c = card.rows[0];
           const realId = c.api_card_id;
           const hist = await db.query(`
-            SELECT price_usd, source, marketplace, recorded_at
-            FROM price_history WHERE card_api_id = $1 AND grade IS NULL
-            ORDER BY recorded_at DESC LIMIT 60`, [realId]);
+            SELECT ph.price_usd, ph.source, ph.marketplace, ph.recorded_at
+            FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
+            -- digital:unfiltered — this card was resolved through visibleSql just
+            -- above; the join only reads its variants for the base-printing rule.
+            WHERE ph.card_api_id = $1 AND ph.grade IS NULL
+              AND ${printsql.basePrintingSql('ph', 'c')}   -- never a reverse as the base (T10)
+            ORDER BY ph.recorded_at DESC LIMIT 60`, [realId]);
 
           const real = hist.rows.filter(h => !/^estimate/.test(h.source || ''));
           const best = real[0] || hist.rows[0];
@@ -1242,7 +1266,7 @@ async function resolveListingCard(cardId) {
   // Whatever this query stops selecting, those gates stop working.
   const r = await db.query(
     `SELECT api_card_id, name, name_en, number, rarity, set_api_id, set_name,
-            set_name_en, set_total, set_release, image_small
+            set_name_en, set_total, set_release, image_small, variants
      FROM cards WHERE api_card_id = ANY($1)
        AND ${digital.visibleSql()} AND ${cardid.ourIdSql()} LIMIT 1`, [listingIdCandidates(cardId)]);
   return r.rows[0] || null;
@@ -1265,6 +1289,7 @@ async function numberMatchedPrice(cardId) {
       FROM price_history ph
       WHERE ph.card_api_id = c.api_card_id
         AND ph.grade IS NULL
+        AND ${printsql.basePrintingSql('ph', 'c')}   -- never a reverse as the base (T10)
       ORDER BY (ph.source NOT LIKE 'estimate%') DESC, ph.recorded_at DESC
       LIMIT 1
     ) lp ON TRUE
@@ -1461,8 +1486,20 @@ function gateLanguage(card) {
   return cm.languageFromCardId(card && card.api_card_id);
 }
 
+// The printings a card exists in, from cards.variants (TASK T10), as keys.
+// null = not yet read by manifest — NEVER "no variants". The printing gate
+// treats null as "cannot tell", so it refuses only a stated conflict.
+// `variants` must be SELECTed by resolveListingCard, or this is always null
+// and the gate quietly loses its ambiguity rule: the set_release lesson.
+function printingsOf(card) {
+  const v = card && card.variants;
+  const list = v && Array.isArray(v.printings) ? v.printings.map(p => p.key).filter(Boolean) : null;
+  return list && list.length ? list : null;
+}
+
 function filterCard(card, nameOverride) {
   return {
+    printings: printingsOf(card),
     name: nameOverride || card.name,
     number: card.number,
     setTotal: card.set_total,
@@ -1608,9 +1645,17 @@ async function sourceYuyutei(card, grade, limit, opts = {}) {
   // to 5x the price. matchesOurCard already refuses a wrong printed total
   // and runs jpfilter's lot vocabulary over the product name.
   const atNumber = entries.filter(e => yt.matchesOurCard(e, card));
-  const chosen = yt.pickVariants(atNumber, card.name);
-
   const fc = filterCard(card);
+  // A mirror asked for (TASK T10): the entries whose OWN text claims that
+  // printing — "(マスターボール)" on the shop's row. Anything else, and All:
+  // the base-printing rule, unchanged. Never a mixture.
+  const wantMirror = opts.printing && /^reverse/.test(opts.printing);
+  const chosen = wantMirror
+    ? atNumber.filter(e => {
+        const c = cm.printingClaim(yt.entryTitle(e), fc);
+        return c.stated && !cm.printingRefusal(c, opts.printing, fc);
+      })
+    : yt.pickVariants(atNumber, card.name);
   const dropped = [];
   const listings = [];
 
@@ -1652,7 +1697,9 @@ async function sourceYuyutei(card, grade, limit, opts = {}) {
       priceKind: 'shop-ask',
       // Stock is the shop's own figure and is worth showing: "1 in stock"
       // is a different proposition from "12 in stock" at the same price.
-      seller: e.stock != null ? `yuyu-tei · ${e.stock} in stock` : 'yuyu-tei'
+      seller: e.stock != null ? `yuyu-tei · ${e.stock} in stock` : 'yuyu-tei',
+      printing: cm.printingClaim(title, fc).key,
+      printingStated: cm.printingClaim(title, fc).stated
     }));
   }
 
@@ -1671,6 +1718,7 @@ async function sourceYuyutei(card, grade, limit, opts = {}) {
     atNumber: atNumber.length,
     dropped: dropped.slice(0, 40),
     gate: cm.printingEvidence(fc),
+    printing: printingReport(opts.printing, fc, listings, dropped),
     query: `set page ${entry.code} (${entry.label}) — ${entries.length} cards on the page, ` +
            `${atNumber.length} at #${card.number}, ${chosen.length} after the variant rule`,
     // A shop asking price is a different KIND of number from an auction
@@ -1684,7 +1732,7 @@ async function sourceYuyutei(card, grade, limit, opts = {}) {
   };
 }
 
-async function sourceYahoo(card, grade, limit) {
+async function sourceYahoo(card, grade, limit, opts = {}) {
   const fc = filterCard(card);
   const q = `ポケモンカード ${card.name} ${card.number || ''}`.trim();
 
@@ -1757,6 +1805,11 @@ async function sourceYahoo(card, grade, limit) {
         dropped.push({ title: it.title, reason: conflict });
         continue;
       }
+      // The printing gate (TASK T10), the same cardmatch rule eBay runs —
+      // Yahoo is where the Japanese mirrors actually trade.
+      const pclaim = cm.printingClaim(it.title || '', fc);
+      const prefuse = cm.printingRefusal(pclaim, opts.printing, fc);
+      if (prefuse) { dropped.push({ title: it.title, reason: prefuse, printingConflict: true }); continue; }
 
       const yen = parseInt(it.price || it.bidOrBuy || it.currentPrice || 0);
       if (!(yen >= 100 && yen <= 2000000)) {
@@ -1770,7 +1823,8 @@ async function sourceYahoo(card, grade, limit) {
         sourceLabel: 'Yahoo JP',
         condition: jpf.isRawGrade(grade) ? 'Raw' : String(grade),
         listingType: feed.live ? (it.isFixedPrice ? 'fixed' : 'auction') : 'ended',
-        live: feed.live
+        live: feed.live,
+        printing: pclaim.key, printingStated: pclaim.stated
       }));
     }
   }
@@ -1784,6 +1838,7 @@ async function sourceYahoo(card, grade, limit) {
            kept: out.length, rejected: dropped.length, dropped: dropped.slice(0, 40),
            duplicatesSkipped: out.length - deduped.length,
            query: q,
+           printing: printingReport(opts.printing, fc, out, dropped),
            printingRejected: rejectedPrinting.length,
            // Same reporting as the eBay path: what the gate had, not only
            // what it did. Yahoo is the marketplace where Korean prints
@@ -1798,6 +1853,7 @@ async function sourceYahoo(card, grade, limit) {
 function ebayMatchCard(card) {
   const name = card.name_en || card.name;
   return {
+    printings: printingsOf(card),
     name, nameEn: card.name_en || null,
     number: card.number,
     setTotal: card.set_total,
@@ -1873,7 +1929,9 @@ async function sourceEbay(card, grade, limit, opts = {}) {
 
   // cardmatch.buildQuery is the single query builder, shared with the
   // frontend's deep links so a link and an API call ask the same question.
-  const q = cm.buildQuery(matchCard, grade);
+  // The printing asked for (TASK T10), or null for All.
+  const printing = opts.printing || null;
+  const q = cm.buildQuery(matchCard, grade, printing ? { printing } : undefined);
   // A raw sub-condition is asked of eBay's own "Card Condition" aspect,
   // which search can filter on. Measured: the filtered rows agreed with each
   // item's descriptor 36 of 36 times. Same one call as before — each raw
@@ -1886,7 +1944,9 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // ("TAG Graded 8") the field answers. No extra calls.
   const gradeFilter = condFilter ? null : cm.ebayGradeFilter(grade);
   const aspectFilter = condFilter ? condFilter.aspectFilter : gradeFilter ? gradeFilter.aspectFilter : null;
-  const gateOpts = gradeFilter ? { structuredGrade: { grader: gradeFilter.grader, grade: gradeFilter.grade } } : undefined;
+  const gateOpts = Object.assign({},
+    gradeFilter ? { structuredGrade: { grader: gradeFilter.grader, grade: gradeFilter.grade } } : {},
+    printing ? { printing } : {});
   // "mint" also matches every "Near Mint" title: live, Raw M on Base Set
   // Charizard kept 11 rows of which 1 said Mint. eBay's own phrase exclusion
   // keeps the cap for the titles that do. eBay syntax, so the eBay REQUEST
@@ -2013,7 +2073,8 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       }
     } catch (e) { /* the parser must never break the gate */ }
 
-    if (!v.ok) { dropped.push({ title, reason: v.reason, gradeConflict: v.gradeConflict || undefined }); continue; }
+    if (!v.ok) { dropped.push({ title, reason: v.reason, gradeConflict: v.gradeConflict || undefined,
+                                printingConflict: v.printingConflict || undefined }); continue; }
 
     // eBay's own condition field, which the gate never read. A $1,114.99
     // slab sat in a Raw NM list because its title said "PCG 9" — not a
@@ -2073,7 +2134,11 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       titleCondition: sc.stated ? sc.code : null,
       // 'ebay' = the title named no grade and eBay's grade fields answered;
       // 'title+ebay' = both, and they agreed; 'title' = no filter applied.
-      gradeSource: v.gradeSource || null
+      gradeSource: v.gradeSource || null,
+      // What the title says about its printing (TASK T10). printingStated
+      // false = the seller did not say: the UNSTATED group, never assumed.
+      printing: v.printing || null,
+      printingStated: !!v.printingStated
     }));
   }
 
@@ -2105,7 +2170,19 @@ async function sourceEbay(card, grade, limit, opts = {}) {
                  refusedOnDisagreement: dropped.filter(d => d.gradeConflict).length }
              : null,
            pages,
+           printing: printingReport(printing, matchCard, listings, dropped),
            query: qAsk };
+}
+
+// What the printing gate did on one source, stated either way (TASK T10).
+function printingReport(asked, card, kept, dropped) {
+  return {
+    asked: asked || 'all',
+    cardPrintings: card.printings || null,      // null = not yet read by manifest
+    keptStated: kept.filter(l => l.printingStated).length,
+    keptUnstated: kept.filter(l => !l.printingStated).length,
+    refused: dropped.filter(d => d.printingConflict).length
+  };
 }
 
 // Documented-unavailable sources. They stay in the registry so the response
@@ -2204,6 +2281,9 @@ async function gatherListings(card, grade, limit, opts) {
       if (r.value.gradeFilter) sources[s.id].gradeFilter = r.value.gradeFilter;
       if (r.value.titleCondition) sources[s.id].titleCondition = r.value.titleCondition;
       if (r.value.pages) sources[s.id].pages = r.value.pages;
+      // What the printing gate did here — asked, kept stated / unstated,
+      // refused. Reported for All too, so "not asked" is visible (T10).
+      if (r.value.printing) sources[s.id].printing = r.value.printing;
 
       // Printing rejections (reprint / language / year) from a source that
       // does not use the `rejected` shape below. Reported even when zero:
@@ -2359,6 +2439,18 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
   const { cardId } = req.params;
   const grade = req.query.grade || 'Raw';
   const limit = Math.min(parseInt(req.query.limit) || 25, 50);
+  // ?printing=reverse | holo | normal | reverse-masterball ... (TASK T10).
+  // Absent or "all" = every printing, each row labelled. An unknown value is
+  // refused rather than silently treated as All.
+  const printing = cm.parsePrintingParam(req.query.printing);
+  if (req.query.printing && !printing && String(req.query.printing).toLowerCase() !== 'all') {
+    return res.status(400).json({ cardId, grade, listings: [],
+      error: 'unknown printing "' + req.query.printing + '"', printings: Object.keys(cm.PRINTINGS) });
+  }
+  // The cache answers ONE question: card + grade + printing. Keyed on less,
+  // a Reverse Holo answer would be served for a Holo question — the
+  // "number cached per card when it depends on the grade" failure.
+  const cacheGrade = printing ? grade + '|' + printing : grade;
 
   if (!db) return res.status(503).json({ cardId, grade, listings: [], error: 'database not configured' });
 
@@ -2373,7 +2465,8 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
     const hidden = await hiddenReason(listingIdCandidates(cardId)).catch(() => null);
     if (hidden) return res.status(404).json({ cardId, grade, listings: [], hidden: { cardId, reason: hidden } });
   }
-  // Not one of our cards — fall through to the legacy eBay-by-name route.
+  // Not one of our cards — the next handler answers 404 (T9: it used to be
+  // an ungated eBay search on the raw string).
   if (!card) return next();
 
   const key = card.api_card_id;
@@ -2382,7 +2475,7 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
   // A dry run must never be served from cache, or it reports a request that
   // was not built for it.
   if (!req.query.refresh && !dryRun) {
-    const hit = listingCacheGet(key, grade);
+    const hit = listingCacheGet(key, cacheGrade);
     if (hit) return res.json(hit);
   }
 
@@ -2391,7 +2484,7 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
     // spend quota down to the reserve. Only ingestion and refresh are
     // background, and they yield at the soft stop so this path keeps working.
     const gathered = await gatherListings(card, grade, limit,
-      { background: false, dryRun });
+      { background: false, dryRun, printing });
     const { listings, sources, tookMs, liveCount } = gathered;
     // The headline figures skip anything the outlier check flagged. This is
     // the number a buyer acts on, and "$2.08" for a card that trades at
@@ -2407,6 +2500,11 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
         image: card.image_small || null
       },
       grade,
+      // The printing asked for, and every printing this card exists in —
+      // the page offers a selector only when there is more than one.
+      printing: printing || 'all',
+      printings: (printingsOf(card) || []).map(k => ({ key: k, label: cm.printingLabel(k) })),
+      printingsRead: !!printingsOf(card),
       count: listings.length,
       liveCount,
       cheapest: trusted.length ? trusted[0].landed : null,
@@ -2446,7 +2544,7 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
       payload.note = 'dryRun=1 — nothing was sent to eBay and no quota was spent';
       return res.json(payload);          // deliberately NOT cached
     }
-    listingCacheSet(key, grade, payload);
+    listingCacheSet(key, cacheGrade, payload);
     res.json(payload);
   } catch (err) {
     res.status(500).json({ cardId, grade, listings: [], error: err.message });
@@ -2847,7 +2945,8 @@ app.get('/api/sets/lang/:lang', async (req, res) => {
                    WHERE EXISTS (SELECT 1 FROM price_history ph
                                  WHERE ph.card_api_id = c.api_card_id
                                    AND ph.grade IS NULL
-                                   AND ph.source NOT LIKE 'estimate%')
+                                   AND ph.source NOT LIKE 'estimate%'
+                                   AND ${printsql.basePrintingSql('ph', 'c')})
                  ) AS real_prices,
                  (ARRAY_AGG(c.image_small ORDER BY c.api_card_id))[1] AS sample_image
           FROM cards c

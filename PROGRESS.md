@@ -31,6 +31,18 @@ priced from Yahoo JP; jpfilter's second English gate deleted (dropped 4/4
 genuine titles) — its cases now run `cardmatch.verify` and found "x4
 Playset" kept and "$74" read as #74 (fixed; 0 of 516 kept titles changed).
 
+**T10.** Read a real TCGdex response first (booleans hide the mirrors;
+per-printing pricing is NOT always the repeated blob). `c1eceb6` + part 2:
+cards.variants from manifest; printing gate on eBay/Yahoo/Yuyu-tei; reverse
+and mirror prices as variant rows; `printsql.basePrintingSql` on every
+headline reader — the 241 reverse-as-base cards: 235 real base prices now.
+Browser (local API): Alakazam #33 Printing box Normal/Reverse, $19.23 /
+$71.39; Exeggcute five options, Master Ball $1.32; SIR and Base Set
+Charizard get no box. Open: Yahoo stored medians carry no printing; the
+"Typical" grade-price block ignores the printing. Alakazam #1's stored
+tcgplayer_market was $67.18 against TCGdex's $233.32 — now the headline
+reads TCGdex's (source rank allowed it); worth a `pricecheck` on ecard1.
+
 **Found, not acted on:** ingest's `tcgPlayerSearch` uses TCGplayer's
 internal search API from the home IP — source of 72,174 `tcgplayer_market`
 rows. Decision for Roy.

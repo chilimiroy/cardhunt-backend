@@ -33,7 +33,10 @@ function slice(decl) {
   return src.slice(at + 1, end + 2);
 }
 const fnEbay = slice('async function sourceEbay(');
-const fnMatch = slice('function gateLanguage(') + slice('function ebayMatchCard(');
+// printingsOf / printingReport: T10's printing dimension, which the real
+// sourceEbay now calls — the extraction has to carry them or the run crashes.
+const fnMatch = slice('function gateLanguage(') + slice('function printingsOf(') + slice('function ebayMatchCard(')
+  + slice('function printingReport(');
 const fnNorm = slice('function normaliseListing(');
 ok(!/\nasync function |\nfunction /.test(fnEbay.slice(1)), 'the sourceEbay slice holds one function');
 const maxPagesDecl = (src.match(/\nconst EBAY_MAX_PAGES = \d+;/) || [''])[0];

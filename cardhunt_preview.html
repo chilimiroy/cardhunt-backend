@@ -1891,7 +1891,9 @@ function getBase(c) {
   // Backend serves merged real prices from our own database
   if (c._price && c._price > 0) return parseFloat(Number(c._price).toFixed(2));
   var t = (c.tcgplayer && c.tcgplayer.prices) ? c.tcgplayer.prices : {};
-  var buckets = ['holofoil','1stEditionHolofoil','reverseHolofoil','1stEdition','unlimited','normal'];
+  // reverseHolofoil is NOT a base price (T10): it sat ahead of 'normal'
+  // here, the page-side twin of the 241 cards whose headline was a reverse.
+  var buckets = ['holofoil','1stEditionHolofoil','1stEdition','unlimited','normal'];
   for (var bi = 0; bi < buckets.length; bi++) {
     var b = t[buckets[bi]];
     if (!b) continue;
@@ -2479,8 +2481,22 @@ function updatePrices(grade,base){
   sdd.textContent = 'no licensed sold source · see eBay sold link';
   sdd.title = 'eBay completed sales need the Marketplace Insights API (restricted); '
     + "scraping eBay's sold pages is not done.";
-  // The badge says where the headline came from, and only that.
+  // A NON-base printing selected (T10): its own held price, never the base
+  // printing's price under its name. Expedition Alakazam #33's reverse is
+  // $71.39 against $19.23 normal — averaging or borrowing describes neither.
   var badge = document.getElementById('cd-chg');
+  var sp = SEL && SEL.printing && SEL.printing !== 'all' && /^reverse/.test(SEL.printing) ? SEL.printing : null;
+  if (sp) {
+    var held = (cc && Array.isArray(cc.printingPrices) ? cc.printingPrices : []).filter(function (x) { return x.printing === sp; })[0];
+    document.getElementById('cd-mkt').innerHTML = held ? fmtCurrency(held.price)
+      : '&mdash;';
+    if (badge) badge.innerHTML = held
+      ? '<span style="color:var(--gr)">&#9679; ' + liveEsc(printingLabelOf(sp)) + ' price, collector number</span> '
+        + '<span style="color:var(--fa);font-size:11px">' + liveEsc(held.source) + '</span>'
+      : '<span style="color:var(--mu)">no ' + liveEsc(printingLabelOf(sp)) + ' price held &mdash; listings below</span>';
+    return;
+  }
+  // The badge says where the headline came from, and only that.
   if (badge) badge.innerHTML = priceIsReal
     ? '<span style="color:var(--gr)">&#9679; matched on collector number</span> '
       + '<span style="color:var(--fa);font-size:11px">' + liveEsc(String(cc._priceSource || 'database')) + '</span>'
@@ -2622,7 +2638,22 @@ function conditionsFor(status, otherGrader) {
   return STATUS_CONDITIONS[status] || ['All'];
 }
 
-var SEL = { status: 'Raw', condition: 'All', otherGrader: null };
+var SEL = { status: 'Raw', condition: 'All', otherGrader: null, printing: 'all' };
+// A printing's label from cardmatch, read LIVE (the async-module lesson).
+// The server's own labels for this card come first: cardmatch.js is loaded
+// from Render's absolute URL, so a page ahead of the deployed module (or a
+// module that has not arrived) would otherwise print the raw key.
+function printingLabelOf(k) {
+  var own = (S.currentCard && Array.isArray(S.currentCard.printings)) ? S.currentCard.printings : [];
+  for (var i = 0; i < own.length; i++) if (own[i].key === k && own[i].label) return own[i].label;
+  var cmx = liveCM();
+  if (cmx && cmx.printingLabel) return cmx.printingLabel(k);
+  return String(k || '');
+}
+// The printing box (T10). Printing is a dimension of the COPY — it sits
+// beside grade and condition, and never replaces the print-run grouping
+// (1st Edition / Shadowless / Unlimited), which is a different question.
+function setPrinting(p) { SEL.printing = p || 'all'; renderSelector(); applySelection(); }
 
 // Build the grade STRING the rest of the app already speaks. Everything
 // downstream — buildQuery, verify, /api/listings?grade= — takes a string,
@@ -2662,6 +2693,20 @@ function renderSelector() {
     h += '</div>';
   }
   h += '</div>';
+
+  // ── PRINTING ── only when the card exists in more than one (T10). A card
+  // printed only in holo offers nothing to choose, so it gets no box.
+  var pr = (S.currentCard && Array.isArray(S.currentCard.printings)) ? S.currentCard.printings : [];
+  var printingBox = '';
+  if (pr.length > 1) {
+    printingBox = '<div class="selbox"><div class="sellbl">Printing</div><div class="selopts">'
+      + '<button class="selchip' + (SEL.printing === 'all' ? ' on' : '') + '" onclick="setPrinting(&quot;all&quot;)">All</button>';
+    pr.forEach(function (p) {
+      printingBox += '<button class="selchip' + (SEL.printing === p.key ? ' on' : '') + '" '
+        + 'onclick="setPrinting(&quot;' + liveEsc(p.key) + '&quot;)">' + liveEsc(p.label || printingLabelOf(p.key)) + '</button>';
+    });
+    printingBox += '</div></div>';
+  }
 
   // ── CONDITION ── every option visible, no "more" button.
   h += '<div class="selbox"><div class="sellbl">Condition</div><div class="selopts">';
@@ -2712,7 +2757,17 @@ function renderSelector() {
     if (SEL.condition === '10 Pristine' && who === 'BGS') note += ' Beckett&rsquo;s ordinary 10. Black Labels are refused &mdash; they sell for several times a regular 10.';
   }
   h += '<div class="selnote">' + note + '</div>';
-  h += '</div></div>';
+  h += '</div>';
+  if (printingBox) {
+    // Close the printing box's own note in, then the box.
+    h += printingBox.replace(/<\/div><\/div>$/, '</div>'
+      + '<div class="selnote">' + (SEL.printing === 'all'
+        ? 'Every printing, each row labelled with what its title states.'
+        : 'Only <strong>' + liveEsc(printingLabelOf(SEL.printing)) + '</strong>. A title stating another '
+          + 'printing is refused; a title stating none is grouped as <em>printing not stated</em>, never assumed.')
+      + '</div></div>');
+  }
+  h += '</div>';
 
   host.innerHTML = h;
 }
@@ -2805,7 +2860,7 @@ async function openCard(id){
   
   // A new card starts at Raw + All, and the selector is redrawn so it never
   // shows the previous card's selection against this card's listings.
-  SEL.status='Raw'; SEL.condition='All'; SEL.otherGrader=null;
+  SEL.status='Raw'; SEL.condition='All'; SEL.otherGrader=null; SEL.printing='all';
   document.getElementById('watch-btn').textContent='🤍 Watch';
   document.getElementById('cd-img').src='';
   document.getElementById('cd-name').textContent='Loading…';
@@ -3307,13 +3362,18 @@ var LIVE_TTL   = 15 * 60 * 1000;      // mirrors the server's cache
 // queue-wait on Render (browser, 2026-09-28), plus 1-3 eBay calls of quota
 // per view for nothing. Now one request: a fresh cached answer, else the
 // one already in flight, else a new one (published in LIVE_INFLIGHT).
-function fetchListings(cardId, grade) {
-  var key = cardId + '|' + grade;
+// printing (T10): 'all' or absent = every printing. It rides on the cache
+// key as well as the URL — keyed on card+grade alone, a Reverse Holo answer
+// would be served to a Holo question (the grade-in-the-cache-key lesson).
+function fetchListings(cardId, grade, printing) {
+  var pr0 = (printing && printing !== 'all') ? printing : null;
+  var key = cardId + '|' + grade + (pr0 ? '|' + pr0 : '');
   var hit = LIVE_CACHE[key];
   if (hit && Date.now() - hit.ts < LIVE_TTL) return Promise.resolve(hit.data);
   if (LIVE_INFLIGHT[key]) return LIVE_INFLIGHT[key];
   var pr = fetch(BACKEND + '/api/listings/' + encodeURIComponent(cardId)
-                 + '?grade=' + encodeURIComponent(grade) + '&limit=25')
+                 + '?grade=' + encodeURIComponent(grade) + '&limit=25'
+                 + (pr0 ? '&printing=' + encodeURIComponent(pr0) : ''))
     .then(function (r) { if (!r.ok) throw new Error('API returned ' + r.status); return r.json(); })
     .then(function (d) { LIVE_CACHE[key] = { ts: Date.now(), data: d }; return d; });
   LIVE_INFLIGHT[key] = pr;
@@ -3386,6 +3446,11 @@ function liveRow(l){
     // Mint and Damaged exist only in the seller's words - say so on the row.
     + (l.conditionSource === 'title' && l.sellerStated && TITLE_ONLY_RAW[l.sellerCondition]
         ? ' \u00b7 ' + (l.sellerCondition === 'M' ? 'Mint' : 'Damaged') + ', seller-stated' : '')
+    // The printing the TITLE states (T10) \u2014 only for a card that has more
+    // than one, where it tells two products apart.
+    + (l.printingStated && l.printing && S.currentCard && Array.isArray(S.currentCard.printings)
+       && S.currentCard.printings.length > 1
+        ? ' \u00b7 ' + liveEsc(printingLabelOf(l.printing)) : '')
     + ' \u00b7 '
     + liveEsc(when) + bids + (l.seller ? ' \u00b7 ' + liveEsc(l.seller) : '')
     // A shop's asking price is not a sale and not a bid. The row says so
@@ -3566,13 +3631,14 @@ async function renderLiveListings(card, grade){
   if (!host || !card) return;
   var cardId = card.id;
   var key = cardId + '|' + grade;
+  var printing = SEL.printing || 'all';
 
   host.innerHTML = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd);'
     + 'font-size:11px;color:var(--mu)">Checking marketplaces for real listings\u2026</div>';
 
   var d;
   try {
-    d = await fetchListings(cardId, grade);
+    d = await fetchListings(cardId, grade, printing);
   } catch (err) {
     host.innerHTML = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd);'
       + 'font-size:11px;color:var(--mu);background:rgba(239,68,68,.06)">'
@@ -3581,8 +3647,16 @@ async function renderLiveListings(card, grade){
     return;
   }
 
-  // The user may have changed card or grade while this was in flight.
-  if (!LF.card || LF.card.id !== cardId || LF.grade !== grade) return;
+  // The user may have changed card, grade or printing while this was in flight.
+  if (!LF.card || LF.card.id !== cardId || LF.grade !== grade || (SEL.printing || 'all') !== printing) return;
+
+  // The printings this card exists in arrive with its listings; the
+  // selector offers a printing box only when there is more than one (T10).
+  if (Array.isArray(d.printings) && S.currentCard && S.currentCard.id === cardId
+      && JSON.stringify(S.currentCard.printings || null) !== JSON.stringify(d.printings)) {
+    S.currentCard.printings = d.printings;
+    renderSelector();
+  }
 
   perfMark('card:listings arrived', { id: cardId, grade: grade, rows: (d.listings || []).length, cached: !!d.cached });
   if (PERF_ON) requestAnimationFrame(function () { perfMark('card:listings painted', { id: cardId }); });
@@ -3624,13 +3698,30 @@ async function renderLiveListings(card, grade){
     rows = keep;
   }
 
+  // ── Printing (T10) — the same rule as condition ──
+  // The server already refused rows that STATE a different printing. Rows
+  // that state none are the same card in a printing nobody named: shown, in
+  // their own UNSTATED group, never assumed to be the one asked for.
+  var printFilter = printing !== 'all' ? printing : null;
+  var unstatedPrint = [];
+  if (printFilter) {
+    var keepP = [];
+    rows.forEach(function (l) { (l.printingStated ? keepP : unstatedPrint).push(l); });
+    rows = keepP;
+  }
+  var printRefused = 0;
+  Object.keys(d.sources || {}).forEach(function (k) {
+    var p = d.sources[k] && d.sources[k].printing; if (p && p.refused) printRefused += p.refused;
+  });
+
   // "Checked" is the whole difference between this block and the search
   // links below it, and the panel has to say which is which.
-  var selLabel = SEL.status === 'Raw'
+  var selLabel = (SEL.status === 'Raw'
     ? ('RAW' + (SEL.condition === 'All' ? ' — ALL' : ' — ' + SEL.condition))
     // Under Other, name the grader: "OTHER — ALL" did not say which slabs.
     : ((SEL.status === 'Other' ? (SEL.otherGrader || otherGraders()[0]) : SEL.status)
-       + ' — ' + SEL.condition).toUpperCase();
+       + ' — ' + SEL.condition).toUpperCase())
+    + (printFilter ? ' — ' + printingLabelOf(printFilter).toUpperCase() : '');
   var head = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd)">'
     + '<div style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em;margin-bottom:8px">'
     + 'FOR SALE NOW &mdash; ' + liveEsc(selLabel)
@@ -3653,11 +3744,28 @@ async function renderLiveListings(card, grade){
   // Rows excluded because the seller stated a DIFFERENT condition. Counted
   // and named, so a short list is never mistaken for a thin market.
   function excludedNote() {
-    if (!wrongCond) return '';
-    return '<div style="font-size:11px;color:var(--fa);margin-top:8px">'
+    var out = '';
+    if (wrongCond) out += '<div style="font-size:11px;color:var(--fa);margin-top:8px">'
       + wrongCond + ' listing' + (wrongCond === 1 ? '' : 's')
       + ' hidden &mdash; the seller stated a different '
       + (SEL.status === 'Raw' ? 'condition' : 'grade') + '.</div>';
+    if (printRefused) out += '<div style="font-size:11px;color:var(--fa);margin-top:4px">'
+      + printRefused + ' listing' + (printRefused === 1 ? '' : 's')
+      + ' refused &mdash; the title states a different printing.</div>';
+    return out + unstatedPrintBlock();
+  }
+  // Same card, printing not stated (T10). Its own group, its own words.
+  function unstatedPrintBlock() {
+    if (!unstatedPrint.length) return '';
+    return '<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--bd)">'
+      + '<div style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;'
+      + 'letter-spacing:.06em;margin-bottom:4px">Printing not stated &mdash; ' + unstatedPrint.length + '</div>'
+      + '<div style="font-size:11px;color:var(--mu);line-height:1.6;margin-bottom:8px">'
+      + 'The same card, but the seller does not say which printing. It may be '
+      + liveEsc(printingLabelOf(printFilter)) + ' or another one this card exists in. Shown, not hidden.'
+      + '</div>'
+      + unstatedPrint.map(liveRow).join('')
+      + '</div>';
   }
 
   if (!rows.length) {
@@ -5689,6 +5797,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260929-abae1a9-nomarketdup &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260929-c1eceb6-printings &middot; click to hide</div>
 </body>
 </html>

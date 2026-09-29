@@ -126,6 +126,38 @@ ok('gatherListings copies the printing report into sources', /sources\[s\.id\]\.
   ok('/api/listings refuses an unknown printing (400), not silently All', /status\(400\)/.test(route));
 }
 
+// ── 3b. The page — selector only when there is a choice ───────
+console.log('\n  3b. the page');
+{
+  const html = strip(fs.readFileSync('cardhunt_preview.html', 'utf8'));
+  const pfn = name => { const i = html.search(new RegExp('\\n(?:async\\s+)?function\\s+' + name + '\\s*\\(')); if (i < 0) return '';
+    const j = html.slice(i + 5).search(/\n(?:async\s+)?function\s+[A-Za-z0-9_$]+\s*\(/); return html.slice(i, j < 0 ? undefined : i + 5 + j); };
+  ok('fetchListings keys its cache on the printing and sends it', /key = cardId \+ '\|' \+ grade \+ \(pr0/.test(pfn('fetchListings')) && /&printing=/.test(pfn('fetchListings')));
+  ok('renderLiveListings asks with SEL.printing', /fetchListings\(cardId, grade, printing\)/.test(pfn('renderLiveListings')));
+  ok('the printing box is drawn only when the card has MORE THAN ONE printing', /pr\.length > 1/.test(pfn('renderSelector')));
+  ok('rows with no stated printing go to their own group, never dropped', /unstatedPrint/.test(pfn('renderLiveListings')) && /Printing not stated/.test(pfn('renderLiveListings')));
+  ok('a selected non-base printing shows ITS price or says none is held — never the base price',
+    /printingPrices/.test(pfn('updatePrices')) && /price held/.test(pfn('updatePrices')));
+  ok('openCard resets the printing', /SEL\.printing='all'/.test(pfn('openCard')));
+  ok("getBase's fallback never takes a reverseHolofoil as the base", !/'reverseHolofoil'/.test(pfn('getBase')));
+}
+{
+  const ps = require('./printsql');
+  ok('printsql: a reverse row is not a base row when the card has a base printing',
+    !ps.isBasePrintingRow('reverse', { printings: [{ key: 'normal' }, { key: 'reverse' }] }));
+  ok('printsql: ...nor when printings are unknown', !ps.isBasePrintingRow('reverse', null));
+  ok('printsql: ...but IS on a card that exists only in reverse', ps.isBasePrintingRow('reverse', { printings: [{ key: 'reverse' }] }));
+  ok('printsql: a holo / null row is always base-eligible', ps.isBasePrintingRow('holo', null) && ps.isBasePrintingRow(null, null));
+  ok('every headline reader in server.js applies basePrintingSql (5)', (server.match(/printsql\.basePrintingSql\(/g) || []).length === 5);
+  const PX = JSON.parse(fs.readFileSync('variants.pricing.fixture.json', 'utf8'));
+  const pp = id => tdx.printingPrices(PX[id]).map(o => o.variant + ':' + o.price).join(' ');
+  ok('printingPrices: Alakazam #1 reverse $122.74, #33 reverse $71.39 (real response)',
+    pp('en/ecard1-1') === 'reverse:122.74' && pp('en/ecard1-33') === 'reverse:71.39', pp('en/ecard1-1') + ' / ' + pp('en/ecard1-33'));
+  ok('printingPrices: Exeggcute mirrors priced from their OWN products ($0.31 / $1.32)',
+    pp('en/sv08.5-001') === 'reverse:0.21 reverse-pokeball:0.31 reverse-masterball:1.32', pp('en/sv08.5-001'));
+  ok('printingPrices: a holo-only SIR has no other printing to price', pp('en/sv03.5-199') === '');
+}
+
 // ── 4. Nothing changes under All — measured on real kept titles ──
 console.log('\n  4. All changes nothing');
 {

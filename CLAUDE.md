@@ -32,7 +32,7 @@ TCGdex · pokemontcg.io · Limitless
 | Frontend | `cardhunt_preview.html` | Render, at **`/app`** — local file is the fallback |
 | API | `server.js` v5.6.0 | Render |
 | Database | Supabase Postgres | `cards`, `price_history`, `alerts`, `portfolio`, `users` |
-| Ingestion | `ingest.js` v5.7.2 | Local only — never deploy. **Tracked** in git (T2) |
+| Ingestion | `ingest.js` v5.8.0 | Local only — never deploy. **Tracked** in git (T2) |
 
 ## The module map
 
@@ -70,7 +70,8 @@ jpfilter.js  linkaudit.js  listingparse.js  outlier.js  setaudit.js
 sourceprobe.js  tcgdexprice.js  yuyutei.js  digital.js  trending.js
 searchaudit.js  certcheck.js
 checkout-disabled.js  login-disabled.js   (preserved, never loaded or served)
-migration-grade-dimension.sql  migration-image-source.sql
+migration-grade-dimension.sql  migration-image-source.sql  migration-variants.sql
+printsql.js  variants.fixture.json  variants.pricing.fixture.json
 package.json  .gitignore
 ```
 
@@ -300,7 +301,7 @@ and `cardmarketSearch` name-only fallbacks, jpfilter's second English gate.
 | **raw condition** | NM/LP/MP/HP (M/DMG seller-stated) | eBay aspect filter | page groups: unstated | page groups: unstated | NM only | — | selection | page: "N stated otherwise", UNSTATED group |
 | **outliers** | an order of magnitude below the card's own median — **flags, never removes** | `flagOutliers` in `gatherListings` | same | same | — | IQR + `YAHOO_MAX_SPREAD` refusal | ≥5 priced, ≥$15 median | `outliers{}` |
 | **reprint-priced** | a row at the known reprint's price level | `flagReprintPriced` where `REPRINT_OF` | same | same | — | — | the reprint's own listings | `outliers.reprints[]` |
-| **variant** | reverse / holo / master-ball / poké-ball printing | **NONE — labelled only** (`listingparse`) | `pickVariants` (base only) | **NONE** | holofoil/normal key choice | **NONE** | — | — → **T10** |
+| **printing** (T10) | normal / holo / reverse / reverse-pokeball / reverse-masterball … — a STATED other printing is refused, silence kept as *unstated* | `verify(opts.printing)`; `buildQuery` asks for it | the asked mirror's own entries, else `pickVariants` | `printingRefusal` | base printing only — `printsql.basePrintingSql` on every headline reader | — | `cards.variants` (manifest) — **must be SELECTed** | `sources.<id>.printing{asked, keptStated, keptUnstated, refused}` |
 
 **Reporting.** Every registered listing source now returns `kept`,
 `rejected`, `dropped[]` (reasons), `gate` (what the gate had) — Yahoo did not
@@ -320,7 +321,7 @@ only; that is a script run deliberately, the `gradeprices.js` shape.
   only when a search returns no items. Ungated by construction; 0 rows held.
 - **`node ingest.js scrape`** still exists (`scrapeEbaySold`). Banned, never
   run — T8's reasoning says delete it.
-- **Variant is gated nowhere** except Yuyu-tei's base-printing rule. T10.
+- ~~Variant is gated nowhere~~ — built in T10. **Still open:** stored Yahoo medians (path Q) carry no printing, so a mirror sale can enter a base median; and the card page's "Typical" grade-price block does not follow the printing selector.
 
 ---
 
@@ -626,6 +627,7 @@ node marketwait.test.js      # 12   no /api/market request; one /api/listings pe
 node nofabricated.test.js    # 48   no password/card input, no invented shops/holdings/prices (--deployed: Render's HTML too)
 node nosoldscrape.test.js    # 17   no eBay sold-page scrape; real /api/market handler, network stubbed (--live: +3)
 node gateaudit.test.js       # 57   T9: every path reaches the gates it needs, and reports (--live: +8)
+node variants.test.js        # 71   T10: printings from the REAL TCGdex shape; the gate; every reader; the page (--db: +6)
 ```
 
 Run them all:
@@ -2367,6 +2369,44 @@ server code in the browser. Append `?api=render` to use Render instead —
 eBay credentials exist only there. And the shell escape trap bit five more
 times this round: `\s`, `\'` and `$'` (a `String.replace` pattern) were
 each mangled; the editor tool, not `node -e`, for anything with a backslash.
+
+## Rarity is the card's; printing is the copy's (T10, 2026-09-29)
+Expedition Alakazam #1 is Holo Rare, printed holo ($233.32) and reverse
+($122.74); #33 is Rare, printed normal ($19.23) and reverse ($71.39) — four
+products, two numbers, and the reverse can outprice the base. Our catalogue
+had #1 as plain "Rare" (manifest corrected 32 Expedition holo rares) and no
+notion of printing at all.
+
+**Read the real response.** TCGdex's `variants` booleans hide the mirrors —
+ja SV2a-001 says only `reverse: true` for the Poké Ball and Master Ball
+mirrors. `variants_detailed[]` carries `type` + `foil` (the pattern), and
+mixes in print run (`subtype`, `stamp: 1st-edition` — a different dimension,
+`byPrintRun` owns it) and `size: jumbo` (another product). And **the
+"per-variant pricing is the repeated card blob" line above is only true when
+a printing shares the card's product**: Prismatic Exeggcute's Poké Ball and
+Master Ball entries carry their own products and prices ($0.31 / $1.32 vs
+$0.04). `printingPrices` takes a pattern's price only when the block names
+the pattern's OWN product id. Also: TCGdex maps Alakazam #1 and #33 to ONE
+Cardmarket product (274876) — its Cardmarket price is wrong for one of them.
+
+Built, in order: `cards.variants` from manifest; the gate
+(`cardmatch.printingClaim` / `printingRefusal`, `verify(opts.printing)`) on
+eBay, Yahoo and Yuyu-tei; per-printing prices written as
+`price_history.variant` rows; `printsql.basePrintingSql` on **every**
+headline reader — the missing half of the variant column: 7,117 reverse rows
+existed and no reader looked, so **241 cards showed a reverse price as the
+card's price, and none of them held a base price at all**. 235 now do (TCGdex
+`--gaps-only` over their 56 sets), 3 estimate, 3 none. The page offers a
+Printing box only when a card has more than one.
+
+**The Master Ball trap** is the TAG/ACE lesson: "Master Ball" and "Poké
+Ball" are pattern words AND card names. The card's own name is removed from
+the title before pattern words are read, so the Master Ball ACE SPEC card
+(EN and JP マスターボール) is never read as a mirror. And a kana fold must
+**recompose**: NFKD splits ボ into ホ + dakuten, and マスターボール never
+matched until the fold ended in NFC.
+
+`variants.test.js` 71 (+6 `--db`); 19 wiring assertions watched failing.
 
 ---
 

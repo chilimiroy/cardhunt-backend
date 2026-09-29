@@ -2163,6 +2163,11 @@ async function sourceEbay(card, grade, limit, opts = {}) {
            kept: listings.length, rejected: dropped.length,
            dropped: opts.allDropped ? dropped : dropped.slice(0, 40),
            marketplace: mp,
+           // marketprobe only: every item id eBay returned, kept or not, so a
+           // row another site "adds" can be told apart from one THIS site
+           // returned and the gate refused (eBay machine-translates US titles
+           // for IT/ES/FR/DE, and a translated title can slip a refusal).
+           scannedIds: opts.allDropped ? items.map(it => it.itemId) : undefined,
            parserDisagreements: disagreements.slice(0, 20),
            gate: cm.printingEvidence(matchCard),
            conditionFilter: condFilter
@@ -3839,7 +3844,7 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
                       rate: conv && conv.rate, shippingUsd: l.shipping === 0 ? 0 : (shipConv ? shipConv.usd : null),
                       country: l.country, title: l.title.slice(0, 90) });
         }
-        per[mp] = { scanned: r.scanned, kept: r.kept, rejected: r.rejected, pages: r.pages,
+        per[mp] = { scanned: r.scanned, kept: r.kept, rejected: r.rejected, pages: r.pages, scannedIds: r.scannedIds || [],
                     rejectReasons: reasons, keptRows: kept };
       } catch (e) {
         per[mp] = { error: e.message, status: e.ebayStatus || null };
@@ -3860,6 +3865,7 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
     const usP = per.EBAY_US && per.EBAY_US.pages;
     const usCapped = !!(usP && usP.stoppedAtCap);
     const usMax = Math.max(0, ...(((per.EBAY_US && per.EBAY_US.keptRows) || []).map(k => k.usd || 0)));
+    const usScanned = new Set((per.EBAY_US && per.EBAY_US.scannedIds) || []);
     const summary = {};
     for (const mp of sites) {
       const p = per[mp];
@@ -3879,6 +3885,13 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
         notOnUs: fresh.length, newVsAllEarlier: freshAll.length,
         notOnUsUnflagged: clean.length,
         notOnUsInUsRange: usCapped ? clean.filter(k => k.usd <= usMax).length : clean.length,
+        // Of the rows not kept on US: how many US RETURNED and refused (the
+        // same item, re-judged on another site's title), and how many US never
+        // returned at all — only the second kind is a listing US lacks.
+        refusedOnUs: clean.filter(k => usScanned.has(k.itemId)).length,
+        neverOnUs: clean.filter(k => !usScanned.has(k.itemId)).length,
+        neverOnUsInUsRange: clean.filter(k => !usScanned.has(k.itemId) && (!usCapped || k.usd <= usMax)).length,
+        refusedOnUsSample: clean.filter(k => usScanned.has(k.itemId)).slice(0, 5),
         foreignLocated: p.keptRows.filter(k => k.country && k.country !== 'US').length,
         keptCountries: countries, keptCurrencies: currencies,
         rejectReasons: p.rejectReasons,

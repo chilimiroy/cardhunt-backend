@@ -1937,7 +1937,10 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // frontend's deep links so a link and an API call ask the same question.
   // The printing asked for (TASK T10), or null for All.
   const printing = opts.printing || null;
-  const q = cm.buildQuery(matchCard, grade, printing ? { printing } : undefined);
+  // marketprobe only (EBAY_US_NOSET): ask without the set name; the gate
+  // still has it. Tests whether the words ASKED are why US misses listings.
+  const q = cm.buildQuery(opts.noSetInQuery ? Object.assign({}, matchCard, { setName: null }) : matchCard,
+                          grade, printing ? { printing } : undefined);
   // A raw sub-condition is asked of eBay's own "Card Condition" aspect,
   // which search can filter on. Measured: the filtered rows agreed with each
   // item's descriptor 36 of 36 times. Same one call as before — each raw
@@ -3812,7 +3815,8 @@ app.get('/api/ebay/gradecost/:cardId', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 const MARKETPROBE_SITES = ['EBAY_US', 'EBAY_GB', 'EBAY_DE', 'EBAY_AU', 'EBAY_CA',
                            'EBAY_FR', 'EBAY_IT', 'EBAY_ES', 'EBAY_JP',
-                           'EBAY_US_NOCAT'];   // US, no category filter
+                           'EBAY_US_NOCAT',    // US, no category filter
+                           'EBAY_US_NOSET'];   // US, set name not in the query
 const marketProbeCache = new Map();
 app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
   const cardId = req.params.cardId;
@@ -3831,8 +3835,9 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
     const per = {};
     for (const mp of sites) {
       try {
-        const r = await sourceEbay(card, grade, 25, { marketplace: mp.replace(/_NOCAT$/, ''),
-          noCategory: /_NOCAT$/.test(mp), background: true, allDropped: true });
+        const r = await sourceEbay(card, grade, 25, { marketplace: mp.replace(/_NO(CAT|SET)$/, ''),
+          noCategory: /_NOCAT$/.test(mp), noSetInQuery: /_NOSET$/.test(mp),
+          background: true, allDropped: true });
         const reasons = {};
         for (const d of r.dropped) {
           const k = /title says (\w+)/.test(d.reason) ? 'language:' + d.reason.match(/title says (\w+)/)[1]

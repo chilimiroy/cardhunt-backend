@@ -1,9 +1,13 @@
-// marketwait.test.js — /api/market never races the gated listings (TASK T1)
+// marketwait.test.js — a card view asks the server once (TASK T1, then 2026-09-29)
 //   node marketwait.test.js
-// Measured on Render 2026-09-28: fired together, /api/market's eBay call took
-// the serial eBay queue first and the listings waited 512ms mean (31% of a
-// cold view). The page now starts market only after that card+grade's
-// listings request settles. This runs the REAL function from the page.
+// Measured on Render 2026-09-28: /api/market and a duplicate /api/listings
+// fired with every card view, and the gated listings queued behind them on
+// eBay's serial queue — 512ms mean (31% of a cold view). T1 made market wait
+// for listings and shared one listings request. On 2026-09-29 /api/market's
+// last answer the page used (the ungated "lowest listing") was replaced by
+// /api/listings' own cheapestLive, so the page no longer calls /api/market
+// at all — there is nothing left to order. What this pins now: no market
+// request, and one listings request per card+grade. Runs the REAL function.
 'use strict';
 const fs = require('fs');
 let pass = 0, fail = 0;
@@ -21,9 +25,9 @@ const slice = name => {
 };
 
 console.log('\n  structure');
-const calls = (code.match(/fetchMarketPrice\(/g) || []).length;
-ok('fetchMarketPrice is called only by marketAfterListings (1 call + 1 declaration)', calls === 2, calls + ' occurrences');
-ok('both card-view paths go through marketAfterListings', (code.match(/marketAfterListings\((S\.currentCard|c), /g) || []).length === 2);
+ok('the page makes no /api/market request', !/\/api\/market/.test(code));
+ok('marketAfterListings / fetchMarketPrice / renderMarketData are gone',
+  !/function\s+(marketAfterListings|fetchMarketPrice|renderMarketData)\b/.test(code));
 ok('the listings request is published while in flight', /LIVE_INFLIGHT\[key\] = pr;/.test(code));
 // Opening a card fired /api/listings twice ~110ms apart (panel + Latest-
 // searches tile average), and the panel's copy queued behind its twin.
@@ -32,54 +36,10 @@ ok('exactly ONE place in the page fetches /api/listings', listingFetches === 1, 
 ok('...and it is fetchListings', /fetch\(BACKEND \+ '\/api\/listings\/'/.test(slice('fetchListings')));
 ok('the panel and the tile average both go through it',
   /fetchListings\(/.test(slice('renderLiveListings')) && /fetchListings\(/.test(slice('cardListingAvg')));
+ok('Lowest listing is filled from that same answer (setLowestFromListings)',
+  /setLowestFromListings\(/.test(slice('renderLiveListings')));
 
-console.log('\n  behaviour — the real function, stubbed network');
 (async () => {
-  const src = slice('marketAfterListings');
-  const log = [];
-  const LIVE_INFLIGHT = {};
-  const fetchMarketPrice = async () => { log.push('market'); return { marketValue: 1 }; };
-  // eslint-disable-next-line no-new-func
-  const marketAfterListings = new Function('LIVE_INFLIGHT', 'fetchMarketPrice', src + '; return marketAfterListings;')(LIVE_INFLIGHT, fetchMarketPrice);
-  const card = { id: 'en-base1-4' };
-
-  let release;
-  LIVE_INFLIGHT['en-base1-4|PSA 10'] = new Promise(r => { release = r; });
-  const m = marketAfterListings(card, 'PSA 10');
-  await new Promise(r => setTimeout(r, 20));
-  ok('market does NOT start while listings are in flight', log.length === 0);
-  log.push('listings'); release({});
-  await m;
-  ok('market starts after listings settle', log.join(',') === 'listings,market', log.join(','));
-
-  log.length = 0;
-  let reject;
-  LIVE_INFLIGHT['en-base1-4|Raw NM'] = new Promise((_, j) => { reject = j; });
-  const m2 = marketAfterListings(card, 'Raw NM');
-  reject(new Error('API returned 500'));
-  const got = await m2;
-  ok('a FAILED listings request still lets market run (fallback headline survives)', log.join(',') === 'market' && got.marketValue === 1);
-
-  log.length = 0;
-  await marketAfterListings(card, 'PSA 9');
-  ok('nothing in flight (cached listings) -> market runs at once', log.join(',') === 'market');
-
-  log.length = 0;
-  LIVE_INFLIGHT['en-base1-4|PSA 8'] = new Promise(() => {});    // never settles
-  await marketAfterListings({ id: 'en-sv03.5-199' }, 'PSA 8');
-  ok('another card’s listings do not hold market back', log.join(',') === 'market');
-
-  // openCard resets S.activeGrade while listings keep LF.grade: the same
-  // card's listings at a DIFFERENT grade must still hold market back.
-  log.length = 0;
-  let rel2;
-  LIVE_INFLIGHT['en-swsh7-215|Raw LP'] = new Promise(r => { rel2 = r; });
-  const m3 = marketAfterListings({ id: 'en-swsh7-215' }, 'Raw NM');
-  await new Promise(r => setTimeout(r, 20));
-  ok('the same card’s listings at another grade still hold market back', log.length === 0);
-  log.push('listings'); rel2({}); await m3;
-  ok('...and release it when they settle', log.join(',') === 'listings,market', log.join(','));
-
   console.log('\n  fetchListings — one request per card+grade, however many ask');
   {
     const src2 = slice('fetchListings');

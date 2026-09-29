@@ -284,8 +284,12 @@ ok(!/EBAY_ID\b/.test(src.replace(/EBAY_IDENT\w*/g, '')),
   'no dangling EBAY_ID reference survives (it would be a ReferenceError)');
 ok(src.includes('const auth = await getEbayTokenDetailed();'),
   'sourceEbay uses the detailed token path');
-ok(/scrEbayToken\(\)\s*\{\s*\n?\s*return \(await getEbayTokenDetailed\(\)\)/.test(src),
-  'the duplicate token implementation delegates instead of re-implementing');
+// scrEbayToken was the second token implementation; it delegated, and since
+// 2026-09-29 it is gone with its only caller (ebayActive). Either way there
+// must be ONE token exchange in the server.
+ok((!/scrEbayToken/.test(src) || /scrEbayToken\(\)\s*\{\s*\n?\s*return \(await getEbayTokenDetailed\(\)\)/.test(src))
+   && (src.match(/identity\/v1\/oauth2\/token/g) || []).length <= 1,
+  'one token implementation: the duplicate delegates or is gone, one oauth2 exchange');
 ok(src.includes('readyMeans'),
   '/ebay/status distinguishes "variables set" from "eBay accepted them"');
 ok(src.includes("req.query.probe === '1'"),

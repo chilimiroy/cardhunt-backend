@@ -173,9 +173,10 @@ ok('/api/listings/:cardName (unresolvable id) answers 404', /status\(404\)/.test
 ok('...and never calls eBay', !/fetchEbay|item_summary|getEbayToken/.test(nameRoute));
 // Every eBay Browse search in the server, by the function that makes it.
 // sourceEbay is gated. The rest are named here so a new one cannot appear
-// unnoticed: ebayActive is the KNOWN ungated name search behind /api/market's
-// "lowest listing · by name, ungated" (labelled as such on the page); the
-// /api/ebay/* routes are diagnostics that report, never render as listings.
+// unnoticed: the /api/ebay/* routes are diagnostics that report, never
+// render as listings. ebayActive — the ungated name search behind
+// /api/market's "lowest listing" — was deleted 2026-09-29: /api/listings
+// already computes cheapestLive through the gate.
 const searchSites = [];
 {
   const re = /item_summary\/search/g; let m;
@@ -185,9 +186,23 @@ const searchSites = [];
     searchSites.push(fn ? (fn[1] || fn[2]) : '?');
   }
 }
-const ALLOWED = ['sourceEbay', 'ebayActive', '/api/ebay/conditions/:cardId', '/api/ebay/certprobe/:cardId', '/api/ebay/gradecost/:cardId', '/api/ebay/conditionvalues'];
+const ALLOWED = ['sourceEbay', '/api/ebay/conditions/:cardId', '/api/ebay/certprobe/:cardId', '/api/ebay/gradecost/:cardId', '/api/ebay/conditionvalues'];
 const unknown = searchSites.filter(s => !ALLOWED.includes(s));
 ok('every eBay search site is a known one', unknown.length === 0, 'unexpected: ' + unknown.join(', '));
+ok('ebayActive (ungated eBay name search) is gone', !/ebayActive\s*\(/.test(server));
+
+// ── /api/market: nothing fetched, nothing name-matched ─────────
+console.log('\n  /api/market — the stored number-matched price, and no outbound call');
+{
+  const mk = route('get', '/api/market/:cardName');
+  ok('/api/market/:cardName found', mk.length > 200);
+  ok('...makes no outbound call (no fetch, no eBay)', !/\bfetch\(|fetchEbay|getEbayToken/.test(mk));
+  ok('...answers from numberMatchedPrice only', /numberMatchedPrice\(/.test(mk));
+  ok("TCGplayer's internal search API is not called from the server", !/mp-search-api\.tcgplayer\.com/.test(server));
+  ok('the PriceCharting HTML scrape is gone (token API route kept)',
+    !/pricecharting\.com\/search-products/.test(server) && /app\.get\('\/api\/graded\/:cardName'/.test(server));
+  ok('/api/market/:cardName/active answers 410', /status\(410\)/.test(route('get', '/api/market/:cardName/active')));
+}
 
 (async () => {
   if (process.argv.includes('--live')) {

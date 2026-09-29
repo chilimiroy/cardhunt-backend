@@ -858,7 +858,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
          fixed multiplier, never measured.
 
          Every element id the logic addresses is unchanged. openCard(),
-         selGrade(), renderMarketData(), updateValueBar() and
+         selGrade(), updatePrices(), updateValueBar() and
          renderListingFinder() reach this page by id, and a renamed one
          silently disconnects logic from markup. -->
     <div class="cdwrap">
@@ -2455,7 +2455,7 @@ function updateCardPrices(grade,base){ return updatePrices(grade,base); }
 //   Lowest listing  <- the cheapest GATED live listing (setLowestFromListings),
 //                      or /api/market's by-name lowest, labelled ungated
 //   Last sold       <- nothing: no licensed sold source (T8). It says so.
-//   the badge       <- renderMarketData's collector-number match
+//   the badge       <- the card's own collector-number price, here
 // and the graph and its stats <- /api/history (loadHistory).
 function updatePrices(grade,base){
   // Say whether the headline number is measured or derived. The set tile has
@@ -2473,10 +2473,18 @@ function updatePrices(grade,base){
   var lo = document.getElementById('cd-low');
   lo.textContent = '—'; lo.removeAttribute('data-gated');
   document.getElementById('cd-lowsrc').textContent = 'checking ' + gradeText(grade) + ' listings…';
-  if (!S._soldShown) {
-    document.getElementById('cd-sold').textContent = '—';
-    document.getElementById('cd-soldd').textContent = 'no licensed sold source';
-  }
+  // Last sold: no licensed source (T8). Stated, never a number.
+  document.getElementById('cd-sold').textContent = '—';
+  var sdd = document.getElementById('cd-soldd');
+  sdd.textContent = 'no licensed sold source · see eBay sold link';
+  sdd.title = 'eBay completed sales need the Marketplace Insights API (restricted); '
+    + "scraping eBay's sold pages is not done.";
+  // The badge says where the headline came from, and only that.
+  var badge = document.getElementById('cd-chg');
+  if (badge) badge.innerHTML = priceIsReal
+    ? '<span style="color:var(--gr)">&#9679; matched on collector number</span> '
+      + '<span style="color:var(--fa);font-size:11px">' + liveEsc(String(cc._priceSource || 'database')) + '</span>'
+    : '<span style="color:var(--mu)">no market data held — estimate</span>';
 }
 
 // The cheapest GATED live listing at the selected grade — the same number
@@ -2768,9 +2776,6 @@ function selGrade(grade,base){
   // writers, one of them ungated", reintroduced by wiring the selector into
   // selGrade. The other tabs still need this.
   if (S.ltab && S.ltab !== 'live') buildMockListings(S.currentCard,base,S.ltab);
-  marketAfterListings(S.currentCard, grade).then(function(m){
-    if (m && m.marketValue > 0) renderMarketData(m);
-  });
 
   // Grade badge on card image
   var oldBadge = document.getElementById('grade-badge');
@@ -2797,7 +2802,7 @@ async function openCard(id){
   SS('card');
   if(S.chart){S.chart.destroy();S.chart=null;}
   S.activeGrade='Raw NM';S.watching=false;
-  S._soldShown=false;
+  
   // A new card starts at Raw + All, and the selector is redrawn so it never
   // shows the previous card's selection against this card's listings.
   SEL.status='Raw'; SEL.condition='All'; SEL.otherGrader=null;
@@ -2873,10 +2878,6 @@ async function openCard(id){
     renderCardInfo(c);
     try { renderListingFinder(c); }
     catch (err) { console.warn('listing finder failed:', err.message); }
-    // Pull real market data in the background
-    marketAfterListings(c, S.activeGrade).then(function(m){
-      if (m && m.marketValue > 0) renderMarketData(m);
-    });
     updateValueBar(base);
     setTimeout(function(){initChart(base,'3M');},80);
   }catch(err){
@@ -2942,145 +2943,24 @@ async function fetchArtist(c) {
   return (ARTIST_CACHE[c.id] = null);
 }
 
-// ── /api/market WAITS for /api/listings (TASK T1, measured 2026-09-28) ──
-// Both went out together on every card view. Every eBay call on the server
-// is serialised through one queue, and /api/market reaches it first (the
-// listings route does a DB lookup before its search), so the GATED listings
-// a buyer is waiting for queued behind an ungated name search whose result
-// only feeds a fallback headline. On Render, 12 cold views: queue-wait was
-// 512ms of a 1,669ms mean (31%); the same listings requested alone took
-// 544-832ms with zero queue-wait. So market starts once that card+grade's
-// listings request has settled, whichever way it settled.
+// ── The page does not call /api/market (2026-09-29) ──
+// marketAfterListings / fetchMarketPrice / renderMarketData were here. They
+// fetched /api/market on every card view for three things, each a second
+// answer to a question already answered properly:
+//   Lowest listing  <- an UNGATED eBay name search. /api/listings computes
+//                      cheapestLive with the gate, reprint and language
+//                      checks and outliers excluded; setLowestFromListings
+//                      is the only writer of that box now.
+//   name-match headline <- TCGplayer's internal search API from Render, on
+//                      name + set only. Withdrawn server-side; a card with
+//                      no number-matched price shows its labelled estimate.
+//   the badge       <- now drawn by updatePrices from the card itself.
+// Two implementations of one thing has gone wrong six times in this project;
+// this one also cost an eBay call per card view.
+//
+// LIVE_INFLIGHT stays: fetchListings shares one in-flight request per
+// card+grade through it (TASK T1).
 var LIVE_INFLIGHT = {};
-// Any in-flight listings for THIS card, whatever its grade: openCard resets
-// S.activeGrade while the listings keep LF.grade, so keying on one grade
-// let the two race again whenever they differed (seen in the browser).
-function marketAfterListings(card, grade) {
-  var prefix = card ? card.id + '|' : null, waits = [];
-  if (prefix) Object.keys(LIVE_INFLIGHT).forEach(function (k) {
-    if (k.indexOf(prefix) === 0) waits.push(LIVE_INFLIGHT[k].then(function () {}, function () {}));
-  });
-  return Promise.all(waits).then(function () { return fetchMarketPrice(card, grade); });
-}
-
-// ── REAL MARKET PRICE from scraper backend ────────────────────
-async function fetchMarketPrice(card, grade) {
-  if (!card) return null;
-  var setName = (card.set && card.set.name) ? card.set.name : '';
-  var url = BACKEND + '/api/market/' + encodeURIComponent(card.name)
-          + '?set=' + encodeURIComponent(setName)
-          + '&grade=' + encodeURIComponent(grade || '')
-          + '&cardId=' + encodeURIComponent(card.id || '');
-  try {
-    var r = await fetch(url);
-    if (!r.ok) return null;
-    return await r.json();
-  } catch (e) { return null; }
-}
-
-function renderMarketData(m) {
-  if (!m) return;
-
-  // ── /api/market CANNOT identify one card ──────────────────────
-  // Its aggregate comes from tcgplayerPrice(cardName, setName), which
-  // matches on NAME AND SET ONLY — no collector number. Where a name
-  // repeats in a set, which chase cards almost always do, it returns an
-  // arbitrary variant. Ascended Heroes has Mega Hawlucha ex three times:
-  // #116 Double Rare $0.70, #268 Rare Ultra $5.90, #283 SIR $56.34 — and
-  // /api/market returns $230.48 for ALL THREE, which is none of them.
-  //
-  // This used to be written into price_history and that was stopped (see
-  // server.js). The value is still SERVED, and the card page was still
-  // pasting it over the headline, badged "high confidence" — so the same
-  // defect survived on the display path with nothing to show for it. The
-  // set tile read $0.70 and the card page read $230.48 for the same click.
-  //
-  // A number-matched price is the stronger signal and must win. Inference
-  // is for absent data only.
-  var cc = S.currentCard;
-  var haveNumberMatched = !!(cc && (cc._priceIsReal === true
-    || (cc._priceSource && !/^estimate/.test(cc._priceSource))));
-
-  if (m.marketValue > 0 && !haveNumberMatched) {
-    // No per-card price for this exact card. The aggregate may stand in,
-    // but it is NOT this card's measured price and must not claim to be.
-    var mkt = document.getElementById('cd-mkt');
-    if (mkt) mkt.innerHTML = fmtCurrency(m.marketValue)
-      + '<span style="font-size:11px;color:var(--fa);margin-left:6px;font-weight:600"'
-      + ' title="Matched on card name and set only — not on collector number.'
-      + ' Where a name repeats in a set this may be a different variant.">name match</span>';
-    S.activeGradeBase = m.marketValue;
-    updateValueBar(m.marketValue);
-  }
-  // Lowest active listing. Also a name query, and ebayActive runs no title
-  // gate, so this is "cheapest thing called this in this set", not this
-  // card. Say which, rather than presenting it as the card's own floor —
-  // the gated per-card listings are in the panel below.
-  // A gated per-card lowest (setLowestFromListings) always wins; this one
-  // may only fill an empty box.
-  var loBox = document.getElementById('cd-low');
-  if (m.lowestActive > 0 && !(loBox && loBox.getAttribute('data-gated'))) {
-    var lo = loBox;
-    var ls = document.getElementById('cd-lowsrc');
-    if (lo) lo.textContent = fmtCurrency(m.lowestActive);
-    if (ls) ls.textContent = m.activeCount + ' active on eBay · by name, ungated';
-  }
-  // Last sold: there is NO legitimate source (TASK T8, 2026-09-29). This box
-  // used to show m.recentSales[0], which came from scraping eBay's sold pages
-  // from the server on every card view. The scrape is gone; the server says
-  // why in m.sold, and the box says so rather than showing a number. The
-  // "eBay — sold" deep link below opens the real sold search in the user's
-  // own browser. Do not refill this box from anything but a licensed source.
-  if (m.sold && m.sold.available === false) {
-    var sd = document.getElementById('cd-sold');
-    var sdd = document.getElementById('cd-soldd');
-    S._soldShown = true;
-    if (sd) sd.textContent = '—';
-    if (sdd) {
-      sdd.textContent = 'no licensed sold source · see eBay sold link';
-      sdd.title = m.sold.reason || '';
-    }
-  }
-  // Confidence badge. m.confidence describes the NAME-MATCHED aggregate, so
-  // it may only describe the headline when the aggregate IS the headline.
-  // Reporting "high confidence" over a number-matched price was the badge
-  // vouching for a number it had not been asked about.
-  var badgeHost = document.getElementById('cd-chg');
-  if (badgeHost && haveNumberMatched) {
-    badgeHost.innerHTML = '<span style="color:var(--gr)">&#9679; matched on collector '
-      + 'number</span> <span style="color:var(--fa);font-size:11px">'
-      + liveEsc(String((cc && cc._priceSource) || 'database')) + '</span>';
-  } else if (badgeHost && m.confidence && m.confidence !== 'none') {
-    var col = m.confidence === 'high' ? 'var(--gr)' : m.confidence === 'medium' ? 'var(--am)' : 'var(--mu)';
-    badgeHost.innerHTML = '<span style="color:' + col + '">&#9679; ' + m.confidence
-      + ' confidence</span> <span style="color:var(--fa);font-size:11px">' + (m.basis || '')
-      + ' (name match)</span>';
-  }
-  // m.graded (PriceCharting, by name) used to be pasted into the price
-  // table's rows. The table is gone (TASK.md T4), so there is nowhere for
-  // it to go; it is still in the response for any future use.
-  // ── NOT the listings panel ────────────────────────────────────
-  // This used to call renderRealListings(m.listings) and write into
-  // #cd-listings — the same element renderListingFinder() owns. Two writers,
-  // one element, and whichever request came back last won.
-  //
-  // renderListingFinder fetches /api/listings/:cardId, which is gated by
-  // cardmatch on number, set size, grade, reprint, language and year, and
-  // reports "73 kept, 2 rejected of 75 scanned". `m.listings` is
-  // act.listings from /api/market, which is ebayActive() on a NAME query
-  // with no title gate at all — it carries no rejection count because
-  // nothing ever rejected anything.
-  //
-  // Measured on Giratina V #130: the gated endpoint returned 73 listings,
-  // every one Giratina V 130/196, and the panel displayed
-  // "2022 Pokémon Magnezone V #056 Lost Origin" at the top, because the
-  // ungated list overwrote it. A wrong card shown as this card's cheapest
-  // offer is the failure the whole gate exists to prevent.
-  //
-  // If /api/listings fails, renderListingFinder says so and the deep links
-  // below still work — that is the designed fallback, and it does not
-  // involve showing someone a different card.
-}
 
 // Renders a list of eBay rows into #cd-listings. NOT wired to
 // /api/market — see above. Kept for a caller that has GATED rows to render.
@@ -3426,8 +3306,7 @@ var LIVE_TTL   = 15 * 60 * 1000;      // mirrors the server's cache
 // search twice and the panel's copy queued behind its twin — 739-1,473ms of
 // queue-wait on Render (browser, 2026-09-28), plus 1-3 eBay calls of quota
 // per view for nothing. Now one request: a fresh cached answer, else the
-// one already in flight, else a new one (published in LIVE_INFLIGHT so
-// marketAfterListings() can wait on it too).
+// one already in flight, else a new one (published in LIVE_INFLIGHT).
 function fetchListings(cardId, grade) {
   var key = cardId + '|' + grade;
   var hit = LIVE_CACHE[key];
@@ -5810,6 +5689,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260929-17695f4-nosoldscrape &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260929-abae1a9-nomarketdup &middot; click to hide</div>
 </body>
 </html>

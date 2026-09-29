@@ -30,51 +30,57 @@ const slice = (code, name) => {
 console.log('\n  server — no sold scrape anywhere');
 ok('no LH_Sold / LH_Complete in server code', !/LH_Sold|LH_Complete/.test(server));
 ok('no fetch of www.ebay.com/sch (eBay HTML search) in server code', !/ebay\.com\/sch/.test(server));
-ok('ebaySold is gone — not declared, not called', !/ebaySold/.test(server));
+ok('ebaySold is gone — never called', !/ebaySold\s*\(/.test(server));
 ok('SOLD_UNAVAILABLE is declared, available:false, with a reason',
-  /const SOLD_UNAVAILABLE = Object\.freeze\(\{\s*available: false/.test(server) && /reason:/.test(slice(server, 'getMarketPrice') + server));
+  /const SOLD_UNAVAILABLE = Object\.freeze\(\{\s*available: false,[\s\S]{0,80}reason:/.test(server));
 ok('/api/market/:cardName/sold answers 410', /app\.get\('\/api\/market\/:cardName\/sold'[\s\S]{0,120}status\(410\)/.test(server));
 
-console.log('\n  page — Last sold says why, never shows a scraped number');
-const rmd = slice(html, 'renderMarketData');
-ok('renderMarketData exists', rmd.length > 200, rmd.length + ' chars');
-ok('renderMarketData never reads recentSales', !/recentSales/.test(rmd));
+console.log('\n  page — Last sold says why, never shows a number');
+const upd = slice(html, 'updatePrices');
+ok('updatePrices exists', upd.length > 200, upd.length + ' chars');
+ok('the page never reads recentSales', !/recentSales/.test(html));
 ok('the page never writes a price into #cd-sold',
   !/getElementById\('cd-sold'\)\.textContent\s*=\s*fmtCurrency/.test(html) && !/sd\.textContent\s*=\s*fmtCurrency/.test(html));
-ok('renderMarketData states the missing source from m.sold', /m\.sold && m\.sold\.available === false/.test(rmd) && /no licensed sold source/.test(rmd));
+ok('updatePrices states the missing source on every card and grade',
+  /getElementById\('cd-sold'\)\.textContent = '—'/.test(upd) && /no licensed sold source/.test(upd));
 ok('the "eBay — sold" DEEP LINK is kept (user\'s own browser, not a fetch)', /id: 'ebay_sold'/.test(html));
 
-console.log('\n  behaviour — the REAL getMarketPrice, network stubbed');
+// The REAL /api/market handler (2026-09-29: getMarketPrice and its four
+// outbound calls are gone), run with the network stubbed. Any fetch at all
+// fails this — a sold scrape coming back would have to fetch.
+console.log('\n  behaviour — the REAL /api/market handler, network stubbed');
 (async () => {
-  const src = slice(server, 'getMarketPrice');
+  const i = server.indexOf("app.get('/api/market/:cardName', ");
+  const j = server.indexOf("\napp.", i + 5);
+  const handlerSrc = i >= 0 ? server.slice(server.indexOf('async', i), server.lastIndexOf(');', j)) : '';
   const decl = /const SOLD_UNAVAILABLE = Object\.freeze\(\{[\s\S]*?\}\);/.exec(server);
-  ok('getMarketPrice and SOLD_UNAVAILABLE extracted', !!src && !!decl);
+  const wdecl = /const MARKET_WITHDRAWN = Object\.freeze\(\{[\s\S]*?\}\);/.exec(server);
+  ok('handler, SOLD_UNAVAILABLE and MARKET_WITHDRAWN extracted', !!handlerSrc && !!decl && !!wdecl);
   const fetched = [];
   const fakeFetch = async (u) => { fetched.push(String(u)); return { ok: false, status: 599 }; };
-  const stubs = {
-    ebayActive: async () => ({ listings: [{ price: 10 }, { price: 20 }, { price: 30 }] }),
-    tcgplayerPrice: async () => ({ market: 0 }),
-    priceChartingGraded: async () => ({ grades: {} })
+  const run = async (nmAnswer, query) => {
+    let body = null;
+    const res = { json: b => { body = b; }, status: () => res };
+    try {
+      // eslint-disable-next-line no-new-func
+      const h = new Function('fetch', 'numberMatchedPrice',
+        (decl ? decl[0] : '') + '\n' + (wdecl ? wdecl[0] : '') + '\nreturn (' + handlerSrc + ');')(
+        fakeFetch, async () => nmAnswer);
+      await h({ params: { cardName: 'Charizard' }, query }, res);
+    } catch (e) { ok('the handler runs', false, e.message); }
+    return body || {};
   };
-  // If a sold scraper is ever back in the source, run IT (network stubbed),
-  // so the assertions below catch it by behaviour, not only by grep.
-  const soldSrc = slice(server, 'ebaySold');
-  let r = {};
-  try {
-    // eslint-disable-next-line no-new-func
-    const f = new Function('fetch', 'ebayActive', 'tcgplayerPrice', 'priceChartingGraded',
-      'sGet', 'sSet', 'throttle', 'SUA',
-      (decl ? decl[0] : '') + '\n' + soldSrc + '\n' + src + '; return getMarketPrice;')(
-      fakeFetch, stubs.ebayActive, stubs.tcgplayerPrice, stubs.priceChartingGraded,
-      () => null, () => {}, async () => {}, 'test');
-    r = await f('Charizard', 'Base Set', 'PSA 9');
-  } catch (e) { ok('getMarketPrice runs', false, e.message); }
-  ok('no network fetch made by getMarketPrice itself', fetched.length === 0, fetched.join(' '));
+  const held = { cardId: 'en-base1-4', number: '4', price: 944.53, source: 'tcgplayer_market', isReal: true, recordedAt: '2026-09-29' };
+  const r = await run(held, { cardId: 'en-base1-4', set: 'Base Set' });
+  ok('no network fetch made by /api/market', fetched.length === 0, fetched.join(' '));
   ok('sold.available === false with a stated reason', r.sold && r.sold.available === false && /Marketplace Insights/.test(r.sold.reason));
   ok('recentSales empty, soldCount 0, soldMedian null',
     Array.isArray(r.recentSales) && r.recentSales.length === 0 && r.soldCount === 0 && r.soldMedian === null);
+  ok('the held number-matched price answers', r.marketValue === 944.53 && r.matchedOn === 'collector number', r.marketValue + ' ' + r.matchedOn);
   ok('basis never claims eBay sales', !/sale/i.test(String(r.basis)), r.basis);
-  ok('the legitimate tiers still answer (active median here)', r.marketValue === 20 && r.confidence === 'low', r.marketValue + ' ' + r.confidence);
+  const none = await run(null, {});
+  ok('no cardId -> no number, no name-matched stand-in, and says why',
+    none.marketValue === null && none.matchedOn === 'none' && /no cardId/.test(none.matchWarning || ''));
 
   if (process.argv.includes('--live')) {
     const base = process.env.CARDHUNT_API || 'http://localhost:3001';

@@ -102,8 +102,8 @@ console.log('  ' + html.length + ' bytes' + (OFFLINE ? '   [offline: live checks
 console.log('\n0. THE SLICER ITSELF');
 // 14 assertions below read source through fnSrc(). If it slices the wrong
 // text they report green about code they never looked at.
-ok('fnSrc finds a plain function', /^function renderMarketData\s*\(/.test(fnSrc('renderMarketData')),
-  JSON.stringify(fnSrc('renderMarketData').slice(0, 40)));
+ok('fnSrc finds a plain function', /^function setLowestFromListings\s*\(/.test(fnSrc('setLowestFromListings')),
+  JSON.stringify(fnSrc('setLowestFromListings').slice(0, 40)));
 ok('fnSrc finds an async function', /^async function loadLangSets\s*\(/.test(fnSrc('loadLangSets')),
   JSON.stringify(fnSrc('loadLangSets').slice(0, 40)));
 ok('fnSrc does not over-run into the next declaration',
@@ -506,20 +506,19 @@ console.log('\n4. A NUMBER-MATCHED PRICE ALWAYS WINS');
 // Heroes carries Pikachu ex at #057 $3.37 and #276 $959.68; the aggregate
 // returned $3.17 for both, and renderMarketData pasted it over the headline
 // badged "high confidence". The set tile read $959.68 on the same click.
-const rmd = fnSrc('renderMarketData');
-ok('renderMarketData exists', rmd.length > 0);
-ok('renderMarketData computes whether a number-matched price is held',
-  /haveNumberMatched/.test(rmd), 'the guard variable is gone');
-ok('...and the aggregate is written ONLY when there is none',
-  /if\s*\(\s*m\.marketValue\s*>\s*0\s*&&\s*!haveNumberMatched\s*\)/.test(rmd),
-  'the condition that stops the overwrite');
-ok('the stand-in aggregate is LABELLED "name match"',
-  /name match/.test(rmd),
-  'a price that cannot identify the card must not imply it did');
-ok('_priceIsReal is what decides it, not the raw number',
-  /_priceIsReal/.test(rmd) && /estimate/.test(rmd));
-ok('the ungated by-name lowest is labelled as ungated',
-  /ungated/.test(rmd), 'otherwise it reads as this card\'s own floor');
+//
+// 2026-09-29: the stand-in is gone altogether. The page no longer calls
+// /api/market, the server no longer computes a name-matched aggregate, and
+// the badge is drawn from the card's own price. The strongest form of
+// "a number-matched price always wins" is that nothing else can be shown.
+ok('the page never fetches /api/market', !/\/api\/market/.test(codeOnly));
+ok('renderMarketData / marketAfterListings / fetchMarketPrice are gone',
+  !/function (renderMarketData|marketAfterListings|fetchMarketPrice)\b/.test(codeOnly));
+ok('no "name match" headline can be drawn', !/name match/.test(codeOnly));
+const upd = fnSrc('updatePrices');
+ok('the badge is decided by _priceIsReal, not by a fetched number',
+  /_priceIsReal/.test(upd) && /cd-chg/.test(upd) && /matched on collector number/.test(upd));
+ok('...and an estimate says so', /estimate/.test(upd));
 
 // ══════════════════════════════════════════════════════════════
 console.log('\n5. OUTLIERS ARE FLAGGED, NEVER REMOVED');
@@ -558,8 +557,8 @@ ok('renderListingFinder owns the listings element',
 ok('the ungated renderRealListings writer is GONE from #cd-listings',
   !/renderRealListings\(\s*m\.listings\s*\)/.test(codeOnly),
   'two writers, one ungated — whichever returned last won the element');
-ok('...and renderMarketData does not call it either',
-  !/renderRealListings\s*\(/.test(fnCode('renderMarketData')),
+ok('...and there is no second writer left to call it (renderMarketData gone)',
+  !/function renderMarketData\b/.test(codeOnly) && !/renderRealListings\s*\(/.test(codeOnly),
   'the ungated render must not come back through the other writer');
 ok('every deep link query goes through cardmatch.buildQuery',
   /cardQuery/.test(html) && /buildQuery/.test(html),
@@ -767,8 +766,13 @@ console.log('7d3. THE BOXES, THE GRAPH AND THE BAR ARE MEASURED OR SAY NOTHING')
   ok('Lowest listing is the GATED cheapest, set where the panel gets its answer',
     fnCode('renderLiveListings').indexOf('setLowestFromListings(d, grade)') >= 0
     && fnCode('setLowestFromListings').indexOf('cheapestLive') >= 0);
-  ok('...and the by-name lowest cannot overwrite it',
-    fnCode('renderMarketData').indexOf('data-gated') >= 0);
+  // ...and nothing else puts a number there: the by-name lowest from
+  // /api/market was the other writer, deleted 2026-09-29.
+  const lowWriters = [...codeOnly.matchAll(/(?:^|\n)\s*(?:async\s+)?function\s+([A-Za-z0-9_$]+)\s*\(/g)]
+    .map(m => m[1]).filter(f => /getElementById\('cd-low'\)/.test(fnCode(f)));
+  ok('only updatePrices (clears) and setLowestFromListings (gated) write #cd-low',
+    lowWriters.includes('setLowestFromListings')      // not vacuous: it found the real writer
+    && lowWriters.every(f => f === 'updatePrices' || f === 'setLowestFromListings'), lowWriters.join(', '));
   ok('the graph draws /api/history', fnCode('loadHistory').indexOf('/api/history/') >= 0);
   const server = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
   const h = server.slice(server.indexOf("app.get('/api/history/:cardId'"));

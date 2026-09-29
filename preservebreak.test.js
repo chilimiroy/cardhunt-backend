@@ -33,10 +33,13 @@ const breaks = [
     h => h.replace('<body', '<img src="https://images.pokemontcg.io/base1/1.png"><body'),
     'images.pokemontcg.io references do not INCREASE'],
 
-  ['the number-matched guard is deleted from renderMarketData',
-    h => h.replace('if (m.marketValue > 0 && !haveNumberMatched) {',
-                   'if (m.marketValue > 0) {'),
-    'the aggregate is written ONLY when there is none'],
+  // renderMarketData is gone (2026-09-29): the page no longer asks
+  // /api/market for anything. The way that comes back is a fetch of it.
+  ['a /api/market fetch comes back into the page',
+    h => h.replace('function setLowestFromListings(d, grade) {',
+                   "function fetchMarketPrice(card) { return fetch(BACKEND + '/api/market/' + card.name); }\n"
+                   + 'function setLowestFromListings(d, grade) {'),
+    'the page never fetches /api/market'],
 
   ['outlier rows are filtered away instead of greyed',
     h => h.replace('var flagged = rows.filter(function(l){ return l.suspect; });',
@@ -55,10 +58,12 @@ const breaks = [
     h => h.replace('The results are not ', 'The results are '),
     'say the results are not checked by us'],
 
-  ['the ungated writer is wired back into the listings panel',
-    h => h.replace('function renderMarketData(m) {',
-                   'function renderMarketData(m) {\n  renderRealListings(m.listings);'),
-    'renderMarketData does not call it either'],
+  // ...and the by-name lowest it used to write into the Lowest listing box.
+  ['a second writer puts an ungated price into Lowest listing',
+    h => h.replace('function setLowestFromListings(d, grade) {',
+                   "function renderMarketData(m) { document.getElementById('cd-low').textContent = m.lowestActive; }\n"
+                   + 'function setLowestFromListings(d, grade) {'),
+    'only updatePrices (clears) and setLowestFromListings (gated) write #cd-low'],
 
   ['the shop-asking-price label is removed from the row',
     h => h.replace('shop asking price', 'price'),

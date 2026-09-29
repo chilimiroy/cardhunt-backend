@@ -97,10 +97,14 @@ const fnSrc = name => {
   ok('fnSrc finds an async function by name',
     /^async function openCard\(/.test(fnSrc('openCard')),
     JSON.stringify(fnSrc('openCard').slice(0, 40)));
-  ok('fnSrc reaches the END of a long function',
-    /^function renderMarketData\(/.test(fnSrc('renderMarketData'))
-      && /m\.graded/.test(fnSrc('renderMarketData')),
-    'renderMarketData was truncated again');
+  // renderMarketData was the long function used here; deleted 2026-09-29.
+  // updatePrices' LAST statement is the estimate badge, and the function
+  // after it is setLowestFromListings: reach the one, never the other.
+  ok('fnSrc reaches the END of a function, and stops there',
+    /^function updatePrices\(/.test(fnSrc('updatePrices'))
+      && /no market data held/.test(fnSrc('updatePrices'))
+      && !/function setLowestFromListings/.test(fnSrc('updatePrices')),
+    'updatePrices was truncated or over-read');
   ok('fnSrc returns empty for a name that does not exist',
     fnSrc('thisFunctionDoesNotExist__') === '');
 
@@ -264,16 +268,14 @@ const fnSrc = name => {
       + '?set=' + encodeURIComponent((lo.set && lo.set.name) || '')
       + '&grade=Raw%20NM&cardId=' + encodeURIComponent(lo.id));
     console.log(`        /api/market says $${mk.marketValue} for cardId=${lo.id}`);
-    // Documents the endpoint's real behaviour rather than asserting it is
-    // fixed: the FRONTEND must be safe whether or not it ever is.
-    ok('the frontend does not trust /api/market for a card that has its own price',
-      /haveNumberMatched/.test(fnSrc('renderMarketData')),
-      'renderMarketData overwrites the headline again');
-    ok('the confidence badge does not vouch for a price it did not produce',
-      /haveNumberMatched[\s\S]{0,400}badgeHost|badgeHost[\s\S]{0,200}haveNumberMatched/
-        .test(fnSrc('renderMarketData')));
-    ok('an aggregate shown in place of a missing price is labelled a name match',
-      /name match/.test(fnSrc('renderMarketData')));
+    // 2026-09-29: the page no longer calls /api/market at all, and the server
+    // no longer computes a name-matched aggregate — so no such number can
+    // reach the headline, and the badge is drawn from the card's own price.
+    const pageCode = html.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
+    ok('the frontend never fetches /api/market', !/\/api\/market/.test(pageCode));
+    ok('the confidence badge is drawn from the card\'s own price (updatePrices)',
+      /_priceIsReal/.test(fnSrc('updatePrices')) && /cd-chg/.test(fnSrc('updatePrices')));
+    ok('no "name match" headline exists to be shown', !/name match/.test(pageCode));
 
     // The endpoint itself, now that it uses the cardId it is given. Two paths
     // that should agree, asserted to agree — the technique that has found
@@ -294,9 +296,11 @@ const fnSrc = name => {
     // answering with whatever the name search returned.
     const anon = await get('/api/market/' + encodeURIComponent(lo.name)
       + '?set=' + encodeURIComponent((lo.set && lo.set.name) || '') + '&grade=Raw%20NM');
-    ok('without a cardId it reports matchedOn name+set and warns',
-      anon.matchedOn === 'name+set' && /different variant/.test(anon.matchWarning || ''),
-      `matchedOn=${anon.matchedOn}`);
+    // Before 2026-09-29 it answered with a name+set aggregate and a warning;
+    // now there is no name-matched stand-in at all.
+    ok('without a cardId it answers NOTHING and says why',
+      anon.matchedOn === 'none' && anon.marketValue === null && /no cardId/.test(anon.matchWarning || ''),
+      `matchedOn=${anon.matchedOn} marketValue=${anon.marketValue}`);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

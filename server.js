@@ -2696,81 +2696,34 @@ app.get('/api/diagnostic', async (req, res) => {
 
 
 // ══════════════════════════════════════════════════════════════
-// SCRAPER ROUTES — real market prices from multiple sources
+// /api/market — what we HOLD for one card, and nothing fetched
+//
+// This block used to be "SCRAPER ROUTES — real market prices from multiple
+// sources": four outbound calls on every card view, each a second answer to
+// a question something else already answered properly.
+//
+//   ebaySold()            eBay's sold-page HTML           deleted T8
+//   ebayActive()          ungated eBay NAME search        deleted 2026-09-29
+//       fed the page's "Lowest listing" box when the gated one had not
+//       answered, and a median-of-active fallback headline. /api/listings
+//       computes cheapest / cheapestLive with the gate, the reprint and
+//       language checks, and outliers excluded — the box reads that now.
+//       Two implementations of one thing; it also cost an eBay call a view.
+//   tcgplayerPrice()      TCGplayer's INTERNAL search API  deleted 2026-09-29
+//       (mp-search-api.tcgplayer.com) from Render. TCGplayer grants no new
+//       API access (CLAUDE.md), and calling their private endpoint from a
+//       server is the T8 question again. We already hold their prices
+//       legitimately: TCGdex (keyed by TCGplayer productId) and pokemontcg.io.
+//       It also matched on NAME + SET only — the Mega Hawlucha $230.48.
+//   priceChartingGraded() PriceCharting HTML scrape        deleted 2026-09-29
+//       Dead: "OK - 0 grade prices" on every probe. The token API route
+//       /api/graded/:cardName is separate and untouched.
+//
+// What is left needs no network: the number-matched price we store (the
+// same LATERAL join /api/cards uses) and the sold status. Kept as an
+// endpoint, with the old field names present and empty, so an older page
+// or tool reading them gets "nothing" rather than undefined.
 // ══════════════════════════════════════════════════════════════
-// ══ SCRAPER (inlined — nothing external to deploy) ═══════════
-const SCACHE = {};
-const STTL = 30 * 60 * 1000;               // 30 min — be polite to sources
-const sGet = k => { const e = SCACHE[k]; return (e && Date.now()-e.ts < STTL) ? e.d : null; };
-const sSet = (k, d) => { SCACHE[k] = { d, ts: Date.now() }; };
-
-const SUA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
-           '(KHTML, like Gecko) Chrome/120.0 Safari/537.36';
-
-// Politeness: never hammer a host. One request per host per 1.2s.
-const lastHit = {};
-async function throttle(host) {
-  const now = Date.now();
-  const wait = Math.max(0, (lastHit[host] || 0) + 1200 - now);
-  if (wait) await new Promise(r => setTimeout(r, wait));
-  lastHit[host] = Date.now();
-}
-
-// ── 1 & 2. EBAY ───────────────────────────────────────────────
-// A SECOND token implementation used to live here, with its own cache and
-// its own copy of the module-load credential consts. Two paths to one
-// marketplace that must agree and had no reason to — the shape CLAUDE.md
-// warns about — and it carried the same "return null for any reason" bug.
-// It now delegates, so there is one token, one cache, one error path.
-async function scrEbayToken() {
-  return (await getEbayTokenDetailed()).token;
-}
-
-// Active listings via the free Browse API
-async function ebayActive(query, marketplace = 'EBAY_US', limit = 50) {
-  const key = `eb_act_${marketplace}_${query}`;
-  const hit = sGet(key); if (hit) return hit;
-
-  const token = await scrEbayToken();
-  if (!token) return { listings: [], source: 'ebay_api', configured: false };
-
-  const url = 'https://api.ebay.com/buy/browse/v1/item_summary/search'
-    + '?q=' + encodeURIComponent(query)
-    + '&category_ids=183454&limit=' + limit + '&sort=price';
-
-  // background: true — this is the harvest/diagnostic path, not a user
-  // waiting on a page. It yields at the soft stop so live requests keep
-  // working. ebaycall paces internally, so the old throttle() is redundant.
-  const call = await ebay.fetchEbay(db, {
-    url, token, kind: 'search', background: true,
-    meta: { cardId: 'ebayActive', query, marketplace },
-    countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0)
-  });
-  if (call.blocked) {
-    return { listings: [], source: 'ebay_api', status: call.blocked, reason: call.reason };
-  }
-  if (!call.ok) return { listings: [], source: 'ebay_api', error: call.reason };
-
-  const d = call.data || {};
-  const listings = (d.itemSummaries || []).map(it => ({
-    title: it.title,
-    price: parseFloat(it.price && it.price.value) || 0,
-    currency: (it.price && it.price.currency) || 'USD',
-    shipping: (it.shippingOptions && it.shippingOptions[0] && it.shippingOptions[0].shippingCost)
-              ? parseFloat(it.shippingOptions[0].shippingCost.value) : 0,
-    condition: it.condition || '',
-    url: it.itemWebUrl,
-    image: it.image && it.image.imageUrl,
-    seller: it.seller && it.seller.username,
-    feedback: it.seller && it.seller.feedbackPercentage,
-    country: it.itemLocation && it.itemLocation.country,
-    type: (it.buyingOptions || []).includes('AUCTION') ? 'auction' : 'fixed'
-  })).filter(l => l.price > 0);
-
-  const out = { listings, source:'ebay_api', configured:true, count:listings.length };
-  sSet(key, out);
-  return out;
-}
 
 // ── SOLD comps: there is no legitimate source, so there are none ──
 // `ebaySold()` used to live here. It fetched eBay's completed-listings HTML
@@ -2782,13 +2735,10 @@ async function ebayActive(query, marketplace = 'EBAY_US', limit = 50) {
 // rather than switched off: a scraper left in place is one call site away from
 // running again (the renderRealListings lesson).
 //
-// Nothing was lost: /api/market never wrote to price_history, so the scraped
-// sales were displayed and discarded. The legitimate routes to sold data are
-// eBay's Marketplace Insights API (restricted — a business application) or a
-// paid source such as PriceCharting; see CLAUDE.md "Sold data". Until one is
-// built, every response SAYS there is no sold source rather than showing a
-// number. The page's "eBay — sold" deep link is unaffected: it opens eBay in
-// the user's own browser, which is the sanctioned shape.
+// The legitimate routes to sold data are eBay's Marketplace Insights API
+// (restricted — a business application) or a paid source such as
+// PriceCharting; see CLAUDE.md "Sold data". The page's "eBay — sold" deep
+// link is unaffected: it opens eBay in the user's own browser.
 const SOLD_UNAVAILABLE = Object.freeze({
   available: false,
   source: null,
@@ -2798,212 +2748,47 @@ const SOLD_UNAVAILABLE = Object.freeze({
   disabledOn: '2026-09-29'
 });
 
-// ── 3. TCGPLAYER public price page ────────────────────────────
-async function tcgplayerPrice(cardName, setName) {
-  const key = `tcg_${cardName}_${setName}`;
-  const hit = sGet(key); if (hit) return hit;
+// Every route that used to answer with a fetched aggregate says what it was
+// and why it went, instead of disappearing.
+const MARKET_WITHDRAWN = Object.freeze({
+  ebaySold:        'eBay sold-page scrape — see sold.reason',
+  ebayActive:      'ungated eBay name search — lowest live listing comes from /api/listings/:cardId (gated)',
+  tcgplayerSearch: "TCGplayer's internal search API — their prices are held via TCGdex and pokemontcg.io",
+  pricecharting:   'PriceCharting HTML scrape (returned nothing) — /api/graded/:cardName uses their token API'
+});
 
-  await throttle('www.tcgplayer.com');
-  const q = encodeURIComponent(`${cardName} ${setName}`.trim());
-  const url = `https://mp-search-api.tcgplayer.com/v1/search/request?q=${q}&isList=false`;
-  try {
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: { 'User-Agent': SUA, 'Content-Type':'application/json', 'Accept':'application/json' },
-      body: JSON.stringify({
-        algorithm:'sales_dismax', from:0, size:10,
-        filters:{ term:{ productLineName:['pokemon'] }, range:{}, match:{} },
-        listingSearch:{ context:{ cart:{} }, filters:{ term:{ sellerStatus:'Live' }, range:{ quantity:{ gte:1 } }, exclude:{ channelExclusion:0 } } },
-        context:{ cart:{}, shippingCountry:'US' },
-        settings:{ useFuzzySearch:true, didYouMean:{} },
-        sort:{}
-      })
-    });
-    if (!r.ok) return { price:null, source:'tcgplayer', error:'HTTP '+r.status };
-    const d = await r.json();
-    const first = d && d.results && d.results[0] && d.results[0].results && d.results[0].results[0];
-    if (!first) return { price:null, source:'tcgplayer', error:'no match' };
-    const out = {
-      price: first.marketPrice || first.lowestPrice || null,
-      lowest: first.lowestPrice || null,
-      market: first.marketPrice || null,
-      productId: first.productId,
-      name: first.productName,
-      set: first.setName,
-      source: 'tcgplayer'
-    };
-    sSet(key, out);
-    return out;
-  } catch (e) { return { price:null, source:'tcgplayer', error:e.message }; }
-}
-
-// ── 4. PRICECHARTING public page (graded prices, no API key) ──
-async function priceChartingGraded(cardName, setName) {
-  const key = `pc_${cardName}_${setName}`;
-  const hit = sGet(key); if (hit) return hit;
-
-  await throttle('www.pricecharting.com');
-  const q = encodeURIComponent(`${cardName} ${setName}`.trim());
-  try {
-    const r = await fetch(`https://www.pricecharting.com/search-products?q=${q}&type=prices`,
-                          { headers: { 'User-Agent': SUA } });
-    if (!r.ok) return { grades:{}, source:'pricecharting', error:'HTTP '+r.status };
-    const html = await r.text();
-
-    const grab = (id) => {
-      const re = new RegExp('id="' + id + '"[\\s\\S]{0,200}?\\$([\\d,]+\\.?\\d*)');
-      const m = html.match(re);
-      return m ? parseFloat(m[1].replace(/,/g,'')) : null;
-    };
-    const grades = {
-      'Raw NM':  grab('used_price'),
-      'Grade 7': grab('complete_price'),
-      'Grade 8': grab('new_price'),
-      'Grade 9': grab('graded_price'),
-      'Grade 9.5': grab('box_only_price'),
-      'PSA 10':  grab('manual_only_price')
-    };
-    const out = { grades, source:'pricecharting' };
-    sSet(key, out);
-    return out;
-  } catch (e) { return { grades:{}, source:'pricecharting', error:e.message }; }
-}
-
-// ── 5. AGGREGATE: best available market value ─────────────────
-async function getMarketPrice(cardName, setName, grade) {
-  const q = [cardName, setName, grade].filter(Boolean).join(' ') + ' pokemon';
-  const results = await Promise.allSettled([
-    ebayActive(q),
-    tcgplayerPrice(cardName, setName),
-    priceChartingGraded(cardName, setName)
-  ]);
-
-  const [act, tcg, pc] = results.map(r => r.status === 'fulfilled' ? r.value : null);
-
-  // Priority: TCGPlayer market > median active listing. A "recent sold
-  // median" tier used to lead this chain; its only input was the eBay sold
-  // scrape, removed in T8 — see SOLD_UNAVAILABLE.
-  let marketValue = null, confidence = 'none', basis = null;
-
-  if (tcg && tcg.market > 0) {
-    marketValue = tcg.market;
-    confidence = 'high';
-    basis = 'TCGPlayer market price';
-  } else if (act && act.listings.length >= 3) {
-    const vals = act.listings.map(l => l.price).sort((a,b)=>a-b);
-    marketValue = vals[Math.floor(vals.length/2)];
-    confidence = 'low';
-    basis = `${act.listings.length} active listings (median)`;
-  }
-
-  return {
-    card: cardName, set: setName, grade: grade || 'Raw NM',
-    marketValue, confidence, basis,
-    lowestActive: act && act.listings.length ? Math.min(...act.listings.map(l=>l.price)) : null,
-    activeCount: act ? act.listings.length : 0,
-    // Sold fields stay in the envelope, empty, so an older page reading
-    // them gets "nothing" rather than undefined — and `sold` says why.
-    soldCount: 0,
-    soldMedian: null,
-    soldRange: null,
-    sold: SOLD_UNAVAILABLE,
-    tcgplayer: tcg ? { market: tcg.market, lowest: tcg.lowest } : null,
-    graded: pc ? pc.grades : null,
-    listings: act ? act.listings.slice(0, 20) : [],
-    recentSales: [],
-    fetchedAt: new Date().toISOString()
-  };
-}
-
-
-
-const scraper = {
-  ebayActive, tcgplayerPrice, priceChartingGraded,
-  getMarketPrice, ebayToken: scrEbayToken
-};
-
-
-// GET /api/market/:cardName?set=Base%20Set&grade=PSA%209
-// The main endpoint: aggregated real market value
+// GET /api/market/:cardName?cardId=en-base1-4
 app.get('/api/market/:cardName', async (req, res) => {
-  if (!scraper) return res.status(503).json({ error: 'scraper module not loaded' });
   try {
-    const data = await scraper.getMarketPrice(
-      req.params.cardName,
-      req.query.set || '',
-      req.query.grade || ''
-    );
-    // ── DO NOT WRITE THIS INTO price_history ──────────────────
-    // This endpoint used to persist its aggregate here, keyed on
-    // `req.query.cardId || req.params.cardName` with `data.basis` as the
-    // source — which is where the 47 rows labelled "TCGPlayer market
-    // price" came from.
-    //
-    // The aggregate is built by `tcgplayerPrice(cardName, setName)`, which
-    // matches on NAME AND SET ONLY — no collector number. Where a name
-    // repeats in a set, which chase cards almost always do, it returns an
-    // arbitrary variant. Mega Gengar ex #284 (Special Illustration Rare,
-    // $1,056) was overwritten with $3.14, the price of Mega Gengar ex
-    // #125, the Double Rare. Pikachu ex #276 went from $1,130 to $3.66.
-    //
-    // Because it wrote on every card view, the deployed app was quietly
-    // re-introducing the exact defect v4.9 was written to kill, on top of
-    // the number-matched prices safeprices had established. Ten cards were
-    // showing a wrong current price when this was found (2026-08-26).
-    //
-    // price_history is written by the ingest pipeline ONLY — it matches on
-    // collector number, uses rarity as a tiebreaker, and returns nothing
-    // rather than guess. A read endpoint must not inject a weaker signal
-    // into the authoritative table. Serve the aggregate, store nothing.
-    // ──────────────────────────────────────────────────────────
-
-    // ── ...AND DO NOT SERVE IT AS THIS CARD'S PRICE EITHER ────
-    // Not writing the aggregate was only half the fix. It was still RETURNED
-    // as `marketValue` with `confidence: 'high'`, and the card page pasted it
-    // over the number-matched price. Ascended Heroes carries Pikachu ex at
-    // #057 $3.37 and #276 $959.68; this endpoint answered $3.17 for both,
-    // because tcgplayerPrice() searches "{name} {set}" and takes results[0].
-    //
-    // `cardId` was accepted here and never used. Now it decides: a
-    // number-matched price outranks a name-matched one, always. The
-    // aggregate is still returned, under `nameMatched`, so nothing that
-    // read it has lost anything — but it can no longer be mistaken for this
-    // card's own price.
-    //
-    // `matchedOn` states which path produced `marketValue`, so this is
-    // diagnosable from the response instead of by reading frontend code.
     const cardId = req.query.cardId || '';
     let nm = null;
     try { nm = await numberMatchedPrice(cardId); }
-    catch (e) { nm = null; }   // never fail the read over the upgrade
-
-    if (nm && nm.isReal) {
-      data.nameMatched = {
-        marketValue: data.marketValue,
-        confidence: data.confidence,
-        basis: data.basis,
-        warning: 'matched on card name and set only — where a name repeats in '
-               + 'a set this may be a different variant'
-      };
-      data.marketValue = nm.price;
-      data.confidence  = 'high';
-      data.basis       = nm.source + ' (collector number ' + nm.number + ')';
-      data.matchedOn   = 'collector number';
-      data.cardId      = nm.cardId;
-      data.priceDate   = nm.recordedAt;
-    } else {
-      // Say so. A response that cannot identify the card must not imply it
-      // did — that is the whole failure this endpoint is known for.
-      data.matchedOn = 'name+set';
-      data.cardId    = nm ? nm.cardId : (cardId || null);
-      data.matchWarning = cardId
-        ? 'no number-matched price for ' + cardId + ' — marketValue is matched '
-          + 'on card name and set only and may be a different variant'
-        : 'no cardId supplied — marketValue is matched on card name and set '
-          + 'only and may be a different variant';
+    catch (e) { nm = null; }   // never fail the read over the lookup
+    const real = !!(nm && nm.isReal);
+    const out = {
+      card: req.params.cardName, set: req.query.set || '', grade: req.query.grade || 'Raw NM',
+      cardId: nm ? nm.cardId : (cardId || null),
+      // A number-matched price or nothing. The name-matched aggregate that
+      // used to stand in here is gone with tcgplayerPrice — there is no
+      // second, weaker answer to fall back to, which is the point.
+      marketValue: real ? nm.price : null,
+      confidence: real ? 'high' : 'none',
+      basis: real ? nm.source + ' (collector number ' + nm.number + ')' : null,
+      matchedOn: real ? 'collector number' : 'none',
+      priceDate: real ? nm.recordedAt : null,
+      sold: SOLD_UNAVAILABLE,
+      withdrawn: MARKET_WITHDRAWN,
+      // Old envelope, present and empty.
+      soldCount: 0, soldMedian: null, soldRange: null, recentSales: [],
+      lowestActive: null, activeCount: 0, listings: [], tcgplayer: null, graded: null,
+      fetchedAt: new Date().toISOString()
+    };
+    if (!real) {
+      out.matchWarning = cardId
+        ? 'no number-matched price held for ' + cardId + ' — and no name-matched stand-in is offered'
+        : 'no cardId supplied — this endpoint answers only for a catalogue card id';
     }
-
-    res.json(data);
+    res.json(out);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -3013,44 +2798,26 @@ app.get('/api/market/:cardName/sold', (req, res) => {
   res.status(410).json({ error: 'sold comparables withdrawn', sold: SOLD_UNAVAILABLE });
 });
 
-// GET /api/market/:cardName/active - live eBay listings only
-app.get('/api/market/:cardName/active', async (req, res) => {
-  if (!scraper) return res.status(503).json({ error: 'scraper not loaded' });
-  try {
-    const q = [req.params.cardName, req.query.set, req.query.grade]
-      .filter(Boolean).join(' ') + ' pokemon';
-    res.json(await scraper.ebayActive(q, req.query.marketplace || 'EBAY_US'));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+// GET /api/market/:cardName/active - GONE. An ungated eBay search by name.
+app.get('/api/market/:cardName/active', (req, res) => {
+  res.status(410).json({ error: 'ungated eBay name search withdrawn',
+    reason: MARKET_WITHDRAWN.ebayActive, use: '/api/listings/:cardId?grade=' });
 });
 
-// GET /api/scraper/test - verify which scraper sources actually work
+// GET /api/scraper/test - reports what the market block does now
 app.get('/api/scraper/test', async (req, res) => {
-  if (!scraper) return res.status(503).json({ error: 'scraper not loaded' });
-  const card = req.query.card || 'Charizard';
-  const set  = req.query.set  || 'Base Set';
-  const out = { card, set, sources: {} };
-
+  const out = { sources: {} };
   try {
-    const t = await scraper.ebayToken();
-    out.sources.ebay_api = t ? 'OK - token acquired' : 'NOT configured (add EBAY_CLIENT_ID + EBAY_CLIENT_SECRET)';
+    const a = await getEbayTokenDetailed();
+    out.sources.ebay_api = a.token ? 'OK - token acquired'
+      : (a.unconfigured ? 'NOT configured (add EBAY_CLIENT_ID + EBAY_CLIENT_SECRET)' : 'FAIL ' + a.error);
   } catch (e) { out.sources.ebay_api = 'FAIL ' + e.message; }
-
   out.sources.ebay_sold = 'DISABLED - ' + SOLD_UNAVAILABLE.reason;
-
-  try {
-    const t = await scraper.tcgplayerPrice(card, set);
-    out.sources.tcgplayer = t.error ? 'FAIL ' + t.error : `OK - market $${t.market}`;
-  } catch (e) { out.sources.tcgplayer = 'FAIL ' + e.message; }
-
-  try {
-    const p = await scraper.priceChartingGraded(card, set);
-    const got = Object.values(p.grades || {}).filter(Boolean).length;
-    out.sources.pricecharting = p.error ? 'FAIL ' + p.error : `OK - ${got} grade prices`;
-  } catch (e) { out.sources.pricecharting = 'FAIL ' + e.message; }
-
+  for (const [k, why] of Object.entries(MARKET_WITHDRAWN)) {
+    if (k !== 'ebaySold') out.sources[k] = 'WITHDRAWN - ' + why;
+  }
   res.json(out);
 });
-
 
 
 // ══════════════════════════════════════════════════════════════
@@ -3246,15 +3013,7 @@ app.get('/api/health/full', async (req, res) => {
       : (a.unconfigured ? 'not configured' : 'FAIL ' + a.error);
   } catch (e) { out.checks.ebay_api = 'FAIL ' + e.message; }
   out.checks.ebay_sold_scrape = 'DISABLED - ' + SOLD_UNAVAILABLE.reason;
-  try {
-    const t = await tcgplayerPrice('Charizard', 'Base Set');
-    out.checks.tcgplayer_scrape = t.error ? 'FAIL ' + t.error : `OK - $${t.market}`;
-  } catch (e) { out.checks.tcgplayer_scrape = 'FAIL ' + e.message; }
-  try {
-    const p = await priceChartingGraded('Charizard', 'Base Set');
-    const n = Object.values(p.grades || {}).filter(Boolean).length;
-    out.checks.pricecharting_scrape = p.error ? 'FAIL ' + p.error : `OK - ${n} grades`;
-  } catch (e) { out.checks.pricecharting_scrape = 'FAIL ' + e.message; }
+  for (const [k, why] of Object.entries(MARKET_WITHDRAWN)) out.checks[k] = 'WITHDRAWN - ' + why;
 
   out.checks.database = db ? 'Supabase connected' : 'no DATABASE_URL set';
   out.checks.cache_entries = Object.keys(CACHE).length;

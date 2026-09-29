@@ -1,0 +1,737 @@
+<!--
+  DESIGN REFERENCE ONLY (tracked 2026-09-29). The mockup the Phase 1a-2 port
+  of cardhunt_preview.html was built from. Every price, name and number in it
+  is SAMPLE DATA. Never served (approute.test.js asserts the 404) and never a
+  base to adopt: the page is cardhunt_preview.html, served at /app.
+-->
+<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1, viewport-fit=cover'></head><body><title>CardHunt</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#F2F3F6; --surface:#FFFFFF; --surface-2:#E9EBF1; --surface-3:#DEE1E9;
+    --ink:#14161C; --ink-2:#4B5063; --ink-3:#868CA0; --border:#DBDEE7;
+    --accent:#25459E; --accent-ink:#FFFFFF; --accent-soft:#E4E9FB;
+    --good:#1D7A54; --good-soft:#DEF2E7;
+    --warn:#9C6B12; --warn-soft:#F7EBD3;
+    --crit:#B23B3B; --crit-soft:#FBE3E3;
+    --money:#8A5A11;
+    --shadow: 0 1px 2px rgba(20,22,28,.06), 0 8px 24px -12px rgba(20,22,28,.18);
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14161B; --surface:#1C1F27; --surface-2:#262A34; --surface-3:#323744;
+      --ink:#ECEDF3; --ink-2:#B7BBCB; --ink-3:#7E859A; --border:#333A48;
+      --accent:#7C97EC; --accent-ink:#0E1220; --accent-soft:#232B47;
+      --good:#4FBE8C; --good-soft:#173226;
+      --warn:#E0AA51; --warn-soft:#332711;
+      --crit:#E27878; --crit-soft:#3A2222;
+      --money:#E0B45C;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#14161B; --surface:#1C1F27; --surface-2:#262A34; --surface-3:#323744;
+    --ink:#ECEDF3; --ink-2:#B7BBCB; --ink-3:#7E859A; --border:#333A48;
+    --accent:#7C97EC; --accent-ink:#0E1220; --accent-soft:#232B47;
+    --good:#4FBE8C; --good-soft:#173226;
+    --warn:#E0AA51; --warn-soft:#332711;
+    --crit:#E27878; --crit-soft:#3A2222;
+    --money:#E0B45C;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box;}
+  body{background:var(--bg); color:var(--ink); font-family:'IBM Plex Sans',system-ui,sans-serif; padding-inline:16px; padding-block:20px 48px; max-width:760px; margin:0 auto;}
+  h1,h2,h3{font-family:'Source Serif 4',Georgia,serif; margin:0; text-wrap:balance;}
+  .num{font-family:'IBM Plex Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums;}
+  a{color:var(--accent);}
+  button{font:inherit; color:inherit;}
+  .muted{color:var(--ink-3);}
+  .sub{color:var(--ink-2);}
+
+  /* ---- top bar ---- */
+  .topbar{display:flex; align-items:center; gap:10px; margin-bottom:18px;}
+  .wordmark{font-family:'Source Serif 4',serif; font-weight:700; font-size:21px; letter-spacing:-.01em; white-space:nowrap; cursor:pointer;}
+  .wordmark span{color:var(--accent);}
+  .search-wrap{position:relative; flex:1;}
+  .search-input{width:100%; padding:10px 14px; border-radius:999px; border:1px solid var(--border); background:var(--surface); color:var(--ink); font-size:14px; font-family:inherit;}
+  .search-input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .stub-btn{padding:9px 14px; border-radius:999px; border:1px dashed var(--border); background:var(--surface); color:var(--ink-3); font-size:13px; white-space:nowrap; cursor:default;}
+  .stub-btn .tag{display:block; font-size:10px; letter-spacing:.04em; text-transform:uppercase; margin-top:1px;}
+
+  .suggest{position:absolute; top:calc(100% + 6px); left:0; right:0; background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); z-index:20; max-height:360px; overflow:auto; padding:6px;}
+  .suggest[hidden]{display:none!important;}
+  .sugg-row{display:flex; align-items:center; gap:10px; padding:8px; border-radius:8px; cursor:pointer; text-align:left; width:100%; background:none; border:none;}
+  .sugg-row:hover, .sugg-row:focus{background:var(--surface-2);}
+  .sugg-thumb{width:32px; height:44px; border-radius:4px; object-fit:cover; background:var(--surface-2); flex-shrink:0;}
+  .sugg-name{font-size:13.5px; font-weight:600;}
+  .sugg-meta{font-size:11.5px; color:var(--ink-3);}
+  .sugg-price{margin-left:auto; font-size:12.5px; text-align:right;}
+  .suggest-note{padding:8px 10px; font-size:12px; color:var(--ink-3);}
+
+  /* ---- sections ---- */
+  section{margin-top:22px;}
+  .section-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px; margin-bottom:10px;}
+  .section-head h2{font-size:15px; font-weight:600; font-family:'IBM Plex Sans',sans-serif; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-2);}
+  .see-more{font-size:12.5px; color:var(--ink-3); text-decoration:none; border-bottom:1px dashed var(--ink-3);}
+
+  .card-box{background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px; box-shadow:var(--shadow);}
+
+  /* home: latest searches */
+  .chip-row{display:flex; flex-wrap:wrap; gap:8px;}
+  .chip{display:flex; align-items:center; gap:8px; padding:6px 12px 6px 6px; border-radius:999px; background:var(--surface); border:1px solid var(--border); cursor:pointer; font-size:13px;}
+  .chip img{width:22px; height:30px; object-fit:cover; border-radius:3px;}
+  .empty-note{font-size:13px; color:var(--ink-3); padding:10px 2px;}
+
+  /* alerts stub */
+  .alerts-box{display:flex; align-items:center; gap:12px; opacity:.75;}
+  .alerts-box .icon{width:34px; height:34px; border-radius:9px; background:var(--surface-2); display:flex; align-items:center; justify-content:center; font-size:17px;}
+
+  /* tcg row */
+  .tcg-scroll{display:flex; gap:10px; overflow-x:auto; padding-bottom:4px;}
+  .tcg-tile{flex:0 0 auto; width:118px; padding:12px; border-radius:12px; background:var(--surface); border:1px solid var(--border); text-align:left;}
+  .tcg-tile.active{border-color:var(--accent); background:var(--accent-soft);}
+  .tcg-tile.soon{opacity:.55;}
+  .tcg-name{font-weight:600; font-size:13.5px;}
+  .tcg-meta{font-size:11px; color:var(--ink-3); margin-top:3px;}
+  .soon-badge{display:inline-block; margin-top:6px; font-size:9.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-3); border:1px dashed var(--border); border-radius:999px; padding:2px 6px;}
+
+  .trending-empty{display:flex; gap:12px; align-items:flex-start; opacity:.8;}
+  .trending-empty .icon{font-size:20px;}
+
+  /* badges */
+  .badge{display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px; white-space:nowrap;}
+  .badge.good{background:var(--good-soft); color:var(--good);}
+  .badge.warn{background:var(--warn-soft); color:var(--warn);}
+  .badge.crit{background:var(--crit-soft); color:var(--crit);}
+  .badge.neutral{background:var(--surface-2); color:var(--ink-2);}
+
+  /* ---- card page ---- */
+  .card-hero{display:flex; gap:16px; margin-top:6px;}
+  .card-photo{width:150px; border-radius:10px; box-shadow:var(--shadow); flex-shrink:0; background:var(--surface-2);}
+  .card-photo-wrap{position:relative; flex-shrink:0;}
+  .card-title{font-size:22px; font-weight:600; line-height:1.15;}
+  .card-meta{margin-top:4px; font-size:13.5px; color:var(--ink-2);}
+  .card-meta .setlogo{height:16px; vertical-align:-3px; margin-right:5px;}
+  .card-tags{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px;}
+
+  .condition-bar{margin-top:18px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+  .seg{display:inline-flex; border:1px solid var(--border); border-radius:999px; overflow:hidden; background:var(--surface);}
+  .seg button{padding:7px 16px; border:none; background:none; font-size:13px; cursor:pointer; color:var(--ink-2);}
+  .seg button.active{background:var(--accent); color:var(--accent-ink); font-weight:600;}
+  select.cond-select{padding:7px 12px; border-radius:999px; border:1px solid var(--border); background:var(--surface); color:var(--ink); font-size:13px; font-family:inherit;}
+
+  .price-hero{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px;}
+  @media (max-width:520px){ .price-hero{grid-template-columns:1fr;} }
+  .price-tile{padding:14px; border-radius:var(--radius); background:var(--surface); border:1px solid var(--border);}
+  .price-tile .label{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-3); font-weight:600;}
+  .price-tile .value{font-size:26px; font-weight:600; margin-top:6px; color:var(--money);}
+  .price-tile .sub{font-size:12px; margin-top:5px;}
+
+  .chart-card{margin-top:16px; padding:14px 14px 6px;}
+  .chart-toggle{display:flex; gap:6px; margin-bottom:8px;}
+  .chart-toggle button{padding:5px 12px; border-radius:999px; border:1px solid var(--border); background:var(--surface); font-size:12px; cursor:pointer; color:var(--ink-2);}
+  .chart-toggle button.active{background:var(--accent-soft); color:var(--accent); border-color:var(--accent);}
+  .chart-wrap{position:relative;}
+  .chart-legend{display:flex; gap:14px; font-size:11.5px; color:var(--ink-2); margin-top:4px; flex-wrap:wrap;}
+  .legend-dot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:-1px;}
+  .chart-tip{position:absolute; pointer-events:none; background:var(--ink); color:var(--bg); font-size:11px; padding:5px 8px; border-radius:6px; transform:translate(-50%,-115%); white-space:nowrap; opacity:0; transition:opacity .08s;}
+  .chart-note{font-size:12px; color:var(--ink-3); margin-top:6px; padding-bottom:8px;}
+
+  .group-scroll{display:flex; gap:8px; overflow-x:auto; margin-top:14px; padding-bottom:4px;}
+  .group-card{flex:0 0 auto; min-width:150px; padding:10px 12px; border-radius:11px; background:var(--surface); border:1px solid var(--border);}
+  .group-card.thin{border-style:dashed;}
+  .group-card .g-title{font-size:12.5px; font-weight:600;}
+  .group-card .g-price{font-size:16px; font-weight:600; margin-top:3px;}
+  .group-card .g-range{font-size:11px; color:var(--ink-3);}
+  .group-card .g-flag{margin-top:5px;}
+
+  .listings-head{display:flex; justify-content:space-between; align-items:baseline; margin-top:20px;}
+  .listing-row{display:flex; gap:10px; align-items:center; padding:10px 4px; border-bottom:1px solid var(--border);}
+  .listing-row:last-child{border-bottom:none;}
+  .listing-row.suspect{opacity:.55;}
+  .l-thumb{width:38px; height:52px; object-fit:cover; border-radius:4px; background:var(--surface-2); flex-shrink:0;}
+  .l-body{flex:1; min-width:0;}
+  .l-title{font-size:13px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+  .l-tags{display:flex; flex-wrap:wrap; gap:5px; margin-top:5px;}
+  .l-price{text-align:right; flex-shrink:0;}
+  .l-price .amt{font-size:15px; font-weight:600;}
+  .l-price .ship{font-size:10.5px; color:var(--ink-3); display:block;}
+  .l-suspect-note{font-size:11px; color:var(--crit); margin-top:4px;}
+
+  details.sources{margin-top:20px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); padding:12px 14px;}
+  details.sources summary{cursor:pointer; font-size:13px; font-weight:600; list-style:none;}
+  details.sources summary::-webkit-details-marker{display:none;}
+  .src-row{display:flex; gap:10px; align-items:flex-start; padding:8px 0; border-top:1px solid var(--border);}
+  .src-row:first-of-type{border-top:none;}
+  .src-dot{width:8px; height:8px; border-radius:50%; margin-top:5px; flex-shrink:0;}
+  .src-name{font-size:12.5px; font-weight:600;}
+  .src-note{font-size:11.5px; color:var(--ink-3);}
+  .src-gate{font-size:11px; color:var(--ink-3); margin-top:2px; font-family:'IBM Plex Mono',monospace;}
+  .unfiltered-note{margin-top:10px; font-size:12px; color:var(--ink-3); padding-top:10px; border-top:1px dashed var(--border);}
+
+  .attribution{margin-top:14px; font-size:11.5px; color:var(--ink-3);}
+  .loading, .error-box{padding:40px 10px; text-align:center; color:var(--ink-3); font-size:13.5px;}
+  .error-box{color:var(--crit);}
+  .skeleton{background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 37%,var(--surface-2) 63%); background-size:400% 100%; animation:sk 1.4s ease infinite; border-radius:8px;}
+  @keyframes sk{0%{background-position:100% 50%}100%{background-position:0 50%}}
+
+  .footer-note{margin-top:30px; font-size:11.5px; color:var(--ink-3); text-align:center; line-height:1.6;}
+</style>
+
+<div class="topbar">
+  <div class="wordmark" id="homeLink">Card<span>Hunt</span></div>
+  <div class="search-wrap">
+    <input class="search-input" id="searchInput" type="text" placeholder="Search any card — try “mew” or “charizard”" autocomplete="off">
+    <div class="suggest" id="suggestBox" hidden></div>
+  </div>
+  <button class="stub-btn" title="Not built in this pass">Compare<span class="tag">soon</span></button>
+</div>
+
+<div id="app"></div>
+
+<div class="footer-note">Redesign prototype &middot; reads live from cardhunt-backend.onrender.com &middot; production UI at <span class="num">/app</span> is untouched</div>
+
+<script>
+(function(){
+  "use strict";
+  var API = "https://cardhunt-backend.onrender.com";
+  var app = document.getElementById("app");
+  var searchInput = document.getElementById("searchInput");
+  var suggestBox = document.getElementById("suggestBox");
+  document.getElementById("homeLink").addEventListener("click", function(){ location.hash = "#/"; });
+
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+  function fmt$(n){ if(n==null||isNaN(n)) return "—"; return "$" + Number(n).toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2}); }
+  function fmtDate(d){ try{ return new Date(d).toLocaleDateString("en-US",{month:"short", day:"numeric", year:"numeric"}); }catch(e){ return d; } }
+  function placeholderImg(){ return 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="60" height="84"><rect width="60" height="84" rx="4" fill="#00000014"/><text x="30" y="46" font-size="10" text-anchor="middle" fill="#00000055" font-family="sans-serif">no image</text></svg>'); }
+
+  function safeLS(){
+    try{ var k="__t"; localStorage.setItem(k,"1"); localStorage.removeItem(k); return localStorage; }catch(e){ return null; }
+  }
+  var LS = safeLS();
+  function getSearches(){ try{ return LS ? JSON.parse(LS.getItem("ch_searches")||"[]") : []; }catch(e){ return []; } }
+  function pushSearch(card){
+    if(!LS) return;
+    var list = getSearches().filter(function(c){ return c.cardId !== card.cardId; });
+    list.unshift(card);
+    list = list.slice(0,3);
+    try{ LS.setItem("ch_searches", JSON.stringify(list)); }catch(e){}
+  }
+
+  async function getJSON(path){
+    var res = await fetch(API + path);
+    if(!res.ok){ throw new Error("HTTP " + res.status + " on " + path); }
+    return res.json();
+  }
+
+  // cold-start aware fetch: shows a "waking up" note if it's taking a while
+  async function coldAware(path, onSlow){
+    var slowTimer = setTimeout(function(){ if(onSlow) onSlow(); }, 3500);
+    try{
+      var data = await getJSON(path);
+      clearTimeout(slowTimer);
+      return data;
+    }catch(e){
+      clearTimeout(slowTimer);
+      throw e;
+    }
+  }
+
+  /* ===================== ROUTER ===================== */
+  function route(){
+    var h = location.hash.replace(/^#\/?/, "");
+    var parts = h.split("/").filter(Boolean);
+    suggestBox.hidden = true;
+    if(parts[0] === "card" && parts[1]){
+      renderCardPage(decodeURIComponent(parts[1]));
+    } else {
+      renderHome();
+    }
+    window.scrollTo(0,0);
+  }
+  window.addEventListener("hashchange", route);
+
+  /* ===================== SEARCH BAR (global) ===================== */
+  var searchDebounce = null;
+  searchInput.addEventListener("input", function(){
+    var q = searchInput.value.trim();
+    clearTimeout(searchDebounce);
+    if(q.length < 2){ suggestBox.hidden = true; return; }
+    searchDebounce = setTimeout(function(){ runSearch(q); }, 300);
+  });
+  searchInput.addEventListener("focus", function(){
+    if(searchInput.value.trim().length >= 2){ suggestBox.hidden = false; }
+  });
+  document.addEventListener("click", function(e){
+    if(!suggestBox.contains(e.target) && e.target !== searchInput){ suggestBox.hidden = true; }
+  });
+
+  async function runSearch(q){
+    suggestBox.innerHTML = '<div class="suggest-note">Searching…</div>';
+    suggestBox.hidden = false;
+    try{
+      var data = await getJSON("/api/search?q=" + encodeURIComponent(q));
+      var cands = (data.candidates || []).slice(0, 8);
+      if(!cands.length){
+        suggestBox.innerHTML = '<div class="suggest-note">No cards match “' + esc(q) + '.”</div>';
+        return;
+      }
+      suggestBox.innerHTML = "";
+      cands.forEach(function(c){
+        var row = document.createElement("button");
+        row.className = "sugg-row";
+        row.innerHTML =
+          '<img class="sugg-thumb" src="' + (c.image ? esc(c.image) : placeholderImg()) + '" onerror="this.src=\'' + placeholderImg() + '\'">' +
+          '<span><span class="sugg-name">' + esc(c.name) + '</span><br>' +
+          '<span class="sugg-meta">' + esc(c.setName) + ' &middot; #' + esc(c.number) + (c.setTotal ? "/"+esc(c.setTotal) : "") + '</span></span>' +
+          '<span class="sugg-price num">' + (c.price && c.price.value != null ? fmt$(c.price.value) : '<span class="muted">no price</span>') +
+          (c.price && c.price.isReal === false ? '<br><span class="muted" style="font-size:10px">est.</span>' : '') + '</span>';
+        row.addEventListener("click", function(){
+          pushSearch({cardId:c.cardId, name:c.name, setName:c.setName, number:c.number, image:c.image});
+          searchInput.value = "";
+          suggestBox.hidden = true;
+          location.hash = "#/card/" + encodeURIComponent(c.cardId);
+        });
+        suggestBox.appendChild(row);
+      });
+    }catch(e){
+      suggestBox.innerHTML = '<div class="suggest-note">Search failed — ' + esc(e.message) + '</div>';
+    }
+  }
+
+  /* ===================== HOME ===================== */
+  var TEST_CARDS = [
+    {cardId:"en-base1-4", name:"Charizard", setName:"Base Set", number:"4", setTotal:"102", image:"https://assets.tcgdex.net/en/base/base1/4/low.png"},
+    {cardId:"en-swsh11-186", name:"Giratina V", setName:"Lost Origin", number:"186", setTotal:"196", image:"https://assets.tcgdex.net/en/swsh/swsh11/186/low.png"}
+  ];
+  var OTHER_TCGS = ["Magic: The Gathering","Yu-Gi-Oh!","One Piece","Lorcana","Dragon Ball","Digimon","Flesh & Blood","Star Wars"];
+
+  function renderHome(){
+    app.innerHTML =
+      '<section>' +
+        '<div class="section-head"><h2>Latest searches</h2></div>' +
+        '<div id="latestSearches"></div>' +
+      '</section>' +
+
+      '<section>' +
+        '<div class="section-head"><h2>Preview test cards</h2><span class="see-more">from the redesign brief</span></div>' +
+        '<div class="chip-row" id="testCards"></div>' +
+      '</section>' +
+
+      '<section>' +
+        '<div class="section-head"><h2>My alerts</h2></div>' +
+        '<div class="card-box alerts-box">' +
+          '<div class="icon">&#128276;</div>' +
+          '<div><div style="font-weight:600; font-size:13.5px;">Not connected in this prototype</div>' +
+          '<div class="sub" style="font-size:12px; margin-top:2px;">The alerts API exists on the backend, but there is no sign-in here to attach a saved list to — so this stays honestly empty rather than faked.</div></div>' +
+        '</div>' +
+      '</section>' +
+
+      '<section>' +
+        '<div class="section-head"><h2>Choose TCG set</h2><span class="see-more">See more &rarr;</span></div>' +
+        '<div class="tcg-scroll" id="tcgRow"><div class="skeleton" style="width:118px;height:78px;flex:0 0 auto;"></div></div>' +
+      '</section>' +
+
+      '<section>' +
+        '<div class="section-head"><h2>Trending</h2></div>' +
+        '<div class="card-box trending-empty">' +
+          '<div class="icon">&#128200;</div>' +
+          '<div><div style="font-weight:600; font-size:13.5px;">No live endpoint yet</div>' +
+          '<div class="sub" style="font-size:12px; margin-top:2px;">The brief marks this "nice to have." <span class="num">/api/trending</span> doesn\'t exist on the API yet, so this is left honest and empty instead of showing invented cards.</div></div>' +
+        '</div>' +
+      '</section>';
+
+    // latest searches
+    var searches = getSearches();
+    var ls = document.getElementById("latestSearches");
+    if(!searches.length){
+      ls.innerHTML = '<div class="card-box empty-note">Nothing searched yet this session — search above, or try a test card below.</div>';
+    } else {
+      var row = document.createElement("div");
+      row.className = "chip-row";
+      searches.forEach(function(c){ row.appendChild(chipFor(c)); });
+      ls.appendChild(row);
+    }
+
+    // test cards
+    var tc = document.getElementById("testCards");
+    TEST_CARDS.forEach(function(c){ tc.appendChild(chipFor(c)); });
+
+    // tcg row
+    loadTcgRow();
+  }
+
+  function chipFor(c){
+    var chip = document.createElement("button");
+    chip.className = "chip";
+    chip.innerHTML = '<img src="' + (c.image?esc(c.image):placeholderImg()) + '" onerror="this.src=\'' + placeholderImg() + '\'">' +
+      '<span>' + esc(c.name) + ' <span class="muted">#' + esc(c.number) + '</span></span>';
+    chip.addEventListener("click", function(){ location.hash = "#/card/" + encodeURIComponent(c.cardId); });
+    return chip;
+  }
+
+  async function loadTcgRow(){
+    var row = document.getElementById("tcgRow");
+    var html = '<button class="tcg-tile active"><div class="tcg-name">Pok&eacute;mon</div><div class="tcg-meta" id="pkmMeta">loading sets&hellip;</div></button>';
+    OTHER_TCGS.forEach(function(name){
+      html += '<div class="tcg-tile soon"><div class="tcg-name">' + esc(name) + '</div><span class="soon-badge">Coming soon</span></div>';
+    });
+    row.innerHTML = html;
+    try{
+      var data = await getJSON("/api/sets/lang/en");
+      document.getElementById("pkmMeta").textContent = data.count + " English sets tracked";
+    }catch(e){
+      var el = document.getElementById("pkmMeta");
+      if(el) el.textContent = "set count unavailable right now";
+    }
+  }
+
+  /* ===================== CARD PAGE ===================== */
+  var CONDITION = { status: "raw", company: "PSA", grade: "10" };
+  var GRADERS = ["PSA","BGS","CGC","SGC","ACE","AiGrade"];
+  var GRADE_NUMS = ["10","9.5","9","8.5","8","7.5","7","6.5","6","5","4","3","2","1"];
+  var chartMode = "compare"; // "history" | "compare"
+
+  function gradeQuery(){
+    if(CONDITION.status === "raw") return "Raw";
+    var g = CONDITION.company;
+    if(CONDITION.grade) g += " " + CONDITION.grade;
+    return g;
+  }
+
+  async function renderCardPage(cardId){
+    app.innerHTML = '<div class="loading" id="cardLoading">Loading card&hellip;</div>';
+    var slow = setTimeout(function(){
+      var el = document.getElementById("cardLoading");
+      if(el) el.textContent = "Still loading — the live API sleeps when idle and can take up to a minute to wake up.";
+    }, 3500);
+
+    var card, history;
+    try{
+      var r = await Promise.all([
+        getJSON("/api/cards/" + encodeURIComponent(cardId)),
+        getJSON("/api/history/" + encodeURIComponent(cardId)).catch(function(){ return {data:[]}; })
+      ]);
+      card = r[0].data; history = r[1].data || [];
+    }catch(e){
+      clearTimeout(slow);
+      app.innerHTML = '<div class="error-box">Couldn\'t load this card from the live API.<br><span class="muted num" style="font-size:11px;">' + esc(e.message) + '</span></div>';
+      return;
+    }
+    clearTimeout(slow);
+    if(!card){
+      app.innerHTml ? null : null;
+      app.innerHTML = '<div class="error-box">No card found for id ' + esc(cardId) + '.</div>';
+      return;
+    }
+
+    pushSearch({cardId: card.id, name: card.name, setName: card.set && card.set.name, number: card.number, image: card.images && card.images.small});
+
+    app.innerHTML =
+      '<div class="card-hero">' +
+        '<img class="card-photo" src="' + esc(card.images && card.images.large || card.images && card.images.small || "") + '" onerror="this.src=\'' + placeholderImg() + '\'">' +
+        '<div>' +
+          '<div class="card-title">' + esc(card.name) + '</div>' +
+          '<div class="card-meta">' +
+            (card.set && card.set.logo ? '<img class="setlogo" src="' + esc(card.set.logo) + '">' : '') +
+            esc(card.set && card.set.name) + ' &middot; #' + esc(card.number) + (card.set && card.set.total ? "/"+esc(card.set.total) : "") +
+          '</div>' +
+          '<div class="card-meta">' + esc(card.rarity || "") + (card.set && card.set.releaseDate ? " &middot; " + new Date(card.set.releaseDate).getFullYear() : "") + '</div>' +
+          '<div class="card-tags">' +
+            (card._priceIsReal
+              ? '<span class="badge good">&#10003; measured price</span>'
+              : '<span class="badge warn">estimated price</span>') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="condition-bar">' +
+        '<div class="seg" id="statusSeg">' +
+          '<button data-v="raw" class="' + (CONDITION.status==="raw"?"active":"") + '">Raw</button>' +
+          '<button data-v="graded" class="' + (CONDITION.status==="graded"?"active":"") + '">Graded</button>' +
+        '</div>' +
+        '<div id="gradedControls" style="display:' + (CONDITION.status==="graded"?"flex":"none") + '; gap:8px;">' +
+          '<select class="cond-select" id="companySel">' + GRADERS.map(function(g){ return '<option ' + (g===CONDITION.company?"selected":"") + '>' + g + '</option>'; }).join("") + '</select>' +
+          '<select class="cond-select" id="gradeSel"><option value="">Any grade</option>' + GRADE_NUMS.map(function(g){ return '<option ' + (g===CONDITION.grade?"selected":"") + '>' + g + '</option>'; }).join("") + '</select>' +
+        '</div>' +
+      '</div>' +
+
+      '<div id="listingsArea"><div class="loading">Loading live listings for ' + esc(gradeQuery()) + '&hellip;</div></div>';
+
+    document.getElementById("statusSeg").addEventListener("click", function(e){
+      var b = e.target.closest("button"); if(!b) return;
+      CONDITION.status = b.dataset.v;
+      renderCardPage(cardId);
+    });
+    var gc = document.getElementById("gradedControls");
+    if(gc){
+      var cs = document.getElementById("companySel"), gs = document.getElementById("gradeSel");
+      if(cs) cs.addEventListener("change", function(){ CONDITION.company = cs.value; loadListings(cardId, card, history); });
+      if(gs) gs.addEventListener("change", function(){ CONDITION.grade = gs.value; loadListings(cardId, card, history); });
+    }
+
+    loadListings(cardId, card, history);
+  }
+
+  async function loadListings(cardId, card, history){
+    var area = document.getElementById("listingsArea");
+    area.innerHTML = '<div class="loading">Loading live listings for ' + esc(gradeQuery()) + '&hellip;</div>';
+    var data;
+    try{
+      data = await getJSON("/api/listings/" + encodeURIComponent(cardId) + "?grade=" + encodeURIComponent(gradeQuery()));
+    }catch(e){
+      area.innerHTML = '<div class="error-box">Couldn\'t load listings — ' + esc(e.message) + '</div>';
+      return;
+    }
+    area.innerHTML = buildListingsHTML(card, history, data);
+    wireChart(card, history, data);
+  }
+
+  function repEdition(g){
+    if(g.edition) return g.edition;
+    return "No edition noted";
+  }
+
+  function buildListingsHTML(card, history, data){
+    var gp = data.gradePrice || {groups:[], best:null};
+    var headline = gp.best;
+    var html = "";
+
+    // price hero
+    html += '<div class="price-hero">' +
+      '<div class="price-tile">' +
+        '<div class="label">Measured price &middot; last recorded</div>' +
+        '<div class="value num">' + fmt$(card._price) + '</div>' +
+        '<div class="sub muted">source: ' + esc(card._priceSource || "unknown") + (card._priceDate ? " &middot; " + fmtDate(card._priceDate) : "") + '</div>' +
+      '</div>' +
+      '<div class="price-tile">' +
+        '<div class="label">Live listings &middot; ' + esc(data.grade) + '</div>' +
+        (headline
+          ? '<div class="value num">' + fmt$(headline.median) + '</div><div class="sub muted">' + esc(headline.label) + (headline.thin ? ' <span class="badge warn" style="margin-left:4px;">thin</span>' : '') + '</div>'
+          : (gp.groups.length
+              ? '<div class="value num" style="font-size:16px;">no single figure</div><div class="sub muted">multiple editions in market — see below</div>'
+              : '<div class="value num" style="font-size:16px;">no data</div><div class="sub muted">no live listings passed the gate for ' + esc(data.grade) + '</div>')) +
+      '</div>' +
+    '</div>';
+
+    // chart card
+    html += '<div class="card-box chart-card">' +
+      '<div class="chart-toggle">' +
+        '<button data-m="history" class="' + (chartMode==="history"?"active":"") + '">Price history</button>' +
+        '<button data-m="compare" class="' + (chartMode==="compare"?"active":"") + '">Vs. live listings</button>' +
+      '</div>' +
+      '<div class="chart-wrap" id="chartWrap"></div>' +
+      '<div class="chart-legend" id="chartLegend"></div>' +
+      '<div class="chart-note" id="chartNote"></div>' +
+    '</div>';
+
+    // editions as separate markets
+    if(gp.groups && gp.groups.length){
+      html += '<div class="section-head" style="margin-top:18px;"><h2>Editions in this market</h2></div>';
+      html += '<div class="group-scroll">';
+      gp.groups.forEach(function(g){
+        html += '<div class="group-card' + (g.thin?" thin":"") + '">' +
+          '<div class="g-title">' + esc(g.grade) + (g.edition ? " &middot; " + esc(g.edition) : "") + '</div>' +
+          '<div class="g-price num">' + fmt$(g.median) + '</div>' +
+          '<div class="g-range num">' + fmt$(g.low) + '&ndash;' + fmt$(g.high) + ' &middot; ' + g.count + ' listing' + (g.count===1?"":"s") + '</div>' +
+          '<div class="g-flag">' + (g.thin ? '<span class="badge warn">' + esc(g.label) + '</span>' : '<span class="badge good">active market</span>') + '</div>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
+    // outliers summary
+    if(data.outliers){
+      var o = data.outliers;
+      html += '<div class="chart-note" style="margin-top:16px;">' +
+        (o.applied
+          ? (o.flagged
+              ? o.flagged + ' of ' + o.count + ' listing' + (o.count===1?"":"s") + ' flagged as implausibly cheap (' + o.spread.toFixed(1) + 'x spread from median ' + fmt$(o.median) + ') — shown below, sorted last, never removed.'
+              : 'No outliers flagged &mdash; ' + o.count + ' listings span ' + fmt$(o.low) + '&ndash;' + fmt$(o.high) + ' (' + (o.spread||0).toFixed(1) + 'x), a normal spread.')
+          : 'Outlier check skipped: ' + esc(o.reason || "not enough data") + '.') +
+      '</div>';
+    }
+
+    // listings feed
+    html += '<div class="listings-head"><h2 style="font-size:15px;">Listings &middot; ' + esc(data.grade) + '</h2><span class="muted" style="font-size:12px;">' + (data.count||0) + ' found</span></div>';
+
+    var listings = (data.listings || []).slice().sort(function(a,b){
+      var as = a.suspect ? 1 : 0, bs = b.suspect ? 1 : 0;
+      if(as !== bs) return as - bs;
+      return (a.landed!=null?a.landed:a.price) - (b.landed!=null?b.landed:b.price);
+    });
+
+    if(!listings.length){
+      html += '<div class="card-box empty-note">No live listings passed the gate for ' + esc(data.grade) + ' right now. ' +
+        (data.sources && data.sources.ebay ? esc(data.sources.ebay.summary || "") : "") + '</div>';
+    } else {
+      listings.forEach(function(l){
+        html += '<div class="listing-row' + (l.suspect?" suspect":"") + '">' +
+          '<img class="l-thumb" src="' + esc(l.imageUrl || "") + '" onerror="this.src=\'' + placeholderImg() + '\'">' +
+          '<div class="l-body">' +
+            '<div class="l-title">' + esc(l.title) + '</div>' +
+            '<div class="l-tags">' +
+              '<span class="badge neutral">' + esc(l.sourceLabel) + '</span>' +
+              (l.condition ? '<span class="badge neutral">' + esc(l.condition) + '</span>' : '') +
+              (l.edition ? '<span class="badge neutral">' + esc(l.edition) + '</span>' : '') +
+              (l.priceKind === "shop-ask" ? '<span class="badge warn">shop asking price</span>' : '') +
+              (l.suspect ? '<span class="badge crit">flagged</span>' : '') +
+            '</div>' +
+            (l.suspect ? '<div class="l-suspect-note">' + esc(l.suspectReason) + '</div>' : '') +
+          '</div>' +
+          '<div class="l-price">' +
+            '<a class="amt num" href="' + esc(l.url) + '" target="_blank" rel="noopener">' + fmt$(l.landed!=null?l.landed:l.price) + '</a>' +
+            '<span class="ship">' + (l.shippingKnown ? (l.shipping ? "+"+fmt$(l.shipping)+" ship" : "free ship") : "shipping unknown") + '</span>' +
+          '</div>' +
+        '</div>';
+      });
+    }
+
+    // sources transparency panel
+    var order = ["ebay","yahoo","yuyutei","mercari","cardmarket","facebook","localshops"];
+    var srcs = data.sources || {};
+    html += '<details class="sources"><summary>Sources checked (' + order.filter(function(k){return srcs[k];}).length + ')</summary>';
+    order.forEach(function(k){
+      var s = srcs[k]; if(!s) return;
+      var color = s.status === "ok" ? "good" : (s.status === "skipped" ? "warn" : "crit");
+      html += '<div class="src-row">' +
+        '<span class="src-dot" style="background:var(--' + color + ')"></span>' +
+        '<div><div class="src-name">' + k + ' <span class="muted" style="font-weight:400;">&middot; ' + esc(s.status) + '</span></div>' +
+        '<div class="src-note">' + esc(s.summary || s.reason || "") + '</div>' +
+        (s.gate ? '<div class="src-gate">gate: lang=' + esc(s.gate.language) + ' year=' + esc(s.gate.year) + ' set=&quot;' + esc(s.gate.setName) + '&quot;' + (s.gate.unchecked && s.gate.unchecked.length ? " unchecked="+s.gate.unchecked.join(",") : "") + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    });
+    html += '<div class="unfiltered-note">No unfiltered deep-link sources (PriceCharting, Amazon, etc.) are wired into this build yet — every listing above has passed the match gate. When one is added, it will be labelled separately as an unchecked search, not mixed into these gated results.</div>';
+    html += '</details>';
+
+    if(data.attribution && data.attribution.ebay){
+      html += '<div class="attribution">' + esc(data.attribution.ebay.label) + ' &middot; ' + esc(data.attribution.ebay.note) + '</div>';
+    }
+    if(data.freshness){
+      html += '<div class="attribution">' + esc(data.freshness.note) + ' &middot; refreshes every ' + Math.round(data.freshness.maxAgeSeconds/60) + ' min</div>';
+    }
+
+    return html;
+  }
+
+  function wireChart(card, history, data){
+    var wrap = document.getElementById("chartWrap");
+    var toggle = document.querySelector(".chart-toggle");
+    if(toggle){
+      toggle.querySelectorAll("button").forEach(function(b){
+        b.addEventListener("click", function(){ chartMode = b.dataset.m; drawChart(wrap, card, history, data); });
+      });
+    }
+    drawChart(wrap, card, history, data);
+  }
+
+  function drawChart(wrap, card, history, data){
+    var legend = document.getElementById("chartLegend");
+    var note = document.getElementById("chartNote");
+    document.querySelectorAll(".chart-toggle button").forEach(function(b){ b.classList.toggle("active", b.dataset.m === chartMode); });
+
+    var refValue = data.gradePrice && data.gradePrice.best ? data.gradePrice.best.median : null;
+    var refLabel = "Live median &middot; " + esc(data.grade);
+
+    if(!history.length){
+      wrap.innerHTML = '<div class="empty-note" style="padding:20px 0;">No measured price history stored for this card yet.</div>';
+      legend.innerHTML = "";
+      note.textContent = "";
+      return;
+    }
+
+    var pts = history.map(function(h){ return {t: new Date(h.date).getTime(), v: +h.avg_price}; }).sort(function(a,b){return a.t-b.t;});
+
+    if(pts.length === 1){
+      var single = pts[0];
+      var vals = [single.v]; if(chartMode==="compare" && refValue) vals.push(refValue);
+      wrap.innerHTML = '<div style="padding:18px 0; display:flex; gap:30px; align-items:baseline;">' +
+        '<div><div class="muted" style="font-size:11px;">only measured point</div><div class="num" style="font-size:22px; font-weight:600; color:var(--accent);">' + fmt$(single.v) + '</div><div class="muted" style="font-size:11px;">' + fmtDate(single.t) + '</div></div>' +
+        (chartMode==="compare" && refValue ? '<div><div class="muted" style="font-size:11px;">live listings now</div><div class="num" style="font-size:22px; font-weight:600; color:var(--money);">' + fmt$(refValue) + '</div></div>' : '') +
+      '</div>';
+      legend.innerHTML = '<span><span class="legend-dot" style="background:var(--accent)"></span>Measured price</span>' + (chartMode==="compare"&&refValue?'<span><span class="legend-dot" style="background:var(--money)"></span>Live listings median</span>':"");
+      note.textContent = "Only one measured price point exists for this card — not enough history for a trend line.";
+      return;
+    }
+
+    var w = 620, h = 190, padL = 46, padR = 14, padT = 14, padB = 26;
+    var vals = pts.map(function(p){return p.v;});
+    if(chartMode === "compare" && refValue) vals = vals.concat([refValue]);
+    var minV = Math.min.apply(null, vals), maxV = Math.max.apply(null, vals);
+    if(minV === maxV){ minV *= 0.9; maxV *= 1.1; }
+    var pad = (maxV - minV) * 0.12;
+    minV -= pad; maxV += pad; if(minV < 0) minV = 0;
+    var minT = pts[0].t, maxT = pts[pts.length-1].t;
+    if(minT === maxT) maxT = minT + 86400000;
+
+    function X(t){ return padL + (t - minT) / (maxT - minT) * (w - padL - padR); }
+    function Y(v){ return padT + (1 - (v - minV) / (maxV - minV)) * (h - padT - padB); }
+
+    var path = pts.map(function(p,i){ return (i===0?"M":"L") + X(p.t).toFixed(1) + "," + Y(p.v).toFixed(1); }).join(" ");
+    var areaPath = path + " L" + X(pts[pts.length-1].t).toFixed(1) + "," + (h-padB) + " L" + X(pts[0].t).toFixed(1) + "," + (h-padB) + " Z";
+
+    var yTicks = 4, yLines = "";
+    for(var i=0;i<=yTicks;i++){
+      var v = minV + (maxV-minV) * i/yTicks;
+      var y = Y(v);
+      yLines += '<line x1="' + padL + '" x2="' + (w-padR) + '" y1="' + y.toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="var(--border)" stroke-width="1"/>';
+      yLines += '<text x="' + (padL-8) + '" y="' + (y+3).toFixed(1) + '" text-anchor="end" font-size="9.5" fill="var(--ink-3)" font-family="IBM Plex Mono,monospace">' + fmt$(v).replace(".00","") + '</text>';
+    }
+
+    var refLine = "";
+    if(chartMode === "compare" && refValue){
+      var ry = Y(refValue);
+      refLine = '<line x1="' + padL + '" x2="' + (w-padR) + '" y1="' + ry.toFixed(1) + '" y2="' + ry.toFixed(1) + '" stroke="var(--money)" stroke-width="1.6" stroke-dasharray="4 3"/>' +
+        '<text x="' + (w-padR) + '" y="' + (ry-5).toFixed(1) + '" text-anchor="end" font-size="10" fill="var(--money)" font-family="IBM Plex Mono,monospace">' + fmt$(refValue) + '</text>';
+    }
+
+    var dots = pts.map(function(p,i){ return '<circle class="hp" data-i="'+i+'" cx="' + X(p.t).toFixed(1) + '" cy="' + Y(p.v).toFixed(1) + '" r="3.4" fill="var(--accent)" stroke="var(--surface)" stroke-width="1.4"/>'; }).join("");
+
+    wrap.innerHTML =
+      '<svg viewBox="0 0 ' + w + ' ' + h + '" style="width:100%; height:auto; overflow:visible;" id="priceSvg">' +
+        yLines +
+        '<path d="' + areaPath + '" fill="var(--accent)" opacity="0.08" stroke="none"/>' +
+        '<path d="' + path + '" fill="none" stroke="var(--accent)" stroke-width="2"/>' +
+        refLine +
+        dots +
+      '</svg>' +
+      '<div class="chart-tip" id="chartTip"></div>';
+
+    legend.innerHTML = '<span><span class="legend-dot" style="background:var(--accent)"></span>Measured price (last sold / market)</span>' +
+      (chartMode==="compare" && refValue ? '<span><span class="legend-dot" style="background:var(--money)"></span>Live listings median &middot; ' + esc(data.grade) + '</span>' : '');
+
+    if(chartMode === "compare" && refValue){
+      var last = pts[pts.length-1].v;
+      var delta = ((refValue - last) / last) * 100;
+      note.textContent = "Live listings are " + (delta>=0?"+":"") + delta.toFixed(1) + "% vs. the last measured price of " + fmt$(last) + " (" + fmtDate(pts[pts.length-1].t) + ").";
+    } else if(chartMode === "compare"){
+      note.textContent = "No live listings median available for " + data.grade + " to compare against.";
+    } else {
+      note.textContent = pts.length + " measured price points from " + fmtDate(pts[0].t) + " to " + fmtDate(pts[pts.length-1].t) + ".";
+    }
+
+    // hover tooltip
+    var svg = document.getElementById("priceSvg");
+    var tip = document.getElementById("chartTip");
+    svg.addEventListener("mousemove", function(e){
+      var rect = svg.getBoundingClientRect();
+      var xFrac = (e.clientX - rect.left) / rect.width;
+      var xSvg = xFrac * w;
+      var nearest = 0, best = Infinity;
+      pts.forEach(function(p,i){ var d = Math.abs(X(p.t) - xSvg); if(d < best){best = d; nearest = i;} });
+      var p = pts[nearest];
+      tip.style.opacity = 1;
+      tip.style.left = ((X(p.t)/w)*100) + "%";
+      tip.style.top = ((Y(p.v)/h)*100) + "%";
+      tip.textContent = fmtDate(p.t) + " — " + fmt$(p.v);
+    });
+    svg.addEventListener("mouseleave", function(){ tip.style.opacity = 0; });
+  }
+
+  route();
+})();
+</script>
+</body></html>

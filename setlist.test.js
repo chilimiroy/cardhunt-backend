@@ -131,7 +131,9 @@ const fnSrc = name => {
   const fs2 = require('fs');
   // ingest.js joined 2026-09-29 (TASK T2): it held the T5/T6 pricing fixes
   // on one machine only, and has been reverted twice by a download.
-  const mustTrack = ['CLAUDE.md', 'PROGRESS.md', 'jptest.js', 'ingest.js']
+  // cardhunt-redesign.html: the design reference, tracked so it cannot
+  // drift (decided 2026-09-29).
+  const mustTrack = ['CLAUDE.md', 'PROGRESS.md', 'jptest.js', 'ingest.js', 'cardhunt-redesign.html']
     .concat(fs2.readdirSync(__dirname).filter(f => /\.test\.js$/.test(f)));
   const untracked = mustTrack.filter(f => {
     try {
@@ -140,7 +142,8 @@ const fnSrc = name => {
       return false;
     } catch (e) { return true; }
   });
-  ok('CLAUDE.md, PROGRESS.md, ingest.js and all ' + (mustTrack.length - 4) + ' *.test.js files are tracked',
+  ok('CLAUDE.md, PROGRESS.md, ingest.js, the redesign reference and all '
+    + (mustTrack.length - 5) + ' *.test.js files are tracked',
     untracked.length === 0, 'not in the index: ' + untracked.join(', '));
 
   const loadAll = fnSrc('loadAllSets');

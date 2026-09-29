@@ -569,7 +569,12 @@ const NOT_A_SINGLE_CARD_TERMS = [
   'fan art', 'fanart', 'fan made', 'fanmade', 'art card',
   'unofficial', 'not official', 'handmade', 'homemade', 'inspired by',
   'gold card', 'jumbo', 'oversized', 'oversize', 'sticker', 'stickers', 'tattoo',
-  'stamp', 'cardboard cutout'
+  'stamp', 'cardboard cutout',
+  // several copies sold as one. jptest asserted "x4 Playset" was refused —
+  // of an English gate production never ran (T9, 2026-09-29). Measured on
+  // 516 titles production keeps: 0 carry it. NOT "quantity": the one kept
+  // title with it ("… #74/73 … Quantity (5)") is a single, five in stock.
+  'playset', 'play set', 'playsets'
 ];
 
 // The one entry that is genuinely a pattern rather than a word: "50 cards",
@@ -580,7 +585,10 @@ const NOT_A_SINGLE_CARD_TERMS = [
 // Charizard (live, $1,289 and $1,699.99, 2026-09-27). A bare "set" would
 // be wrong: of 727 real kept titles exactly one carried a standalone "set",
 // and it was a genuine single ("Dracaufeu Charizard - 4/102 - Set de Base").
+// The third: a multiplier, "x4" / "4x" / "x 3", standing alone — 0 of 516
+// kept production titles carry one (2026-09-29). 2-9 only: "x1" is a single.
 const NOT_A_SINGLE_CARD_PATTERNS = ['\\d+\\s*cards?\\b',
+  '(?:^|[\\s(\\[])(?:x\\s?[2-9]|[2-9]\\s?x)(?=[\\s)\\]]|$)',
   '\\b(?:ex|gx|vmax|vstar|sar|sir|chr|csr|ur|hr)\\s+set\\b'];
 
 // The boundaries are applied by boundedTerm, defined once near the top of
@@ -1457,7 +1465,10 @@ function verifyCore(title, card, grade, opts) {
 
   // 5. No N/M pair. Accept only with a bare number AND the set name —
   //    either alone is too weak. "Charizard #4" appears in many sets.
-  const bareNum = new RegExp('(?:^|[^0-9/])0*' + wantNum + '(?![0-9/])').test(t);
+  // Not after a currency sign: "Champion's Path $74 PSA 10" states a PRICE,
+  // and read as #74 it passed for Charizard VMAX #74 (T9, 2026-09-29; 0 of
+  // 516 kept production titles carry a currency sign before a number).
+  const bareNum = new RegExp('(?:^|[^0-9/$€£¥])0*' + wantNum + '(?![0-9/])').test(t);
   const setName = String(card.setName || '').toLowerCase()
                     .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
   const titleFlat = lower.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');

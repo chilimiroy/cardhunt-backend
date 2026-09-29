@@ -251,65 +251,14 @@ function jpTitleHasGrade(title, grade) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// ENGLISH-LANGUAGE MARKETPLACES (eBay, and anything else Latin-script).
-//
-// Same principle as the Japanese rules, different vocabulary. This lives
-// here rather than in server.js so there is exactly ONE answer to "is this
-// listing a single copy of this card" no matter which marketplace asked —
-// which is the whole reason jpfilter is a shared module.
+// ENGLISH marketplaces are NOT gated here. An English gate lived here —
+// enItemMatchesRequest / enTitleIsSingleRaw / enTitleMentionsCard — and
+// production never called it: eBay rows go through cardmatch.verify. Only
+// ebayprobe.js did, so the probe measured a DIFFERENT gate from the one a
+// card view runs, with substring rules that dropped Giratina ("tin"),
+// TAG TEAM and ACE SPEC — 4 of 4 genuine titles in the T9 audit
+// (2026-09-29). Deleted; jptest's English cases now run cardmatch.verify.
 // ══════════════════════════════════════════════════════════════
-const EN_LOT_WORDS = [
-  'lot', 'lots', 'bundle', 'bulk', 'joblot', 'job lot', 'collection',
-  'set of', 'playset', 'complete set', 'master set', 'binder',
-  'booster box', 'booster', 'etb', 'elite trainer', 'sealed', 'pack',
-  'blister', 'tin', 'random', 'mystery', 'repack', 'you pick', 'u pick',
-  'choose', 'your choice', 'proxy', 'custom', 'fan art', 'orica',
-  'reprint', 'counterfeit', 'not real'
-];
-const EN_GRADED_WORDS = ['PSA', 'BGS', 'CGC', 'SGC', 'ACE', 'TAG', 'GRADED', 'SLAB'];
-
-function enTitleIsSingleRaw(title, opts = {}) {
-  if (!title) return false;                        // unjudgeable — exclude
-  const t = String(title).toLowerCase();
-  for (const w of EN_LOT_WORDS) if (t.includes(w)) return false;
-  if (!opts.allowGraded) {
-    const T = String(title).toUpperCase();
-    for (const w of EN_GRADED_WORDS) if (T.includes(w)) return false;
-  }
-  // "x4", "4x", "qty 3", "3 cards" — quantity markers
-  if (/\b(x\s?\d{1,3}|\d{1,3}\s?x)\b/.test(t)) return false;
-  if (/\bqty\b|\bquantity\b/.test(t)) return false;
-  if (/\b\d{1,3}\s+cards?\b/.test(t)) return false;
-  // Two or more different "number/total" citations is a bundle
-  const cited = new Set((t.match(/\d{1,4}\s*\/\s*\d{1,4}/g) || []).map(x => x.replace(/\s+/g, '')));
-  if (cited.size >= 2) return false;
-  return true;
-}
-
-// English titles rarely repeat the Japanese exactness, so the name test is
-// token-based: every significant word of the card name must appear.
-function enTitleMentionsCard(title, cardName) {
-  if (!title || !cardName) return false;
-  const t = String(title).toLowerCase();
-  const tokens = String(cardName).toLowerCase()
-    .replace(/[^a-z0-9'\s-]/g, ' ')
-    .split(/\s+/).filter(w => w.length > 1);
-  if (!tokens.length) return false;
-  return tokens.every(w => t.includes(w));
-}
-
-// The English gate. Mirrors jpItemMatchesRequest exactly, including the
-// fail-closed number rule — an eBay title that cites a number must cite
-// OURS, and one that cites none must name the set.
-function enItemMatchesRequest(item, card, grade) {
-  const c = (typeof card === 'string') ? { name: card } : (card || {});
-  const title = (item && item.title) || '';
-  if (!enTitleMentionsCard(title, c.name)) return false;
-  if (!jpTitleMatchesNumber(title, c.number, c.setTotal, c.setId, c.setName)) return false;
-  if (isRawGrade(grade)) return enTitleIsSingleRaw(title);
-  return enTitleIsSingleRaw(title, { allowGraded: true })
-      && jpTitleHasGrade(title, grade);
-}
 
 // "Raw" arrives in several vocabularies and they must all mean ungraded:
 //   frontend GRADES[]   'Raw NM', 'Raw LP', 'Raw MP'
@@ -457,7 +406,5 @@ module.exports = {
   jpTitleMatchesNumber, jpItemIsSingleCard, yahooItemToListing, escapeRe,
   titleNamesSet, titleHasBareNumber,
   jpTitleHasGrade, isRawGrade, jpItemMatchesRequest, jpItemRejectReason,
-  JP_CARD_CATEGORY_IDS, JP_EXCLUDED_CATEGORY_IDS, parseYahooLiveHtml,
-  EN_LOT_WORDS, EN_GRADED_WORDS,
-  enTitleIsSingleRaw, enTitleMentionsCard, enItemMatchesRequest
+  JP_CARD_CATEGORY_IDS, JP_EXCLUDED_CATEGORY_IDS, parseYahooLiveHtml
 };

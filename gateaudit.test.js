@@ -142,6 +142,30 @@ if (fs.existsSync('ingest.js')) {
   ok('...and keeps the Japanese one', !cm.printingConflict('ポケモンカード リザードンex SAR 201/165 SV2a', ctx, opts));
 } else console.log('  skip  ingest.js not present');
 
+// ── One English gate ───────────────────────────────────────────
+console.log('\n  one English gate — cardmatch.verify');
+{
+  const jpf = require('./jpfilter');
+  ok('jpfilter carries no second English gate (enItemMatchesRequest et al.)',
+    !['enItemMatchesRequest', 'enTitleIsSingleRaw', 'enTitleMentionsCard', 'EN_LOT_WORDS'].some(k => k in jpf));
+  ok("jptest's English cases run cardmatch.verify",
+    /cm\.verify\(c\.item\.title/.test(fs.readFileSync('jptest.js', 'utf8')));
+  if (fs.existsSync('ebayprobe.js')) {
+    const pr = fs.readFileSync('ebayprobe.js', 'utf8');
+    ok('ebayprobe (local) gates with cm.verify and asks cm.buildQuery', /cm\.verify\(/.test(pr) && /cm\.buildQuery\(/.test(pr));
+  }
+  const cm = require('./cardmatch');
+  const cz = { name: 'Charizard VMAX', number: '74', setTotal: '73', setId: 'swsh3.5', setName: "Champion's Path" };
+  ok('verify refuses "x4 Playset"', !cm.verify('Charizard VMAX 74/73 x4 Playset', cz, 'Raw').ok);
+  ok('verify refuses a $74 PRICE as #74', !cm.verify("Charizard VMAX Champion's Path $74 PSA 10", cz, 'PSA 10').ok);
+  ok('verify keeps "#74 … Quantity (5)" — one card, five in stock',
+    cm.verify("Charizard VMAX Holo (Secret) #74/73 Champion's Path NM Rainbow - Quantity (5)", cz, 'Raw').ok);
+  ok('verify keeps Giratina / TAG TEAM / ACE SPEC (what the deleted gate dropped)',
+    cm.verify('Giratina V 186/196 Lost Origin Alt Art NM', { name: 'Giratina V', number: '186', setTotal: '196', setId: 'swsh11', setName: 'Lost Origin' }, 'Raw').ok &&
+    cm.verify('Pikachu & Zekrom GX TAG TEAM 33/181 Team Up', { name: 'Pikachu & Zekrom GX', number: '33', setTotal: '181', setId: 'sm9', setName: 'Team Up' }, 'Raw').ok &&
+    cm.verify('Master Ball ACE SPEC 153/167 Twilight Masquerade', { name: 'Master Ball', number: '153', setTotal: '167', setId: 'sv06', setName: 'Twilight Masquerade' }, 'Raw').ok);
+}
+
 // ── No route hands back eBay rows that skipped the gate ────────
 console.log('\n  routes — nothing serves eBay search rows ungated');
 const nameRoute = route('get', '/api/listings/:cardName');

@@ -185,6 +185,10 @@ const EN_CASES = [
     item: { title: 'Charizard VMAX 2074 Champions Path PSA 10' } },        // nor is 2074
   { keep: false, grade: 'PSA 10', card: CZVMAX,
     item: { title: "Charizard VMAX Champion's Path $74 PSA 10" } },        // a price, not a number
+  // A real kept production title: one card, five in stock. "Quantity" is
+  // why no quantity word was added to the lot list (2026-09-29).
+  { keep: true, card: CZVMAX,
+    item: { title: "Charizard VMAX Holo (Secret) #74/73 Champion's Path NM Rainbow - Quantity (5)" } },
   { keep: false, grade: 'PSA 10', card: CZVMAX,
     item: { title: "Charizard VMAX #74 Champion's Path PSA 9" } },         // wrong grade
   { keep: false, grade: 'PSA 10', card: CZVMAX,
@@ -230,11 +234,19 @@ function rawGradeTest() {
   return { pass, fail, keeps: RAW_GRADE_CASES.filter(c => c[1]).length, total: RAW_GRADE_CASES.length };
 }
 
+// These cases used to run jpfilter.enItemMatchesRequest — an English gate
+// that production NEVER ran; only ebayprobe.js called it, so the probe that
+// "measures what a card view asks" measured a different gate, one whose
+// substring rules dropped Giratina ("tin"), TAG TEAM and ACE SPEC. Found in
+// the T9 gate audit (2026-09-29): 4 of 4 genuine titles dropped by it, kept by
+// cardmatch.verify. The English cases now ask the gate eBay rows actually
+// pass through, and the second gate is deleted.
 function enTest() {
   let pass = 0, fail = 0;
-  console.log('\n  -- English / eBay --');
+  const cm = require('./cardmatch');
+  console.log('\n  -- English / eBay (cardmatch.verify — the production gate) --');
   for (const c of EN_CASES) {
-    const got = require('./jpfilter').enItemMatchesRequest(c.item, c.card, c.grade);
+    const got = cm.verify(c.item.title || '', c.card, c.grade || 'Raw').ok;
     const ok = got === c.keep;
     ok ? pass++ : fail++;
     console.log(`  ${ok ? 'ok  ' : 'FAIL'}  want ${c.keep ? 'KEEP  ' : 'REJECT'}  got ${got ? 'KEEP  ' : 'REJECT'}  ` +

@@ -150,6 +150,13 @@ console.log('\n  3b. the page');
   ok('a selected non-base printing shows ITS price or says none is held — never the base price',
     /printingPrices/.test(pfn('updatePrices')) && /price held/.test(pfn('updatePrices')));
   ok('openCard resets the printing', /SEL\.printing='all'/.test(pfn('openCard')));
+  // T4 (2026-09-29): the Typical grade block multiplied the BASE printing's
+  // price whatever the Printing box said.
+  const rlf = pfn('renderListingFinder');
+  ok('the Typical block reads the selected printing\'s OWN held price',
+    /SEL\.printing/.test(rlf) && /card\.printingPrices/.test(rlf) && /var base = sp \?/.test(rlf));
+  ok('...and says none is held rather than borrowing the base price', /no price held for that printing/.test(rlf));
+  ok('...and names the printing in its heading', /Typical ' \+ gradeText\(LF\.grade\) \+ spLabel/.test(rlf));
   ok("getBase's fallback never takes a reverseHolofoil as the base", !/'reverseHolofoil'/.test(pfn('getBase')));
 }
 {

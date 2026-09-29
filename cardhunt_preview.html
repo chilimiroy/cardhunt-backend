@@ -3268,21 +3268,36 @@ function renderListingFinder(card) {
   // controls for one setting is also two places for them to disagree about
   // what is currently selected.
 
-  // Estimated value at the chosen grade
-  var base = getBase(card);
+  // Estimated value at the chosen grade — of the SELECTED PRINTING (T4,
+  // 2026-09-29). It multiplied the base printing's price whatever the
+  // Printing box said, so Alakazam #1 Reverse read as the $233 holo's
+  // estimate, not the $122 reverse's. A reverse/mirror uses its OWN held
+  // price (the lookup the headline uses) and, holding none, says so rather
+  // than borrowing the base's.
+  var sp = SEL && SEL.printing && /^reverse/.test(SEL.printing) ? SEL.printing : null;
+  var spHeld = sp ? (Array.isArray(card.printingPrices) ? card.printingPrices : [])
+    .filter(function (x) { return x.printing === sp; })[0] : null;
+  var base = sp ? (spHeld ? Number(spHeld.price) : 0) : getBase(card);
   var mult = gradeMult(LF.grade);
   var est = base * mult;
+  var spLabel = sp ? ' &middot; ' + liveEsc(printingLabelOf(sp)) : '';
   if (base > 0) {
     html += '<div id="cd-gradeval" style="padding:12px 18px;background:var(--bg);'
       + 'border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;'
       + 'align-items:center">';
-    html += '<div><div style="font-size:11px;color:var(--mu)">Typical ' + gradeText(LF.grade)
+    html += '<div><div style="font-size:11px;color:var(--mu)">Typical ' + gradeText(LF.grade) + spLabel
       + ' &middot; <span style="color:var(--am);font-weight:700">estimate</span></div>'
       + '<div style="font-size:20px;font-weight:800">' + fmtCurrency(est) + '</div></div>';
     html += '<div style="font-size:11px;color:var(--fa);text-align:right;max-width:200px">'
-      + 'Raw price &times;' + mult + ', not measured from sales. The listings below are real.'
+      + (sp ? liveEsc(printingLabelOf(sp)) + ' raw price' : 'Raw price')
+      + ' &times;' + mult + ', not measured from sales. The listings below are real.'
       + '</div>';
     html += '</div>';
+  } else if (sp) {
+    html += '<div id="cd-gradeval" style="padding:12px 18px;background:var(--bg);'
+      + 'border-bottom:1px solid var(--bd);font-size:12px;color:var(--mu)">'
+      + 'No typical ' + gradeText(LF.grade) + ' estimate for ' + liveEsc(printingLabelOf(sp))
+      + ' &mdash; no price held for that printing. The listings below are real.</div>';
   }
 
   // Real listings from our own API land here, above the search links.
@@ -5797,6 +5812,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260929-c1eceb6-printings &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260929-28ea4be-typicalprinting &middot; click to hide</div>
 </body>
 </html>

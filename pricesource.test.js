@@ -43,6 +43,23 @@ ok('"Pokemon GO" == "Pokémon GO" by the normaliser alone', S.sameTcgSet('Pokemo
 ok('trainer kits are NOT aliased (both halves number from 1)',
   !S.sameTcgSet('BW Trainer Kit: Excadrill & Zoroark', 'tk-bw-e', 'BW trainer Kit (Excadrill)'));
 
+console.log('\nYAHOO — a stated mirror never enters the base median (T4; real titles, 2026-09-29)');
+const cm = require('./cardmatch.js');
+const bulba = { name: 'フシギダネ', number: '001', printings: ['normal', 'reverse-pokeball', 'reverse-masterball'] };
+// ja-SV2a-001: ALL three surviving sales were Master Ball mirrors — the old
+// median stored ~$22 as a Common's base price.
+for (const t of ['状態B トレカ ポケモンカードゲーム SV2a-001 フシギダネ ミラー(マスターボール) C',
+                 'ポケモンカードゲーム　フシギダネ　151 マスターボールミラー　001/165　汚れ白かけなし',
+                 'ポケモンカード フシギダネ sv2a 001/165 マスターボールミラー'])
+  ok('set aside as reverse-masterball: ' + t.slice(0, 40), cm.printingClaim(t, bulba).key === 'reverse-masterball');
+const pika = { name: 'ピカチュウ', number: '025', printings: ['normal', 'reverse-pokeball', 'reverse-masterball'] };
+ok('set aside as reverse-pokeball: モンスターボールミラー',
+  cm.printingClaim('ピカチュウ sv2a 025/165 モンスターボールミラー ポケモンカードゲーム 同梱OK 美品', pika).key === 'reverse-pokeball');
+ok('KEPT in the base: a title that names no printing',
+  !cm.printingClaim('ポケモンカード ピカチュウ SV2a 025/165 C自引きですので、すぐにスリーブ入れました。', pika).stated);
+ok('KEPT in the base: the Master Ball CARD is not a mirror',
+  !/^reverse/.test(String(cm.printingClaim('マスターボール ACE SPEC SV5a 153/167', { name: 'マスターボール', number: '153' }).key)));
+
 console.log('\nPRODUCT — one product id claimed by two cards is trusted for neither');
 const c1 = T.productConflicts([
   { cardId: 'en-swsh9tg-TG16', tcgplayer: 263784, cardmarket: null },
@@ -82,6 +99,14 @@ if (fs.existsSync(__dirname + '/ingest.js')) {
   const tpf = I.slice(I.indexOf('async function tcgdexPriceFor'), I.indexOf('async function tcgPlayerSearch'));
   ok('tcgdexPriceFor refuses without a recorded full harvest', /if \(!_tdxConflicts\.ready\)/.test(tpf));
   ok('tcgdexPriceFor refuses a shared product', /_tdxConflicts\.tcgplayer\.has\(String\(b\.productId\)\)/.test(tpf));
+  const yjs = I.slice(I.indexOf('async function yahooJapanSearch'), I.indexOf('async function yahooJapanSearch') + 9000);
+  ok('Yahoo base median excludes a stated reverse/mirror', /const priced = pricedAll\.filter\(x => !isOther\(x\)\)/.test(yjs));
+  ok('Yahoo returns mirror medians even with no base sample', /if \(variantPrices\.length\) \{\s*return \{ price: null/.test(yjs));
+  ok('jpCtx hands the card\'s printings to the gate', /printings: card\.variants && Array\.isArray\(card\.variants\.printings\)/.test(I));
+  ok('both price runs write variant rows', (I.match(/const res = await safePriceFor\(card\);\s*await writeVariantPrices\(card, res\);/g) || []).length === 2);
+  ok('both price runs SELECT variants for the gate', (I.match(/c\.set_total, (?:c\.set_release, )?c\.variants, c\.name_en/g) || []).length === 2);
+  const wvp = I.slice(I.indexOf('async function writeVariantPrices'), I.indexOf('async function safePriceFor'));
+  ok('variant rows are written WITH their variant, and only reverse keys', /variant, source_meta\)/.test(wvp) && /\^reverse/.test(wvp));
   ok('the writers record marketplace and source_meta',
     (I.match(/res\.marketplace \|\| res\.source\.split\('_'\)\[0\],\s*res\.meta/g) || []).length === 2);
 } else console.log('  SKIP  ingest.js wiring — not in this checkout');

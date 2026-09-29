@@ -37,7 +37,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.8.0';   // bump when this file changes
+const VERSION = '5.9.0';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -1023,11 +1023,28 @@ const {
 // opts.setTotal / opts.setId -- REQUIRED to tell one card from another. See
 // jpTitleMatchesNumber: without setTotal, "SM9 105/095" matches card #105 of
 // any set.
+// The median rule yahooJapanSearch applies to the base printing, for a
+// mirror group's yen: >= 3 sales, 1.5 IQR fence, and the spread refusal.
+function yahooMedianYen(yenIn) {
+  const yen = yenIn.slice().sort((a, b) => a - b);
+  if (yen.length < 3) return null;
+  const q1 = yen[Math.floor(yen.length * 0.25)];
+  const q3 = yen[Math.floor(yen.length * 0.75)];
+  const iqr = q3 - q1;
+  const clean = yen.filter(v => v >= q1 - 1.5 * iqr && v <= q3 + 1.5 * iqr);
+  const use = clean.length >= 3 ? clean : yen;
+  const lo = use[0], hi = use[use.length - 1];
+  if (lo > 0 && hi / lo > YAHOO_MAX_SPREAD) return null;
+  return { medianYen: use[Math.floor(use.length / 2)], lo, hi, use };
+}
+
 async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
   await hostDelay('yahoo', 3000);
   const cardCtx = { name: cardName, number: cardNumber,
                     setTotal: opts.setTotal, setId: opts.setId,
-                    setYear: opts.setYear || null, lang: opts.lang || null };
+                    setYear: opts.setYear || null, lang: opts.lang || null,
+                    nameEn: opts.nameEn || null,
+                    printings: opts.printings || null };
 
   // Yahoo embeds the whole search result as JSON in __NEXT_DATA__.
   // Far more reliable than parsing their (frequently changing) markup.
@@ -1086,10 +1103,30 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
              { cjkIsChinese: false, scriptIsLanguageEvidence: false }));
       const rejected = items.length - singles.length;
 
-      const priced = singles
-        .map(it => ({ it, yen: parseInt(it.price || it.bidOrBuy || it.currentPrice || 0) }))
+      const pricedAll = singles
+        .map(it => ({ it, yen: parseInt(it.price || it.bidOrBuy || it.currentPrice || 0),
+                      claim: cmatch.printingClaim(it.title || '', cardCtx) }))
         .filter(x => x.yen >= 100 && x.yen <= 2000000);
+
+      // ── Printing (TASK T4, 2026-09-29) ──
+      // The stored median had no printing, so a Master Ball mirror sale
+      // (JP mirrors: $0.51 base against $38.09 Master Ball) landed in the
+      // BASE price — the collision the reprint work started from. A title
+      // that STATES another printing (a reverse or a mirror pattern) is
+      // taken out of the base median and given a median of its own, written
+      // with price_history.variant; silence stays in the base, as it does on
+      // the listings path. The headline readers already exclude variant
+      // rows (printsql.basePrintingSql).
+      const isOther = x => x.claim.stated && /^reverse/.test(x.claim.key);
+      const priced = pricedAll.filter(x => !isOther(x));
+      const otherGroups = {};
+      for (const x of pricedAll.filter(isOther)) (otherGroups[x.claim.key] = otherGroups[x.claim.key] || []).push(x.yen);
       const yen = priced.map(x => x.yen);
+      const variantPrices = Object.entries(otherGroups).map(([variant, ys]) => {
+        const m = yahooMedianYen(ys);
+        return m ? { variant, price: +(m.medianYen / JPY_PER_USD).toFixed(2), priceYen: m.medianYen,
+                     count: m.use.length, source: `yahoojp_${m.use.length}` } : null;
+      }).filter(Boolean);
 
       if (yen.length >= 3) {
         yen.sort((a, b) => a - b);
@@ -1125,7 +1162,12 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
           count: use.length,
           rejected: rejected,
           source: `yahoojp_${use.length}`,
-          currency: 'JPY->USD'
+          currency: 'JPY->USD',
+          // The other printings seen, each its own median under the same
+          // rules (>= 3 sales, IQR, the spread refusal). Also reported when
+          // too thin to price, so a run says what it set aside.
+          printingsExcluded: pricedAll.length - priced.length,
+          variantPrices
         };
         if (opts.withItems) {
           out.items = priced
@@ -1134,6 +1176,15 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
             .map(x => yahooItemToListing(x.it, x.yen));
         }
         return out;
+      }
+
+      // No base sample, but a mirror has one. Measured 2026-09-29 on
+      // ja-SV2a-001 フシギダネ (Common): ALL three surviving sales were Master
+      // Ball mirrors at ¥2,750-4,000, which the old median stored as the
+      // card's base price (~$22). Now: no base price, and the mirror's own.
+      if (variantPrices.length) {
+        return { price: null, count: 0, rejected, source: null, currency: 'JPY->USD',
+                 printingsExcluded: pricedAll.length - priced.length, variantPrices };
       }
 
       // Yahoo's own average — only trust it with a real sample behind it.
@@ -1196,7 +1247,13 @@ function jpCtx(card) {
     // The printing gate's two inputs. Absent, cardmatch skips the year and
     // language checks without a word — the dead-year-gate failure.
     setYear: card.set_release ? new Date(card.set_release).getUTCFullYear() : null,
-    lang: cmatch.languageFromCardId(card.api_card_id)
+    lang: cmatch.languageFromCardId(card.api_card_id),
+    // T4: which printings exist, so printingClaim can read "キラ" on a card
+    // with no holo as its reverse. Absent (not yet manifested) is fine: a
+    // stated mirror is still kept out of the base median.
+    printings: card.variants && Array.isArray(card.variants.printings)
+      ? card.variants.printings.map(p => p.key) : null,
+    nameEn: card.name_en || null
   };
 }
 
@@ -1233,7 +1290,7 @@ async function yahooTest(arg, cardNumber) {
   let name = arg, number = cardNumber, ctx = {};
   if (/^(en|ja|zh-tw|zh-cn)-/.test(arg) && db) {
     const r = await db.query(
-      'SELECT api_card_id, name, number, set_api_id, set_total, set_release, rarity FROM cards WHERE api_card_id=$1', [arg]);
+      'SELECT api_card_id, name, name_en, number, set_api_id, set_total, set_release, rarity, variants FROM cards WHERE api_card_id=$1', [arg]);
     if (!r.rows.length) { console.log('  no such card: ' + arg); return; }
     const c = r.rows[0];
     name = c.name; number = c.number;
@@ -1245,10 +1302,15 @@ async function yahooTest(arg, cardNumber) {
               '  [set ' + (ctx.setId || '-') + ' / total ' + (ctx.setTotal || '-') + ']\n');
   const r = await yahooJapanSearch(name, number, Object.assign({}, ctx, { withItems: true, explain: true }));
   if (!r) { console.log('  no usable result (nothing survived the filter)\n'); return; }
-  console.log('  median   $' + r.price + '  (JPY ' + r.priceYen + ')');
+  console.log('  median   ' + (r.price ? '$' + r.price + '  (JPY ' + r.priceYen + ')'
+                                     : 'none -- no base-printing sample (see other printings)'));
   console.log('  kept     ' + r.count);
   console.log('  rejected ' + r.rejected);
-  console.log('  source   ' + r.source + '\n');
+  console.log('  source   ' + r.source);
+  console.log('  other printings set aside  ' + (r.printingsExcluded || 0));
+  for (const v of (r.variantPrices || []))
+    console.log('    ' + v.variant.padEnd(20) + ' $' + v.price + '  (JPY ' + v.priceYen + ', ' + v.count + ' sales) -- its own row');
+  console.log('');
   for (const l of (r.items || []).slice(0, 10))
     console.log('    $' + String(l.price).padEnd(9) + ' ' + String(l.title).slice(0, 54));
   console.log('');
@@ -1329,7 +1391,7 @@ async function jpCheck(lang, ...flags) {
     if (/^yahoojp/.test(src)) {
       checkedAgainst = 'Yahoo';
       const r = await yahooJapanSearch(c.name, c.number, jpCtx(c));
-      if (r) rechecked = r.price;
+      if (r && r.price) rechecked = r.price;   // price null = only another printing had a sample
       // Yahoo genuinely losing a listing is a real signal for a Yahoo price:
       // it means the comparable that justified this number is gone.
       else verdict = 'no Yahoo comparable now — this price is unsupported';
@@ -1961,6 +2023,29 @@ async function rarityFill(lang, ...flags) {
   console.log('');
 }
 
+// Other printings' prices that came back with a result (T4: Yahoo mirror
+// medians), one row each, tagged in price_history.variant. Written whether
+// or not the base price wins the source-rank gate: a mirror is a different
+// product, not a competing claim on the base, and nothing else stores a
+// Yahoo mirror price. The headline readers never show these as the card's
+// price (printsql.basePrintingSql); /api/history charts them as their own
+// series.
+async function writeVariantPrices(card, res) {
+  if (!db || !res || !Array.isArray(res.variantPrices)) return 0;
+  let n = 0;
+  for (const v of res.variantPrices) {
+    if (!(v.price > 0) || !/^reverse/.test(v.variant)) continue;
+    const r = await db.query(
+      `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition, variant, source_meta)
+       VALUES ($1,$2,$3,'yahoojp','raw_nm',$4,$5)`,
+      [card.api_card_id, v.price, v.source, v.variant,
+       JSON.stringify({ priceYen: v.priceYen, count: v.count, fx: 'JPY_PER_USD ' + JPY_PER_USD })])
+      .catch(e => { console.log(`  variant write failed ${card.api_card_id} ${v.variant}: ${e.message}`); return null; });
+    if (r) { n++; console.log(`      + ${v.variant} $${v.price} (${v.count} sales) — its own row, never the base`); }
+  }
+  return n;
+}
+
 async function safePriceFor(card) {
   const isJP = /[\u3040-\u30ff\u4e00-\u9faf]/.test(card.name) ||
                String(card.api_card_id).startsWith('ja-');
@@ -2069,7 +2154,7 @@ async function safePrices(langFilter, ...flags) {
 
   const rows = await db.query(`
     SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_name, c.set_release,
-      c.set_api_id, c.set_total,
+      c.set_api_id, c.set_total, c.variants, c.name_en,
       COALESCE((SELECT price_usd FROM price_history p
                 WHERE p.card_api_id = c.api_card_id
                 ORDER BY recorded_at DESC LIMIT 1), 0) AS last_price,
@@ -2105,6 +2190,7 @@ async function safePrices(langFilter, ...flags) {
 
   for (const card of todo) {
     const res = await safePriceFor(card);
+    await writeVariantPrices(card, res);
     done++;
     const pct = ((done / todo.length) * 100).toFixed(1);
     const eta = Math.round(((Date.now() - t0) / 60000 / done) * (todo.length - done));
@@ -2265,7 +2351,7 @@ async function testSources(arg1, arg2) {
     if (isJP) {
       process.stdout.write('  Yahoo Auctions JP ... ');
       const y = await yahooJapanSearch(card.name, card.number, jpCtx(card));
-      if (y) {
+      if (y && y.price) {
         console.log('OK');
         console.log(`    median  ¥${y.priceYen.toLocaleString()}  =  $${y.price}`);
         console.log(`    sample  ${y.count} listings   source ${y.source}`);
@@ -4836,7 +4922,7 @@ async function refreshDue(lang, ...flags) {
   // Latest real price and when it was taken, per card
   const rows = await db.query(`
     SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_name, c.set_api_id,
-           c.set_total, c.set_release,
+           c.set_total, c.set_release, c.variants, c.name_en,
            lp.price_usd, lp.recorded_at, lp.source AS held_source,
            EXTRACT(EPOCH FROM (NOW() - lp.recorded_at)) / 3600 AS age_hours
     FROM cards c
@@ -4935,6 +5021,7 @@ async function refreshDue(lang, ...flags) {
     }
     const card = batch[i];
     const res = await safePriceFor(card);
+    await writeVariantPrices(card, res);
 
     if (res && res.price > 0) {
       // A lower-confidence source must never replace a higher-confidence

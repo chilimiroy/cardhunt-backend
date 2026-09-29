@@ -77,7 +77,11 @@ ok(reads >= 14, `scanned ${reads} reads of cards — fewer than 14 means the sca
   fs.writeFileSync(tmp, src);
   const { out } = unfilteredReads(tmp);
   fs.unlinkSync(tmp);
-  ok(out.length === 2, 'scanner catches both trending reads once the filter is removed (got ' + out.length + ')');
+  // Every card join in trending.js — 4 since the base-printing rule joined
+  // cards inside each CTE (T2). Counted, not hard-coded, so a new read
+  // cannot shrink the self-test silently.
+  const all = (src.match(/\b(FROM|JOIN)\s+cards\b/g) || []).length;
+  ok(all >= 2 && out.length === all, 'scanner catches every trending read once the filter is removed (got ' + out.length + ' of ' + all + ')');
 })();
 
 // The server READS the catalogue; ingest writes it, under our ids. The one

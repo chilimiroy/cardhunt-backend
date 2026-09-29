@@ -1514,10 +1514,11 @@ async function jpCheckBoth(lang, ...flags) {
     let cls;
     if (yNow == null && mirrors.length) cls = 'MIRROR — base none now, only another printing sold';
     else if (yNow == null)             cls = 'GONE — no Yahoo base comparable now';
-    else if (near(yNow, c.yp) && tNow && Math.max(yNow / tNow, tNow / yNow) > minRatio)
-                                        cls = 'HOLDS — Yahoo reproduces, still far from Yuyu-tei';
-    else if (tNow && Math.max(yNow / tNow, tNow / yNow) <= minRatio)
-                                        cls = 'RESOLVED — Yahoo now agrees with Yuyu-tei';
+    // "Agrees" is jpcheck's own 0.6-1.67 band, never "under minRatio": the
+    // first run called a 4.99x pair (ja-CP5-38, $114.65 vs $571.97) agreed.
+    else if (tNow && near(yNow, tNow)) cls = 'RESOLVED — Yahoo now agrees with Yuyu-tei';
+    else if (near(yNow, c.yp) && tNow)  cls = 'HOLDS — Yahoo reproduces, still ' +
+                                              Math.max(yNow / tNow, tNow / yNow).toFixed(1) + 'x from Yuyu-tei';
     else if (!near(yNow, c.yp))         cls = 'MOVED — Yahoo now differs from what we stored';
     else                                cls = 'HOLDS — Yahoo reproduces (Yuyu-tei no longer lists it)';
     const key = cls.split(' ')[0];

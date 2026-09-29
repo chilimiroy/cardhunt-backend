@@ -32,7 +32,7 @@ TCGdex · pokemontcg.io · Limitless
 | Frontend | `cardhunt_preview.html` | Render, at **`/app`** — local file is the fallback |
 | API | `server.js` v5.6.0 | Render |
 | Database | Supabase Postgres | `cards`, `price_history`, `alerts`, `portfolio`, `users` |
-| Ingestion | `ingest.js` v5.8.0 | Local only — never deploy. **Tracked** in git (T2) |
+| Ingestion | `ingest.js` v5.9.0 | Local only — never deploy. **Tracked** in git (T2) |
 
 ## The module map
 
@@ -77,7 +77,12 @@ package.json  .gitignore
 
 Gitignored, because each needs a database URL or a residential IP:
 `sourcerank.js`, `jpreconcile.js`, `tcgdexprobe.js`,
-`tcgdexharvest.js`, `ebayprobe.js`, `yahoogate.js`, `gradeprices.js`.
+`ebayprobe.js`, `yahoogate.js`, `gradeprices.js`.
+
+**Tracked since 2026-09-29 (T3):** `tcgdexharvest.js` (it writes prices —
+the `ingest.js` case), `tcgsetname.js` (ingest requires it) and
+`cardhunt-redesign.html` (the design reference; sample data, never served,
+never a base). None is served; `approute.test.js` asserts the 404s.
 
 **`ingest.js` is TRACKED since 2026-09-29 (TASK T2) — and still never
 deployed.** Those are different questions. Render runs `npm start` →
@@ -317,11 +322,19 @@ only; that is a script run deliberately, the `gradeprices.js` shape.
   pokemontcg.io" is true of the Render path and not of the stored prices.
   Moving P to TCGdex (`tcgdexprices`, validated 37/37 at 1.020x) is the
   legitimate route; it has not been run at catalogue scale.
+  **2026-09-29 (T1): measured, and half moved.** See the lesson "The stored
+  price was right 90% of the time — and wrong by SET, not by H-number".
+  `safePriceFor` now asks TCGdex FIRST and the internal API only as a
+  set-checked fallback — but TCGdex-first is **inert until one full
+  `node tcgdexharvest.js en` has recorded shared products**
+  (`tcgdex_product_conflicts`); until then it says so and falls back.
+  The internal API is not stopped: stop it once that harvest's coverage is
+  measured.
 - **`yahoojp_avg_N`** — Yahoo's own average, lots and slabs included, used
   only when a search returns no items. Ungated by construction; 0 rows held.
 - **`node ingest.js scrape`** still exists (`scrapeEbaySold`). Banned, never
   run — T8's reasoning says delete it.
-- ~~Variant is gated nowhere~~ — built in T10. **Still open:** stored Yahoo medians (path Q) carry no printing, so a mirror sale can enter a base median; and the card page's "Typical" grade-price block does not follow the printing selector.
+- ~~Variant is gated nowhere~~ — built in T10. ~~Stored Yahoo medians carry no printing~~ — T4 `28ea4be`: a title stating a reverse/mirror leaves the base median and gets its own `variant` row. **Existing** Yahoo base rows are NOT repaired: of 191 JP cards holding both, 143 Yahoo bases sit >5x the Yuyu-tei base, 54 >20x — `jpcheck` over them is the measurement still owed. ~~"Typical" ignores the printing selector~~ — `a9ba5e3`.
 
 ---
 
@@ -590,7 +603,7 @@ node approute.test.js        # 47   /app serves, and the project root does not l
 node cardmatch.test.js       # 27   the gate
 node cardmatch2.test.js      # 29
 node cardmatch3.test.js      # 44   NOT_A_SINGLE_CARD word boundaries, both directions
-node cardparse.test.js       # 138  free text -> card identity (170 with --db:
+node cardparse.test.js       # 156  free text -> card identity (191 with --db:
                              #      reachable-by-name cases + SQL/JS fold agree)
 node ebaycall.test.js        # 70   every guard tripped
 node ebayquota.test.js       # 25   the quota gate
@@ -627,7 +640,8 @@ node marketwait.test.js      # 12   no /api/market request; one /api/listings pe
 node nofabricated.test.js    # 48   no password/card input, no invented shops/holdings/prices (--deployed: Render's HTML too)
 node nosoldscrape.test.js    # 17   no eBay sold-page scrape; real /api/market handler, network stubbed (--live: +3)
 node gateaudit.test.js       # 57   T9: every path reaches the gates it needs, and reports (--live: +8)
-node variants.test.js        # 72   T10: printings from the REAL TCGdex shape; the gate; every reader; the page (--db: +6)
+node variants.test.js        # 75   T10: printings from the REAL TCGdex shape; the gate; every reader; the page; Typical follows the printing (--db: +6)
+node pricesource.test.js     # 49   T1/T4: set-checked TCGplayer match; shared products refused; Yahoo mirrors kept out of the base
 ```
 
 Run them all:
@@ -842,6 +856,37 @@ describing realised sales, that is the mistake already made once with stored
 prices. The row carries the label rather than the envelope, for the same reason
 eBay's attribution does: a row gets rendered far from anything that would
 otherwise explain it.
+
+## The stored price was right 90% of the time — and wrong by SET, not by H-number (T1, 2026-09-29)
+2,767 English cards (12 per set, all of e-Card), stored non-TCGdex price vs
+TCGdex live: **90% within 10%**, 8% drift 10-40% (mostly sub-$1 and newest
+sets), 2.3% wrong by >40%. By era, >40% wrong: every era 0-3% **except
+Expedition, 27 of 59**.
+
+The hypothesis was H-numbering (Aquapolis/Skyridge holos are H1-H32). It
+was **falsified**: those H-numbered holos agreed **54 of 54**. Expedition
+numbers plainly 1-165, and its holos AND rares were wrong.
+
+One search showed why: `tcgPlayerSearch` accepted the collector number in
+ANY set, and "Expedition **Base Set**" ranks Base Set products first.
+Alakazam 001 took Base Set 2 001/130 ($55.51) or Base Set 001/102 ($69.72)
+— the stored history alternates between exactly those — for a $233.32
+card. Same class: Sun & Moon is "SM Base Set" on TCGplayer.
+
+**But TCGdex was wrong in the other direction on a subset:** Trainer
+Gallery TG16 Mimikyu V ($86.55, which we held correctly) is mapped to the
+main-set 068/172 product ($3.62). Neither source is blindly right, which is
+why the fix has two halves:
+- `tcgsetname.js` — a search hit counts only in TCGplayer's own name for
+  our set (normaliser + 22 aliases measured on 161 sets; trainer kits
+  deliberately refused — the merged kit set numbers each half from 1).
+- `tcgdexprice.productConflicts` — a product id TCGdex gives to two cards
+  is trusted for neither; the same rule catches T4's Alakazam #1/#33
+  sharing one Cardmarket product.
+
+Japanese: TCGdex has 45% of the sampled JA cards at all, TCGplayer pricing
+for none, Cardmarket at a median 0.45x of what we hold. It is no
+replacement for Yuyu-tei/Yahoo; the 72,174 rows are an English question.
 
 ## The master-ball mirror, found for the third time
 A collector number does not identify one card. Master-ball mirrors share the

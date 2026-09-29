@@ -1,5 +1,38 @@
 # CardHunt — Progress Log
 
+## 2026-09-29 (later) — stored prices measured; set-blind match found; printings finished
+
+**T1, measured first.** 3,684 cards (2,767 EN: 12 per set + all e-Card;
+917 JA) stored vs TCGdex live. EN: 90% within 10%, 8% drift, 2.3% >40%.
+By era every one 0-3% wrong except **Expedition 27/59**. H-number
+hypothesis falsified — Aquapolis/Skyridge H-holos 54/54 agree. Cause:
+`tcgPlayerSearch` set-blind; "Expedition Base Set" ranks Base Set first
+(Alakazam 001 -> Base Set 2 $55.51 / Base Set $69.72, the exact stored
+swing). TCGdex wrong the other way on TG16 Mimikyu V ($3.62 main-set
+product vs $86.55). JA: TCGdex has 45% of cards, TCGplayer for none,
+Cardmarket median 0.45x held — not a JA replacement.
+`6d5bdad`: set check (`tcgsetname.js`, 22 aliases measured over 161 sets),
+TCGdex-first (inert until a full harvest records shared products), harvest
+two-phase with shared-product refusal (TCGplayer AND Cardmarket — T4's
+Alakazam item), writers record source_meta. **Not yet run:** the full
+`node tcgdexharvest.js en`; the internal API is still the fallback.
+
+**T3.** `6d5bdad`: tcgdexharvest.js tracked (with its T1 change — its
+pre-change text was never in git). `483afda`: cardhunt-redesign.html
+tracked as the design reference, 404 asserted.
+
+**T4.** `28ea4be` Yahoo medians split by printing — live, ja-SV2a-001
+Bulbasaur: all 3 surviving sales were Master Ball mirrors (old: ~$22 base);
+now base none, reverse-masterball $22.29 own row. Existing Yahoo base rows
+NOT repaired (143/191 >5x Yuyu-tei, 54 >20x) — jpcheck owed.
+`a9ba5e3` Typical follows the Printing box — browser: Alakazam #1 Reverse
+PSA 10 $859.18 (=122.74x7, was 233.32x7); JA Master Ball "no price held".
+`5a25539` letter-suffixed numbers 0/32 -> 32/32 findable by N/T; LPAD
+truncation found on the way ('103A' -> '103').
+
+**T2 (manifest en/ja) not started** — waiting for Chrome to close (369 MB
+free with it open).
+
 ## 2026-09-29 — ingest.js tracked; sold scrape gone; every gate audited
 
 **T2.** `17695f4`. ingest.js tracked (scanned first: env-only credentials,

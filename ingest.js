@@ -4027,18 +4027,28 @@ async function priceCheck(lang, setId) {
   console.log(`  PRICE CHECK — ${lang} / ${setId}`);
   console.log(`${'='.repeat(78)}\n`);
 
-  const rows = await db.query(`
-    SELECT c.api_card_id, c.name, c.number, c.rarity,
-           (SELECT price_usd FROM price_history p
+  // "ours" is the card page's number: ungraded, base printing, latest real
+  // row (/api/cards/:id's LATERAL). It used to be the latest row of ANY
+  // grade or printing — a slab or a reverse could be what got checked (T2,
+  // 2026-09-30). And the rarity filter below matches no card at all in a
+  // pre-2016 set, so Expedition printed an empty table; those sets now
+  // check their most valuable cards instead.
+  const ours = `(SELECT price_usd FROM price_history p
             WHERE p.card_api_id = c.api_card_id AND p.source NOT LIKE 'estimate%'
-            ORDER BY recorded_at DESC LIMIT 1) AS price
+              AND p.grade IS NULL AND ${require('./printsql').basePrintingSql('p', 'c')}
+            ORDER BY recorded_at DESC LIMIT 1)`;
+  const pick = rarityClause => db.query(`
+    SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_name, ${ours} AS price
     FROM cards c
-    WHERE c.set_api_id = $1 AND c.api_card_id LIKE $2
-      AND c.rarity IN ('Hyper Rare','Special Illustration Rare','Illustration Rare','Rare Ultra')
-    ORDER BY (SELECT price_usd FROM price_history p
-              WHERE p.card_api_id = c.api_card_id AND p.source NOT LIKE 'estimate%'
-              ORDER BY recorded_at DESC LIMIT 1) DESC NULLS LAST
+    WHERE c.set_api_id = $1 AND c.api_card_id LIKE $2 ${rarityClause}
+    ORDER BY 6 DESC NULLS LAST
     LIMIT 12`, [setId, lang + '-%']);
+  let rows = await pick(`AND c.rarity IN ('Hyper Rare','Special Illustration Rare','Illustration Rare','Rare Ultra')`);
+  if (!rows.rows.length) {
+    console.log('  (no HR / SIR / IR / Ultra in this set — checking its 12 most valuable cards)');
+    console.log('');
+    rows = await pick('');
+  }
 
   console.log('  #     card                       rarity                  ours      live TCGPlayer');
   console.log('  ' + '-'.repeat(74));
@@ -4047,7 +4057,11 @@ async function priceCheck(lang, setId) {
     // pricecheck must ask the same question the price writer asks.
     const rpc = reprintPricing({ api_card_id: c.api_card_id, number: c.number });
     const live = rpc ? await tcgPlayerSearch(c.name, rpc.tcgSet, rpc.number, c.rarity, { reprint: rpc })
-                     : await tcgPlayerSearch(c.name, setId, c.number);
+                     // The writer's exact question (safePriceFor): the set NAME, and
+                     // the set-name check. This passed the set ID — "Charizard ex
+                     // sv03.5" — with no check, and read "no match" on 151, Base Set
+                     // and Expedition, where the writer finds the product.
+                     : await tcgPlayerSearch(c.name, c.set_name, c.number, c.rarity, { setId });
     const ours = c.price ? '$' + Number(c.price).toFixed(2) : '   -';
     const theirs = live ? '$' + Number(live.price).toFixed(2) + '  (' + live.matchedBy + ')' : 'no match';
     const off = (c.price && live && Math.abs(c.price - live.price) / live.price > 0.4) ? '  MISMATCH' : '';

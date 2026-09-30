@@ -1916,12 +1916,16 @@ const EBAY_SITES = [
   { id: 'EBAY_US', country: 'US', currency: 'USD' },
   { id: 'EBAY_GB', country: 'GB', currency: 'GBP' },
   { id: 'EBAY_AU', country: 'AU', currency: 'AUD' },
-  { id: 'EBAY_CA', country: 'CA', currency: 'CAD' }
+  { id: 'EBAY_CA', country: 'CA', currency: 'CAD' },
+  // DE (2026-09-30): only after the language gate read German words for
+  // other languages and the junk/slab/reprint vocabulary was tested on three
+  // sets of real DE titles (eusites.test.js); aspect names are DE's own
+  // (cardmatch.EBAY_SITE_ASPECTS) — an English one is ignored there.
+  { id: 'EBAY_DE', country: 'DE', currency: 'EUR' }
 ];
 // Not searched yet, each with the reason — reported on every response so a
 // short list is never mistaken for every marketplace having been asked.
 const EBAY_SITES_PENDING = {
-  EBAY_DE: 'German-language titles: the language gate must first read German words for other languages ("Spanisch", "Italienisch") — tested on real DE titles',
   EBAY_FR: 'French-language titles: junk, grade and language vocabulary not yet tested on real FR titles',
   EBAY_IT: 'machine-translated titles ("Portachiavi", "30° Celebrazione"): vocabulary not yet taught',
   EBAY_ES: 'machine-translated titles: vocabulary not yet taught',

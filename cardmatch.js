@@ -669,6 +669,11 @@ const NOT_A_SINGLE_CARD_TERMS = [
   // "fan art" as eBay translates it: "Opera d'arte di un fan", "Obra de arte de un fan"
   'di un fan', 'de un fan',
   'personalizzate', 'personalizzati', 'personalizadas', 'personalizados', 'carta de metal',
+  // third check (12 fresh cards, production gate): display and metal cards,
+  // art-case wordings, and a whole master set in a binder as one listing
+  'carta da esposizione', 'tarjeta de exhibición', 'tarjeta de exhibicion',
+  'scheda metallo', 'carta metallica', 'tarjeta metálica', 'tarjeta metalica', 'tarjeta de metal',
+  'opera estesa', 'arte inserto', 'master set',
   'supporto magnetico', 'soporte magnético', 'soporte magnetico', 'espositore',
   // keychains
   'portachiavi', 'llavero', 'porte-clés', 'porte-cles', 'schlüsselanhänger',

@@ -227,16 +227,24 @@ async function fullView(b) {
 
   // ═══ Every site, every page (T1) ═══
   {
-    // US and GB share items 0-149; GB also has 150-349 of its own.
-    const b = build(0, { sites: { EBAY_US: { total: 150 }, EBAY_GB: { total: 350, currency: 'GBP' },
-                                  EBAY_AU: { total: 0, currency: 'AUD' }, EBAY_CA: { total: 10, currency: 'CAD' } } });
+    // US and GB share items 0-149; GB also has 150-349 of its own. Every
+    // other site in the REAL EBAY_SITES answers with nothing (total 0), so
+    // this keeps working as sites are added.
+    const b0 = build(0);
+    const siteIds = b0.EBAY_SITES.map(x => x.id);
+    const sites = {};
+    for (const id of siteIds) sites[id] = { total: 0, currency: (b0.EBAY_SITES.find(x => x.id === id) || {}).currency };
+    Object.assign(sites, { EBAY_US: { total: 150 }, EBAY_GB: { total: 350, currency: 'GBP' },
+                           EBAY_CA: { total: 10, currency: 'CAD' } });
+    const b = build(0, { sites });
     const v = await fullView(b);
-    const firstMps = b.calls.slice(0, 4).map(c => c.mp).sort().join(',');
-    ok(firstMps === 'EBAY_AU,EBAY_CA,EBAY_GB,EBAY_US' && b.calls.slice(0, 4).every(c => c.offset === 0 && !c.background),
-       'page 1 of every site first, foreground: ' + JSON.stringify(b.calls.slice(0, 4)));
+    const n = siteIds.length;
+    const firstMps = b.calls.slice(0, n).map(c => c.mp).sort().join(',');
+    ok(firstMps === siteIds.slice().sort().join(',') && b.calls.slice(0, n).every(c => c.offset === 0 && !c.background),
+       'page 1 of every site first, foreground: ' + JSON.stringify(b.calls.slice(0, n)));
     ok(v.first.pending.length === 1 && v.first.pending[0].marketplace === 'EBAY_GB' && v.first.pending[0].nextOffset === 200,
        'the first answer says what is still owed: ' + JSON.stringify(v.first.pending));
-    const cont = b.calls.slice(4);
+    const cont = b.calls.slice(n);
     ok(cont.length === 1 && cont[0].mp === 'EBAY_GB' && cont[0].offset === 200 && cont[0].background,
        'the continuation fetches only what is owed, in the background: ' + JSON.stringify(cont));
     ok(v.final.kept === 350 && v.final.listings.length === 350,
@@ -244,8 +252,8 @@ async function fullView(b) {
     ok(v.st.sites.EBAY_GB.duplicates === 150 && v.st.sites.EBAY_US.kept === 150,
        'a row on two sites keeps its US copy: ' + JSON.stringify(v.st.sites.EBAY_GB));
     ok(v.final.pages.complete === true && v.final.pending.length === 0, 'complete once every site is exhausted');
-    ok(v.final.pages.calls === 5, `calls counted: 5 (got ${v.final.pages.calls})`);
-    ok(v.final.sitesNotSearched && v.final.sitesNotSearched.EBAY_DE, 'the sites NOT searched are named, with reasons');
+    ok(v.final.pages.calls === n + 1, `calls counted: ${n + 1} (got ${v.final.pages.calls})`);
+    ok(v.final.sitesNotSearched && v.final.sitesNotSearched.EBAY_JP, 'the sites NOT searched are named, with reasons');
   }
   {
     // A refusal is sticky: US refuses item 7 (a Celebrations title), GB's

@@ -81,7 +81,12 @@ for (const [t, c] of [
   ['Magikarp IR 203/193 Paldea Evolved - Custodia artistica estesa magnetica 🧲 per magikarp', 'karp'],
   ['The Pokémon Company Pikachu & Zekrom GX 33/181 SM-Team Up Ultra Rara (Portachiavi)'.replace('Pikachu & Zekrom GX 33/181 SM-Team Up', 'Celebi V 245/264 Fusion Strike'), 'celebi'],
   ['Opera d\'arte di un fan di Gengar Fossil Holo 5/62 1° Edizione'.replace('Gengar Fossil Holo 5/62', 'Charizard Base Set Holo 4/102'), 'zard'],
-  ['Lotto Carte Pokemon Venusaur 15/102 Set Base Bellissimo Ultra Raro Starter', 'venu']
+  ['Lotto Carte Pokemon Venusaur 15/102 Set Base Bellissimo Ultra Raro Starter', 'venu'],
+  // the third check, on 12 cards nobody had looked at
+  ['Charizard 4/102 Base Set Gold Foil Secret rara carta da esposizione', 'zard'],
+  ['Tarjeta metálica Celebi V 245/264 Gold Secret rara Fusion Strike inglesa.', 'celebi'],
+  ['Pokemon Charizard 4/102 Base Set Custodia Opera Estesa', 'zard'],
+  ['Pokemon Fusion Strike Master Set Carpeta 245/345 Celebi V 245/264', 'celebi']
 ]) {
   const v = V(t, c);
   ok('refused: ' + t.slice(0, 60), !v.ok && /not a single card/.test(v.reason || ''), v.reason);

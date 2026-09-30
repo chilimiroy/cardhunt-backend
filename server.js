@@ -1924,12 +1924,17 @@ const EBAY_SITES = [
   { id: 'EBAY_DE', country: 'DE', currency: 'EUR' },
   // FR: French sellers mark French cards "FR" / "VF" (cardmatch LANG_CASE_TOKENS);
   // ~40% of what FR adds for an English card is the French card, refused.
-  { id: 'EBAY_FR', country: 'FR', currency: 'EUR' }
+  { id: 'EBAY_FR', country: 'FR', currency: 'EUR' },
+  // IT: eBay MACHINE-TRANSLATES US titles here ("Portachiavi", "30°
+  // Celebrazione", "Hecho por Ventilador" on ES). Vocabulary taught and
+  // tested on three sets of real IT titles (eusites.test.js); a refusal on
+  // any site stays a refusal everywhere (mergeEbaySite), so a translation
+  // cannot overturn the English title's verdict.
+  { id: 'EBAY_IT', country: 'IT', currency: 'EUR' }
 ];
 // Not searched yet, each with the reason — reported on every response so a
 // short list is never mistaken for every marketplace having been asked.
 const EBAY_SITES_PENDING = {
-  EBAY_IT: 'machine-translated titles ("Portachiavi", "30° Celebrazione"): vocabulary not yet taught',
   EBAY_ES: 'machine-translated titles: vocabulary not yet taught',
   EBAY_JP: 'refused by eBay — 409 "12019: marketplace not supported"'
 };

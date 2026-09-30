@@ -62,6 +62,14 @@ function suspectLanguage(title, cardLang) {
     if (code === cardLang) continue;
     const m = t.match(re); if (m) return { code, word: m[0] };
   }
+  // Uppercase language codes, case-sensitive: eBay DE sellers mark a German
+  // card "… Holo DE 33/181". This reader missed it on its first live run.
+  // Deliberately looser than the gate — any uppercase DE/FR/ITA/ESP is a
+  // suspect for a person to read, preposition or not.
+  for (const [code, re] of [['de', /(?<![A-Za-z])DE(?![A-Za-z])/], ['fr', /(?<![A-Za-z])FR(?![A-Za-z])/]]) {
+    if (code === cardLang) continue;
+    const m = t.match(re); if (m) return { code, word: m[0] };
+  }
   return null;
 }
 

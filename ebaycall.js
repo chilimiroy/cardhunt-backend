@@ -27,6 +27,7 @@
 'use strict';
 
 const quota = require('./ebayquota');
+const { AsyncLocalStorage } = require('async_hooks');
 // ?debug=1 only; every call below is a no-op outside a debug request.
 const timing = require('./timing');
 
@@ -131,7 +132,7 @@ function queueState() {
            foregroundMaxWaitMs: FOREGROUND_MAX_WAIT_MS,
            running: { foreground: running.fg, background: running.bg },
            waiting: { foreground: lanes.fg.length, background: lanes.bg.length },
-           reservedQuota: reserved };
+           reservedQuota: reserved, reservedTooling };
 }
 
 // ── Quota, still checked at the moment of spending ──
@@ -139,17 +140,36 @@ function queueState() {
 // runs under its own short lock and counts calls already allowed but not yet
 // recorded (`reserved`): three jobs at RESERVE+1 cannot all see "allowed".
 let quotaLock = Promise.resolve();
-let reserved = 0;
-function quotaGate(db, background) {
+let reserved = 0, reservedTooling = 0;
+function quotaGate(db, background, origin) {
   const run = quotaLock.then(async () => {
-    const g = await quota.check(db, { background, pending: reserved });
-    if (g.allowed) reserved++;
+    const g = await quota.check(db, { background, origin, pending: reserved,
+                                      pendingTooling: reservedTooling });
+    if (g.allowed) { reserved++; if (origin === 'tooling') reservedTooling++; }
     return g;
   });
   quotaLock = run.then(() => {}, () => {});
   return run;
 }
-function unreserve() { if (reserved > 0) reserved--; }
+function unreserve(origin) {
+  if (reserved > 0) reserved--;
+  if (origin === 'tooling' && reservedTooling > 0) reservedTooling--;
+}
+
+// ── Who is spending (TASK T2, 2026-09-30) ─────────────────────
+// Every call is user, background or tooling; ebayquota counts and caps them
+// apart. An explicit `origin` wins. Otherwise the REQUEST that caused the
+// call decides — server.js runs each request inside withOrigin(): /api/ebay/*
+// probes, and anything sent `X-CardHunt-Origin: tooling`, are tooling — so a
+// probe's token exchange and every page it fetches are tooling without each
+// of twenty call sites having to remember to say so. Outside any request,
+// `background` decides, as before.
+const originCtx = new AsyncLocalStorage();
+function withOrigin(origin, fn) { return originCtx.run({ origin }, fn); }
+function currentOrigin() { const s = originCtx.getStore(); return s ? s.origin : null; }
+function originFor(opts) {
+  return quota.normOrigin((opts && opts.origin) || currentOrigin(), opts && opts.background);
+}
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -176,6 +196,7 @@ function logCall(o) {
     (o.kind || 'search').padEnd(6),
     o.cardId ? String(o.cardId).padEnd(18) : '-'.padEnd(18),
     o.grade ? String(o.grade).padEnd(8) : '-'.padEnd(8),
+    o.origin && o.origin !== 'user' ? '[' + o.origin + ']' : '',
     'status=' + (o.status === undefined ? '-' : o.status),
     'n=' + (o.count === undefined || o.count === null ? '-' : o.count),
     'left=' + (o.remaining === undefined || o.remaining === null ? '?' : o.remaining),
@@ -204,7 +225,7 @@ function redactHeaders(h) {
  *
  *   { ok:true,  data, status, remaining }
  *   { ok:false, blocked:'disabled'  , reason }   kill switch
- *   { ok:false, blocked:'quota'     , reason, remaining, resetsInMinutes }
+ *   { ok:false, blocked:'quota'     , reason, limitHit, liftsAt, remaining, resetsInMinutes }
  *   { ok:false, blocked:'rate-limit', reason }   429 breaker open
  *   { ok:false, error:true, status, reason }     HTTP or network failure
  *   { ok:true,  dryRun:true, request }           nothing was sent
@@ -212,8 +233,10 @@ function redactHeaders(h) {
 async function fetchEbay(db, opts) {
   opts = opts || {};
   const { url, token, kind = 'search', background = false, dryRun = false,
-          meta = {}, countFrom, fetchImpl, method = 'GET', body = null,
+          countFrom, fetchImpl, method = 'GET', body = null,
           basic = null } = opts;
+  const origin = originFor(opts);
+  const meta = Object.assign({}, opts.meta || {}, { origin });
   // The token exchange is a POST with HTTP Basic and a form body; searches
   // are GETs with a bearer. Both must pass through here or token calls go
   // uncounted — which is precisely how the expires_in bug spent the daily
@@ -274,15 +297,19 @@ async function fetchEbay(db, opts) {
     // THE quota check, at the moment of spending, counting calls already
     // allowed and not yet recorded, so two callers cannot both see the same
     // "allowed" for the same last remaining call.
-    const gate = await timing.time('ebay:quota-check', () => quotaGate(db, background), { kind });
+    const gate = await timing.time('ebay:quota-check', () => quotaGate(db, background, origin), { kind });
     if (!gate.allowed) {
       logCall({ ...meta, kind, status: 'quota', remaining: gate.remaining,
-                note: 'gate refused' });
-      return { ok: false, blocked: 'quota', reason: gate.reason,
-               remaining: gate.remaining, resetsInMinutes: gate.resetsInMin };
+                note: 'gate refused: ' + (gate.limitHit || '?') });
+      // resetsInMinutes is when THIS refusal lifts — the hour for the
+      // hourly ceiling, midnight for the rest.
+      const lifts = gate.liftsInMin != null ? gate.liftsInMin : gate.resetsInMin;
+      return { ok: false, blocked: 'quota', reason: gate.reason, origin,
+               limitHit: gate.limitHit || null, liftsAt: gate.liftsAt || null,
+               remaining: gate.remaining, resetsInMinutes: lifts };
     }
     let unreserved = false;
-    const done = () => { if (!unreserved) { unreserved = true; unreserve(); } };
+    const done = () => { if (!unreserved) { unreserved = true; unreserve(origin); } };
     try { return await spend(); } finally { done(); }
 
   async function spend() {
@@ -309,7 +336,7 @@ async function fetchEbay(db, opts) {
       const ms = Date.now() - t0;
 
       // The call happened, so it counts — whatever the status.
-      await timing.time('ebay:quota-record', () => quota.record(db, { headers: r.headers, kind }), { kind });
+      await timing.time('ebay:quota-record', () => quota.record(db, { headers: r.headers, kind, origin }), { kind });
       done();            // recorded: the table carries it now, not the reservation
 
       const remaining = headerInt(r.headers, 'x-ebay-c-ratelimit-remaining');
@@ -400,6 +427,7 @@ function shortDetail(data, body) {
 
 module.exports = {
   fetchEbay, ebayEnabled, logCall, redactHeaders,
+  withOrigin, currentOrigin, originFor,
   breakerState, tripBreaker, resetBreaker,
   MIN_INTERVAL_MS, MAX_5XX_RETRIES,
   MAX_CONCURRENT, MAX_BACKGROUND, FOREGROUND_MAX_WAIT_MS, queueState,

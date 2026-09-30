@@ -14,12 +14,19 @@ let pass = 0, fail = 0;
 const chk = (l, c) => { c ? pass++ : fail++;
   console.log('  ' + (c ? 'PASS' : 'FAIL') + '  ' + l); };
 
-function fakeDb(row) {
+// The hour row is separate from the day row (T1); `hour` defaults to empty.
+function fakeDb(row, hour) {
   return { query: async (sql) => {
-    if (/CREATE TABLE/i.test(sql)) return { rows: [] };
-    if (/INSERT INTO ebay_quota/i.test(sql) && /RETURNING/i.test(sql)) return { rows: [row] };
+    if (/CREATE TABLE|ALTER TABLE/i.test(sql)) return { rows: [] };
+    if (/INSERT INTO ebay_quota_hour/i.test(sql) && /RETURNING/i.test(sql)) return { rows: [hour || { calls: 0 }] };
+    if (/INSERT INTO ebay_quota\b/i.test(sql) && /RETURNING/i.test(sql)) return { rows: [row] };
     return { rows: [] };
   }};
+}
+// Records what record() writes, to prove the origin reaches the right column.
+function recordingDb() {
+  const sqls = [];
+  return { sqls, query: async (sql, params) => { sqls.push({ sql, params }); return { rows: [] }; } };
 }
 const base = { calls_made: 0, token_calls: 0, ebay_limit: null,
                ebay_remaining: null, ebay_reset: null };
@@ -89,6 +96,85 @@ const L = q.DAILY_LIMIT;
     chk(`${label} — reason given, not an empty result`,
         !g.allowed && typeof g.reason === 'string' && g.reason.length > 20);
   }
+
+  // ══ T1 — THE HOURLY CEILING, TRIPPED ══════════════════════════
+  // A ceiling that has never fired is indistinguishable from one that cannot.
+  console.log('\nHOURLY CEILING (T1)\n');
+  const H = q.HOURLY_LIMIT;
+  chk(`hourly ceiling ${H} bounds a runaway to at most a sixth of the day`, H * 6 <= L);
+  chk('  and is above the heaviest measured browsing hour (195)', H > 195 * 2);
+  chk('  and below the runaway hours it exists for (723, 713)', H < 713);
+  r = await q.check(fakeDb({ ...base, calls_made: 100 }, { calls: H - 1 }));
+  chk('one under the hourly ceiling — allowed', r.allowed);
+  r = await q.check(fakeDb({ ...base, calls_made: 100 }, { calls: H }));
+  chk('hourly ceiling reached, daily nearly untouched — REFUSED', !r.allowed);
+  chk('  refusal names the hourly limit', r.limitHit === 'hourly', r.limitHit);
+  chk('  reason is a sentence, not a code', /hourly ceiling is 600/.test(r.reason || ''), r.reason);
+  chk('  says when it lifts — within the hour', r.liftsInMin >= 1 && r.liftsInMin <= 60, r.liftsInMin);
+  chk('  liftsAt is the next UTC hour', /T\d\d:00:00\.000Z$/.test(r.liftsAt || ''), r.liftsAt);
+  r = await q.check(fakeDb({ ...base, calls_made: 100 }, { calls: H - 2 }), { pending: 2 });
+  chk('calls in flight count toward the hour', !r.allowed && r.limitHit === 'hourly');
+  for (const origin of ['user', 'background', 'tooling']) {
+    r = await q.check(fakeDb({ ...base }, { calls: H }), { origin });
+    chk(`  applies to ${origin} too — a runaway looks like a user`, !r.allowed && r.limitHit === 'hourly');
+  }
+  const t = new Date('2026-09-30T12:59:30Z');
+  chk('hour key is the UTC clock hour', q.hourKey(t) === '2026-09-30T12:00:00.000Z');
+  chk('  and rolls at HH:00', q.hourKey(new Date('2026-09-30T13:00:01Z')) === '2026-09-30T13:00:00.000Z');
+  chk('  30s before the hour, it lifts in 30s', q.msUntilHourReset(t) === 30e3);
+
+  // ══ T2 — TOOLING ALLOWANCE, TRIPPED ═══════════════════════════
+  console.log('\nTOOLING ALLOWANCE (T2)\n');
+  const T = q.TOOLING_DAILY;
+  chk(`tooling allowance ${T} is inside the daily limit, far below the soft stop`,
+      T < L * q.SOFT_STOP - q.RESERVE);
+  r = await q.check(fakeDb({ ...base, calls_made: 500, tooling_calls: T - 1 }), { origin: 'tooling' });
+  chk('tooling one under its allowance — allowed', r.allowed);
+  r = await q.check(fakeDb({ ...base, calls_made: 500, tooling_calls: T }), { origin: 'tooling' });
+  chk('tooling at its allowance — REFUSED', !r.allowed);
+  chk('  names the tooling allowance', r.limitHit === 'tooling', r.limitHit);
+  chk('  says it does not borrow', /rather than borrow from the user budget/.test(r.reason || ''), r.reason);
+  r = await q.check(fakeDb({ ...base, calls_made: 500, tooling_calls: T }), { origin: 'user' });
+  chk('the SAME state still serves a user — tooling is spent, the user budget is not', r.allowed);
+  r = await q.check(fakeDb({ ...base, calls_made: 500, tooling_calls: T }), { background: true });
+  chk('  and background work', r.allowed);
+  r = await q.check(fakeDb({ ...base, calls_made: 500, tooling_calls: T - 1 }),
+                    { origin: 'tooling', pendingTooling: 1 });
+  chk('tooling calls in flight count toward the allowance', !r.allowed && r.limitHit === 'tooling');
+  r = await q.check(fakeDb({ ...base, calls_made: L - 300 }), { origin: 'tooling' });
+  chk('tooling yields at the soft stop like background', !r.allowed && r.limitHit === 'soft-stop');
+  chk('origin defaults: background flag -> background', q.normOrigin(undefined, true) === 'background');
+  chk('origin defaults: nothing -> user', q.normOrigin(undefined, false) === 'user');
+  chk('an unknown origin never becomes a column name', q.normOrigin("x; DROP TABLE", false) === 'user');
+
+  console.log('\nRECORD WRITES THE ORIGIN\n');
+  for (const origin of ['user', 'background', 'tooling']) {
+    const d = recordingDb();
+    await q.record(d, { kind: 'search', origin });
+    const ins = d.sqls.filter(x => /INSERT INTO ebay_quota/.test(x.sql));
+    chk(`${origin}: day row and hour row both written`, ins.length === 2, ins.length);
+    chk(`  into ${origin}_calls`, ins.every(x => x.sql.includes(origin + '_calls')));
+  }
+
+  console.log('\nWHAT THE APP SHOWS (T3)\n');
+  const lv = (used, hour, extra) => q.status(fakeDb({ ...base, calls_made: used, ...(extra || {}) }, { calls: hour || 0 }));
+  let s = await lv(Math.floor(L * 0.49));
+  chk('49% — quiet', s.level === 'quiet' && !s.visible, s.level);
+  s = await lv(Math.floor(L * 0.50));
+  chk('50% — visible', s.level === 'notice' && s.visible, s.level);
+  s = await lv(100, Math.ceil(H * 0.5));
+  chk('50% of the HOUR — visible even when the day is quiet', s.visible, s.level);
+  s = await lv(Math.floor(L * 0.75));
+  chk('75% — warn', s.level === 'warn', s.level);
+  s = await lv(L - q.RESERVE);
+  chk('reserve reached — stopped, with a reason and when it lifts',
+      s.level === 'stopped' && s.reason && s.liftsAt && s.limitHit === 'daily', JSON.stringify([s.level, s.limitHit]));
+  s = await lv(100, H);
+  chk('hourly ceiling — stopped, lifting within the hour',
+      s.level === 'stopped' && s.limitHit === 'hourly' && s.liftsInMinutes <= 60);
+  s = await lv(1200, 0, { user_calls: 700, background_calls: 200, tooling_calls: 300 });
+  chk('broken down by origin', s.byOrigin.user === 700 && s.byOrigin.background === 200 && s.byOrigin.tooling === 300);
+  chk('  tooling spent shows as spent, while the user is still served', s.tooling.remaining === 0 && s.allowed);
 
   console.log('\nWINDOW\n');
   chk('UTC date key', q.windowKey(new Date('2026-09-06T23:59:00Z')) === '2026-09-06');

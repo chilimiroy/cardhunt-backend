@@ -494,6 +494,74 @@ console.log('\nREDACTION\n');
 }
 
 // ══════════════════════════════════════════════════════════════
+console.log('\nHOURLY CEILING AND TOOLING ALLOWANCE, THROUGH fetchEbay (T1/T2)\n');
+// ══════════════════════════════════════════════════════════════
+// The day row and the hour row separately, and a log of what was recorded.
+function splitDb(day, hour) {
+  const writes = [];
+  return { writes, query: async (sql) => {
+    if (/CREATE TABLE|ALTER TABLE/i.test(sql)) return { rows: [] };
+    if (/INSERT INTO ebay_quota_hour/i.test(sql) && /RETURNING/i.test(sql)) return { rows: [hour || { calls: 0 }] };
+    if (/INSERT INTO ebay_quota\b/i.test(sql) && /RETURNING/i.test(sql)) return { rows: [Object.assign({}, QUOTA_ROW, day || {})] };
+    if (/INSERT INTO/i.test(sql)) writes.push(sql);
+    return { rows: [] };
+  }};
+}
+ebay.resetBreaker(); ebay._resetPacing();
+await quiet(async () => {
+  let calls = 0;
+  const r = await ebay.fetchEbay(splitDb({ calls_made: 50 }, { calls: quota.HOURLY_LIMIT }), {
+    url: URL_, token: 'T', fetchImpl: async () => { calls++; return resp(200, {}); } });
+  chk('hourly ceiling reached — a USER call is refused', r.blocked === 'quota', JSON.stringify(r));
+  chk('  and never reached eBay', calls === 0);
+  chk('  limitHit says hourly', r.limitHit === 'hourly', r.limitHit);
+  chk('  resetsInMinutes is the HOUR, not midnight', r.resetsInMinutes <= 60, r.resetsInMinutes);
+  chk('  liftsAt given', /Z$/.test(r.liftsAt || ''), r.liftsAt);
+});
+ebay.resetBreaker(); ebay._resetPacing();
+await quiet(async () => {
+  let calls = 0;
+  const db = splitDb({ calls_made: 500, tooling_calls: quota.TOOLING_DAILY });
+  const t = await ebay.fetchEbay(db, { url: URL_, token: 'T', origin: 'tooling',
+    fetchImpl: async () => { calls++; return resp(200, {}); } });
+  chk('tooling past its allowance — refused', t.blocked === 'quota' && t.limitHit === 'tooling', JSON.stringify(t));
+  chk('  and never reached eBay (it stops, it does not borrow)', calls === 0);
+  const u = await ebay.fetchEbay(db, { url: URL_, token: 'T',
+    fetchImpl: async () => { calls++; return resp(200, {}); } });
+  chk('the same moment, a user call goes through', u.ok && calls === 1, JSON.stringify(u).slice(0, 120));
+});
+ebay.resetBreaker(); ebay._resetPacing();
+await quiet(async () => {
+  // Request-scoped origin: a probe route's calls are tooling without saying so.
+  const db = splitDb({ calls_made: 500, tooling_calls: quota.TOOLING_DAILY });
+  let calls = 0;
+  const r = await ebay.withOrigin('tooling', () => ebay.fetchEbay(db, { url: URL_, token: 'T',
+    fetchImpl: async () => { calls++; return resp(200, {}); } }));
+  chk('inside withOrigin("tooling") an untagged call IS tooling', r.limitHit === 'tooling' && calls === 0, JSON.stringify(r));
+  const k = await ebay.withOrigin('tooling', () => ebay.fetchEbay(db, { url: URL_, token: 'T', kind: 'token',
+    fetchImpl: async () => { calls++; return resp(200, {}); } }));
+  chk('  including its token exchange', k.limitHit === 'tooling' && calls === 0);
+  chk('  outside it, the default is user', ebay.originFor({}) === 'user');
+  chk('  and background: true is background', ebay.originFor({ background: true }) === 'background');
+  const db2 = splitDb({ calls_made: 10 });
+  await ebay.withOrigin('tooling', () => ebay.fetchEbay(db2, { url: URL_, token: 'T',
+    fetchImpl: async () => resp(200, {}) }));
+  chk('  the call is RECORDED as tooling, day row and hour row',
+      db2.writes.length === 2 && db2.writes.every(w => w.includes('tooling_calls')), db2.writes.length);
+});
+ebay.resetBreaker(); ebay._resetPacing();
+await quiet(async () => {
+  // Four tooling calls in flight at once, one under the allowance: only one goes.
+  const db = splitDb({ calls_made: 500, tooling_calls: quota.TOOLING_DAILY - 1 });
+  let calls = 0;
+  const rs = await Promise.all([1, 2, 3, 4].map(() => ebay.fetchEbay(db, { url: URL_, token: 'T',
+    origin: 'tooling', meta: { marketplace: 'EBAY_US' },
+    fetchImpl: async () => { calls++; await new Promise(z => setTimeout(z, 30)); return resp(200, {}); } })));
+  chk('four concurrent tooling calls, one left — exactly one sent', calls === 1, 'calls=' + calls);
+  chk('  the other three say tooling', rs.filter(r => r.limitHit === 'tooling').length === 3);
+});
+
+// ══════════════════════════════════════════════════════════════
 console.log('\nTHRESHOLDS STILL COHERENT\n');
 // ══════════════════════════════════════════════════════════════
 {

@@ -3437,17 +3437,27 @@ function fetchListings(cardId, grade, printing, opts) {
   var expand = opts.sites === 'all' || !!opts.more;
   if (!opts.poll && !expand && hit && Date.now() - hit.ts < LIVE_TTL) return Promise.resolve(hit.data);
   if (LIVE_INFLIGHT[key] && !expand) return LIVE_INFLIGHT[key];
+  // opts.cachedOnly (T2): a tile asks for an answer someone already fetched
+  // and never triggers a search. Its "not fetched" reply is neither cached
+  // nor published as in-flight, so the card panel can never be handed it.
+  var cachedOnly = !!opts.cachedOnly && !expand;
   var pr = fetch(BACKEND + '/api/listings/' + encodeURIComponent(cardId)
                  + '?grade=' + encodeURIComponent(grade)
                  + (pr0 ? '&printing=' + encodeURIComponent(pr0) : '')
                  + (ed0 ? '&edition=' + encodeURIComponent(ed0) : '')
                  + (opts.sites === 'all' ? '&sites=all' : '')
                  + (opts.more ? '&more=1' : '')
+                 + (cachedOnly ? '&cachedOnly=1' : '')
                  + (opts.poll ? '&poll=1' : ''))
     .then(function (r) { if (!r.ok) throw new Error('API returned ' + r.status); return r.json(); })
     // A busy/erroring eBay answer is worth asking again in a moment, so it
     // is not held for LIVE_TTL (the server does not cache it either).
-    .then(function (d) { if (d && d.retryable) delete LIVE_CACHE[key]; else LIVE_CACHE[key] = { ts: Date.now(), data: d }; return d; });
+    .then(function (d) {
+      if (d && d.notFetched) return d;
+      if (d && d.retryable) delete LIVE_CACHE[key]; else LIVE_CACHE[key] = { ts: Date.now(), data: d };
+      return d;
+    });
+  if (cachedOnly) return pr;
   LIVE_INFLIGHT[key] = pr;
   var clear = function () { if (LIVE_INFLIGHT[key] === pr) delete LIVE_INFLIGHT[key]; };
   pr.then(clear, clear);
@@ -4652,8 +4662,11 @@ function listingAvgKey(cardId, grade) { return cardId + '@@' + (grade || 'Raw NM
 // the tile paints from /api/cards first and fills this in when it arrives.
 async function cardListingAvg(cardId, grade) {
   try {
-    // The SAME request the card panel makes — shared, never duplicated.
-    const j = await fetchListings(cardId, grade || 'Raw NM');
+    // The card panel's answer if someone already fetched it — never a new
+    // eBay search for a tile nobody opened (T2: one home-page load opened
+    // 14 cards and spent 45 calls).
+    const j = await fetchListings(cardId, grade || 'Raw NM', null, { cachedOnly: true });
+    if (j.notFetched) return { avg: null, count: 0, note: 'open the card to check listings', notFetched: true };
     // Outlier-flagged rows are excluded from the average for the same
     // reason `cheapest` skips them: $2.08 against a $750 median is not a
     // price for this card, and averaging it in moves the number people act
@@ -4738,7 +4751,9 @@ function cardSummaryTile(s, opts) {
 async function fillListingAvg(hostSel, cardId, grade) {
   const key = listingAvgKey(cardId, grade);
   const res = LISTING_AVG_CACHE[key] || await cardListingAvg(cardId, grade);
-  LISTING_AVG_CACHE[key] = res;
+  // "not fetched" is not an answer: once the card is opened, the next
+  // redraw finds the real one in LIVE_CACHE.
+  if (!res.notFetched) LISTING_AVG_CACHE[key] = res;
   document.querySelectorAll(hostSel + ' [data-avg="' + key + '"]').forEach(function (el) {
     el.innerHTML = res.avg != null
       ? '<span style="color:var(--tx);font-weight:600">' + fmtCurrency(res.avg) + '</span>'
@@ -5980,6 +5995,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260930-589157c-dirty-ondemand &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260930-f28274e-dirty-tilescached &middot; click to hide</div>
 </body>
 </html>

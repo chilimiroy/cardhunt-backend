@@ -3033,6 +3033,17 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   const wantSites = opts.sites === 'all' ? 'all' : null;
   const wantMore = !!opts.more;
 
+  // ?cachedOnly=1 — the home page's tiles (T2, measured live 2026-09-30:
+  // one home-page load opened 14 cards nobody clicked, 45 calls, and
+  // saturated the queue). A tile shows an answer someone ALREADY fetched,
+  // or says it has none. Never a call, never counted as a view.
+  if (opts.cachedOnly) {
+    const hit = listingCacheGet(key, cacheGrade);
+    if (hit) return hit;
+    return { cardId: key, requestedId, grade, cachedOnly: true, notFetched: true, count: 0, listings: [],
+      note: 'not fetched — only an answer already in the 15-minute cache is returned here; open the card to search' };
+  }
+
   if (!opts.dryRun && (wantSites || wantMore)) {
     const vs = viewStateGet(vkey);
     if (vs && vs.gathered.ebayState) return expandView(card, requestedId, grade, printing, edition, vs, vkey,
@@ -3220,6 +3231,7 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
       sites: req.query.sites === 'all' ? 'all' : null,
       more: req.query.more === '1',
       auto: req.query.auto !== '0',
+      cachedOnly: req.query.cachedOnly === '1',
       poll: req.query.poll === '1' });
     res.json(payload);
   } catch (err) {

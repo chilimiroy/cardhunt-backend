@@ -36,6 +36,12 @@ ok('exactly ONE place in the page fetches /api/listings', listingFetches === 1, 
 ok('...and it is fetchListings', /fetch\(BACKEND \+ '\/api\/listings\/'/.test(slice('fetchListings')));
 ok('the panel and the tile average both go through it',
   /fetchListings\(/.test(slice('renderLiveListings')) && /fetchListings\(/.test(slice('cardListingAvg')));
+// T2, measured live 2026-09-30: one home-page load opened 14 cards through
+// the tiles — 45 eBay calls nobody asked for. A tile reads the cache only.
+ok('a tile never starts an eBay search: cardListingAvg asks cachedOnly',
+  /fetchListings\([^)]*\{ cachedOnly: true \}\)/.test(slice('cardListingAvg')));
+ok('...and a "not fetched" reply is never cached or shared with the panel',
+  /if \(d && d\.notFetched\) return d;/.test(slice('fetchListings')) && /if \(cachedOnly\) return pr;/.test(slice('fetchListings')));
 ok('Lowest listing is filled from that same answer (setLowestFromListings)',
   /setLowestFromListings\(/.test(slice('renderLiveListings')));
 

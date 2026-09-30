@@ -21,17 +21,28 @@
 // Read-only over the public API; spends quota only through /api/listings,
 // exactly as a visitor would (and a warm cache spends nothing).
 //
-//   node sitecheck.js                         the default 10 cards, Raw NM
+//   node sitecheck.js                         the default 3 cards, Raw NM, 2 Load-more presses
 //   node sitecheck.js en-base1-4 --grade="PSA 10"
 //   node sitecheck.js --grade=all             Raw NM and PSA 10
+//   node sitecheck.js --wide                  the old 10-card sample
+//   node sitecheck.js --pages=N               more Load-more presses per card
 //   node sitecheck.js --json=out.json
+//
+// COST (CLAUDE.md CALL COST, measured under costmeter.js): every card is
+// "Search all" (8) plus up to 8 per Load-more press, plus 1 per known
+// reprint. The old defaults — 10 cards, 50 presses — measured 128 calls on
+// light cards and could run to hundreds on one busy card, against a
+// 300/day TOOLING allowance. Three cards (vintage with reprints, modern
+// chase, alt art) answer most questions; widen only when they do not.
 // ══════════════════════════════════════════════════════════════
 'use strict';
 const BASE = process.env.CARDHUNT_API || 'https://cardhunt-backend.onrender.com';
 const args = process.argv.slice(2);
 const flag = (n, d) => { const a = args.find(x => x.startsWith('--' + n + '=')); return a ? a.slice(n.length + 3) : d; };
-const DEFAULT_CARDS = ['en-base1-4', 'en-ecard2-149', 'en-swsh11-186', 'en-swsh7-215', 'en-sm9-33',
-                       'en-swsh3.5-74', 'en-neo1-9', 'en-sv10-1', 'en-base1-2', 'en-sv03.5-199'];
+// Vintage chase with two reprints, modern chase, modern alt art.
+const DEFAULT_CARDS = ['en-base1-4', 'en-sv03.5-199', 'en-swsh11-186'];
+const WIDE_CARDS = ['en-base1-4', 'en-ecard2-149', 'en-swsh11-186', 'en-swsh7-215', 'en-sm9-33',
+                    'en-swsh3.5-74', 'en-neo1-9', 'en-sv10-1', 'en-base1-2', 'en-sv03.5-199'];
 const cards = args.filter(a => !a.startsWith('--'));
 const gradeArg = flag('grade', 'Raw NM');
 const grades = gradeArg === 'all' ? ['Raw NM', 'PSA 10'] : [gradeArg];
@@ -96,8 +107,10 @@ async function get(path) {
 // The page's own path, pressing every button (T2, 2026-09-30: nothing loads
 // by itself any more): open, "Search all marketplaces", then "Load more"
 // until nothing is owed. `--pages=N` caps the Load-more presses — each is
-// one call per site with more, so a busy card to exhaustion is expensive.
-const MAX_MORE = parseInt(flag('pages', '50'), 10);
+// one call per site with more, so a busy card to exhaustion is expensive:
+// the default was 50, which on a card with thousands of listings is up to
+// 400 calls for ONE card. 2 examines ~1,000 rows per site already.
+const MAX_MORE = parseInt(flag('pages', '2'), 10);
 async function fullView(cardId, grade) {
   const q = `/api/listings/${encodeURIComponent(cardId)}?grade=${encodeURIComponent(grade)}`;
   const t0 = Date.now();
@@ -111,7 +124,7 @@ async function fullView(cardId, grade) {
 }
 
 (async () => {
-  const list = cards.length ? cards : DEFAULT_CARDS;
+  const list = cards.length ? cards : (args.includes('--wide') ? WIDE_CARDS : DEFAULT_CARDS);
   const out = [];
   const tot = { rows: 0, bySite: {}, suspects: 0, suspectsBySite: {}, calls: 0, incomplete: 0 };
   console.log(`\n  SITECHECK — ${BASE}\n  ${list.length} cards × ${grades.join(', ')}\n`);

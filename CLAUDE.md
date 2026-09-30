@@ -32,7 +32,7 @@ TCGdex · pokemontcg.io · Limitless
 | Frontend | `cardhunt_preview.html` | Render, at **`/app`** — local file is the fallback |
 | API | `server.js` v5.6.0 | Render |
 | Database | Supabase Postgres | `cards`, `price_history`, `alerts`, `portfolio`, `users` |
-| Ingestion | `ingest.js` v5.9.0 | Local only — never deploy. **Tracked** in git (T2) |
+| Ingestion | `ingest.js` v5.9.1 | Local only — never deploy. **Tracked** in git (T2) |
 
 ## The module map
 
@@ -226,6 +226,8 @@ Their rarity is positional inference. Yuyu-tei can supply it; still open.
   same 15). Every read of `cards` carries `digital.visibleSql()`; English
   browses 205 sets, Home 434. The rows stay; 33 of them carry
   `tcgplayer_market` prices up to $498.88 matched against physical promos.
+  `manifest` skips them too since ingest 5.9.1 (`35b8ad9`), with the same
+  predicate, and prints the skip.
 
 ---
 
@@ -358,15 +360,18 @@ Budget: 5,000/day · 600/hour (all origins) · tooling 300/day inside the day.
 | Render server, idle | always | **0** | 6 min idle under the meter: 0 outbound requests. No `setInterval` in any shipped module |
 | A page left open, any screen | every 5 min | **0** | `/api/alerts` + `/api/ebay/quota` (1 min while stopped) + alert tiles `cachedOnly` — 4 tiles, 0 eBay |
 | "CardHunt task watch" | hourly | **0** | no network |
-| **Token exchange** | per process per 2h, and **every Render cold start** | 1 — **or one per concurrent caller** | see below |
+| **Token exchange** | per process per 2h, and **every Render cold start** | **1** — shared by every concurrent caller since `bf49963` | see below |
 
-**The token race (the 393).** `getEbayTokenDetailed` has no single-flight:
-callers arriving while no token is cached each exchange. With a realistic
-600ms exchange, 5 concurrent cold opens = **5 exchanges**; a cold "Search 7
-more marketplaces" = **8 exchanges + 8 searches**; sitecheck's first card = +8.
-Render sleeps when idle, so every wake is cold. At a 5ms stub the race never
-opens (1 exchange) — measure tokens with `tokenDelayMs`. Not fixed yet: one
-shared in-flight promise would make every row below cost at most +1 token.
+**The token race (the 393) — FIXED 2026-10-01 (`bf49963`).**
+`getEbayTokenDetailed` had no single-flight: callers arriving while no token
+was cached each exchanged. With a realistic 600ms exchange, 5 concurrent
+cold opens made **5 exchanges** and a cold "Search 7 more marketplaces" **8
++ 8 searches**. Render sleeps when idle, so every wake was cold. Now one
+exchange is in flight and the rest await it: re-measured, **1 and 1**. A
+guard refusal made for the initiator's origin (tooling allowance, soft stop)
+is not handed to a waiter of another origin — it tries under its own. At a
+5ms stub the race never opens (1 exchange either way) — measure tokens with
+`tokenDelayMs`, or the fix and the bug look the same.
 
 ## User — costs only when someone acts
 | action | request | eBay |
@@ -376,7 +381,7 @@ shared in-flight promise would make every row below cost at most +1 token.
 | **Open a card that has a known reprint** | same | **1 + 1 per reprint** — Blastoise 2 (Celebrations), Charizard 4/102 **3** (Celebrations + 30th). `flagReprintPriced` fetches each reprint's listings; the 55 originals in `REPRINT_OF` |
 | Open, US kept < 5 (auto-expand) | same | **8** (+ reprints: Venusaur 9); US empty: 8 |
 | Same card + grade again within 15 min | cache | **0** |
-| "Search 7 more marketplaces" | `?sites=all` | **7** (+8 tokens if cold) |
+| "Search 7 more marketplaces" | `?sites=all` | **7** (+1 token if cold; was +8) |
 | "Load more listings" | `?more=1` | **1 per site with more** (8 measured) |
 | Verify (PSA cert) | `/api/cert` | **1** getItem |
 | Photos, same listing as Verify | `/api/photos` | **0** — shared 15-min getItem cache; another listing 1 |
@@ -399,10 +404,10 @@ shared in-flight promise would make every row below cost at most +1 token.
 | `/api/ebay/quota?probe=1` · `node ebayratecheck.js` | | **1** rate_limit (+1 token cold; ratecheck always exchanges its own: **2**) |
 | `/ebay/status?probe=1` · `/api/scraper/test` · `/api/health/full` | | **0** with a cached token, **1** cold |
 | `/api/probe/sources` · `node sourceprobe.js` | | **0** — eBay is not a probed source |
-| `node sitecheck.js` | default 10 cards | **128** (8 cold tokens + 120) |
+| `node sitecheck.js` | default: 3 cards, 2 Load-more presses (`8c5f7db`) | **41** light · **89** busy (5,000 listings per site). Was 10 cards / 50 presses: **128** light, no practical ceiling busy. `--wide` = the old 10 |
 | `node sitecheck.js <card>` | one fresh card, Raw NM | **8** light · **40** busy (8 sites x 5 pages) · `--grade=all` **16** · a card already cached **0** |
 | `node linkaudit.js sv10 --live --limit=8` | | **8** (1 per card); without `--live` **0** |
-| `node gradeprices.js --limit=2` | 4 default grades | **8** (1 per card per grade: default `--limit=20` = **80**) |
+| `node gradeprices.js --limit=2` | 4 default grades | **8** (1 per card per grade). Default `--limit` lowered 20 -> **5** = **20** calls (local file, gitignored) |
 | `node ebayprobe.js en-swsh3.5-74 "PSA 10"` | | **2** (token + search) |
 | `node setaudit.js` · `node searchaudit.js` | `--set=sv10` · `--set=sm9` (369 requests) | **0** — dryRun / `listings=0` |
 | `node yahoogate.js` · `tcgdexharvest.js` · `tcgdexprobe.js` | | **0** (yahoogate reads Render `/api/cards` only) |
@@ -412,12 +417,12 @@ shared in-flight promise would make every row below cost at most +1 token.
 | `node ingest.js scrape` | **never run** | banned — not exercised |
 
 **What this says.** Nothing recurring touches eBay. Every call is someone
-pressing something — except the token race, which multiplies whatever a cold
-burst was going to spend anyway. The hidden per-view costs are the reprint
-check (+1/+2 on 55 cards) and auto-expand (8 on thin cards). The big
-spenders are all tooling: sitecheck, marketprobe, conditions `?items=`,
-gradeprices at its default — one run of any can take a third of the tooling
-day.
+pressing something — the token race, which multiplied whatever a cold burst
+was going to spend, is fixed (`bf49963`). The hidden per-view costs are the
+reprint check (+1/+2 on 55 cards) and auto-expand (8 on thin cards). The big
+spenders are all tooling: marketprobe (11 per card), conditions `?items=`
+(1 + items), and sitecheck — its defaults cut from 128 to 41 (`8c5f7db`).
+Pick a tool's sample size from its row here before running it.
 
 ---
 
@@ -482,7 +487,7 @@ payload builder, **every row returned** (it had sliced to 25 while
 
 | action | request | eBay calls |
 |---|---|---|
-| open a card | default | **1** — `EBAY_US`, page 1, 200 rows |
+| open a card | default | **1** — `EBAY_US`, page 1, 200 rows. **2-3 on the 55 cards with a known reprint** (`REPRINT_OF`): the reprint check fetches each reprint's own listings, +1 per reprint — Base Set Charizard costs **3** (Celebrations + 30th), Blastoise 2. Measured, CALL COST |
 | "Search 7 more marketplaces" | `?sites=all` | one per site not yet answered |
 | "Load more listings" | `?more=1` | one page per searched site that has more |
 | US page 1 kept **< 5** | automatic, same request | +7 (`AUTO_EXPAND_BELOW`, measured — lesson below) |
@@ -591,6 +596,12 @@ Holo on paper but belongs in `hot`. Within a run, cards are ordered by how
 overdue they are relative to their own interval, weighted by value, so a partial
 run always covers what matters most. Roughly 3,700 cards a day, about 2.6 hours.
 Cards moving 10%+ are logged.
+
+**`--max` applies PER LANGUAGE** (measured 2026-10-01): `refresh all` loops
+en, ja, zh-tw, zh-cn and gives each its own cap, so the nightly
+`--max=4000` allows up to **16,000 cards**, not 4,000. `--hours=4` is the
+bound that actually holds the whole run. Alerts are evaluated at the end of
+each language's pass. The refresh touches no eBay (CALL COST).
 
 ```powershell
 node ingest.js refresh en --dry              # what is due, change nothing
@@ -745,7 +756,7 @@ node cardparse.test.js       # 156  free text -> card identity (191 with --db:
                              #      reachable-by-name cases + SQL/JS fold agree)
 node ebaycall.test.js        # 103  every guard tripped; two lanes, five slots, 4s foreground cap; hourly + tooling through fetchEbay
 node ebayquota.test.js       # 69   the quota gate; hourly ceiling and tooling allowance TRIPPED; what the app shows
-node ebaytoken.test.js       # 49   which failure is reported, not merely that one was
+node ebaytoken.test.js       # 62   which failure is reported, not merely that one was; ONE exchange shared by concurrent callers
 node estimator.test.js       # 31   the one estimator
 node gradeprice.test.js      # 27
 node jptest.js               # 88   39 of them assert the filter KEEPS; English cases run cardmatch.verify
@@ -1325,10 +1336,10 @@ real `fetchEbay` in `ebaycall.test.js`; watched failing under mutation.
 Found on the way: `ebayprobe.js` exchanged its token with a raw `fetch` —
 uncounted, outside every guard. Now through `ebaycall`.
 
-**Still open:** 393 of that day's 4,900 were TOKEN exchanges (8%).
-**Cause measured 2026-10-01** (CALL COST above): no single-flight in
-`getEbayTokenDetailed`, so each concurrent caller on a cold token
-exchanges — a cold Search-all is 8 exchanges. Not yet fixed.
+**Fixed 2026-10-01 (`bf49963`):** 393 of that day's 4,900 were TOKEN
+exchanges (8%). Cause measured (CALL COST above): no single-flight in
+`getEbayTokenDetailed`, so each concurrent caller on a cold token exchanged
+— a cold Search-all was 8. Now one exchange in flight, shared: 1.
 
 **The cost of a change is calls per card view — state it before shipping.**
 

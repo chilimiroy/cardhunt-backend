@@ -1,5 +1,22 @@
 # CardHunt — Progress Log
 
+## 2026-10-01 (later) — pushed; token race fixed; tool defaults; Pocket out of manifest
+
+- **Pushed** `5d1e6d4..5cffb73`: the quota protections and the call-cost chart.
+- **Token race fixed** (`bf49963`): one exchange in flight, shared. Re-measured
+  under costmeter at 600ms: cold Search-all 8 -> 1 exchange, 5 concurrent cold
+  opens 5 -> 1. A guard refusal about the initiator's origin is not shared
+  across origins. Found on the way: an explicit `origin` never reached the
+  exchange. ebaytoken.test 49 -> 62 (6 fail with sharing removed).
+- **sitecheck** (`8c5f7db`): 3 cards, 2 Load-more presses. 128 -> 41 light,
+  89 busy; the old default had no ceiling on a busy card. `--wide` keeps the
+  10. gradeprices default `--limit` 20 -> 5 (local, gitignored).
+- **manifest skips TCG Pocket** (`35b8ad9`, ingest 5.9.1): the server's own
+  series predicate. Read-only check: EN skips 15 sets / 2,480 cards, keeps 205
+  / 21,272. Not run end to end — a `manifest en` was already running.
+- CLAUDE.md: reprint cost on the open-a-card row; `--max` per language in the
+  refresh section (up to 16,000 a night).
+
 ## 2026-10-01 — the call-cost chart, measured
 
 CLAUDE.md now carries CALL COST: every user action, recurring job and tool

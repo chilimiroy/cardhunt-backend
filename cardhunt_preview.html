@@ -514,6 +514,20 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .pth{display:grid;grid-template-columns:2fr 90px 85px 96px 86px 76px;padding:10px 18px;background:var(--bg);border-bottom:1px solid var(--bd);font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.04em}
 .ptr{display:grid;grid-template-columns:2fr 90px 85px 96px 86px 76px;padding:13px 18px;border-bottom:1px solid var(--bd);align-items:center;font-size:13px;cursor:pointer;transition:background .12s}.ptr:hover{background:var(--bg)}.ptr:last-child{border-bottom:none}
 @keyframes sp{to{transform:rotate(360deg)}}
+/* eBay quota indicator (TASK T3, 2026-09-30). Hidden under 50%, visible from
+   it, amber from 70%, red when a user request would be refused. Bottom right:
+   the build stamp owns bottom left. */
+.eq{position:fixed;right:10px;bottom:10px;z-index:9998;max-width:min(340px,calc(100vw - 20px));background:var(--surface);color:var(--ink-2);border:1px solid var(--border);border-radius:10px;box-shadow:var(--sh2);font-size:11px;line-height:1.5;padding:7px 11px;cursor:pointer}
+.eq[hidden]{display:none}
+.eq b{color:var(--ink)}
+.eq-warn{background:var(--warn-soft);border-color:var(--warn);color:var(--ink)}
+.eq-stopped{background:var(--crit-soft);border-color:var(--crit);color:var(--ink)}
+.eq-stopped .eq-h{color:var(--crit)}
+.eq-h{font-weight:700;color:var(--ink)}
+.eq-d{margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
+.eq-d div{display:flex;justify-content:space-between;gap:12px}
+.lq-pause{padding:12px 14px;margin:0 0 12px;border-radius:10px;border:1px solid var(--crit);background:var(--crit-soft);font-size:12px;line-height:1.6;color:var(--ink)}
+.lq-pause strong{color:var(--crit)}
 </style>
 </head>
 <body>
@@ -2518,7 +2532,7 @@ function setLowestFromListings(d, grade) {
     // "None live" and "a marketplace did not answer" are different facts.
     var src = (d && d.sources) || {};
     var silent = Object.keys(src).filter(function (k) {
-      return ['error', 'unconfigured', 'quota', 'disabled'].indexOf(src[k].status) >= 0;
+      return ['error', 'unconfigured', 'quota', 'disabled', 'busy', 'rate-limit'].indexOf(src[k].status) >= 0;
     });
     lo.textContent = '—';
     ls.textContent = silent.length
@@ -3453,6 +3467,9 @@ function fetchListings(cardId, grade, printing, opts) {
     // A busy/erroring eBay answer is worth asking again in a moment, so it
     // is not held for LIVE_TTL (the server does not cache it either).
     .then(function (d) {
+      // T3: a listings answer is the moment the quota most likely moved; a
+      // refusal re-reads it at once so the indicator agrees with the panel.
+      if (typeof refreshQuota === 'function') refreshQuota(quotaRefusedIn(d));
       if (d && d.notFetched) return d;
       if (d && d.retryable) delete LIVE_CACHE[key]; else LIVE_CACHE[key] = { ts: Date.now(), data: d };
       return d;
@@ -3466,6 +3483,98 @@ function fetchListings(cardId, grade, printing, opts) {
 
 function liveEsc(x){ return String(x==null?'':x).replace(/[&<>"']/g, function(c){
   return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+// ══ eBay QUOTA, WHERE ROY WILL SEE IT (TASK T3, 2026-09-30) ══════════
+// On 2026-09-30 the quota guard worked and nobody saw it: every warning went
+// to a server log, and the card page showed an empty list with no
+// explanation. The number now lives on the page — hidden under 50% of the
+// day AND of the hour, visible from 50%, amber from 70%, red when a user
+// request would be refused — and the listings panel says in words why it is
+// empty and when listings return. Reading /api/ebay/quota is a database
+// read on the server, never an eBay call.
+var QUOTA = null, QUOTA_AT = 0, QUOTA_OPEN = false, QUOTA_TIMER = null;
+function refreshQuota(force) {
+  if (!force && Date.now() - QUOTA_AT < 20000) return Promise.resolve(QUOTA);
+  QUOTA_AT = Date.now();
+  return fetch(BACKEND + '/api/ebay/quota')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (q) { if (q && q.limit) { QUOTA = q; renderQuota(); } return QUOTA; })
+    .catch(function () { return QUOTA; })
+    .then(function (q) {
+      // Every 5 minutes; every minute while stopped, so the page notices the
+      // moment listings are back.
+      clearTimeout(QUOTA_TIMER);
+      QUOTA_TIMER = setTimeout(function () { refreshQuota(true); },
+                               q && q.level === 'stopped' ? 60000 : 300000);
+      return q;
+    });
+}
+// "01:00 (in 7h 29m)" — on the viewer's own clock.
+function quotaWhen(iso) {
+  if (!iso) return '';
+  var t = new Date(iso), ms = t - Date.now();
+  if (isNaN(ms)) return '';
+  var mins = Math.max(1, Math.round(ms / 60000));
+  return t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    + ' (in ' + (mins >= 60 ? Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm' : mins + ' min') + ')';
+}
+function quotaNum(n) { return Number(n || 0).toLocaleString('en-US'); }
+function quotaWhy(limitHit, reason) {
+  return limitHit === 'daily' ? 'Today’s eBay allowance is used up.'
+    : limitHit === 'hourly' ? 'This hour’s limit of eBay calls was reached — a guard that stops runaway use from spending the whole day.'
+    : liveEsc(reason || 'The eBay quota refused the request.');
+}
+function renderQuota() {
+  var el = document.getElementById('ebay-quota');
+  if (!el || !QUOTA) return;
+  var q = QUOTA, h = q.hour || {}, t = q.tooling || {}, o = q.byOrigin || {};
+  el.hidden = !q.visible;
+  el.className = 'eq' + (q.level === 'stopped' ? ' eq-stopped' : q.level === 'warn' ? ' eq-warn' : '');
+  var html = q.level === 'stopped'
+    ? '<div class="eq-h">eBay listings paused</div><div>' + quotaWhy(q.limitHit, q.reason)
+      + ' Back at <b>' + liveEsc(quotaWhen(q.liftsAt)) + '</b>.</div>'
+    : '<span class="eq-h">eBay</span> <b>' + quotaNum(q.used) + '</b> / ' + quotaNum(q.limit)
+      + ' calls today · resets ' + liveEsc(quotaWhen(q.resetsAt))
+      + (h.limit && h.used >= h.limit / 2 ? ' · this hour <b>' + quotaNum(h.used) + '</b> / ' + quotaNum(h.limit) : '');
+  if (QUOTA_OPEN) {
+    var row = function (a, b) { return '<div><span>' + a + '</span><b>' + b + '</b></div>'; };
+    html += '<div class="eq-d">'
+      + row('Today', quotaNum(q.used) + ' / ' + quotaNum(q.limit) + ' (' + q.percentUsed + '%)')
+      + row('This hour', quotaNum(h.used) + ' / ' + quotaNum(h.limit) + ' · resets ' + liveEsc(quotaWhen(h.resetsAt)))
+      + row('App (card views)', quotaNum(o.user))
+      + row('Background', quotaNum(o.background))
+      + row('Tooling', quotaNum(o.tooling) + ' / ' + quotaNum(t.allowance))
+      + (q.unattributed ? row('Before origins were counted', quotaNum(q.unattributed)) : '')
+      + '<div style="color:var(--ink-3);margin-top:4px">Counted by '
+      + (q.countedBy === 'ebay-headers' ? 'eBay’s own headers' : 'our own tally') + '. Click to close.</div>'
+      + '</div>';
+  }
+  el.innerHTML = html;
+}
+// The listings panel's plain-words answer when eBay was NOT asked. An empty
+// list there must never read as "this card has no listings".
+function quotaPauseHtml(d) {
+  var e = d && d.sources && d.sources.ebay;
+  if (!e) return '';
+  var msg;
+  if (e.status === 'quota') {
+    var when = quotaWhen(e.liftsAt) || (e.resetsInMinutes != null ? 'in ' + e.resetsInMinutes + ' min' : 'later today');
+    msg = '<strong>eBay listings are paused.</strong> ' + quotaWhy(e.limitHit, e.reason)
+      + ' eBay listings return at <strong>' + liveEsc(when) + '</strong>.';
+  } else if (e.status === 'busy') {
+    msg = '<strong>eBay was busy</strong> and nothing was fetched. Open the card again in a moment.';
+  } else if (e.status === 'rate-limit') {
+    msg = '<strong>eBay asked us to slow down.</strong> No eBay calls until its window resets.';
+  } else if (e.status === 'disabled') {
+    msg = '<strong>eBay is switched off</strong> on the server.';
+  } else return '';
+  return '<div class="lq-pause">' + msg
+    + ' An empty list here does not mean the card has no eBay listings &mdash; eBay was not asked.</div>';
+}
+function quotaRefusedIn(d) {
+  var src = (d && d.sources) || {};
+  return Object.keys(src).some(function (k) { return src[k] && src[k].status === 'quota'; });
+}
 
 function liveEndsIn(iso){
   if (!iso) return '';
@@ -3677,6 +3786,10 @@ function liveSourceNote(d){
     else if (v.status === 'ok') bits.push(k + ': ' + v.count
       + (pg && pg.truncated ? ' (first ' + v.scanned + ' of ' + (pg.ebayTotal != null ? pg.ebayTotal : '?')
           + ' examined' + (pg.pageError ? ', a page failed' : '') + ')' : ''));
+    else if (v.status === 'quota') bits.push(k + ': not asked — ' + (v.limitHit || 'quota') + ' limit');
+    else if (v.status === 'busy') bits.push(k + ': busy, not asked');
+    else if (v.status === 'rate-limit') bits.push(k + ': rate-limited, not asked');
+    else if (v.status === 'disabled') bits.push(k + ': switched off');
     else if (v.status === 'unconfigured') bits.push(k + ': needs credentials');
     else if (v.status === 'error') bits.push(k + ': failed');
     else if (v.status === 'skipped') bits.push(k + ': n/a');
@@ -3903,6 +4016,9 @@ async function renderLiveListings(card, grade, opts){
     + 'FOR SALE NOW &mdash; ' + liveEsc(selLabel)
     + ' <span style="color:var(--gr)">&#10003; checked</span></div>'
     + liveProgressLine(d);
+  // T3: eBay not asked (quota, busy, …) is said first, in words.
+  var pause = quotaPauseHtml(d);
+  head += pause;
 
   // The unstated group, rendered wherever it is needed. Built once here so
   // the empty case and the populated case cannot describe it differently.
@@ -3963,13 +4079,15 @@ async function renderLiveListings(card, grade, opts){
 
   if (!rows.length) {
     host.innerHTML = head
-      + '<div style="font-size:11px;color:var(--mu);line-height:1.6">'
+      // "No listing matched" is FALSE when eBay was never asked — the pause
+      // message above has already said what happened.
+      + (pause ? '' : '<div style="font-size:11px;color:var(--mu);line-height:1.6">'
       + (condFilter
           ? ('No listing of this card is marked <strong>' + liveEsc(condFilter) + '</strong> '
              + 'in eBay&rsquo;s Card Condition field right now, and no shop title states it.')
           : ('No listing matched this exact card at this grade. A listing is only shown when its '
              + 'title confirms both the card and the set &mdash; a near miss is worse than nothing.'))
-      + '</div>' + excludedNote() + unstatedBlock() + liveSourceNote(d) + '</div>';
+      + '</div>') + excludedNote() + unstatedBlock() + liveSourceNote(d) + '</div>';
     applyMeasuredGrade(d);
     return;
   }
@@ -5539,6 +5657,8 @@ document.addEventListener('click',function(e){
 setTimeout(()=>{startAlertEngine();updateAlertsBar();},500);
 // INIT
 setTimeout(()=>{loadHome();loadSearchTrending();},100);
+// T3: the eBay quota indicator — read once now, then on its own timer.
+refreshQuota(true);
 });  // end DOMContentLoade
 
 
@@ -5995,6 +6115,7 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260930-f28274e-dirty-tilescached &middot; click to hide</div>
+<div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260930-45045d8-dirty-quota &middot; click to hide</div>
 </body>
 </html>

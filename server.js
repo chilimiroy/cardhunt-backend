@@ -1352,8 +1352,10 @@ function listingCacheGet(cardId, grade) {
     attribution: EBAY_ATTRIBUTION
   };
 }
-function listingCacheSet(cardId, grade, data) {
-  listingCache.set(listingKey(cardId, grade), { ts: Date.now(), data });
+function listingCacheSet(cardId, grade, data, ts) {
+  // `ts` is kept by a continuation: rows arriving later never make the
+  // entry look fresher than its oldest row.
+  listingCache.set(listingKey(cardId, grade), { ts: ts || Date.now(), data });
   // keep the map from growing without bound on a long-lived dyno
   if (listingCache.size > 500) {
     const oldest = [...listingCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
@@ -1441,7 +1443,15 @@ function normaliseListing(o) {
     // correctly on live eBay, and every kept row still arrived "unstated",
     // so the page grouped a "Reverse Holo" title as printing-not-stated.
     printing: o.printing || null,
-    printingStated: o.printingStated === true
+    printingStated: o.printingStated === true,
+    // ── Where it was found, and whose shipping quote this is (T1) ──
+    // `marketplace` is the eBay site that returned the row; `shippingTo` the
+    // country that site quotes shipping for. Never a filter — a row that
+    // does not ship somewhere stays in the list, saying what is known.
+    marketplace: o.marketplace || null,
+    shippingTo: o.shippingTo || null,
+    // The conversion that produced `price`, e.g. "GBP->USD @1.3497 (ecb …)".
+    fx: o.fx || null
   };
 }
 
@@ -1884,9 +1894,40 @@ function ebayMatchCard(card) {
   };
 }
 
-// 3 pages of 75 = 225 rows: enough that a median stops moving, and a hard
-// ceiling on what one card view can spend. See the paging in sourceEbay.
+// 3 pages: the DEFAULT for callers that ask for one bounded search
+// (marketprobe, gradecost). /api/listings no longer stops here (T1,
+// 2026-09-30): it fetches page 1 of every site, then pages to exhaustion in
+// the background — see listingsFor / continueListings.
 const EBAY_MAX_PAGES = 3;
+// eBay Browse's own ceilings: 200 rows a page, and offset + limit may not
+// pass 10,000 (the API answers 400 beyond it). A search with more than
+// 10,000 results cannot be fully read by ANY client; the response says so.
+const EBAY_PAGE_MAX = 200;
+const EBAY_OFFSET_CEILING = 10000;
+
+// ── Which eBay sites /api/listings searches (T1) ──
+// A marketplace is where a card is SOLD; a language is what the card IS.
+// Adding a site changes where we look, never what the gate accepts: the
+// language gate is identical on every site. Measured over US alone
+// (marketprobe, 10 cards): GB +51%, AU +19%, CA +7% — English-titled sites,
+// no vocabulary work needed. `country` is whose buyer the site's shipping
+// quote is for; `currency` goes through fx.js (pinned for all four).
+const EBAY_SITES = [
+  { id: 'EBAY_US', country: 'US', currency: 'USD' },
+  { id: 'EBAY_GB', country: 'GB', currency: 'GBP' },
+  { id: 'EBAY_AU', country: 'AU', currency: 'AUD' },
+  { id: 'EBAY_CA', country: 'CA', currency: 'CAD' }
+];
+// Not searched yet, each with the reason — reported on every response so a
+// short list is never mistaken for every marketplace having been asked.
+const EBAY_SITES_PENDING = {
+  EBAY_DE: 'German-language titles: the language gate must first read German words for other languages ("Spanisch", "Italienisch") — tested on real DE titles',
+  EBAY_FR: 'French-language titles: junk, grade and language vocabulary not yet tested on real FR titles',
+  EBAY_IT: 'machine-translated titles ("Portachiavi", "30° Celebrazione"): vocabulary not yet taught',
+  EBAY_ES: 'machine-translated titles: vocabulary not yet taught',
+  EBAY_JP: 'refused by eBay — 409 "12019: marketplace not supported"'
+};
+const ebaySite = id => EBAY_SITES.find(s => s.id === id) || { id, country: null, currency: null };
 
 async function sourceEbay(card, grade, limit, opts = {}) {
   const background = !!opts.background;
@@ -1968,13 +2009,17 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // cuts the EXPENSIVE end, so `cheapest` was fine while every median built
   // from these rows sat low. Capped at EBAY_MAX_PAGES so one popular card
   // cannot spend seven calls; the response says when it stopped there.
-  const pageSize = Math.min(limit * 3, 100);
+  const pageSize = opts.pageSize ? Math.min(opts.pageSize, EBAY_PAGE_MAX) : Math.min(limit * 3, 100);
+  // Where this call starts (a continuation resumes at the next offset) and
+  // how many pages it may take. Infinity = until eBay's total runs out.
+  const startOffset = opts.offset || 0;
+  const maxPages = opts.maxPages || EBAY_MAX_PAGES;
   const pageUrl = offset => 'https://api.ebay.com/buy/browse/v1/item_summary/search'
     + '?q=' + encodeURIComponent(qAsk)
     + (opts.noCategory ? '' : '&category_ids=183454') + '&limit=' + pageSize + '&sort=price'
     + (offset ? '&offset=' + offset : '')
     + (aspectFilter ? '&aspect_filter=' + encodeURIComponent(aspectFilter) : '');
-  const url = pageUrl(0);
+  const url = pageUrl(startOffset);
   // Which eBay site is asked. EBAY_US unless a caller names another — only
   // /api/ebay/marketprobe does (T1, 2026-09-30: measuring what the other
   // sites add before deciding whether /api/listings should ask them).
@@ -1985,7 +2030,8 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   const call = await ebay.fetchEbay(db, {
     url, token, kind: 'search', background,
     dryRun,
-    meta: { cardId: card.api_card_id, grade, query: q, marketplace: mp },
+    meta: { cardId: card.api_card_id, grade, query: q, marketplace: mp,
+            page: Math.floor(startOffset / pageSize) + 1 },
     countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0)
   });
 
@@ -2010,36 +2056,46 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   const d = call.data || {};
   const items = (d.itemSummaries || []).slice();
   const ebayTotal = Number.isFinite(d.total) ? d.total : null;
-  let pagesFetched = 1, pageError = null, received = items.length;
+  let pagesFetched = 1, pageError = null, pageBlocked = null, received = items.length;
+  let lastLen = items.length;
   const seen = new Set(items.map(it => it.itemId));
-  // Another page only while eBay's total says one exists and the last page
-  // came back full. A later page that fails keeps what page 1 delivered and
-  // says so — never an empty list, never a silent short one.
-  while (pagesFetched < EBAY_MAX_PAGES && ebayTotal != null
-         && ebayTotal > pagesFetched * pageSize
-         && (d.itemSummaries || []).length >= pageSize) {
+  const nextAt = () => startOffset + pagesFetched * pageSize;
+  // Another page only while eBay's total says one exists, the last page came
+  // back full, and eBay's offset ceiling allows it. A later page that fails
+  // keeps what earlier pages delivered and says so — never an empty list,
+  // never a silent short one.
+  while (pagesFetched < maxPages && ebayTotal != null
+         && ebayTotal > nextAt() && lastLen >= pageSize
+         && nextAt() + pageSize <= EBAY_OFFSET_CEILING) {
     const more = await ebay.fetchEbay(db, {
-      url: pageUrl(pagesFetched * pageSize), token, kind: 'search', background,
-      meta: { cardId: card.api_card_id, grade, query: q, page: pagesFetched + 1, marketplace: mp },
+      url: pageUrl(nextAt()), token, kind: 'search', background,
+      meta: { cardId: card.api_card_id, grade, query: q, page: Math.floor(nextAt() / pageSize) + 1, marketplace: mp },
       countFrom: x => (x && x.itemSummaries ? x.itemSummaries.length : 0)
     });
-    if (!more.ok) { pageError = more.reason || more.blocked || 'page fetch failed'; break; }
+    if (!more.ok) { pageError = more.reason || more.blocked || 'page fetch failed';
+                    pageBlocked = more.blocked || null; break; }
     pagesFetched++;
     const got = (more.data && more.data.itemSummaries) || [];
     received += got.length;
+    lastLen = got.length;
     // Offset paging over a live, price-sorted feed can repeat a row that
     // moved between calls; count each item once.
     for (const it of got) if (!seen.has(it.itemId)) { seen.add(it.itemId); items.push(it); }
-    if (got.length < pageSize) break;
   }
+  // Nothing more to ask for: eBay's total is reached, a page came back
+  // short, or eBay's own 10,000-result ceiling stops every client.
+  const atCeiling = nextAt() + pageSize > EBAY_OFFSET_CEILING && ebayTotal != null && ebayTotal > nextAt();
+  const exhausted = !pageError && (ebayTotal == null || ebayTotal <= nextAt() || lastLen < pageSize || atCeiling);
   const pages = {
-    fetched: pagesFetched, pageSize, maxPages: EBAY_MAX_PAGES, ebayTotal,
+    fetched: pagesFetched, pageSize, maxPages: Number.isFinite(maxPages) ? maxPages : null, ebayTotal,
+    startOffset, nextOffset: exhausted ? null : nextAt(),
+    exhausted, atEbayCeiling: atCeiling,
     // A truncated result must say it is truncated: eBay holds more rows than
     // were examined, and under sort=price the missing ones are the dearest.
-    truncated: !!pageError || (ebayTotal != null && ebayTotal > received),
+    truncated: !!pageError || (ebayTotal != null && ebayTotal > startOffset + received),
     duplicatesSkipped: received - items.length,
-    stoppedAtCap: pagesFetched >= EBAY_MAX_PAGES && ebayTotal != null && ebayTotal > pagesFetched * pageSize,
-    pageError
+    stoppedAtCap: !exhausted && !pageError && pagesFetched >= maxPages,
+    pageError, pageBlocked
   };
 
   // ── The gate ──
@@ -2102,11 +2158,33 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       continue;
     }
 
-    const price = parseFloat(it.price && it.price.value) || 0;
-    if (price <= 0) { dropped.push({ title, reason: 'no usable price' }); continue; }
+    const priceNative = parseFloat(it.price && it.price.value) || 0;
+    if (priceNative <= 0) { dropped.push({ title, reason: 'no usable price' }); continue; }
     const shipOpt = it.shippingOptions && it.shippingOptions[0];
-    const shipping = (shipOpt && shipOpt.shippingCost && shipOpt.shippingCost.value != null)
+    const shipNative = (shipOpt && shipOpt.shippingCost && shipOpt.shippingCost.value != null)
       ? parseFloat(shipOpt.shippingCost.value) : null;
+    // Every row in USD, its own currency and the rate kept beside it (T1).
+    // A GB row carried GBP straight into `landed` beside USD rows — only
+    // harmless while US was the one site asked. fx refuses an unpinned
+    // currency; such a row is DROPPED WITH ITS REASON, never shown as USD.
+    const cur = String((it.price && it.price.currency) || 'USD').toUpperCase();
+    let price = priceNative, shipping = shipNative, fxNote = null;
+    if (cur !== 'USD') {
+      let pc = null, sc2 = null;
+      try {
+        pc = await fx.toUsd(priceNative, cur);
+        const shipCur = String((shipOpt && shipOpt.shippingCost && shipOpt.shippingCost.currency) || cur).toUpperCase();
+        sc2 = shipNative > 0 ? await fx.toUsd(shipNative, shipCur) : null;
+      } catch (e) { dropped.push({ title, reason: 'currency not convertible: ' + e.message }); continue; }
+      if (!pc) { dropped.push({ title, reason: 'no usable price' }); continue; }
+      price = pc.usd;
+      shipping = shipNative == null ? null : shipNative === 0 ? 0 : (sc2 ? sc2.usd : null);
+      fxNote = fx.describe(pc);
+    }
+    // Shipping is never a filter (T1). What it IS: the quote this site gives
+    // its own buyers. A GB row's shipping is to a UK address. Unknown stays
+    // unknown (shippingKnown:false), and the row stays.
+    const site = ebaySite(mp);
     // Seller-stated raw condition, parsed once per row. cardmatch owns it —
     // a second implementation here is the estimator split all over again.
     const sc = cm.sellerCondition ? cm.sellerCondition(it.title) : { code: null, stated: false };
@@ -2115,8 +2193,13 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       sourceLabel: 'eBay',
       title: it.title,
       price,
-      currency: (it.price && it.price.currency) || 'USD',
+      currency: 'USD',
+      priceOriginal: cur !== 'USD' ? priceNative : null,
+      currencyOriginal: cur !== 'USD' ? cur : null,
+      fx: fxNote,
       shipping,
+      shippingTo: site.country,
+      marketplace: mp,
       condition: jpf.isRawGrade(grade) ? (it.condition || 'Raw') : String(grade),
       seller: it.seller && it.seller.username,
       url: it.itemWebUrl,
@@ -2164,8 +2247,13 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // with no input is skipped silently and correctly — and is then
   // indistinguishable from one that ran and found nothing, which is how the
   // year check sat dead on every live route. Reported even when complete.
+  const keptIds = new Set(listings.map(l => l.itemId));
   return { listings, scanned: items.length,
            kept: listings.length, rejected: dropped.length,
+           // Every item this search examined and did NOT keep. Across sites
+           // a refusal is sticky (mergeEbaySite): the same item re-judged on
+           // another site's title never overturns it.
+           refusedIds: items.filter(it => it.itemId && !keptIds.has(it.itemId)).map(it => it.itemId),
            dropped: opts.allDropped ? dropped : dropped.slice(0, 40),
            marketplace: mp,
            // marketprobe only: every item id eBay returned, kept or not, so a
@@ -2216,6 +2304,135 @@ const UNAVAILABLE = {
   localshops: 'No API — deep link only'
 };
 
+// ══════════════════════════════════════════════════════════════
+// Every eBay site, every page (T1, 2026-09-30)
+//
+// Page 1 of every site in EBAY_SITES, together, answers the first view.
+// continueEbay then pages each site to exhaustion in the background and the
+// cached payload grows; the page polls and says what is still loading.
+// Nothing is trimmed to save quota — if the budget runs short, the site's
+// entry says so and why (`incompleteReason`).
+// ══════════════════════════════════════════════════════════════
+function newEbayState() {
+  return { seen: new Set(), refused: new Set(), listings: [], dropped: [], sites: {},
+           first: null, calls: 0, printing: { keptStated: 0, keptUnstated: 0, refused: 0 } };
+}
+
+// Fold one sourceEbay result (one or more pages of one site) into the state.
+function mergeEbaySite(st, mp, r) {
+  const s = st.sites[mp] || (st.sites[mp] = { status: 'ok', country: ebaySite(mp).country,
+    currency: ebaySite(mp).currency, pagesFetched: 0, scanned: 0, kept: 0, rejected: 0,
+    duplicates: 0, overturned: 0, ebayTotal: null, nextOffset: 0, exhausted: false });
+  // The envelope (query, gate evidence, filters) is US's when US answered.
+  if (!st.first || (mp === 'EBAY_US' && st.firstMp !== 'EBAY_US')) { st.first = r; st.firstMp = mp; }
+  const p = r.pages || {};
+  s.pagesFetched += p.fetched || 0;
+  st.calls += p.fetched || 0;
+  s.scanned += r.scanned || 0;
+  s.rejected += r.rejected || 0;
+  if (p.ebayTotal != null) s.ebayTotal = p.ebayTotal;
+  s.nextOffset = p.nextOffset;
+  s.exhausted = !!p.exhausted;
+  if (p.atEbayCeiling) s.atEbayCeiling = true;
+  if (p.pageError) { s.incompleteReason = p.pageError; s.nextOffset = null; }
+  // A refusal anywhere is a refusal everywhere, including of a row an
+  // earlier page kept on another site.
+  for (const id of (r.refusedIds || [])) {
+    st.refused.add(id);
+    const i = st.listings.findIndex(l => l.itemId === id);
+    if (i >= 0) { st.listings.splice(i, 1); s.overturned++; }
+  }
+  for (const l of r.listings || []) {
+    if (!l.itemId) { st.listings.push(l); s.kept++; continue; }
+    if (st.refused.has(l.itemId)) { s.overturned++; continue; }
+    if (st.seen.has(l.itemId)) { s.duplicates++; continue; }
+    st.seen.add(l.itemId);
+    st.listings.push(l);
+    s.kept++;
+  }
+  if (st.dropped.length < 40) st.dropped.push(...(r.dropped || []).slice(0, 40 - st.dropped.length));
+  if (r.printing) {
+    st.printing.keptStated += r.printing.keptStated || 0;
+    st.printing.keptUnstated += r.printing.keptUnstated || 0;
+    st.printing.refused += r.printing.refused || 0;
+  }
+}
+
+function ebaySiteFailed(st, mp, err) {
+  st.sites[mp] = { status: err.ebayStatus || (err.unconfigured ? 'unconfigured' : 'error'),
+                   country: ebaySite(mp).country, reason: String(err.message || err).slice(0, 200),
+                   nextOffset: null, exhausted: false,
+                   incompleteReason: String(err.message || err).slice(0, 200) };
+}
+
+// The sourceEbay-shaped answer for the state so far — what gatherListings
+// and the page already read — plus `sites` and `pending`.
+function ebayStateResult(st) {
+  const f = st.first || {};
+  const sites = st.sites;
+  const pending = Object.entries(sites).filter(([, s]) => s.nextOffset != null)
+    .map(([mp, s]) => ({ marketplace: mp, nextOffset: s.nextOffset, ebayTotal: s.ebayTotal }));
+  const tot = Object.values(sites).reduce((a, s) => ({
+    scanned: a.scanned + (s.scanned || 0), rejected: a.rejected + (s.rejected || 0),
+    ebayTotal: a.ebayTotal + (s.ebayTotal || 0), pages: a.pages + (s.pagesFetched || 0) }),
+    { scanned: 0, rejected: 0, ebayTotal: 0, pages: 0 });
+  return Object.assign({}, f, {
+    listings: st.listings.slice(), scanned: tot.scanned, kept: st.listings.length,
+    rejected: tot.rejected, dropped: st.dropped, refusedIds: undefined,
+    marketplace: 'all', sites, pending,
+    sitesNotSearched: EBAY_SITES_PENDING,
+    printing: f.printing ? Object.assign({}, f.printing, st.printing) : f.printing,
+    pages: { fetched: tot.pages, calls: st.calls, ebayTotalAllSites: tot.ebayTotal,
+             // sum over sites, so an item listed on two sites counts twice
+             complete: pending.length === 0 && Object.values(sites).every(s => s.exhausted),
+             truncated: Object.values(sites).some(s => !s.exhausted) },
+    ebayState: st
+  });
+}
+
+async function sourceEbayAll(card, grade, limit, opts = {}) {
+  // A dry run builds US's request only: it exists to debug the gate, and
+  // four identical requests with a different header say nothing more.
+  if (opts.dryRun) return sourceEbay(card, grade, limit, opts);
+  const st = newEbayState();
+  const results = await Promise.allSettled(EBAY_SITES.map(site =>
+    sourceEbay(card, grade, limit, Object.assign({}, opts,
+      { marketplace: site.id, pageSize: EBAY_PAGE_MAX, maxPages: 1 }))));
+  // Merge in EBAY_SITES order, US first, so a row on two sites keeps its
+  // US (USD, unconverted) copy.
+  EBAY_SITES.forEach((site, i) => {
+    const r = results[i];
+    if (r.status === 'fulfilled') mergeEbaySite(st, site.id, r.value);
+    else ebaySiteFailed(st, site.id, r.reason || {});
+  });
+  // Every site failed: the reason US gave is the source's status, exactly
+  // as before sites existed — quota, disabled, unconfigured stay distinct.
+  if (results.every(r => r.status === 'rejected')) throw results[0].reason;
+  return ebayStateResult(st);
+}
+
+// Page one site onward, one page per call, folding each into `st` and
+// telling the caller after every page. Background priority: at the soft
+// stop it yields, and the site says why it is incomplete.
+async function continueEbaySite(card, grade, opts, st, mp, onPage) {
+  for (;;) {
+    const s = st.sites[mp];
+    if (!s || s.nextOffset == null) return;
+    let r;
+    try {
+      r = await sourceEbay(card, grade, 25, Object.assign({}, opts,
+        { marketplace: mp, offset: s.nextOffset, pageSize: EBAY_PAGE_MAX, maxPages: 1, background: true }));
+    } catch (e) {
+      s.incompleteReason = (e.ebayStatus ? e.ebayStatus + ': ' : '') + String(e.message || e).slice(0, 200);
+      s.nextOffset = null;
+      await onPage();
+      return;
+    }
+    mergeEbaySite(st, mp, r);
+    await onPage();
+  }
+}
+
 const LISTING_SOURCES = [
   {
     id: 'yahoo', label: 'Yahoo JP', fetch: sourceYahoo,
@@ -2232,7 +2449,7 @@ const LISTING_SOURCES = [
     skipReason: 'Japanese shop — card is not Japanese'
   },
   {
-    id: 'ebay', label: 'eBay', fetch: sourceEbay,
+    id: 'ebay', label: 'eBay', fetch: sourceEbayAll,
     applies: card => !!(card.name_en || card.name),
     skipReason: 'no English name to search with'
   }
@@ -2263,6 +2480,7 @@ async function gatherListings(card, grade, limit, opts) {
 
   const dryRuns = {};
   let listings = [];
+  let ebayState = null;
   active.forEach((s, i) => {
     const r = results[i];
     if (r.status === 'fulfilled') {
@@ -2302,6 +2520,14 @@ async function gatherListings(card, grade, limit, opts) {
       if (r.value.gradeFilter) sources[s.id].gradeFilter = r.value.gradeFilter;
       if (r.value.titleCondition) sources[s.id].titleCondition = r.value.titleCondition;
       if (r.value.pages) sources[s.id].pages = r.value.pages;
+      // eBay, per site (T1): what each site returned, what it still owes,
+      // and which sites were not asked at all, each with its reason.
+      if (r.value.sites) {
+        sources[s.id].sites = r.value.sites;
+        sources[s.id].pending = r.value.pending;
+        sources[s.id].sitesNotSearched = r.value.sitesNotSearched;
+        ebayState = r.value.ebayState;
+      }
       // What the printing gate did here — asked, kept stated / unstated,
       // refused. Reported for All too, so "not asked" is visible (T10).
       if (r.value.printing) sources[s.id].printing = r.value.printing;
@@ -2372,6 +2598,22 @@ async function gatherListings(card, grade, limit, opts) {
     }
   });
 
+  // Raw (unjudged) rows are kept: a continuation adds eBay pages and
+  // re-judges the whole set, and a flag is a judgement on the set.
+  const otherRows = listings.filter(l => l.source !== 'ebay');
+  const memo = {};
+  const j = await judgeListings(card, grade, listings, opts, memo);
+  const out = { listings: j.listings, sources, tookMs: Date.now() - t0, liveCount: j.liveCount,
+                outliers: j.outliers, ebayState, otherRows, judgeMemo: memo };
+  if (Object.keys(dryRuns).length) out.dryRun = dryRuns;
+  return out;
+}
+
+// Outliers, the reprint price band, then the sort — over EVERY row of the
+// view. Shared by the first answer and each continuation page, so a row
+// arriving on page 9 is judged against the same peers as one from page 1.
+async function judgeListings(card, grade, listings, opts, memo) {
+  opts = opts || {}; memo = memo || {};
   // ── After the gate, before the sort ───────────────────────────
   // Every listing here has passed cardmatch: right card, right number,
   // right set, right grade. Giratina V #186 still came back spanning
@@ -2397,22 +2639,30 @@ async function gatherListings(card, grade, limit, opts) {
     judged.stats.reprints = [];
     // The catalogue's own number-matched price: the second, independent
     // path to "this card prices apart from its reprint". Real prices only.
-    const mp = await numberMatchedPrice(card.api_card_id).catch(() => null);
-    const marketPrice = mp && mp.isReal ? mp.price : null;
+    if (!('marketPrice' in memo)) {
+      const mp = await numberMatchedPrice(card.api_card_id).catch(() => null);
+      memo.marketPrice = mp && mp.isReal ? mp.price : null;
+    }
+    const marketPrice = memo.marketPrice;
     for (const rc of reprintCards) {
       let prices = null, why = null;
       try {
-        const hit = listingCacheGet(rc.cardId, grade);
-        let rows = hit && hit.listings;
+        // Memoised per view: a continuation re-judges after every page and
+        // must not re-fetch the reprint's listings each time.
+        if (memo.reprintPrices && memo.reprintPrices[rc.cardId]) { prices = memo.reprintPrices[rc.cardId]; }
+        const hit = prices ? null : listingCacheGet(rc.cardId, grade);
+        let rows = prices ? null : hit && hit.listings;
         if (!rows) {
-          const rcard = await resolveListingCard(rc.cardId);
-          if (!rcard) why = 'reprint card not in catalogue';
+          const rcard = prices ? null : await resolveListingCard(rc.cardId);
+          if (prices) { /* memoised */ }
+          else if (!rcard) why = 'reprint card not in catalogue';
           // noReprintCheck: a reprint has no reprint of its own today, but
           // the recursion must not be able to start if REPRINT_OF grows one.
           else rows = (await gatherListings(rcard, grade, 50,
                          Object.assign({}, opts, { noReprintCheck: true }))).listings;
         }
         if (rows) prices = rows.filter(outlier.trustworthy).map(outlier.priceOf).filter(p => p != null);
+        if (prices) (memo.reprintPrices = memo.reprintPrices || {})[rc.cardId] = prices;
       } catch (e) { why = 'reprint listings failed: ' + String(e.message || e).slice(0, 120); }
       if (!prices) {
         judged.stats.reprints.push({ reprint: rc.cardId, label: rc.family && rc.family.label,
@@ -2439,12 +2689,256 @@ async function gatherListings(card, grade, limit, opts) {
   listings.sort((a, b) =>
     (outlier.suspectRank(a) - outlier.suspectRank(b)) ||
     (Number(b.live) - Number(a.live)) || (a.landed - b.landed) || (a.price - b.price));
-  const liveCount = listings.filter(l => l.live).length;
-  const out = { listings, sources, tookMs: Date.now() - t0, liveCount,
-                outliers: judged.stats };
-  if (Object.keys(dryRuns).length) out.dryRun = dryRuns;
-  return out;
+  return { listings, liveCount: listings.filter(l => l.live).length, outliers: judged.stats };
 }
+
+// ══════════════════════════════════════════════════════════════
+// One card view's listings: first answer now, the rest as it arrives (T1)
+// ══════════════════════════════════════════════════════════════
+
+// The payload for one state of a view. Every row, never a slice: `count`
+// and `listings.length` are the same number (they were 58 and 25).
+function buildListingsPayload(card, requestedId, grade, printing, j, sources, tookMs, progress) {
+  // The headline figures skip anything the outlier check flagged. This is
+  // the number a buyer acts on, and "$2.08" for a card that trades at
+  // $800 is not an answer — it is the wrong card, a proxy or a scam.
+  // The flagged rows are still returned, last, with their reason.
+  const listings = j.listings;
+  const trusted = listings.filter(outlier.trustworthy);
+  return {
+    cardId: card.api_card_id,
+    requestedId,
+    card: {
+      name: card.name, nameEn: card.name_en || null, number: card.number,
+      rarity: card.rarity, set: card.set_name, setTotal: card.set_total,
+      image: card.image_small || null
+    },
+    grade,
+    // The printing asked for, and every printing this card exists in —
+    // the page offers a selector only when there is more than one.
+    printing: printing || 'all',
+    printings: (printingsOf(card) || []).map(k => ({ key: k, label: cm.printingLabel(k) })),
+    printingsRead: !!printingsOf(card),
+    count: listings.length,
+    liveCount: j.liveCount,
+    cheapest: trusted.length ? trusted[0].landed : null,
+    cheapestLive: (trusted.find(l => l.live) || {}).landed ?? null,
+    // What the outlier check did, and why — reported even when it did not
+    // run. "Not applied: median $0.99 is below $15" is a different fact
+    // from "applied, nothing flagged".
+    outliers: j.outliers,
+    // What this grade is worth, measured from the listings that passed the
+    // gate. Computed, not stored: this is a read endpoint.
+    gradePrice: gp.aggregate(listings, { grade }),
+    listings,
+    sources,
+    // Is this every listing, and if not, what is still being fetched?
+    progress,
+    tookMs,
+    cached: false,
+    cachedAgeSec: 0,
+    // eBay's terms: do not present data as more current than it is.
+    freshness: {
+      cached: false,
+      ageSeconds: 0,
+      maxAgeSeconds: Math.round(LISTING_TTL / 1000),
+      note: 'fetched now'
+    },
+    attribution: EBAY_ATTRIBUTION,
+    fetchedAt: new Date().toISOString()
+  };
+}
+
+// What is loaded and what is not, in words as well as numbers — "247
+// listings, still searching GB and AU" rather than a silent partial list.
+function listingsProgress(st, count, extra) {
+  extra = extra || {};
+  if (!st) return Object.assign({ complete: true, loading: [], incomplete: [], calls: 0,
+    note: count + ' listing' + (count === 1 ? '' : 's') }, extra);
+  const sites = Object.entries(st.sites);
+  const loading = sites.filter(([, s]) => s.nextOffset != null).map(([mp, s]) => ({
+    marketplace: mp, country: s.country, pagesFetched: s.pagesFetched, examined: s.scanned,
+    ebayTotal: s.ebayTotal }));
+  // Finished but NOT exhausted: a failed page, the quota's soft stop, or
+  // eBay's 10,000-result ceiling. Each says why.
+  const incomplete = sites.filter(([, s]) => s.nextOffset == null && !s.exhausted)
+    .map(([mp, s]) => ({ marketplace: mp, reason: s.incompleteReason || s.reason || 'stopped' }))
+    .concat(sites.filter(([, s]) => s.atEbayCeiling).map(([mp, s]) => ({ marketplace: mp,
+      reason: `eBay serves at most ${EBAY_OFFSET_CEILING.toLocaleString('en-US')} results per search; it reports ${s.ebayTotal}` })));
+  const name = mp => mp.replace(/^EBAY_/, '');
+  const note = count + ' listing' + (count === 1 ? '' : 's')
+    + (loading.length ? ', still searching ' + loading.map(l => name(l.marketplace)).join(', ') : '')
+    + (incomplete.length ? ' — incomplete on ' + incomplete.map(l => name(l.marketplace) + ' (' + l.reason + ')').join('; ') : '');
+  return Object.assign({ complete: !loading.length && !incomplete.length, loading, incomplete,
+    calls: st.calls, pagesByMarketplace: Object.fromEntries(sites.map(([mp, s]) => [mp, s.pagesFetched])),
+    notSearched: Object.keys(EBAY_SITES_PENDING), note }, extra);
+}
+
+// A source that failed outright (every eBay site refused, a quota stop, a
+// timeout, Yahoo's 403 from Render) leaves no site state to report — but the
+// view is NOT complete, and "27 listings" alone would say it was.
+function withSourceFailures(progress, sources) {
+  const failed = Object.entries(sources || {})
+    .filter(([, s]) => s && !['ok', 'skipped', 'unavailable', 'dry-run'].includes(s.status))
+    .map(([id, s]) => ({ marketplace: id, reason: s.status + (s.reason ? ': ' + s.reason : '') }));
+  if (!failed.length) return progress;
+  return Object.assign({}, progress, {
+    incomplete: progress.incomplete.concat(failed), complete: false,
+    note: progress.note + ' — not searched: ' + failed.map(f => f.marketplace + ' (' + f.reason + ')').join('; ') });
+}
+
+// ── Pages fetched per view, recorded (T1) ──
+// "Did we get everything, and what did it cost?" had no answer: nothing
+// recorded a view. Counts only — no eBay item data is stored (the terms).
+const VIEW_LOG = [];
+let viewTableReady = null;
+async function logListingView(v) {
+  VIEW_LOG.push(v);
+  if (VIEW_LOG.length > 500) VIEW_LOG.shift();
+  console.log('[listings:view] ' + JSON.stringify({ card: v.cardId, grade: v.grade, calls: v.calls,
+    pages: v.pagesByMarketplace, rows: v.listings, complete: v.complete, cached: v.cached, ms: v.msTotal }));
+  if (!db) return;
+  try {
+    if (!viewTableReady) viewTableReady = db.query(`CREATE TABLE IF NOT EXISTS listing_views (
+      id bigserial PRIMARY KEY, at timestamptz NOT NULL DEFAULT now(),
+      card_id text NOT NULL, grade text, printing text, cached boolean NOT NULL,
+      calls int NOT NULL, listings int, complete boolean, pages jsonb, totals jsonb,
+      incomplete jsonb, ms_first int, ms_total int)`);
+    await viewTableReady;
+    await db.query(`INSERT INTO listing_views (card_id, grade, printing, cached, calls, listings,
+      complete, pages, totals, incomplete, ms_first, ms_total) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [v.cardId, v.grade, v.printing, v.cached, v.calls, v.listings, v.complete,
+       JSON.stringify(v.pagesByMarketplace || {}), JSON.stringify(v.ebayTotals || {}),
+       JSON.stringify(v.incomplete || []), v.msFirst, v.msTotal]);
+  } catch (e) { viewTableReady = null; console.warn('[listings:view] not recorded: ' + e.message); }
+}
+
+const listingJobs = new Map();
+
+// The whole of one view: cache, first answer, background continuation.
+// /api/listings and /api/search both come through here, so they cannot
+// answer differently (the Raw NM bug) or cache a trimmed copy for the other.
+async function listingsFor(card, requestedId, grade, printing, opts) {
+  opts = opts || {};
+  const key = card.api_card_id;
+  // The cache answers ONE question: card + grade + printing.
+  const cacheGrade = printing ? grade + '|' + printing : grade;
+  const jobKey = listingKey(key, cacheGrade);
+
+  // A dry run must never be served from cache, or it reports a request that
+  // was not built for it. A running continuation is never restarted by
+  // ?refresh — it IS the refresh.
+  if (!opts.dryRun && (!opts.refresh || listingJobs.has(jobKey))) {
+    const hit = listingCacheGet(key, cacheGrade);
+    if (hit) {
+      if (!opts.poll) logListingView({ cardId: key, grade, printing: printing || null, cached: true,
+        calls: 0, listings: hit.count, complete: !!(hit.progress && hit.progress.complete) });
+      return hit;
+    }
+  }
+
+  const t0 = Date.now();
+  // A browser request is a live user waiting, so page 1 is foreground: it
+  // may spend quota down to the reserve. The continuation is background.
+  const gathered = await gatherListings(card, grade, opts.limit || 25,
+    { background: false, dryRun: !!opts.dryRun, printing });
+  const st = gathered.ebayState;
+  const progress = withSourceFailures(listingsProgress(st, gathered.listings.length), gathered.sources);
+  const payload = buildListingsPayload(card, requestedId, grade, printing,
+    { listings: gathered.listings, liveCount: gathered.liveCount, outliers: gathered.outliers },
+    gathered.sources, gathered.tookMs, progress);
+  if (gathered.dryRun) {
+    payload.dryRun = gathered.dryRun;
+    payload.note = 'dryRun=1 — nothing was sent to eBay and no quota was spent';
+    return payload;                       // deliberately NOT cached
+  }
+  const ts = Date.now();
+  listingCacheSet(key, cacheGrade, payload, ts);
+  const msFirst = Date.now() - t0;
+  const view = () => ({ cardId: key, grade, printing: printing || null, cached: false,
+    calls: st ? st.calls : 0,
+    pagesByMarketplace: st ? Object.fromEntries(Object.entries(st.sites).map(([m, s]) => [m, s.pagesFetched])) : {},
+    ebayTotals: st ? Object.fromEntries(Object.entries(st.sites).map(([m, s]) => [m, s.ebayTotal])) : {},
+    listings: payload.count, msFirst, msTotal: Date.now() - t0 });
+
+  if (!st || !progress.loading.length) {
+    const v = view(); v.complete = progress.complete; v.incomplete = progress.incomplete;
+    logListingView(v);
+    return payload;
+  }
+  if (!listingJobs.has(jobKey)) {
+    const job = continueListings(card, requestedId, grade, printing, gathered, ts, t0)
+      .then(final => { const v = view(); Object.assign(v, final); logListingView(v); })
+      .catch(e => console.warn('[listings] continuation failed: ' + e.message))
+      .finally(() => listingJobs.delete(jobKey));
+    listingJobs.set(jobKey, job);
+  }
+  return payload;
+}
+
+// Page every site to exhaustion, re-judging and re-caching after each page.
+// The cache keeps the FIRST fetch's timestamp: no row is served as fresher
+// than the oldest row beside it, and the 15 minutes run from that.
+async function continueListings(card, requestedId, grade, printing, gathered, ts, t0) {
+  const st = gathered.ebayState;
+  const cacheGrade = printing ? grade + '|' + printing : grade;
+  const memo = gathered.judgeMemo || {};
+  const opts = { printing, background: true };
+  let rebuilding = Promise.resolve();
+  const republish = () => (rebuilding = rebuilding.then(async () => {
+    const rows = gathered.otherRows.concat(st.listings);
+    const j = await judgeListings(card, grade, rows, {}, memo);
+    const sources = Object.assign({}, gathered.sources);
+    const r = ebayStateResult(st);
+    sources.ebay = Object.assign({}, sources.ebay, {
+      status: 'ok', count: r.kept, scanned: r.scanned, rejected: r.rejected, sites: r.sites,
+      pending: r.pending, pages: r.pages,
+      printing: r.printing,
+      summary: `${r.kept} kept, ${r.rejected} rejected of ${r.scanned} scanned` });
+    const progress = withSourceFailures(listingsProgress(st, j.listings.length), sources);
+    const payload = buildListingsPayload(card, requestedId, grade, printing, j, sources,
+      Date.now() - t0, progress);
+    payload.fetchedAt = new Date(ts).toISOString();
+    listingCacheSet(card.api_card_id, cacheGrade, payload, ts);
+    return progress;
+  }));
+  // Sites in parallel (ebaycall's queue still serialises the calls and paces
+  // them); pages within a site in order, since each needs the last's offset.
+  await Promise.all(Object.keys(st.sites).map(mp =>
+    continueEbaySite(card, grade, opts, st, mp, republish)));
+  const progress = await republish();
+  return { complete: progress.complete, incomplete: progress.incomplete, listings: st.listings.length + gathered.otherRows.length };
+}
+
+// GET /api/listings-log?limit=200 — calls per card view, from what was
+// recorded, and what that means against the daily budget.
+app.get('/api/listings-log', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 200, 2000);
+  let rows = VIEW_LOG.slice(-limit).map(v => ({ card_id: v.cardId, grade: v.grade, cached: v.cached,
+    calls: v.calls, listings: v.listings, complete: v.complete, pages: v.pagesByMarketplace,
+    totals: v.ebayTotals, ms_first: v.msFirst, ms_total: v.msTotal }));
+  let from = 'memory (this process)';
+  if (db) {
+    try {
+      const r = await db.query(`SELECT at, card_id, grade, cached, calls, listings, complete, pages, totals,
+        incomplete, ms_first, ms_total FROM listing_views ORDER BY id DESC LIMIT $1`, [limit]);
+      rows = r.rows; from = 'listing_views';
+    } catch (e) { /* table not created yet: memory only */ }
+  }
+  const fresh = rows.filter(r => !r.cached);
+  const calls = fresh.map(r => r.calls).sort((a, b) => a - b);
+  const pct = p => calls.length ? calls[Math.min(calls.length - 1, Math.floor(p * calls.length))] : null;
+  const mean = calls.length ? calls.reduce((a, b) => a + b, 0) / calls.length : null;
+  const allMean = rows.length ? rows.reduce((a, r) => a + r.calls, 0) / rows.length : null;
+  res.json({ from, views: rows.length, cachedViews: rows.length - fresh.length,
+    callsPerUncachedView: { mean: mean && +mean.toFixed(1), p50: pct(0.5), p90: pct(0.9), max: calls.length ? calls[calls.length - 1] : null },
+    callsPerViewIncludingCacheHits: allMean && +allMean.toFixed(1),
+    budget: { dailyLimit: quota.DAILY_LIMIT || 5000,
+      uncachedViewsPerDay: mean ? Math.floor((quota.DAILY_LIMIT || 5000) / mean) : null,
+      note: 'searches only; token exchanges are counted separately by /api/ebay/quota' },
+    incompleteViews: fresh.filter(r => r.complete === false).length,
+    rows });
+});
 
 function withTimeout(promise, ms, label) {
   return Promise.race([
@@ -2490,82 +2984,12 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
   // an ungated eBay search on the raw string).
   if (!card) return next();
 
-  const key = card.api_card_id;
   const dryRun = req.query.dryRun === '1' || req.query.dryRun === 'true';
-
-  // A dry run must never be served from cache, or it reports a request that
-  // was not built for it.
-  if (!req.query.refresh && !dryRun) {
-    const hit = listingCacheGet(key, cacheGrade);
-    if (hit) return res.json(hit);
-  }
-
   try {
-    // A browser request is a live user waiting, so it is foreground: it may
-    // spend quota down to the reserve. Only ingestion and refresh are
-    // background, and they yield at the soft stop so this path keeps working.
-    const gathered = await gatherListings(card, grade, limit,
-      { background: false, dryRun, printing });
-    const { listings, sources, tookMs, liveCount } = gathered;
-    // The headline figures skip anything the outlier check flagged. This is
-    // the number a buyer acts on, and "$2.08" for a card that trades at
-    // $800 is not an answer — it is the wrong card, a proxy or a scam.
-    // The flagged rows are still returned, last, with their reason.
-    const trusted = listings.filter(outlier.trustworthy);
-    const payload = {
-      cardId: card.api_card_id,
-      requestedId: cardId,
-      card: {
-        name: card.name, nameEn: card.name_en || null, number: card.number,
-        rarity: card.rarity, set: card.set_name, setTotal: card.set_total,
-        image: card.image_small || null
-      },
-      grade,
-      // The printing asked for, and every printing this card exists in —
-      // the page offers a selector only when there is more than one.
-      printing: printing || 'all',
-      printings: (printingsOf(card) || []).map(k => ({ key: k, label: cm.printingLabel(k) })),
-      printingsRead: !!printingsOf(card),
-      count: listings.length,
-      liveCount,
-      cheapest: trusted.length ? trusted[0].landed : null,
-      cheapestLive: (trusted.find(l => l.live) || {}).landed ?? null,
-      // What the outlier check did, and why — reported even when it did not
-      // run. "Not applied: median $0.99 is below $15" is a different fact
-      // from "applied, nothing flagged", and a UI that cannot tell them
-      // apart cannot explain itself.
-      outliers: gathered.outliers,
-      // T2: what this grade is actually worth, measured from the listings
-      // that just passed the gate — sold apart from active, edition apart
-      // from edition, and the sample size attached. The multiplier table
-      // stays as a labelled fallback; it is no longer the only answer.
-      //
-      // Computed, not stored: this is a read endpoint. `gradeprices.js`
-      // persists aggregates, and it is the only thing that writes them.
-      gradePrice: gp.aggregate(listings, { grade }),
-      listings: listings.slice(0, limit),
-      sources,
-      tookMs,
-      cached: false,
-      cachedAgeSec: 0,
-      // eBay's terms: do not present data as more current than it is. This
-      // states the freshness contract in the response itself rather than
-      // leaving the client to assume "live".
-      freshness: {
-        cached: false,
-        ageSeconds: 0,
-        maxAgeSeconds: Math.round(LISTING_TTL / 1000),
-        note: 'fetched now'
-      },
-      attribution: EBAY_ATTRIBUTION,
-      fetchedAt: new Date().toISOString()
-    };
-    if (gathered.dryRun) {
-      payload.dryRun = gathered.dryRun;
-      payload.note = 'dryRun=1 — nothing was sent to eBay and no quota was spent';
-      return res.json(payload);          // deliberately NOT cached
-    }
-    listingCacheSet(key, cacheGrade, payload);
+    const payload = await listingsFor(card, cardId, grade, printing, {
+      dryRun, refresh: !!req.query.refresh, limit,
+      // The page re-asks while a view is still loading; those are not views.
+      poll: req.query.poll === '1' });
     res.json(payload);
   } catch (err) {
     res.status(500).json({ cardId, grade, listings: [], error: err.message });
@@ -2670,43 +3094,17 @@ app.get('/api/search', async (req, res) => {
       const card = await resolveListingCard(top.cardId);
       if (card) {
         const grade = parsed.gradeString;
-        const cached = listingCacheGet(card.api_card_id, grade);
-        if (cached) {
-          payload.listings = cached.listings;
-          payload.sources = cached.sources;
-          payload.cheapest = cached.cheapest;
-          payload.cheapestLive = cached.cheapestLive;
-          payload.outliers = cached.outliers;
-          payload.listingsCached = true;
-        } else {
-          const gathered = await gatherListings(card, grade, 25);
-          const { listings, sources, tookMs, liveCount } = gathered;
-          // Same rule as /api/listings, from the same helper. These two
-          // paths compute the same thing and must not answer differently —
-          // the Raw NM bug (22 listings one way, 0 the other) was found
-          // exactly here.
-          const trusted = listings.filter(outlier.trustworthy);
-          const lp = {
-            cardId: card.api_card_id, requestedId: top.cardId,
-            card: { name: card.name, nameEn: card.name_en || null, number: card.number,
-                    rarity: card.rarity, set: card.set_name, setTotal: card.set_total,
-                    image: card.image_small || null },
-            grade, count: listings.length, liveCount,
-            cheapest: trusted.length ? trusted[0].landed : null,
-            cheapestLive: (trusted.find(l => l.live) || {}).landed ?? null,
-            outliers: gathered.outliers,
-            listings: listings.slice(0, 25), sources, tookMs,
-            cached: false, fetchedAt: new Date().toISOString()
-          };
-          listingCacheSet(card.api_card_id, grade, lp);
-          payload.listings = lp.listings;
-          payload.sources = sources;
-          payload.liveCount = liveCount;
-          payload.cheapest = lp.cheapest;
-          payload.cheapestLive = lp.cheapestLive;
-          payload.outliers = lp.outliers;
-          payload.listingsCached = false;
-        }
+        // The same function /api/listings uses — same rows, same cache
+        // entry, never a trimmed copy cached for the other to serve.
+        const lp = await listingsFor(card, top.cardId, grade, null, {});
+        payload.listings = lp.listings;
+        payload.sources = lp.sources;
+        payload.liveCount = lp.liveCount;
+        payload.cheapest = lp.cheapest;
+        payload.cheapestLive = lp.cheapestLive;
+        payload.outliers = lp.outliers;
+        payload.progress = lp.progress;
+        payload.listingsCached = !!lp.cached;
       }
     }
 
@@ -3846,12 +4244,10 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
         }
         const kept = [];
         for (const l of r.listings) {
-          const conv = l.currency === 'USD' ? { usd: l.price, rate: 1 } : await fx.toUsd(l.price, l.currency);
-          const shipConv = l.shipping == null ? null
-            : l.currency === 'USD' ? { usd: l.shipping } : await fx.toUsd(l.shipping, l.currency);
-          kept.push({ itemId: l.itemId, price: l.price, currency: l.currency, usd: conv && conv.usd,
-                      rate: conv && conv.rate, shippingUsd: l.shipping === 0 ? 0 : (shipConv ? shipConv.usd : null),
-                      country: l.country, title: l.title.slice(0, 90) });
+          // sourceEbay converts now (T1); the row carries its own currency.
+          kept.push({ itemId: l.itemId, price: l.priceOriginal != null ? l.priceOriginal : l.price,
+                      currency: l.currencyOriginal || 'USD', usd: l.price, fx: l.fx,
+                      shippingUsd: l.shipping, country: l.country, title: l.title.slice(0, 140) });
         }
         per[mp] = { scanned: r.scanned, kept: r.kept, rejected: r.rejected, pages: r.pages, scannedIds: r.scannedIds || [],
                     rejectReasons: reasons, keptRows: kept };

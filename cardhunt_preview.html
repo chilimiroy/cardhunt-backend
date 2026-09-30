@@ -503,6 +503,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .lrr{display:flex;align-items:center;gap:9px;flex-shrink:0}
 .ldot{width:7px;height:7px;border-radius:50%;background:var(--gr);animation:pulse 1.5s infinite;flex-shrink:0}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes cdpulse{from{opacity:1}to{opacity:.3}}
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:500;align-items:center;justify-content:center;backdrop-filter:blur(4px)}.overlay.on{display:flex}
 .modal{background:var(--w);border-radius:20px;padding:28px;width:90%;position:relative;box-shadow:var(--sh3)}
 .modal-x{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;background:var(--bg);border:none;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer}
@@ -3380,15 +3381,20 @@ var LIVE_TTL   = 15 * 60 * 1000;      // mirrors the server's cache
 // printing (T10): 'all' or absent = every printing. It rides on the cache
 // key as well as the URL — keyed on card+grade alone, a Reverse Holo answer
 // would be served to a Holo question (the grade-in-the-cache-key lesson).
-function fetchListings(cardId, grade, printing) {
+// opts.poll (T1): a view still loading re-asks for the server's growing
+// answer — past this page's cache, and marked so the server does not count
+// it as another card view.
+function fetchListings(cardId, grade, printing, opts) {
+  opts = opts || {};
   var pr0 = (printing && printing !== 'all') ? printing : null;
   var key = cardId + '|' + grade + (pr0 ? '|' + pr0 : '');
   var hit = LIVE_CACHE[key];
-  if (hit && Date.now() - hit.ts < LIVE_TTL) return Promise.resolve(hit.data);
+  if (!opts.poll && hit && Date.now() - hit.ts < LIVE_TTL) return Promise.resolve(hit.data);
   if (LIVE_INFLIGHT[key]) return LIVE_INFLIGHT[key];
   var pr = fetch(BACKEND + '/api/listings/' + encodeURIComponent(cardId)
-                 + '?grade=' + encodeURIComponent(grade) + '&limit=25'
-                 + (pr0 ? '&printing=' + encodeURIComponent(pr0) : ''))
+                 + '?grade=' + encodeURIComponent(grade)
+                 + (pr0 ? '&printing=' + encodeURIComponent(pr0) : '')
+                 + (opts.poll ? '&poll=1' : ''))
     .then(function (r) { if (!r.ok) throw new Error('API returned ' + r.status); return r.json(); })
     .then(function (d) { LIVE_CACHE[key] = { ts: Date.now(), data: d }; return d; });
   LIVE_INFLIGHT[key] = pr;
@@ -3425,13 +3431,28 @@ function liveSuspectNote(l){
     + liveEsc(l.suspectReason || 'unusually cheap for this card') + '</div>';
 }
 
+// The listing's own price in its own currency - a GB row shows the pound
+// sign, not the yen sign every non-USD row used to get (T1: eBay GB/AU/CA).
+var CUR_SIGN = { JPY: '\u00a5', GBP: '\u00a3', EUR: '\u20ac', AUD: 'A$', CAD: 'C$' };
+function liveOrigPrice(l){
+  if (!(l.currencyOriginal && l.currencyOriginal !== 'USD' && l.priceOriginal)) return '';
+  var c = l.currencyOriginal, n = Number(l.priceOriginal);
+  return (CUR_SIGN[c] || c + ' ') + n.toLocaleString(undefined, c === 'JPY' ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Shipping is shown, never filtered on (T1). Where the quote is for a buyer
+// in another country, the row says which - a GB listing's postage is to a
+// UK address, and presenting it bare would imply it is to yours.
+var SHIP_TO_NAME = { GB: 'UK', US: 'US', AU: 'Australia', CA: 'Canada', DE: 'Germany', FR: 'France', IT: 'Italy', ES: 'Spain' };
+function liveShip(l){
+  var to = l.shippingTo && l.shippingTo !== 'US' ? ' to ' + (SHIP_TO_NAME[l.shippingTo] || l.shippingTo) : '';
+  if (!l.shippingKnown) return 'shipping not stated' + (to ? ' (' + to.slice(1) + ')' : '');
+  return (l.shipping > 0 ? '+' + fmtCurrency(Number(l.shipping)) + ' ship' : 'free ship') + to;
+}
+
 function liveRow(l){
   var landed = fmtCurrency(Number(l.landed));
-  var ship = l.shippingKnown
-    ? (l.shipping > 0 ? '+' + fmtCurrency(Number(l.shipping)) + ' ship' : 'free ship')
-    : 'shipping n/a';
-  var orig = (l.currencyOriginal && l.currencyOriginal !== 'USD' && l.priceOriginal)
-    ? ' \u00b7 \u00a5' + Number(l.priceOriginal).toLocaleString() : '';
+  var ship = liveShip(l);
+  var orig = liveOrigPrice(l) ? ' \u00b7 ' + liveOrigPrice(l) : '';
   var when = l.live ? (l.listingType === 'auction' ? liveEndsIn(l.endsAt) : 'buy it now') : 'ended';
   var bids = (l.bids != null && l.bids > 0) ? ' \u00b7 ' + l.bids + ' bid' + (l.bids === 1 ? '' : 's') : '';
   return '<div class="lrow-wrap"><a href="' + liveEsc(l.url) + '" target="_blank" rel="noopener" '
@@ -3479,7 +3500,7 @@ function liveRow(l){
     + liveSuspectNote(l) + '</div>'
     + '<div style="text-align:right;flex-shrink:0">'
     + '<div style="font-size:17px;font-weight:800">' + landed + '</div>'
-    + '<div style="font-size:10px;color:var(--mu)">' + liveEsc(ship) + orig + '</div>'
+    + '<div style="font-size:10px;color:var(--mu)">' + liveEsc(ship + orig) + '</div>'
     // The whole row is the link; this makes it LOOK like one, at a size
     // that is easy to hit.
     + '<span class="lrow2-go">View listing &#8599;</span></div></a>'
@@ -3582,7 +3603,17 @@ function liveSourceNote(d){
     // A truncated eBay search says so: under sort=price the rows it never
     // examined are the dearest, so the measured median above leans low.
     var pg = v.pages;
-    if (v.status === 'ok') bits.push(k + ': ' + v.count
+    // eBay per site (T1): what each site kept and how many pages it took.
+    if (v.status === 'ok' && v.sites) {
+      bits.push(k + ': ' + v.count + ' (' + Object.keys(v.sites).map(function (m) {
+        var s = v.sites[m];
+        return m.replace(/^EBAY_/, '') + ' ' + (s.status === 'ok' ? s.kept + ' kept of ' + s.scanned
+          + (s.ebayTotal != null ? '/' + s.ebayTotal : '') + ', ' + s.pagesFetched + ' pg' : s.status);
+      }).join('; ') + ')');
+      if (v.sitesNotSearched) bits.push('not searched: ' + Object.keys(v.sitesNotSearched)
+        .map(function (m) { return m.replace(/^EBAY_/, ''); }).join(', '));
+    }
+    else if (v.status === 'ok') bits.push(k + ': ' + v.count
       + (pg && pg.truncated ? ' (first ' + v.scanned + ' of ' + (pg.ebayTotal != null ? pg.ebayTotal : '?')
           + ' examined' + (pg.pageError ? ', a page failed' : '') + ')' : ''));
     else if (v.status === 'unconfigured') bits.push(k + ': needs credentials');
@@ -3641,14 +3672,51 @@ function applyMeasuredGrade(d){
     + 'The estimate was ' + fmtCurrency(base * gradeMult(d.grade)) + '.</div>';
 }
 
-async function renderLiveListings(card, grade){
+// \u2500\u2500 The count climbing (T1) \u2500\u2500
+// The first answer is page 1 of every eBay site; the server keeps paging
+// each to exhaustion and its cached answer grows. While `progress.loading`
+// is non-empty the panel re-asks (&poll=1: not counted as a view) and
+// redraws in place. It stops when the card, grade or printing changes.
+var LIVE_POLL = null;
+var LIVE_POLL_MS = 2500;
+function liveScheduleProgress(card, grade, printing, d){
+  if (LIVE_POLL) { clearTimeout(LIVE_POLL); LIVE_POLL = null; }
+  var pg = d && d.progress;
+  if (!pg || !pg.loading || !pg.loading.length) return;
+  LIVE_POLL = setTimeout(function () {
+    LIVE_POLL = null;
+    if (!LF.card || LF.card.id !== card.id || LF.grade !== grade || (SEL.printing || 'all') !== printing) return;
+    // fetchListings stores the answer in LIVE_CACHE; the redraw reads it.
+    fetchListings(card.id, grade, printing, { poll: true })
+      .then(function () { renderLiveListings(card, grade, { quiet: true }); })
+      .catch(function () { liveScheduleProgress(card, grade, printing, d); });
+  }, LIVE_POLL_MS);
+}
+// "247 listings, still searching GB and AU" - never a silent partial list.
+function liveProgressLine(d){
+  var pg = d && d.progress;
+  if (!pg) return '';
+  var loading = pg.loading && pg.loading.length;
+  var inc = pg.incomplete && pg.incomplete.length;
+  var color = inc ? '#B45309' : 'var(--mu)';
+  return '<div id="cd-progress" style="font-size:11px;color:' + color + ';margin-bottom:8px">'
+    + (loading ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--t);'
+        + 'margin-right:6px;animation:cdpulse 1s ease-in-out infinite alternate"></span>' : '')
+    + liveEsc(pg.note || '')
+    + (loading ? ' &mdash; the list grows as pages arrive' : (inc ? '' : ' &middot; every page searched'))
+    + '</div>';
+}
+
+async function renderLiveListings(card, grade, opts){
+  opts = opts || {};
   var host = document.getElementById('cd-live');
   if (!host || !card) return;
   var cardId = card.id;
   var key = cardId + '|' + grade;
   var printing = SEL.printing || 'all';
 
-  host.innerHTML = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd);'
+  // A progress redraw keeps the rows on screen; only a new question blanks it.
+  if (!opts.quiet) host.innerHTML = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd);'
     + 'font-size:11px;color:var(--mu)">Checking marketplaces for real listings\u2026</div>';
 
   var d;
@@ -3740,7 +3808,9 @@ async function renderLiveListings(card, grade){
   var head = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd)">'
     + '<div style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em;margin-bottom:8px">'
     + 'FOR SALE NOW &mdash; ' + liveEsc(selLabel)
-    + ' <span style="color:var(--gr)">&#10003; checked</span></div>';
+    + ' <span style="color:var(--gr)">&#10003; checked</span></div>'
+    + liveProgressLine(d);
+  liveScheduleProgress(card, grade, printing, d);
 
   // The unstated group, rendered wherever it is needed. Built once here so
   // the empty case and the populated case cannot describe it differently.
@@ -3818,7 +3888,7 @@ async function renderLiveListings(card, grade){
   if (ended.length) {
     html += '<div style="font-size:10px;font-weight:700;color:var(--fa);margin:12px 0 4px;'
       + 'text-transform:uppercase;letter-spacing:.4px">Recently ended &mdash; comparables, not offers</div>'
-      + ended.slice(0, 6).map(liveRow).join('');
+      + ended.map(liveRow).join('');
   }
   html += excludedNote() + unstatedBlock()
         + liveOutlierNote(d) + liveSourceNote(d) + '</div>';
@@ -5812,6 +5882,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260929-28ea4be-typicalprinting &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260930-cd7794b-allsites &middot; click to hide</div>
 </body>
 </html>

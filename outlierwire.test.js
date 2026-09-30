@@ -47,16 +47,23 @@ chk('the sort ranks suspects first of all',
 
 // cheapest and cheapestLive are the numbers people act on. BOTH payload
 // sites — /api/listings and the /api/search chain — must skip flagged rows.
-chk('two payloads compute cheapest, and both filter to trustworthy rows',
-    count(server, 'listings.filter(outlier.trustworthy)') === 2);
-chk('cheapest is drawn from the trusted rows (2 sites)',
-    count(server, 'cheapest: trusted.length ? trusted[0].landed : null') === 2);
-chk('cheapestLive is too (2 sites)',
-    count(server, "cheapestLive: (trusted.find(l => l.live) || {}).landed ?? null") === 2);
+// T1 (2026-09-30): ONE payload builder now, buildListingsPayload, reached by
+// both endpoints through listingsFor — stronger than two copies that agree.
+chk('one payload builder computes cheapest, filtering to trustworthy rows',
+    count(server, 'listings.filter(outlier.trustworthy)') === 1 &&
+    /function buildListingsPayload\([\s\S]*?const trusted = listings\.filter\(outlier\.trustworthy\);/.test(server));
+chk('cheapest is drawn from the trusted rows',
+    count(server, 'cheapest: trusted.length ? trusted[0].landed : null') === 1);
+chk('cheapestLive is too',
+    count(server, "cheapestLive: (trusted.find(l => l.live) || {}).landed ?? null") === 1);
+chk('/api/listings and /api/search both answer through listingsFor',
+    /const payload = await listingsFor\(card, cardId, grade, printing,/.test(server) &&
+    /const lp = await listingsFor\(card, top\.cardId, grade, null, \{\}\);/.test(server) &&
+    /payload\.cheapest = lp\.cheapest;/.test(server) && /payload\.cheapestLive = lp\.cheapestLive;/.test(server));
 chk('no payload still takes cheapest from the unfiltered list',
     !/cheapest: listings\.length \? listings\[0\]\.landed/.test(server));
 chk('the stats block is returned so the UI can explain rather than hide',
-    count(server, 'outliers: gathered.outliers') === 2 &&
+    /outliers: j\.outliers,/.test(server) && /payload\.outliers = lp\.outliers;/.test(server) &&
     /outliers: judged\.stats/.test(server));
 
 // ── The rows stay ─────────────────────────────────────────────

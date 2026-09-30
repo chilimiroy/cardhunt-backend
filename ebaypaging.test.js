@@ -1,4 +1,4 @@
-// ebaypaging.test.js — /api/listings pages past eBay's first 75, and says so
+// ebaypaging.test.js — eBay is paged until the results run out, on every site
 //
 //   node ebaypaging.test.js
 //
@@ -7,11 +7,15 @@
 // sort=price it cuts the EXPENSIVE end, so every median built from the rows
 // sat low while `cheapest` looked fine.
 //
-// The rule: a second page only when eBay's `total` exceeds what was fetched;
-// never more than EBAY_MAX_PAGES; a truncated result says it is truncated.
+// T1 (2026-09-30) replaced the 3-page cap on /api/listings with: page 1 of
+// every site in EBAY_SITES, then each site paged to exhaustion (or eBay's own
+// 10,000-result ceiling), one page at a time, rows de-duplicated across sites
+// and a refusal on any site sticky everywhere. EBAY_MAX_PAGES remains the
+// DEFAULT for the bounded callers (marketprobe, gradecost).
 //
-// This runs the REAL sourceEbay, sliced out of server.js, against a stubbed
-// eBay — so it measures what the function does, not what its source says.
+// This runs the REAL sourceEbay and the REAL multi-site functions, sliced out
+// of server.js, against a stubbed eBay — so it measures what the functions
+// do, not what their source says.
 'use strict';
 const fs = require('fs');
 const cm = require('./cardmatch');
@@ -39,104 +43,255 @@ const fnMatch = slice('function gateLanguage(') + slice('function printingsOf(')
   + slice('function printingReport(');
 const fnNorm = slice('function normaliseListing(');
 ok(!/\nasync function |\nfunction /.test(fnEbay.slice(1)), 'the sourceEbay slice holds one function');
-const maxPagesDecl = (src.match(/\nconst EBAY_MAX_PAGES = \d+;/) || [''])[0];
-ok(maxPagesDecl, 'EBAY_MAX_PAGES is declared at top level');
+
+// The constants block, EBAY_MAX_PAGES through ebaySite: the page size, the
+// offset ceiling and the site list live there (T1).
+const constStart = src.indexOf('\nconst EBAY_MAX_PAGES = ');
+const constEnd = constStart < 0 ? -1 : src.indexOf('\n', src.indexOf('\nconst ebaySite = ', constStart) + 1);
+const consts = constStart >= 0 && constEnd > constStart ? src.slice(constStart, constEnd) : '';
+ok(/EBAY_OFFSET_CEILING = 10000;/.test(consts) && /EBAY_PAGE_MAX = 200;/.test(consts),
+   'EBAY_PAGE_MAX and EBAY_OFFSET_CEILING are declared at top level');
+const fnSites = ['function newEbayState(', 'function mergeEbaySite(', 'function ebaySiteFailed(',
+  'function ebayStateResult(', 'async function sourceEbayAll(', 'async function continueEbaySite(']
+  .map(slice).join('\n');
 
 // One Charizard title that passes the gate at PSA 10, made unique per row.
 const CARD = { api_card_id: 'en-base1-4', name: 'Charizard', name_en: 'Charizard', number: '4',
                set_total: 102, set_name: 'Base', set_api_id: 'base1', set_release: '1999-01-09' };
 const title = i => `1999 Pokemon Base Set Charizard 4/102 Holo PSA 10 GEM MINT #${1000 + i}`;
 
+// A deterministic fx stub: 1 GBP/AUD/CAD = 1.5 USD. The real fx.js is
+// tested on its own; here the question is whether sourceEbay USES it.
+const fx = {
+  async toUsd(a, c) { if (!(a > 0)) return null; if (c === 'XXX') throw new Error('fx: no pinned fallback for XXX');
+    return { usd: +(a * 1.5).toFixed(2), original: a, currency: c, rate: 1.5, rateDate: 'test', rateSource: 'stub' }; },
+  describe: c => c ? `${c.currency}->USD @${c.rate}` : ''
+};
+
+// `sites`: per marketplace, { total, currency, titleFor(i), idFor(i), failAt }.
+// Default: US only, `total` rows, USD.
 function build(total, opts = {}) {
   const calls = [];
+  const sites = opts.sites || { EBAY_US: { total } };
   const ebay = {
     ebayEnabled: () => true,
     async fetchEbay(_db, req) {
       const u = new URL(req.url);
       const limit = +u.searchParams.get('limit');
       const offset = +(u.searchParams.get('offset') || 0);
-      calls.push({ offset, limit });
+      const mp = (req.meta && req.meta.marketplace) || 'EBAY_US';
+      calls.push({ offset, limit, mp, background: !!req.background });
       if (req.dryRun) return { dryRun: true, request: req.url };
+      const site = sites[mp];
+      if (!site) return { ok: false, reason: 'HTTP 409 marketplace not supported' };
+      const nOnSite = calls.filter(c => c.mp === mp).length;
+      if (site.failAt === nOnSite) return { ok: false, reason: 'HTTP 500' };
+      if (site.blockAt === nOnSite) return { ok: false, blocked: 'quota', reason: 'soft stop reached' };
       if (opts.failAt === calls.length) return { ok: false, reason: 'HTTP 500' };
-      const n = Math.max(0, Math.min(limit, total - offset));
+      const n = Math.max(0, Math.min(limit, site.total - offset));
       const itemSummaries = Array.from({ length: n }, (_, k) => {
         const i = offset + k - (opts.overlap && offset ? opts.overlap : 0);
-        return { itemId: 'v1|' + i, title: title(i), price: { value: String(100 + i), currency: 'USD' },
+        return { itemId: site.idFor ? site.idFor(i) : 'v1|' + i,
+                 title: site.titleFor ? site.titleFor(i) : title(i),
+                 price: { value: String(100 + i), currency: site.currency || 'USD' },
+                 shippingOptions: [{ shippingCost: { value: '5.00', currency: site.currency || 'USD' } }],
                  condition: 'Graded', itemWebUrl: 'https://www.ebay.com/itm/' + i };
       });
-      return { ok: true, data: { total, itemSummaries } };
+      // eBay reports the SEARCH's total on every page, capped nowhere.
+      return { ok: true, data: { total: site.total, itemSummaries } };
     }
   };
-  // timing: the ?debug=1 recorder (T1). A no-op outside a debug request.
-  const factory = new Function('ebay', 'cm', 'lp', 'jpf', 'db', 'getEbayTokenDetailed', 'timing',
-    `${maxPagesDecl}\n${fnMatch}\n${fnNorm}\n${fnEbay}\nreturn { sourceEbay };`);
-  const mod = factory(ebay, cm, lp, jpf, null, async () => ({ token: 't' }), require('./timing'));
+  const factory = new Function('ebay', 'cm', 'lp', 'jpf', 'db', 'getEbayTokenDetailed', 'timing', 'fx',
+    `${consts}\n${fnMatch}\n${fnNorm}\n${fnEbay}\n${fnSites}\n` +
+    'return { sourceEbay, sourceEbayAll, continueEbaySite, ebayStateResult, EBAY_SITES };');
+  const mod = factory(ebay, cm, lp, jpf, null, async () => ({ token: 't' }), require('./timing'), fx);
   return { calls, ...mod };
 }
 
 // `pages` is absent on a build without paging: fail each assertion, don't abort.
 const run = async (b, ...a) => { const r = await b.sourceEbay(...a); r.pages = r.pages || {}; return r; };
+// Drive a multi-site view the way listingsFor does: page 1 everywhere, then
+// every site to exhaustion.
+async function fullView(b) {
+  const r = await b.sourceEbayAll(CARD, 'PSA 10', 25, { background: false });
+  const st = r.ebayState;
+  let pagesSeen = 0;
+  await Promise.all(Object.keys(st.sites).map(mp =>
+    b.continueEbaySite(CARD, 'PSA 10', {}, st, mp, async () => { pagesSeen++; })));
+  return { first: r, final: b.ebayStateResult(st), st, pagesSeen };
+}
 
 (async () => {
-  // ── under one page: one call, nothing claimed truncated ──
+  // ═══ The bounded default (marketprobe, gradecost) — unchanged ═══
   {
     const b = build(40);
-    const r = await run(b,CARD, 'PSA 10', 25);
+    const r = await run(b, CARD, 'PSA 10', 25);
     ok(b.calls.length === 1, `40 on eBay -> 1 call (got ${b.calls.length})`);
-    ok(r.pages.fetched === 1 && r.pages.truncated === false && r.pages.stoppedAtCap === false,
+    ok(r.pages.fetched === 1 && r.pages.truncated === false && r.pages.stoppedAtCap === false && r.pages.exhausted === true,
        'a complete single page is not truncated: ' + JSON.stringify(r.pages));
     ok(r.scanned === 40 && r.kept === 40, `every row reached the gate and passed it (${r.kept}/${r.scanned})`);
   }
-  // ── exactly one full page: eBay's total says there is nothing more ──
   {
     const b = build(75);
-    const r = await run(b,CARD, 'PSA 10', 25);
+    const r = await run(b, CARD, 'PSA 10', 25);
     ok(b.calls.length === 1, `75 on eBay -> 1 call, no speculative second page (got ${b.calls.length})`);
-    ok(r.pages.truncated === false, '75 of 75 is complete');
+    ok(r.pages.truncated === false && r.pages.nextOffset === null, '75 of 75 is complete, nothing owed');
   }
-  // ── the busy card: 145 wanted, as on JP Charizard ex 201 ──
   {
     const b = build(145);
-    const r = await run(b,CARD, 'PSA 10', 25);
+    const r = await run(b, CARD, 'PSA 10', 25);
     ok(b.calls.length === 2, `145 on eBay -> 2 calls (got ${b.calls.length})`);
     ok(b.calls[1] && b.calls[1].offset === 75, 'page 2 starts at offset 75');
     ok(r.scanned === 145 && r.pages.truncated === false && r.pages.stoppedAtCap === false,
        `all 145 examined, complete: ${r.scanned} ${JSON.stringify(r.pages)}`);
     ok(r.listings.some(l => l.price >= 200), 'the expensive end past row 75 is now kept');
   }
-  // ── past the cap: three calls, and the response says it stopped there ──
   {
     const b = build(600);
-    const r = await run(b,CARD, 'PSA 10', 25);
-    ok(b.calls.length === 3, `600 on eBay -> exactly 3 calls, the cap (got ${b.calls.length})`);
-    ok(r.scanned === 225, `225 examined (got ${r.scanned})`);
-    ok(r.pages.truncated === true && r.pages.stoppedAtCap === true && r.pages.ebayTotal === 600,
-       'a capped result says truncated and stoppedAtCap: ' + JSON.stringify(r.pages));
+    const r = await run(b, CARD, 'PSA 10', 25);
+    ok(b.calls.length === 3, `bounded default: 600 on eBay -> 3 calls (got ${b.calls.length})`);
+    ok(r.pages.truncated === true && r.pages.stoppedAtCap === true && r.pages.nextOffset === 225,
+       'a bounded call says where it stopped, so it can be resumed: ' + JSON.stringify(r.pages));
   }
-  // ── a later page fails: page 1 is kept, and the failure is reported ──
   {
     const b = build(300, { failAt: 2 });
-    const r = await run(b,CARD, 'PSA 10', 25);
+    const r = await run(b, CARD, 'PSA 10', 25);
     ok(r.scanned === 75 && r.kept === 75, 'page 1 survives a failed page 2');
-    ok(r.pages.truncated === true && /500/.test(r.pages.pageError || ''),
+    ok(r.pages.truncated === true && /500/.test(r.pages.pageError || '') && r.pages.exhausted === false,
        'the failed page is reported, not a silent short list: ' + JSON.stringify(r.pages));
   }
-  // ── a row that shifted between pages is counted once ──
   {
     const b = build(150, { overlap: 3 });
-    const r = await run(b,CARD, 'PSA 10', 25);
+    const r = await run(b, CARD, 'PSA 10', 25);
     ok(r.pages.duplicatesSkipped === 3 && r.scanned === 147,
        `3 repeated rows skipped (${r.pages.duplicatesSkipped}, scanned ${r.scanned})`);
   }
-  // ── dry run still sends nothing ──
   {
     const b = build(600);
-    const r = await run(b,CARD, 'PSA 10', 25, { dryRun: true });
+    const r = await run(b, CARD, 'PSA 10', 25, { dryRun: true });
     ok(r.dryRun === true && b.calls.length === 1, 'dry run builds one request and pages nothing');
   }
-  // ── wired: gatherListings forwards the block to sources.ebay ──
+
+  // ═══ Paging to exhaustion (T1) ═══
+  {
+    const b = build(677);
+    const r = await run(b, CARD, 'PSA 10', 25, { pageSize: 200, maxPages: Infinity });
+    ok(b.calls.length === 4 && b.calls.every(c => c.limit === 200),
+       `677 on eBay at 200 a page -> 4 calls (got ${b.calls.length}: ${JSON.stringify(b.calls.map(c => c.offset))})`);
+    ok(r.scanned === 677 && r.pages.exhausted === true && r.pages.truncated === false && r.pages.nextOffset === null,
+       'every one of 677 examined and nothing owed: ' + JSON.stringify(r.pages));
+  }
+  {
+    const b = build(677);
+    const r = await run(b, CARD, 'PSA 10', 25, { pageSize: 200, maxPages: 1, offset: 400 });
+    ok(b.calls.length === 1 && b.calls[0].offset === 400, 'a continuation resumes at its offset');
+    ok(r.pages.nextOffset === 600 && r.scanned === 200, 'and says where the next page starts: ' + JSON.stringify(r.pages));
+  }
+  {
+    const b = build(677);
+    const r = await run(b, CARD, 'PSA 10', 25, { pageSize: 999, maxPages: 1 });
+    ok(b.calls[0].limit === 200, `a page is never asked for more than eBay's 200 (asked ${b.calls[0].limit})`);
+  }
+  {
+    // eBay's own ceiling: offset + limit may not pass 10,000.
+    const b = build(25000);
+    const r = await run(b, CARD, 'PSA 10', 25, { pageSize: 200, maxPages: Infinity });
+    ok(b.calls.length === 50 && Math.max(...b.calls.map(c => c.offset)) === 9800,
+       `25,000 results -> 50 pages, the last at offset 9,800 (got ${b.calls.length})`);
+    ok(r.pages.atEbayCeiling === true && r.pages.exhausted === true && r.pages.truncated === true,
+       'the ceiling is stated as truncation, not passed off as complete: ' + JSON.stringify(r.pages));
+  }
+
+  // ═══ Currency and shipping destination (T1) ═══
+  {
+    const b = build(0, { sites: { EBAY_GB: { total: 3, currency: 'GBP' } } });
+    const r = await run(b, CARD, 'PSA 10', 25, { marketplace: 'EBAY_GB' });
+    const l = r.listings[0] || {};
+    ok(l.price === 150 && l.currency === 'USD' && l.priceOriginal === 100 && l.currencyOriginal === 'GBP',
+       'a GBP row is converted, its own price and currency kept: ' + JSON.stringify({ p: l.price, c: l.currency, po: l.priceOriginal, co: l.currencyOriginal }));
+    ok(l.shipping === 7.5 && l.landed === 157.5, `shipping converted too (${l.shipping}, landed ${l.landed})`);
+    ok(l.shippingTo === 'GB' && l.marketplace === 'EBAY_GB' && /GBP->USD/.test(l.fx || ''),
+       'the row says whose shipping quote it is, where it came from, and the rate');
+  }
+  {
+    const b = build(0, { sites: { EBAY_GB: { total: 2, currency: 'XXX' } } });
+    const r = await run(b, CARD, 'PSA 10', 25, { marketplace: 'EBAY_GB' });
+    ok(r.kept === 0 && r.rejected === 2 && r.dropped.every(d => /currency not convertible/.test(d.reason)),
+       'an unconvertible currency is refused WITH its reason, never shown as USD');
+  }
+  {
+    const b = build(3);
+    const r = await run(b, CARD, 'PSA 10', 25);
+    ok(r.listings[0].currencyOriginal === null && r.listings[0].shippingTo === 'US', 'a US row is untouched, shipping to US');
+  }
+
+  // ═══ Every site, every page (T1) ═══
+  {
+    // US and GB share items 0-149; GB also has 150-349 of its own.
+    const b = build(0, { sites: { EBAY_US: { total: 150 }, EBAY_GB: { total: 350, currency: 'GBP' },
+                                  EBAY_AU: { total: 0, currency: 'AUD' }, EBAY_CA: { total: 10, currency: 'CAD' } } });
+    const v = await fullView(b);
+    const firstMps = b.calls.slice(0, 4).map(c => c.mp).sort().join(',');
+    ok(firstMps === 'EBAY_AU,EBAY_CA,EBAY_GB,EBAY_US' && b.calls.slice(0, 4).every(c => c.offset === 0 && !c.background),
+       'page 1 of every site first, foreground: ' + JSON.stringify(b.calls.slice(0, 4)));
+    ok(v.first.pending.length === 1 && v.first.pending[0].marketplace === 'EBAY_GB' && v.first.pending[0].nextOffset === 200,
+       'the first answer says what is still owed: ' + JSON.stringify(v.first.pending));
+    const cont = b.calls.slice(4);
+    ok(cont.length === 1 && cont[0].mp === 'EBAY_GB' && cont[0].offset === 200 && cont[0].background,
+       'the continuation fetches only what is owed, in the background: ' + JSON.stringify(cont));
+    ok(v.final.kept === 350 && v.final.listings.length === 350,
+       `350 distinct items, each once (got ${v.final.kept})`);
+    ok(v.st.sites.EBAY_GB.duplicates === 150 && v.st.sites.EBAY_US.kept === 150,
+       'a row on two sites keeps its US copy: ' + JSON.stringify(v.st.sites.EBAY_GB));
+    ok(v.final.pages.complete === true && v.final.pending.length === 0, 'complete once every site is exhausted');
+    ok(v.final.pages.calls === 5, `calls counted: 5 (got ${v.final.pages.calls})`);
+    ok(v.final.sitesNotSearched && v.final.sitesNotSearched.EBAY_DE, 'the sites NOT searched are named, with reasons');
+  }
+  {
+    // A refusal is sticky: US refuses item 7 (a Celebrations title), GB's
+    // copy of the same item reads clean. The item stays refused.
+    const bad = i => `Pokemon Celebrations Charizard 4/102 Classic Collection PSA 10 #${i}`;
+    const b = build(0, { sites: { EBAY_US: { total: 10, titleFor: i => i === 7 ? bad(i) : title(i) },
+                                  EBAY_GB: { total: 10, currency: 'GBP' } } });
+    const v = await fullView(b);
+    ok(!v.final.listings.some(l => l.itemId === 'v1|7'),
+       'an item US refused is not let back in by another site\'s title');
+    ok(v.final.kept === 9, `9 kept (got ${v.final.kept})`);
+  }
+  {
+    // The quota's soft stop on page 3: the site says it is incomplete and why.
+    const b = build(0, { sites: { EBAY_US: { total: 1000, blockAt: 3 } } });
+    const v = await fullView(b);
+    const s = v.st.sites.EBAY_US;
+    ok(v.final.kept === 400 && s.exhausted === false && /quota|soft stop/.test(s.incompleteReason || ''),
+       'a budget stop keeps what arrived and says why: ' + JSON.stringify({ kept: v.final.kept, s }));
+    ok(v.final.pages.complete === false, 'and the view is not called complete');
+  }
+  {
+    // One site failing does not empty the view; every site failing reports
+    // the source's status as before.
+    const b = build(0, { sites: { EBAY_US: { total: 5 } } });   // GB/AU/CA answer 409
+    const v = await fullView(b);
+    ok(v.final.kept === 5 && v.st.sites.EBAY_GB.status === 'error' && /409/.test(v.st.sites.EBAY_GB.reason),
+       'a refusing site is reported, the others still answer: ' + JSON.stringify(v.st.sites.EBAY_GB));
+    const b2 = build(0, { sites: {} });
+    let threw = null; try { await b2.sourceEbayAll(CARD, 'PSA 10', 25, {}); } catch (e) { threw = e; }
+    ok(threw && /409/.test(threw.message), 'every site failing throws, so the status is reported, never an empty list');
+  }
+  {
+    // A dry run asks one site and sends nothing.
+    const b = build(0, { sites: { EBAY_US: { total: 5 } } });
+    const r = await b.sourceEbayAll(CARD, 'PSA 10', 25, { dryRun: true });
+    ok(r.dryRun === true && b.calls.length === 1, 'a dry run builds one request');
+  }
+
+  // ═══ Wiring ═══
   ok(/if \(r\.value\.pages\) sources\[s\.id\]\.pages = r\.value\.pages;/.test(src),
      'gatherListings carries `pages` onto the source block');
+  ok(/id: 'ebay', label: 'eBay', fetch: sourceEbayAll,/.test(src), 'the eBay listing source is the every-site one');
+  ok(!/listings: listings\.slice\(0, (limit|25)\)/.test(src), 'no listings response is sliced to a row limit');
+  ok(/const lp = await listingsFor\(card, top\.cardId, grade, null, \{\}\);/.test(src),
+     '/api/search answers through listingsFor — never a trimmed copy in the shared cache');
 
   console.log(`\nebaypaging: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

@@ -132,8 +132,17 @@ ok('gatherListings copies the printing report into sources', /sources\[s\.id\]\.
 {
   const i = server.indexOf("app.get('/api/listings/:cardId'");
   const route = server.slice(i, server.indexOf('\napp.', i + 5));
-  ok('/api/listings keys its cache on the printing too', /listingCacheGet\(key, cacheGrade\)/.test(route) && /listingCacheSet\(key, cacheGrade/.test(route));
-  ok('/api/listings passes printing to gatherListings', /gatherListings\(card, grade, limit,\s*\{[^}]*printing/.test(route));
+  // T1: the route answers through listingsFor, which owns the cache and the
+  // gather — both are asserted there.
+  const lf = (k => server.slice(k, server.indexOf('\n}\n', k)))(server.indexOf('async function listingsFor('));
+  ok('/api/listings passes printing to listingsFor', /listingsFor\(card, cardId, grade, printing,/.test(route));
+  ok('listingsFor keys its cache on the printing too',
+     /const cacheGrade = printing \? grade \+ '\|' \+ printing : grade;/.test(lf)
+     && /listingCacheGet\(key, cacheGrade\)/.test(lf) && /listingCacheSet\(key, cacheGrade/.test(lf));
+  ok('listingsFor passes printing to gatherListings', /gatherListings\(card, grade, [^,]+,\s*\{[^}]*printing/.test(lf));
+  ok('the continuation caches under the same printing key',
+     /const cacheGrade = printing \? grade \+ '\|' \+ printing : grade;/.test(
+       (k => server.slice(k, server.indexOf('\n}\n', k)))(server.indexOf('async function continueListings('))));
   ok('/api/listings refuses an unknown printing (400), not silently All', /status\(400\)/.test(route));
 }
 

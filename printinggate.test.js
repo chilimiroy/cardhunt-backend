@@ -287,6 +287,20 @@ const registry = serverSrc.slice(serverSrc.indexOf('const LISTING_SOURCES = ['),
 const sourceFns = [...registry.matchAll(/fetch:\s*(source\w+)/g)].map(m => m[1]);
 ok('found the source registry to inspect', sourceFns.length >= 2, sourceFns.join(', '));
 
+// T1: the eBay entry is sourceEbayAll, which merges sourceEbay's answers
+// per site and spreads the US one (gate included) through ebayStateResult.
+// The evidence is checked where it is produced — sourceEbay — once the
+// wrapper is shown to carry it through.
+if (sourceFns.includes('sourceEbayAll')) {
+  const i = serverSrc.indexOf('async function sourceEbayAll(');
+  const allBody = serverSrc.slice(i, serverSrc.indexOf('\n}\n', i));
+  const j = serverSrc.indexOf('function ebayStateResult(');
+  const resBody = serverSrc.slice(j, serverSrc.indexOf('\n}\n', j));
+  ok('sourceEbayAll carries sourceEbay\'s gate evidence through',
+     /sourceEbay\(card, grade, limit/.test(allBody) && /return ebayStateResult\(st\)/.test(allBody)
+     && /Object\.assign\(\{\}, f, \{/.test(resBody) && !/\bgate:/.test(resBody));
+  sourceFns.splice(sourceFns.indexOf('sourceEbayAll'), 1, 'sourceEbay');
+}
 for (const fn of sourceFns) {
   // Slice the one function. Anchored on the declaration and stopped at the
   // next top-level declaration INCLUDING `async` — setlist.test.js's slicer

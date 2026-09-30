@@ -55,10 +55,27 @@ console.log('\n  listing sources — each one reports rejected + dropped');
 const registry = /const LISTING_SOURCES = \[([\s\S]*?)\n\];/.exec(server);
 ok('LISTING_SOURCES found', !!registry);
 const fetchers = registry ? [...registry[1].matchAll(/fetch:\s*([A-Za-z0-9_]+)/g)].map(m => m[1]) : [];
-ok('registry names sourceYahoo, sourceYuyutei, sourceEbay',
-  ['sourceYahoo', 'sourceYuyutei', 'sourceEbay'].every(f => fetchers.includes(f)), fetchers.join(','));
+ok('registry names sourceYahoo, sourceYuyutei, sourceEbayAll',
+  ['sourceYahoo', 'sourceYuyutei', 'sourceEbayAll'].every(f => fetchers.includes(f)), fetchers.join(','));
+// T1: the eBay source is every site. Its answer is ebayStateResult over
+// merged sourceEbay results, so the report is checked THERE — and that it
+// carries sourceEbay's own gate evidence through, not a summary of it.
+{
+  const all = slice(server, 'sourceEbayAll');
+  ok('sourceEbayAll gets its rows from sourceEbay (the gated function)', /sourceEbay\(card, grade, limit/.test(all));
+  ok('sourceEbayAll answers through ebayStateResult', /return ebayStateResult\(st\);/.test(all));
+  ok('ebayStateResult carries sourceEbay\'s own fields (gate, query, filters) through',
+     /Object\.assign\(\{\}, f, \{/.test(slice(server, 'ebayStateResult')));
+}
 for (const f of fetchers) {
-  const src = slice(server, f);
+  const src = slice(server, f === 'sourceEbayAll' ? 'ebayStateResult' : f);
+  if (f === 'sourceEbayAll') {
+    // `gate` is sourceEbay's, spread in; assert sourceEbay returns it.
+    ok('sourceEbay returns gate: (what the gate had)', /\bgate:\s/.test(slice(server, 'sourceEbay')));
+    ok(`${f} returns rejected:`, /\brejected:\s/.test(src));
+    ok(`${f} returns dropped:`, /\bdropped:\s/.test(src));
+    continue;
+  }
   ok(`${f} returns rejected:`, /\brejected:\s/.test(src));
   ok(`${f} returns dropped:`, /\bdropped:\s/.test(src));
   ok(`${f} returns gate: (what the gate had)`, /\bgate:\s/.test(src));
@@ -69,7 +86,13 @@ ok('sourceYahoo has no silent `continue` on the jpfilter gate', !/if \(!jpf\.jpI
 ok('sourceYahoo runs printingConflict (language / year / reprint)', /cm\.printingConflict\(/.test(yahoo));
 ok('sourceYuyutei runs printingConflict', /cm\.printingConflict\(/.test(slice(server, 'sourceYuyutei')));
 ok('sourceEbay runs cm.verify', /cm\.verify\(/.test(slice(server, 'sourceEbay')));
-ok('gatherListings flags outliers on every source\'s rows', /outlier\.flagOutliers\(listings\)/.test(slice(server, 'gatherListings')));
+// T1: judging moved to judgeListings, shared by the first answer and every
+// continuation page — both must reach it with EVERY row.
+ok('judgeListings flags outliers on the rows it is given', /outlier\.flagOutliers\(listings\)/.test(slice(server, 'judgeListings')));
+ok('gatherListings judges every source\'s rows', /await judgeListings\(card, grade, listings, opts, memo\)/.test(slice(server, 'gatherListings')));
+ok('a continuation re-judges every row, not only the new page',
+   /gathered\.otherRows\.concat\(st\.listings\)/.test(slice(server, 'continueListings')) &&
+   /await judgeListings\(card, grade, rows,/.test(slice(server, 'continueListings')));
 {
   const jpf = require('./jpfilter');
   ok('jpfilter exports jpItemRejectReason', typeof jpf.jpItemRejectReason === 'function');

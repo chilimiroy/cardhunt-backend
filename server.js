@@ -1968,12 +1968,16 @@ const EBAY_SITES = [
   // tested on three sets of real IT titles (eusites.test.js); a refusal on
   // any site stays a refusal everywhere (mergeEbaySite), so a translation
   // cannot overturn the English title's verdict.
-  { id: 'EBAY_IT', country: 'IT', currency: 'EUR', originalTitles: false }
+  { id: 'EBAY_IT', country: 'IT', currency: 'EUR', originalTitles: false },
+  // ES: no condition or grade aspect in category 183454 at all (only
+  // Material, Vintage) — so no filter, and every ES row's condition is what
+  // its TITLE states. Its translation turns "ENG" into "ESP"; the gate reads
+  // that as Spanish and refuses — a listing lost, never a wrong one kept.
+  { id: 'EBAY_ES', country: 'ES', currency: 'EUR', originalTitles: false }
 ];
 // Not searched yet, each with the reason — reported on every response so a
 // short list is never mistaken for every marketplace having been asked.
 const EBAY_SITES_PENDING = {
-  EBAY_ES: 'machine-translated titles: vocabulary not yet taught',
   EBAY_JP: 'refused by eBay — 409 "12019: marketplace not supported"'
 };
 const ebaySite = id => EBAY_SITES.find(s => s.id === id) || { id, country: null, currency: null };

@@ -393,18 +393,30 @@ has not run the gate** — that is the tell, and it has caught a defect twice.
 
 `?dryRun=1` builds the request, sends nothing and spends no quota.
 
-### Every site, every page (T1, 2026-09-30)
+### On demand — US page 1, the rest when asked (T2, 2026-09-30)
 `/api/listings` and `/api/search` both answer through `listingsFor` — one
 payload builder, **every row returned** (it had sliced to 25 while
-`count` said 58). eBay is `sourceEbayAll`: page 1 of each site in
-`EBAY_SITES` (US, GB, AU, CA, DE, FR, IT, ES) foreground, then
-`continueListings` pages each site to exhaustion at 200 a page in the
-background, re-judging (outliers, reprint band) and re-caching after every
-page. The response carries `progress {complete, loading[], incomplete[],
-calls, note}` — "247 listings, still searching GB" — and the page polls
-(`&poll=1`, not counted as a view) until nothing is loading. eBay's own
-ceiling (offset+limit ≤ 10,000) and a quota soft stop are STATED as
-incomplete, never passed off as complete. Also `?edition=` (T3).
+`count` said 58).
+
+| action | request | eBay calls |
+|---|---|---|
+| open a card | default | **1** — `EBAY_US`, page 1, 200 rows |
+| "Search 7 more marketplaces" | `?sites=all` | one per site not yet answered |
+| "Load more listings" | `?more=1` | one page per searched site that has more |
+| US page 1 kept **< 5** | automatic, same request | +7 (`AUTO_EXPAND_BELOW`, measured — lesson below) |
+| home-page tiles | `?cachedOnly=1` | **0** — cache or "open the card to check listings" |
+
+Buttons extend the cached view (`VIEW_STATE`, 15 min) and re-judge every row
+together (`rebuildView`). Nothing runs by itself afterwards — T1's
+`continueListings` background crawl and the page's poller are deleted.
+`progress` says what is NOT shown: `searched`, `notSearched`, `morePages`
+(`notExamined` per site), and `actions` carrying each button's label and
+call cost — "128 listings from eBay US. 7 more marketplaces not searched
+(GB, AU, CA, DE, FR, IT, ES). 99 more results on eBay not yet examined".
+A refused site (busy, quota, 409) stays in `notSearched` and the next press
+asks it again; a busy/error answer is not cached, server or page
+(`retryable`). eBay's own ceiling (offset+limit ≤ 10,000) is STATED as
+incomplete. Also `?edition=` (T3), `?auto=0` (measurement only).
 
 - **Shipping is never a filter.** Rows carry `shippingTo` (whose buyer the
   site quotes) and `shippingKnown`; every non-USD row goes through `fx.js`
@@ -415,16 +427,22 @@ incomplete, never passed off as complete. Also `?edition=` (T3).
 - **A refusal on an English-titled site (US/GB/AU/CA) is sticky
   everywhere**; a refusal on a translated site (`originalTitles: false`)
   drops only its own copy — see the lesson below.
-- **Pages per view are recorded**: `listing_views` (counts only, no eBay
-  item data), summarised at `GET /api/listings-log`. Local servers write to
-  the same table — filter them out before reading averages.
-- `node sitecheck.js [--grade=all]` reads the real view to completion and
-  reports rows per site plus an INDEPENDENT language reader's suspects.
-  Run it after any change to `EBAY_SITES` or the gate's vocabulary.
+- **Calls per view are recorded**: `listing_views` (counts only, no eBay
+  item data) with `action` (open / open+auto / all-sites / more) and
+  `origin` (render / local), summarised at `GET /api/listings-log`
+  (render only by default; `byAction`, `callsPerCardOpened`). Marked, not
+  deleted: 34 local test views `origin=local`, 538 T1-era views
+  `action=t1-every-site`, 40 threshold-measurement views `measure:*` —
+  reported under byAction, never averaged into browsing.
+- `node sitecheck.js [--grade=all] [--pages=N]` presses every button (all
+  sites, then Load more until nothing is owed) and reports rows per site
+  plus an INDEPENDENT language reader's suspects. Expensive by design —
+  run it after any change to `EBAY_SITES` or the gate's vocabulary.
 
-Measured 2026-09-30, 10 English cards × Raw NM + PSA 10: calls per uncached
-view mean 7.6 (p50 6 before ES/IT, min 8 with all eight sites), max 32 —
-~550-650 uncached views/day on 5,000. Cached views cost 0.
+Measured 2026-09-30 after deploy: 11 plain opens **1 call each**; two cards
+opened at once during a background job answered in 2.1-2.6s (was: 75s and
+zero rows); Search all on sv03.5-199 7 calls (128 -> 301 rows), Load more
+6 (-> 372). Under T1 the same views cost mean 7.6, max 32.
 
 ### The registry
 
@@ -600,7 +618,7 @@ curl '<host>/api/probe/sources?id=yahoo&refresh=1'
 
 # eBay — guards, quota, live checks
 node ebayquota.test.js                     # 25 assertions, the quota gate
-node ebaycall.test.js                      # 70, every guard tripped
+node ebaycall.test.js                      # 86, every guard tripped; lanes, slots, busy cap
 node ebayratecheck.js                      # ask eBay the REAL limit (needs keys)
 node ebayprobe.js en-swsh3.5-74 "PSA 10"   # credentials -> token -> search -> gate
 node yahoogate.js ja-SV2a-201              # the Yahoo gate, live (LOCAL ONLY - Render is 403'd)
@@ -639,7 +657,7 @@ node cardmatch2.test.js      # 29
 node cardmatch3.test.js      # 44   NOT_A_SINGLE_CARD word boundaries, both directions
 node cardparse.test.js       # 156  free text -> card identity (191 with --db:
                              #      reachable-by-name cases + SQL/JS fold agree)
-node ebaycall.test.js        # 70   every guard tripped
+node ebaycall.test.js        # 86   every guard tripped; two lanes, five slots, 4s foreground cap
 node ebayquota.test.js       # 25   the quota gate
 node ebaytoken.test.js       # 49   which failure is reported, not merely that one was
 node estimator.test.js       # 31   the one estimator
@@ -665,12 +683,12 @@ node cardid.test.js          # 51   foreign ids refused; producers closed; DB co
 node gradefilter.test.js     # 58   eBay grade fields; refuse where title and field disagree
 node anygrade.test.js        # 27   grader-wide mode still checks the card
 node cdlayout.test.js        # 17   one spacing rule down the card page's price column
-node ebaypaging.test.js      # 53   the REAL sourceEbay + every-site layer: pages to exhaustion, fx, sticky refusals, one row per item
+node ebaypaging.test.js      # 66   the REAL sourceEbay + site layer: US-only default, Search all, Load more, fx, sticky refusals, one row per item
 node unspaced.test.js        # 41   "PSA10" read; TAG TEAM / ACE SPEC still reachable raw
 node certcheck.test.js       # 47   cert + photos from one getItem; never claims verified; never padded; nothing eBay persisted
 node reprintpricing.test.js  # 13   reprints priced by printed number in their own TCGPlayer set (SKIP w/o ingest.js)
 node manifestmap.test.js     # 12   manifest never maps "None" to Common (SKIP w/o ingest.js)
-node marketwait.test.js      # 12   no /api/market request; one /api/listings per card+grade
+node marketwait.test.js      # 14   no /api/market request; one /api/listings per card+grade; tiles read the cache only
 node nofabricated.test.js    # 48   no password/card input, no invented shops/holdings/prices (--deployed: Render's HTML too)
 node nosoldscrape.test.js    # 17   no eBay sold-page scrape; real /api/market handler, network stubbed (--live: +3)
 node gateaudit.test.js       # 62   T9: every path reaches the gates it needs, and reports (--live: +8)
@@ -1161,9 +1179,17 @@ The pieces that are not obvious:
 - **Token exchanges count** (`kind: 'token'`). The `expires_in` bug spent the
   daily quota on authentication and nothing recorded it. `/api/ebay/quota`
   now shows `token_calls` separately, so that failure is visible next time.
-- **The quota check happens INSIDE the serialising queue.** Checking before
-  joining it is the classic time-of-check bug: three jobs at 99 remaining each
-  check, each sees "allowed", all three spend.
+- **The quota check happens at the moment of spending.** Checking before
+  joining the queue is the classic time-of-check bug: three jobs at 99
+  remaining each check, each sees "allowed", all three spend. Since the
+  queue has five slots (T1, 2026-09-30) the check runs under its own short
+  lock and counts calls allowed but not yet recorded (`pending`);
+  `ebaycall.test.js` sends eight at RESERVE+2 and asserts exactly two go.
+- **Two lanes, five slots — a user never waits behind background.**
+  `EBAY_CONCURRENCY` 5; background holds at most 2; a free slot goes to the
+  foreground queue first; pacing is 200ms per ENDPOINT (marketplace, token
+  host); a foreground call that gets no slot in 4s is refused as `busy`
+  (never sent later) rather than queued. `/api/ebay/quota` shows `queue`.
 - **Background yields, foreground does not.** Ingestion and `ebayActive` are
   `background: true` and stop at the 92% soft stop; a live user request runs
   down to the 100-call reserve. `DAILY_LIMIT * (1 - SOFT_STOP)` must stay
@@ -1748,6 +1774,42 @@ Before any other site reaches `/api/listings`: every currency through
 `fx.js` (GBP/AUD/CAD pinned since `f98108b` — fx refuses an unpinned
 currency, which first threw away every GB/AU/CA call), and shipping is to
 THAT site's buyer unless `X-EBAY-C-ENDUSERCTX` says otherwise — unmeasured.
+
+## Completeness plus a single lane is starvation (T1/T2, 2026-09-30)
+Live: zero listings, `calls: 0`, `tookMs: 75038`, quota fine. The morning's
+"every site, every page" made one card view 8-40 paced calls, background
+paging shared a queue of ONE, and a user's request sat 75 seconds behind a
+crawl and never reached eBay. Not a pre-existing bug — the consequence of
+the design that preceded it. Two fixes, both needed:
+- **The queue** (ebaycall): foreground and background lanes, five slots,
+  background capped at two, a 4s foreground cap answered as `busy`.
+- **The design**: fetch what was asked. Open = 1 call; everything else is a
+  button that says what it costs, and the response says what was not
+  fetched. Measured after deploy: 11 plain opens, 1 call each.
+
+**Then the page did it again from another direction.** The first live
+reading after deploy showed a home-page load opening 14 cards nobody clicked
+— the Latest-searches and alert tiles fetch each card's listings for an
+"avg listing" line — 45 calls, and the burst filled the slots enough that
+sites answered busy. Tiles now read the cache only (`?cachedOnly=1`).
+**Look for every caller of a metered path, not only the one you changed.**
+
+### The auto-expand threshold, measured
+20 random priced English cards (5 per price tier, Raw): US page 1, then all
+8 sites. US 0-4 kept (5 cards): the rest added 0, 0, +2, +3, +13 — ex15-95
+has none in the US and 13 in AU. US 5-9 (2): +1, +12. 10-60 (5): +4..+38.
+60+ (8): +4..+340. `< 10` expands 7 of 20 opens (~3.5 calls/open, over the
+1-3 target); `< 5` expands 5 of 20 (~2.75). **5.** Random cards over-weight
+obscure ones; re-read `/api/listings-log` `callsPerCardOpened` on real
+traffic before moving it.
+
+### Known, deliberately not built
+- **A card named twice in two languages** — "Nachtara Vmax … Umbreon Vmax"
+  on eBay DE. Words cannot settle German vs English; eBay's structured
+  Language aspect could, at one getItem per listing per site. Not worth
+  that under the budget above.
+- **CMG** — seen once ("CMG 8"), unconfirmed as a grading company. Counted
+  as a slab only with a grade number beside it (the TAG/ACE rule). Leave it.
 
 ## eBay listings are cached, never stored
 eBay's terms allow serving item data for a request, not retaining it. So:

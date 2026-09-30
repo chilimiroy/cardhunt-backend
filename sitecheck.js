@@ -6,8 +6,8 @@
 // non-English cards got in. 50 added with 3 German-language cards is a
 // failure, not a 94% success."
 //
-// Reads the REAL /api/listings view to completion (polling while
-// progress.loading is non-empty — the same path the page takes), then:
+// Reads the REAL /api/listings view to completion (pressing "Search all
+// marketplaces" then "Load more" until nothing is owed — T2), then:
 //
 //   ADDED   rows per marketplace. A row seen on two sites keeps its US copy,
 //           so a row labelled EBAY_GB is one the US search did not keep.
@@ -81,17 +81,20 @@ async function get(path) {
   return JSON.parse(txt);
 }
 
-// The page's own path: ask once, then poll until nothing is loading.
+// The page's own path, pressing every button (T2, 2026-09-30: nothing loads
+// by itself any more): open, "Search all marketplaces", then "Load more"
+// until nothing is owed. `--pages=N` caps the Load-more presses — each is
+// one call per site with more, so a busy card to exhaustion is expensive.
+const MAX_MORE = parseInt(flag('pages', '50'), 10);
 async function fullView(cardId, grade) {
   const q = `/api/listings/${encodeURIComponent(cardId)}?grade=${encodeURIComponent(grade)}`;
   const t0 = Date.now();
-  let d = await get(q), polls = 0;
-  while (d.progress && d.progress.loading && d.progress.loading.length && Date.now() - t0 < WAIT_MS) {
-    await sleep(3000);
-    d = await get(q + '&poll=1');
-    polls++;
+  let d = await get(q + '&sites=all'), presses = 0;
+  while (d.progress && d.progress.actions && d.progress.actions.loadMore && presses < MAX_MORE && Date.now() - t0 < WAIT_MS) {
+    d = await get(q + '&more=1');
+    presses++;
   }
-  d._waitedMs = Date.now() - t0; d._polls = polls;
+  d._waitedMs = Date.now() - t0; d._polls = presses;
   return d;
 }
 

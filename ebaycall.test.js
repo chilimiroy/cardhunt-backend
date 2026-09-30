@@ -208,10 +208,107 @@ await quiet(async () => {
   await Promise.all([mk(1), mk(2), mk(3)]);
   const took = Date.now() - t0;
 
-  chk('never more than one eBay call in flight', maxInFlight === 1, 'max=' + maxInFlight);
+  chk('one endpoint: never two calls in flight at once (paced 200ms apart)', maxInFlight === 1, 'max=' + maxInFlight);
   chk('  calls complete in submission order', order.join(',') === '1,2,3', order.join(','));
   chk(`  three calls take >= 2x${ebay.MIN_INTERVAL_MS}ms of pacing`,
       took >= ebay.MIN_INTERVAL_MS * 2, took + 'ms');
+});
+
+// ══════════════════════════════════════════════════════════════
+console.log('\nSLOTS AND LANES  (TASK T1: a user sat 75s behind a background crawl)\n');
+// ══════════════════════════════════════════════════════════════
+const SITES = ['EBAY_US', 'EBAY_GB', 'EBAY_AU', 'EBAY_CA', 'EBAY_DE', 'EBAY_FR', 'EBAY_IT', 'EBAY_ES'];
+function slowCall(db, o) {
+  return ebay.fetchEbay(db, Object.assign({ url: URL_, token: 'T' }, o, {
+    fetchImpl: async () => { o.track.now++; o.track.max = Math.max(o.track.max, o.track.now);
+      await new Promise(r => setTimeout(r, o.ms || 300)); o.track.now--; o.track.done.push(o.tag);
+      return resp(200, {}); } }));
+}
+ebay.resetBreaker(); ebay._resetPacing();
+await quiet(async () => {
+  const track = { now: 0, max: 0, done: [] };
+  const db = fakeDb();
+  await Promise.all(SITES.map(mp => slowCall(db, { meta: { marketplace: mp }, track, tag: mp })));
+  chk(`different marketplaces run concurrently, up to ${ebay.MAX_CONCURRENT}`,
+      track.max > 1 && track.max <= ebay.MAX_CONCURRENT, 'max=' + track.max);
+  chk('  concurrency is at least 4 (T1: 4-6)', ebay.MAX_CONCURRENT >= 4 && ebay.MAX_CONCURRENT <= 6,
+      'MAX_CONCURRENT=' + ebay.MAX_CONCURRENT);
+});
+
+ebay.resetBreaker(); ebay._resetPacing();
+await quiet(async () => {
+  // A background crawl already running: 12 queued background calls.
+  const bgT = { now: 0, max: 0, done: [] }, fgT = { now: 0, max: 0, done: [] };
+  const db = fakeDb();
+  const bg = SITES.concat(SITES.slice(0, 4)).map((mp, i) =>
+    slowCall(db, { background: true, meta: { marketplace: mp }, track: bgT, tag: 'bg' + i, ms: 400 }));
+  await new Promise(r => setTimeout(r, 30));
+  const tFg = Date.now();
+  const fg = await slowCall(db, { meta: { marketplace: 'EBAY_US' }, track: fgT, tag: 'fg', ms: 50 });
+  const fgMs = Date.now() - tFg;
+  chk(`background never holds more than ${ebay.MAX_BACKGROUND} slots`, bgT.max <= ebay.MAX_BACKGROUND, 'max=' + bgT.max);
+  chk('  a foreground call during a crawl is served, not queued behind it', fg.ok, JSON.stringify(fg).slice(0, 120));
+  chk('  and it finished before most of the crawl', bgT.done.length < 6, 'bg done first: ' + bgT.done.length);
+  chk('  within ~1s (pacing on its own site only)', fgMs < 1000, fgMs + 'ms');
+  const rs = await Promise.all(bg);
+  chk('  the crawl still completes afterwards', rs.every(r => r.ok));
+});
+
+ebay.resetBreaker(); ebay._resetPacing();
+await quiet(async () => {
+  // Foreground first: fill every slot, queue a background then a foreground;
+  // the foreground must get the next free slot.
+  const t = { now: 0, max: 0, done: [] };
+  const db = fakeDb();
+  const fill = SITES.slice(0, ebay.MAX_CONCURRENT).map(mp =>
+    slowCall(db, { meta: { marketplace: mp }, track: t, tag: 'fill-' + mp, ms: 250 }));
+  await new Promise(r => setTimeout(r, 20));
+  const b = slowCall(db, { background: true, meta: { marketplace: 'EBAY_ES' }, track: t, tag: 'BG', ms: 50 });
+  const f = slowCall(db, { meta: { marketplace: 'EBAY_IT' }, track: t, tag: 'FG', ms: 50 });
+  await Promise.all(fill.concat([b, f]));
+  chk('a free slot goes to the foreground queue before the background one',
+      t.done.indexOf('FG') < t.done.indexOf('BG'), t.done.join(','));
+});
+
+ebay.resetBreaker(); ebay._resetPacing();
+await quiet(async () => {
+  // Never wait 75 seconds: every slot busy far longer than the cap.
+  const t = { now: 0, max: 0, done: [] };
+  const db = fakeDb();
+  let reached = 0;
+  const fill = SITES.slice(0, ebay.MAX_CONCURRENT).map(mp =>
+    slowCall(db, { meta: { marketplace: mp }, track: t, tag: mp, ms: 1500 }));
+  await new Promise(r => setTimeout(r, 20));
+  const t0 = Date.now();
+  const r = await ebay.fetchEbay(db, { url: URL_, token: 'T', maxWaitMs: 300, meta: { marketplace: 'EBAY_ES' },
+    fetchImpl: async () => { reached++; return resp(200, {}); } });
+  const waited = Date.now() - t0;
+  chk('a foreground call that cannot get a slot is refused as busy', r.blocked === 'busy', JSON.stringify(r));
+  chk('  after the cap, not after the crawl', waited < 700, waited + 'ms');
+  chk('  it says so, and that nothing was sent', /not sent/.test(r.reason || ''), r.reason);
+  await Promise.all(fill);
+  await new Promise(r => setTimeout(r, 50));
+  chk('  and it is NOT sent later behind the caller\'s back', reached === 0, 'reached=' + reached);
+  chk('  the default foreground cap is a few seconds', ebay.FOREGROUND_MAX_WAIT_MS >= 2000 && ebay.FOREGROUND_MAX_WAIT_MS <= 6000);
+});
+
+ebay.resetBreaker(); ebay._resetPacing();
+await quiet(async () => {
+  // Quota with several slots: RESERVE + 2 left, eight concurrent calls on
+  // eight sites. A DB whose count really moves on record.
+  const row = Object.assign({}, QUOTA_ROW, { calls_made: quota.DAILY_LIMIT - quota.RESERVE - 2 });
+  const db = { query: async (sql) => {
+    if (/RETURNING/i.test(sql)) { await new Promise(r => setTimeout(r, 5)); return { rows: [Object.assign({}, row)] }; }
+    if (/INSERT INTO ebay_quota/i.test(sql)) { await new Promise(r => setTimeout(r, 40)); row.calls_made++; }
+    return { rows: [] };
+  }};
+  let sent = 0;
+  const rs = await Promise.all(SITES.map(mp => ebay.fetchEbay(db, { url: URL_, token: 'T', meta: { marketplace: mp },
+    fetchImpl: async () => { sent++; await new Promise(r => setTimeout(r, 60)); return resp(200, {}); } })));
+  chk('two calls left above the reserve: exactly two of eight concurrent calls are sent',
+      sent === 2 && rs.filter(r => r.ok).length === 2, 'sent=' + sent + ' ' + rs.map(r => r.ok ? 'ok' : r.blocked).join(','));
+  chk('  the rest are refused as quota, with a reason', rs.filter(r => r.blocked === 'quota').length === 6);
+  chk('  no reservation leaks', ebay.queueState().reservedQuota === 0, JSON.stringify(ebay.queueState()));
 });
 
 // ══════════════════════════════════════════════════════════════

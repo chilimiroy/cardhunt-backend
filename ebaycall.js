@@ -55,17 +55,101 @@ function ebayEnabled() {
   return !/^(false|0|no|off)$/i.test(String(v).trim());
 }
 
-// ── Serialisation ─────────────────────────────────────────────
-// One eBay call at a time, process-wide. `refresh`, a user request and a
-// manual probe can otherwise overlap freely.
-let chain = Promise.resolve();
-let lastCallAt = 0;
+// ── Two lanes, a few slots (TASK T1, 2026-09-30) ──────────────
+// This was ONE call at a time, process-wide. Right while a card view cost
+// 1-3 calls; once a view paged 8 marketplaces to exhaustion, one Charizard
+// held the lane for 40+ paced calls, background paging shared it, and a
+// user's request sat 75,038ms in the queue and returned zero listings with
+// `calls: 0` — quota fine, eBay never asked. Completeness plus a single
+// lane is starvation.
+//
+// eBay's limit is per DAY, not per concurrent request, and each marketplace
+// is its own endpoint. So:
+//   - MAX_CONCURRENT slots in total;
+//   - background may hold at most MAX_BACKGROUND of them, so a foreground
+//     call always has a free slot unless other FOREGROUND calls fill them;
+//   - a free slot goes to the foreground queue first, always;
+//   - a foreground call waits at most FOREGROUND_MAX_WAIT_MS for a slot and
+//     is then refused as `busy` — never sent, never a silent empty list;
+//   - pacing is per endpoint (marketplace, or the token host): 200ms
+//     between call STARTS on one endpoint, reserved at acquisition so two
+//     slots cannot both start on the same site at once.
+function envInt(name, dflt, min, max) {
+  const v = parseInt(process.env[name], 10);
+  return Number.isFinite(v) ? Math.max(min, Math.min(max, v)) : dflt;
+}
+const MAX_CONCURRENT = envInt('EBAY_CONCURRENCY', 5, 1, 8);
+const MAX_BACKGROUND = Math.min(envInt('EBAY_BACKGROUND_SLOTS', 2, 1, 8), Math.max(1, MAX_CONCURRENT - 1));
+const FOREGROUND_MAX_WAIT_MS = 4000;
 
-function enqueue(task) {
-  const run = chain.then(task, task);       // a rejection must not break the chain
-  chain = run.then(() => {}, () => {});
+const lanes = { fg: [], bg: [] };
+const running = { fg: 0, bg: 0 };
+const nextStartAt = new Map();          // endpoint -> earliest next start (ms)
+
+function pump() {
+  while (running.fg + running.bg < MAX_CONCURRENT) {
+    let lane = null;
+    if (lanes.fg.length) lane = 'fg';
+    else if (lanes.bg.length && running.bg < MAX_BACKGROUND) lane = 'bg';
+    if (!lane) return;
+    const w = lanes[lane].shift();
+    if (w.timer) clearTimeout(w.timer);
+    running[lane]++;
+    w.resolve(lane);
+  }
+}
+function release(lane) { running[lane]--; pump(); }
+
+// Resolves to the lane once a slot is held, or null if maxWaitMs passed first
+// (the waiter is removed from the queue: nothing is sent later behind the
+// caller's back).
+function acquire(background, maxWaitMs) {
+  const lane = background ? 'bg' : 'fg';
+  return new Promise(resolve => {
+    const w = { resolve };
+    lanes[lane].push(w);
+    if (Number.isFinite(maxWaitMs)) {
+      w.timer = setTimeout(() => {
+        const i = lanes[lane].indexOf(w);
+        if (i >= 0) { lanes[lane].splice(i, 1); resolve(null); }
+      }, Math.max(0, maxWaitMs));
+    }
+    pump();
+  });
+}
+
+// Reserve this endpoint's next start time and return how long to wait.
+function paceDelay(endpoint) {
+  const now = Date.now();
+  const at = Math.max(now, nextStartAt.get(endpoint) || 0);
+  nextStartAt.set(endpoint, at + MIN_INTERVAL_MS);
+  return at - now;
+}
+
+function queueState() {
+  return { maxConcurrent: MAX_CONCURRENT, maxBackground: MAX_BACKGROUND,
+           foregroundMaxWaitMs: FOREGROUND_MAX_WAIT_MS,
+           running: { foreground: running.fg, background: running.bg },
+           waiting: { foreground: lanes.fg.length, background: lanes.bg.length },
+           reservedQuota: reserved };
+}
+
+// ── Quota, still checked at the moment of spending ──
+// With several slots the check can no longer rely on being alone, so it
+// runs under its own short lock and counts calls already allowed but not yet
+// recorded (`reserved`): three jobs at RESERVE+1 cannot all see "allowed".
+let quotaLock = Promise.resolve();
+let reserved = 0;
+function quotaGate(db, background) {
+  const run = quotaLock.then(async () => {
+    const g = await quota.check(db, { background, pending: reserved });
+    if (g.allowed) reserved++;
+    return g;
+  });
+  quotaLock = run.then(() => {}, () => {});
   return run;
 }
+function unreserve() { if (reserved > 0) reserved--; }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -164,28 +248,47 @@ async function fetchEbay(db, opts) {
     return { ok: false, blocked: 'rate-limit', reason: br.reason };
   }
 
-  // Everything below happens one at a time, process-wide.
+  // A slot, foreground first. A foreground call that cannot get one within
+  // FOREGROUND_MAX_WAIT_MS is refused as `busy` rather than left queued.
   const tQueued = timing.now();
-  return enqueue(async () => {
-    timing.span('ebay:queue-wait', tQueued, timing.now(), { kind });
-    // Re-check the breaker inside the lock: a call ahead of us in the
-    // queue may have tripped it while we waited.
+  const waitFrom = Date.now();
+  const maxWait = opts.maxWaitMs !== undefined ? opts.maxWaitMs
+    : (background ? Infinity : FOREGROUND_MAX_WAIT_MS);
+  const lane = await acquire(background, maxWait);
+  timing.span('ebay:queue-wait', tQueued, timing.now(), { kind });
+  if (!lane) {
+    const waited = Date.now() - waitFrom;
+    logCall({ ...meta, kind, status: 'busy', note: `no slot in ${waited}ms — not sent` });
+    return { ok: false, blocked: 'busy', waitedMs: waited,
+             reason: `eBay queue busy — waited ${waited}ms for a free slot (${running.fg} foreground, `
+               + `${running.bg} background in flight); not sent, no quota spent` };
+  }
+  try { return await sendOne(); } finally { release(lane); }
+
+  async function sendOne() {
+    // Re-check the breaker once a slot is held: a call ahead of us may
+    // have tripped it while we waited.
     const b2 = breakerState();
     if (b2) return { ok: false, blocked: 'rate-limit', reason: b2.reason };
 
-    // THE quota check. Inside the lock, so two callers cannot both see
-    // the same "allowed" for the same last remaining call.
-    const gate = await timing.time('ebay:quota-check', () => quota.check(db, { background }), { kind });
+    // THE quota check, at the moment of spending, counting calls already
+    // allowed and not yet recorded, so two callers cannot both see the same
+    // "allowed" for the same last remaining call.
+    const gate = await timing.time('ebay:quota-check', () => quotaGate(db, background), { kind });
     if (!gate.allowed) {
       logCall({ ...meta, kind, status: 'quota', remaining: gate.remaining,
                 note: 'gate refused' });
       return { ok: false, blocked: 'quota', reason: gate.reason,
                remaining: gate.remaining, resetsInMinutes: gate.resetsInMin };
     }
+    let unreserved = false;
+    const done = () => { if (!unreserved) { unreserved = true; unreserve(); } };
+    try { return await spend(); } finally { done(); }
 
-    // Pace. Measured from the last call actually made.
-    const since = Date.now() - lastCallAt;
-    if (since < MIN_INTERVAL_MS) await timing.time('ebay:pace', () => sleep(MIN_INTERVAL_MS - since));
+  async function spend() {
+    // Pace, per endpoint.
+    const wait = paceDelay(kind === 'token' ? 'token' : (meta.marketplace || 'EBAY_US'));
+    if (wait > 0) await timing.time('ebay:pace', () => sleep(wait));
 
     const doFetch = fetchImpl || fetch;
     let attempt = 0;
@@ -197,18 +300,17 @@ async function fetchEbay(db, opts) {
       try {
         r = await doFetch(url, body === null ? { method, headers } : { method, headers, body });
       } catch (e) {
-        lastCallAt = Date.now();
         // A network failure never reached eBay, so it spends no quota and
         // is not recorded as a call.
         logCall({ ...meta, kind, status: 'net', note: e.message, ms: Date.now() - t0 });
         return { ok: false, error: true, transport: true,
                  reason: 'could not reach api.ebay.com: ' + e.message };
       }
-      lastCallAt = Date.now();
-      const ms = lastCallAt - t0;
+      const ms = Date.now() - t0;
 
       // The call happened, so it counts — whatever the status.
       await timing.time('ebay:quota-record', () => quota.record(db, { headers: r.headers, kind }), { kind });
+      done();            // recorded: the table carries it now, not the reservation
 
       const remaining = headerInt(r.headers, 'x-ebay-c-ratelimit-remaining');
 
@@ -265,7 +367,8 @@ async function fetchEbay(db, opts) {
       return { ok: true, status: r.status, data, remaining, headers: r.headers,
                nonJson: data === null && !!responseText };
     }
-  });
+  }
+  }
 }
 
 function headerStr(h, n) {
@@ -299,6 +402,7 @@ module.exports = {
   fetchEbay, ebayEnabled, logCall, redactHeaders,
   breakerState, tripBreaker, resetBreaker,
   MIN_INTERVAL_MS, MAX_5XX_RETRIES,
+  MAX_CONCURRENT, MAX_BACKGROUND, FOREGROUND_MAX_WAIT_MS, queueState,
   // test seam
-  _resetPacing: () => { lastCallAt = 0; }
+  _resetPacing: () => { nextStartAt.clear(); }
 };

@@ -98,7 +98,11 @@ async function check(db, opts) {
     ? s.ebay_remaining : null;
 
   const used      = s.calls_made + s.token_calls;
-  const remaining = ebayRemaining !== null ? ebayRemaining : (DAILY_LIMIT - used);
+  // `pending`: calls already allowed and not yet recorded (ebaycall runs
+  // several at once). Counted as spent, or two slots can both be allowed
+  // the same last call.
+  const pending   = Math.max(0, opts.pending | 0);
+  const remaining = (ebayRemaining !== null ? ebayRemaining : (DAILY_LIMIT - used)) - pending;
   const limit     = s.ebay_limit || DAILY_LIMIT;
   const ratio     = 1 - (remaining / limit);
 

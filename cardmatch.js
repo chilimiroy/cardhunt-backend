@@ -1050,6 +1050,21 @@ const LANG_CJK_WORDS = {
   ja: /日本語版/
 };
 
+// Language CODES as European sellers write them, CASE-SENSITIVE (T1,
+// 2026-09-30). Read live on eBay DE: "Pikachu & Zekrom-GX … Holo DE 33/181
+// 240 KP", "Turtok # 2/102 … DE Near Mint", "Gengar 5/62 | FO | DE | RARE" —
+// German cards, kept, because bare "de" is a preposition in three languages
+// and was left out. Measured over every title collected (58 distinct with an
+// uppercase DE, none from US/GB/AU/CA): the only non-German uses were the
+// preposition before its noun — "SET DE BASE", "DE COLECCIÓN", "FUNDA DE
+// ARTE" — so those nouns are excluded. "FR" is how French sellers mark a
+// French card ("Carte Pokémon FR ED. 2"). "IT" and "ES" are NOT read: "IT"
+// is an English word in any all-caps title.
+const LANG_CASE_TOKENS = [
+  [/(?<![A-Za-z])DE(?![A-Za-z])(?!\s+(?:BASE|COLECCI[OÓ]N|ARTE|CARTAS?|JUEGO|LA|LAS|LOS|EL|UN|UNA)\b)/, 'de'],
+  [/(?<![A-Za-z])FR(?![A-Za-z])/, 'fr']
+];
+
 // Country flags as language evidence (T1, 2026-09-30, eBay DE/FR). The US
 // and UK flags are absent: an English card is the right answer, and a US
 // seller's 🇺🇸 is decoration.
@@ -1082,6 +1097,7 @@ function languageOf(title, opts) {
   // Genesis\ud83c\udde9\ud83c\uddea", "CARTE POKEMON \ud83c\uddeb\ud83c\uddf7"). After the words, so a title that
   // SAYS its language is read by what it says.
   for (const [flag, code] of LANG_FLAGS) if (t.includes(flag)) return code;
+  for (const [re, code] of LANG_CASE_TOKENS) if (re.test(t)) return code;
   if (/[\uac00-\ud7af]/.test(t)) return 'ko';      // hangul
   if (/[\u3040-\u30ff]/.test(t)) return 'ja';      // kana
   if (opts.cjkIsChinese !== false && CJK.test(t)) return 'zh';

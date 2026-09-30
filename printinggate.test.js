@@ -425,6 +425,26 @@ console.log('\n6. EUROPEAN SITES — a marketplace is where a card is sold, a la
     const v = cm.verify(t, ZARD, 'Raw');
     ok(`kept: ${t.slice(0, 52)}`, v.ok, v.reason);
   }
+  // Language CODES, case-sensitive — read live on eBay DE after it went on.
+  for (const t of ['Pokémon TCG Pikachu & Zekrom-GX TAG TEAM GX Holo DE 33/181 240 KP'.replace('Pikachu & Zekrom-GX TAG TEAM GX Holo DE 33/181 240 KP', 'Charizard 4/102 Holo DE 120 KP'),
+                   'Turtok # 2/102 (Blastoise) Rare Holo Base Set 1999 Pokemon DE Near Mint Vintage'.replace('Turtok # 2/102 (Blastoise)', 'Glurak # 4/102 (Charizard)'),
+                   'Charizard 4/102 | BS | DE | RARE | POOR | Pokémon | TCG',
+                   'Pokemon Karte DE Charizard 4/102 Base Set Wizards (Nr.4)']) {
+    const v = cm.verify(t, ZARD, 'Raw');
+    ok(`refused (de code): ${t.slice(0, 52)}`, !v.ok && /title says de/.test(v.reason || ''), v.reason);
+  }
+  for (const t of ['CHARIZARD HOLO - POKÉMON 4/102 SET DE BASE ÉDITION 2 FR', 'Carte Pokémon FR Charizard 4/102 Set De Base Wizards (N°4)']) {
+    const v = cm.verify(t, ZARD, 'Raw');
+    ok(`refused (fr code): ${t.slice(0, 52)}`, !v.ok && /title says fr/.test(v.reason || ''), v.reason);
+  }
+  // "de" the preposition, before its noun, is not German.
+  for (const t of ['MEWTWO HOLO - POKEMON 4/102 SET DE BASE'.replace('MEWTWO', 'CHARIZARD'),
+                   'JCC Pokémon Charizard 4/102 Base Set Holo WOTC DE COLECCIÓN',
+                   'Charizard 4/102 Juego de cartas coleccionables Pokémon conjunto base holograma raro 1999 de colección',
+                   'Pokemon Charizard 4/102 Base Set Holo Rare English EN']) {
+    const v = cm.verify(t, ZARD, 'Raw');
+    ok(`kept (preposition / English): ${t.slice(0, 52)}`, v.ok, v.reason);
+  }
   ok('a Japanese card still refuses Korean, and keeps "Japanisch"',
      cm.languageOf('Glurak ex 201/165 Koreanisch') === 'ko' && cm.languageOf('Glurak ex 201/165 Japanisch') === 'ja');
 }

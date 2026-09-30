@@ -167,8 +167,14 @@ function unreserve(origin) {
 const originCtx = new AsyncLocalStorage();
 function withOrigin(origin, fn) { return originCtx.run({ origin }, fn); }
 function currentOrigin() { const s = originCtx.getStore(); return s ? s.origin : null; }
+// Only a TOOLING context overrides the call's own background flag: a
+// background:true call made while serving a user request is still
+// background work, and must still yield at the soft stop.
 function originFor(opts) {
-  return quota.normOrigin((opts && opts.origin) || currentOrigin(), opts && opts.background);
+  opts = opts || {};
+  if (quota.ORIGINS.indexOf(opts.origin) >= 0) return opts.origin;
+  if (currentOrigin() === 'tooling') return 'tooling';
+  return opts.background ? 'background' : 'user';
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));

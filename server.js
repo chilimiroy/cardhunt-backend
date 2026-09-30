@@ -55,6 +55,29 @@ app.use((req, res, next) => {
   });
 });
 
+// ── Who is spending eBay quota (TASK T2, 2026-09-30) ──────────
+// Every eBay call is user, background or tooling, and ebayquota caps tooling
+// at its own 300/day. The request decides, once, here — so a probe's token
+// exchange and every page it fetches are tooling without each of its call
+// sites having to say so:
+//   /api/ebay/*                 the probes and measurements (conditions,
+//                               certprobe, gradecost, marketprobe, aspects,
+//                               quota?probe=1) — all tooling
+//   /ebay/status, /api/scraper/test, /api/health/full   token checks
+//   X-CardHunt-Origin: tooling  sitecheck, linkaudit --live, setaudit,
+//   or ?origin=tooling          searchaudit, gradeprices — scripts that
+//                               drive /api/listings and /api/search
+// Only 'tooling' can be CLAIMED: it can only ever narrow what a caller may
+// spend, never widen it. Everything else is a user request.
+const ebay0 = require('./ebaycall');
+const TOOLING_PATHS = /^\/(api\/ebay\/|ebay\/status|api\/scraper\/test|api\/health\/full)/;
+function requestOrigin(req) {
+  const claimed = String(req.get('x-cardhunt-origin') || req.query.origin || '').toLowerCase();
+  if (claimed === 'tooling') return 'tooling';
+  return TOOLING_PATHS.test(req.path) ? 'tooling' : 'user';
+}
+app.use((req, res, next) => ebay0.withOrigin(requestOrigin(req), () => next()));
+
 // ── DATABASE (Supabase) ───────────────────────────────────────
 const db = process.env.DATABASE_URL ? new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -1003,7 +1026,8 @@ async function getEbayTokenDetailed(opts) {
     // the `null is not a diagnosis` failure that cost days.
     return { token: null, blocked: call.blocked, error: call.error || call.reason,
              reason: call.reason, remaining: call.remaining,
-             resetsInMinutes: call.resetsInMinutes };
+             resetsInMinutes: call.resetsInMinutes,
+             limitHit: call.limitHit || null, liftsAt: call.liftsAt || null };
   }
   if (!call.ok) {
     // Keep the wording that made this diagnosable. "eBay rejected the token
@@ -2013,6 +2037,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       e.ebayStatus = auth.blocked;
       e.remaining = auth.remaining;
       e.resetsInMinutes = auth.resetsInMinutes;
+      e.limitHit = auth.limitHit; e.liftsAt = auth.liftsAt;
     }
     throw e;
   }
@@ -2104,6 +2129,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     e.ebayStatus = call.blocked;
     e.remaining = call.remaining;
     e.resetsInMinutes = call.resetsInMinutes;
+    e.limitHit = call.limitHit; e.liftsAt = call.liftsAt;
     throw e;
   }
   if (!call.ok) throw new Error(call.reason);
@@ -2449,6 +2475,7 @@ function mergeEbaySite(st, mp, r) {
 
 function ebaySiteFailed(st, mp, err) {
   st.sites[mp] = { status: err.ebayStatus || (err.unconfigured ? 'unconfigured' : 'error'),
+                   limitHit: err.limitHit || undefined, liftsAt: err.liftsAt || undefined,
                    country: ebaySite(mp).country, reason: String(err.message || err).slice(0, 200),
                    nextOffset: null, exhausted: false,
                    incompleteReason: String(err.message || err).slice(0, 200) };
@@ -2684,6 +2711,10 @@ async function gatherListings(card, grade, limit, opts) {
           sources[s.id].remaining = err.remaining;
         if (err.resetsInMinutes !== undefined && err.resetsInMinutes !== null)
           sources[s.id].resetsInMinutes = err.resetsInMinutes;
+        // Which limit, and when listings return (T3): the page says so in
+        // words instead of showing an empty list.
+        if (err.limitHit) sources[s.id].limitHit = err.limitHit;
+        if (err.liftsAt) sources[s.id].liftsAt = err.liftsAt;
       } else if (err.unconfigured) {
         sources[s.id] = { status: 'unconfigured', reason: err.message };
       } else {
@@ -2983,8 +3014,11 @@ const viewExpanding = new Map();
 // browsing should cost less. Re-measure from /api/listings-log byAction.
 const AUTO_EXPAND_BELOW = 5;
 
-// A failure worth retrying in a minute is not cached for fifteen.
-const TRANSIENT = ['busy', 'error', 'rate-limit'];
+// A failure worth retrying in a minute is not cached for fifteen. A quota
+// refusal is one (T1): the hourly ceiling lifts on the hour, and a view cached
+// at 12:58 must not keep saying "stopped" until 13:13. Asking again costs a
+// database read, not an eBay call - the gate refuses before anything is sent.
+const TRANSIENT = ['busy', 'error', 'rate-limit', 'quota'];
 function transientFailure(sources) {
   return Object.values(sources || {}).some(s => s && TRANSIENT.includes(s.status));
 }

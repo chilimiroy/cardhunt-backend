@@ -33,9 +33,11 @@ const verbose    = args.includes('--verbose');
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+// T2 (2026-09-30): tooling. The server counts this against the 300/day
+// tooling allowance, never against the user budget.
 async function get(path) {
   try {
-    const r = await fetch(BASE + path, { headers: { Accept: 'application/json' } });
+    const r = await fetch(BASE + path, { headers: { Accept: 'application/json', 'X-CardHunt-Origin': 'tooling' } });
     const text = await r.text();
     if (!r.ok) return { ok: false, status: r.status, body: text.slice(0, 200) };
     try { return { ok: true, status: r.status, json: JSON.parse(text) }; }

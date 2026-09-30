@@ -62,7 +62,7 @@ async function main() {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: 'grant_type=client_credentials&scope=' +
           encodeURIComponent('https://api.ebay.com/oauth/api_scope'),
-    kind: 'token', meta: { cardId: 'ratecheck' }
+    kind: 'token', origin: 'tooling', meta: { cardId: 'ratecheck' }   // T2: a measurement
   });
 
   if (tok.blocked) { console.log(`\n  BLOCKED (${tok.blocked}): ${tok.reason}\n`); return; }

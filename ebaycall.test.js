@@ -543,6 +543,10 @@ await quiet(async () => {
   chk('  including its token exchange', k.limitHit === 'tooling' && calls === 0);
   chk('  outside it, the default is user', ebay.originFor({}) === 'user');
   chk('  and background: true is background', ebay.originFor({ background: true }) === 'background');
+  chk('  background: true inside a USER request stays background (still yields)',
+      ebay.withOrigin('user', () => ebay.originFor({ background: true })) === 'background');
+  chk('  background: true inside a TOOLING request is tooling (its allowance)',
+      ebay.withOrigin('tooling', () => ebay.originFor({ background: true })) === 'tooling');
   const db2 = splitDb({ calls_made: 10 });
   await ebay.withOrigin('tooling', () => ebay.fetchEbay(db2, { url: URL_, token: 'T',
     fetchImpl: async () => resp(200, {}) }));

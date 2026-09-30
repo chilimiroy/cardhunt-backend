@@ -74,11 +74,23 @@ function suspectLanguage(title, cardLang) {
 }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// T2 (2026-09-30): these requests are TOOLING — sent X-CardHunt-Origin, so the
+// server counts them against the 300/day tooling allowance, never the user
+// budget. When the allowance (or any quota limit) refuses, the tool stops and
+// says why rather than recording a column of empty cards.
+function quotaStop(d) {
+  const e = d && d.sources && d.sources.ebay;
+  if (e && e.status === 'quota') {
+    console.error('  STOP — eBay quota refused (' + (e.limitHit || 'quota') + '): ' + e.reason);
+    process.exit(3);
+  }
+}
 async function get(path) {
-  const r = await fetch(BASE + path, { headers: { Accept: 'application/json' } });
+  const r = await fetch(BASE + path, { headers: { Accept: 'application/json', 'X-CardHunt-Origin': 'tooling' } });
   const txt = await r.text();
   if (!r.ok) throw new Error(`HTTP ${r.status}: ${txt.slice(0, 160)}`);
-  return JSON.parse(txt);
+  const d = JSON.parse(txt); quotaStop(d);
+  return d;
 }
 
 // The page's own path, pressing every button (T2, 2026-09-30: nothing loads

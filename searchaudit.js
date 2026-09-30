@@ -36,10 +36,12 @@ const conc    = parseInt((args.find(a => a.startsWith('--concurrency=')) || '').
 const verbose = args.includes('--verbose');
 const CAP = 25;
 
+// T2 (2026-09-30): tooling. The server counts this against the 300/day
+// tooling allowance, never against the user budget.
 async function get(path, tries = 3) {
   for (let t = 0; t < tries; t++) {
     try {
-      const r = await fetch(BASE + path, { headers: { Accept: 'application/json' } });
+      const r = await fetch(BASE + path, { headers: { Accept: 'application/json', 'X-CardHunt-Origin': 'tooling' } });
       if (r.ok) return await r.json();
       if (r.status < 500) return { _status: r.status };
     } catch (e) { if (t === tries - 1) return { _error: e.message }; }

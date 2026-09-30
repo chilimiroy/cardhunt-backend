@@ -157,8 +157,19 @@ function parseListingTitle(title) {
   }
 
   // ── Edition and variant, before rarity strips the holo words ──
-  for (const [re, label] of EDITIONS) {
-    if (re.test(t)) { out.edition = label; t = t.replace(re, ' '); break; }
+  // 1st Edition / Shadowless / Unlimited come from cardmatch.editionClaim —
+  // the ONE reader, which the gate also uses (TASK T3). Two readers of one
+  // fact disagreed on 1,090 of 5,000 real titles: this one missed every
+  // European form ("1. Edition", "1ª Edición", "Ilimitado"). The local list
+  // still labels the stamps (Staff, Prerelease) cardmatch does not read.
+  const ed = cmGraders.editionClaim ? cmGraders.editionClaim(t) : { stated: false };
+  if (ed.stated) {
+    out.edition = cmGraders.editionLabel(ed.key);
+    for (const [re] of EDITIONS) t = t.replace(re, ' ');
+  } else {
+    for (const [re, label] of EDITIONS) {
+      if (re.test(t)) { out.edition = label; t = t.replace(re, ' '); break; }
+    }
   }
   for (const [re, label] of VARIANTS) {
     if (re.test(t)) { out.variant = label; t = t.replace(re, ' '); break; }

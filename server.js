@@ -646,9 +646,27 @@ app.get('/api/cards/:cardId', async (req, res) => {
           ORDER BY variant, recorded_at DESC`, [c.api_card_id]).catch(() => ({ rows: [] }));
         const printingPrices = other.rows.map(r => ({ printing: r.variant, label: cm.printingLabel(r.variant),
           price: r.price, source: r.source, date: r.recorded_at }));
+        // T3: editions, only where they existed (gradeprice.printRunsFor —
+        // Base Set to Neo Destiny), and each NON-base edition's latest real
+        // price. The headline is Unlimited (printsql.baseEditionSql); a 1st
+        // Edition price is offered here and never stands in for it.
+        const ekeys = editionsOfCard(c);
+        let editionPrices = [];
+        if (ekeys.length) {
+          const eds = await db.query(`
+            SELECT DISTINCT ON (ed) ${printsql.editionOfSql('ph')} AS ed, ph.price_usd::float AS price, ph.source, ph.recorded_at
+            FROM price_history ph
+            WHERE ph.card_api_id = $1 AND ph.grade IS NULL AND ph.source NOT LIKE 'estimate%' AND ph.price_usd > 0
+              AND NOT ${printsql.baseEditionSql('ph')}
+            ORDER BY ed, (ph.source LIKE '%\\_mid' ESCAPE '\\') ASC, ph.recorded_at DESC`, [c.api_card_id]).catch(() => ({ rows: [] }));
+          editionPrices = eds.rows.filter(r => r.ed).map(r => ({ edition: r.ed, label: cm.editionLabel(r.ed),
+            price: r.price, source: r.source, date: r.recorded_at }));
+        }
         return res.json({ data: {
           printings: pkeys ? pkeys.map(k => ({ key: k, label: cm.printingLabel(k) })) : null,
           printingPrices,
+          editions: ekeys.length ? ekeys.map(k => ({ key: k, label: cm.editionLabel(k) })) : null,
+          editionPrices,
           id: c.api_card_id, name: c.name, nameEn: c.name_en || null,
           number: c.number, rarity: c.rarity,
           supertype: c.supertype,
@@ -1444,6 +1462,10 @@ function normaliseListing(o) {
     // so the page grouped a "Reverse Holo" title as printing-not-stated.
     printing: o.printing || null,
     printingStated: o.printingStated === true,
+    // Edition as the gate read it (T3): key + stated. `edition` above is
+    // listingparse's label from the same reader.
+    editionKey: o.editionKey || null,
+    editionStated: o.editionStated === true,
     // ── Where it was found, and whose shipping quote this is (T1) ──
     // `marketplace` is the eBay site that returned the row; `shippingTo` the
     // country that site quotes shipping for. Never a filter — a row that
@@ -1511,6 +1533,19 @@ function printingsOf(card) {
   const v = card && card.variants;
   const list = v && Array.isArray(v.printings) ? v.printings.map(p => p.key).filter(Boolean) : null;
   return list && list.length ? list : null;
+}
+
+// The editions this card was printed in (TASK T3): ['1st-edition',
+// 'shadowless', 'unlimited'] on Base Set, ['1st-edition', 'unlimited'] on the
+// other nine, [] everywhere else. gradeprice.printRunsFor owns WHICH sets —
+// the list checked against TCGdex's firstEd counts; this only translates its
+// labels to the keys the gate and the query speak.
+const EDITION_KEY_OF_LABEL = { '1st Edition': '1st-edition', 'Shadowless': 'shadowless', 'Unlimited': 'unlimited' };
+function editionsOfCard(card) {
+  if (!card) return [];
+  const id = card.api_card_id || card.cardId || '';
+  const setId = card.set_api_id || cm.setIdOf({ cardId: id });
+  return gp.printRunsFor(setId, cm.languageFromCardId(id)).map(l => EDITION_KEY_OF_LABEL[l]).filter(Boolean);
 }
 
 function filterCard(card, nameOverride) {
@@ -1995,7 +2030,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // marketprobe only (EBAY_US_NOSET): ask without the set name; the gate
   // still has it. Tests whether the words ASKED are why US misses listings.
   const q = cm.buildQuery(opts.noSetInQuery ? Object.assign({}, matchCard, { setName: null }) : matchCard,
-                          grade, printing ? { printing } : undefined);
+                          grade, (printing || opts.edition) ? { printing, edition: opts.edition || null } : undefined);
   // A raw sub-condition is asked of eBay's own "Card Condition" aspect,
   // which search can filter on. Measured: the filtered rows agreed with each
   // item's descriptor 36 of 36 times. Same one call as before — each raw
@@ -2010,7 +2045,9 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   const aspectFilter = condFilter ? condFilter.aspectFilter : gradeFilter ? gradeFilter.aspectFilter : null;
   const gateOpts = Object.assign({},
     gradeFilter ? { structuredGrade: { grader: gradeFilter.grader, grade: gradeFilter.grade } } : {},
-    printing ? { printing } : {});
+    printing ? { printing } : {},
+    // The edition asked for (TASK T3) — refuses a title STATING another.
+    opts.edition ? { edition: opts.edition } : {});
   // "mint" also matches every "Near Mint" title: live, Raw M on Base Set
   // Charizard kept 11 rows of which 1 said Mint. eBay's own phrase exclusion
   // keeps the cap for the titles that do. eBay syntax, so the eBay REQUEST
@@ -2159,7 +2196,8 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     } catch (e) { /* the parser must never break the gate */ }
 
     if (!v.ok) { dropped.push({ title, itemId: it.itemId || undefined, reason: v.reason, gradeConflict: v.gradeConflict || undefined,
-                                printingConflict: v.printingConflict || undefined }); continue; }
+                                printingConflict: v.printingConflict || undefined,
+                                editionConflict: v.editionConflict || undefined }); continue; }
 
     // eBay's own condition field, which the gate never read. A $1,114.99
     // slab sat in a Raw NM list because its title said "PCG 9" — not a
@@ -2250,7 +2288,10 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       // What the title says about its printing (TASK T10). printingStated
       // false = the seller did not say: the UNSTATED group, never assumed.
       printing: v.printing || null,
-      printingStated: !!v.printingStated
+      printingStated: !!v.printingStated,
+      // The edition the title states (T3), as a key, and whether it did.
+      editionKey: v.edition || null,
+      editionStated: !!v.editionStated
     }));
   }
 
@@ -2294,6 +2335,8 @@ async function sourceEbay(card, grade, limit, opts = {}) {
              : null,
            pages,
            printing: printingReport(printing, matchCard, listings, dropped),
+           // Refused for STATING another edition (T3), counted before any slice.
+           editionRefused: dropped.filter(d => d.editionConflict).length,
            query: qAsk };
 }
 
@@ -2329,7 +2372,7 @@ const UNAVAILABLE = {
 // ══════════════════════════════════════════════════════════════
 function newEbayState() {
   return { seen: new Set(), refused: new Set(), listings: [], dropped: [], sites: {},
-           first: null, calls: 0, printing: { keptStated: 0, keptUnstated: 0, refused: 0 } };
+           first: null, calls: 0, printing: { keptStated: 0, keptUnstated: 0, refused: 0 }, editionRefused: 0 };
 }
 
 // Fold one sourceEbay result (one or more pages of one site) into the state.
@@ -2390,6 +2433,7 @@ function mergeEbaySite(st, mp, r) {
     s.kept++;
   }
   if (st.dropped.length < 40) st.dropped.push(...(r.dropped || []).slice(0, 40 - st.dropped.length));
+  st.editionRefused += r.editionRefused || 0;
   if (r.printing) {
     st.printing.keptStated += r.printing.keptStated || 0;
     st.printing.keptUnstated += r.printing.keptUnstated || 0;
@@ -2418,7 +2462,7 @@ function ebayStateResult(st) {
   return Object.assign({}, f, {
     listings: st.listings.slice(), scanned: tot.scanned, kept: st.listings.length,
     rejected: tot.rejected, dropped: st.dropped, refusedIds: undefined,
-    marketplace: 'all', sites, pending,
+    marketplace: 'all', sites, pending, editionRefused: st.editionRefused,
     sitesNotSearched: EBAY_SITES_PENDING,
     printing: f.printing ? Object.assign({}, f.printing, st.printing) : f.printing,
     pages: { fetched: tot.pages, calls: st.calls, ebayTotalAllSites: tot.ebayTotal,
@@ -2570,6 +2614,7 @@ async function gatherListings(card, grade, limit, opts) {
       // What the printing gate did here — asked, kept stated / unstated,
       // refused. Reported for All too, so "not asked" is visible (T10).
       if (r.value.printing) sources[s.id].printing = r.value.printing;
+      if (r.value.editionRefused !== undefined) sources[s.id].editionRefused = r.value.editionRefused;
 
       // Printing rejections (reprint / language / year) from a source that
       // does not use the `rejected` shape below. Reported even when zero:
@@ -2737,7 +2782,7 @@ async function judgeListings(card, grade, listings, opts, memo) {
 
 // The payload for one state of a view. Every row, never a slice: `count`
 // and `listings.length` are the same number (they were 58 and 25).
-function buildListingsPayload(card, requestedId, grade, printing, j, sources, tookMs, progress) {
+function buildListingsPayload(card, requestedId, grade, printing, j, sources, tookMs, progress, edition) {
   // The headline figures skip anything the outlier check flagged. This is
   // the number a buyer acts on, and "$2.08" for a card that trades at
   // $800 is not an answer — it is the wrong card, a proxy or a scam.
@@ -2758,6 +2803,16 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
     printing: printing || 'all',
     printings: (printingsOf(card) || []).map(k => ({ key: k, label: cm.printingLabel(k) })),
     printingsRead: !!printingsOf(card),
+    // The edition asked for, and the editions this card was printed in (T3)
+    // — none outside Base Set to Neo Destiny, so no selector there.
+    edition: edition || 'all',
+    editions: editionsOfCard(card).map(k => ({ key: k, label: cm.editionLabel(k) })),
+    editionReport: {
+      asked: edition || 'all',
+      keptStated: listings.filter(l => l.editionStated).length,
+      keptUnstated: listings.filter(l => !l.editionStated).length,
+      refused: Object.values(sources || {}).reduce((n, s) => n + ((s && s.editionRefused) || 0), 0)
+    },
     count: listings.length,
     liveCount: j.liveCount,
     cheapest: trusted.length ? trusted[0].landed : null,
@@ -2854,14 +2909,22 @@ async function logListingView(v) {
 
 const listingJobs = new Map();
 
+// The cache answers ONE question: card + grade + printing + edition. Keyed
+// on less, a Reverse Holo or a 1st Edition answer would be served for
+// another question (the grade-in-the-cache-key lesson). One helper, so the
+// first answer and the continuation cannot key differently.
+function viewCacheGrade(grade, printing, edition) {
+  return grade + (printing ? '|' + printing : '') + (edition ? '|ed:' + edition : '');
+}
+
 // The whole of one view: cache, first answer, background continuation.
 // /api/listings and /api/search both come through here, so they cannot
 // answer differently (the Raw NM bug) or cache a trimmed copy for the other.
 async function listingsFor(card, requestedId, grade, printing, opts) {
   opts = opts || {};
   const key = card.api_card_id;
-  // The cache answers ONE question: card + grade + printing.
-  const cacheGrade = printing ? grade + '|' + printing : grade;
+  const edition = opts.edition || null;
+  const cacheGrade = viewCacheGrade(grade, printing, edition);
   const jobKey = listingKey(key, cacheGrade);
 
   // A dry run must never be served from cache, or it reports a request that
@@ -2880,12 +2943,12 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   // A browser request is a live user waiting, so page 1 is foreground: it
   // may spend quota down to the reserve. The continuation is background.
   const gathered = await gatherListings(card, grade, opts.limit || 25,
-    { background: false, dryRun: !!opts.dryRun, printing });
+    { background: false, dryRun: !!opts.dryRun, printing, edition });
   const st = gathered.ebayState;
   const progress = withSourceFailures(listingsProgress(st, gathered.listings.length), gathered.sources);
   const payload = buildListingsPayload(card, requestedId, grade, printing,
     { listings: gathered.listings, liveCount: gathered.liveCount, outliers: gathered.outliers },
-    gathered.sources, gathered.tookMs, progress);
+    gathered.sources, gathered.tookMs, progress, edition);
   if (gathered.dryRun) {
     payload.dryRun = gathered.dryRun;
     payload.note = 'dryRun=1 — nothing was sent to eBay and no quota was spent';
@@ -2906,7 +2969,7 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
     return payload;
   }
   if (!listingJobs.has(jobKey)) {
-    const job = continueListings(card, requestedId, grade, printing, gathered, ts, t0)
+    const job = continueListings(card, requestedId, grade, printing, gathered, ts, t0, edition)
       .then(final => { const v = view(); Object.assign(v, final); logListingView(v); })
       .catch(e => console.warn('[listings] continuation failed: ' + e.message))
       .finally(() => listingJobs.delete(jobKey));
@@ -2918,11 +2981,11 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
 // Page every site to exhaustion, re-judging and re-caching after each page.
 // The cache keeps the FIRST fetch's timestamp: no row is served as fresher
 // than the oldest row beside it, and the 15 minutes run from that.
-async function continueListings(card, requestedId, grade, printing, gathered, ts, t0) {
+async function continueListings(card, requestedId, grade, printing, gathered, ts, t0, edition) {
   const st = gathered.ebayState;
-  const cacheGrade = printing ? grade + '|' + printing : grade;
+  const cacheGrade = viewCacheGrade(grade, printing, edition);
   const memo = gathered.judgeMemo || {};
-  const opts = { printing, background: true };
+  const opts = { printing, edition, background: true };
   let rebuilding = Promise.resolve();
   const republish = () => (rebuilding = rebuilding.then(async () => {
     const rows = gathered.otherRows.concat(st.listings);
@@ -2932,11 +2995,11 @@ async function continueListings(card, requestedId, grade, printing, gathered, ts
     sources.ebay = Object.assign({}, sources.ebay, {
       status: 'ok', count: r.kept, scanned: r.scanned, rejected: r.rejected, sites: r.sites,
       pending: r.pending, pages: r.pages,
-      printing: r.printing,
+      printing: r.printing, editionRefused: r.editionRefused,
       summary: `${r.kept} kept, ${r.rejected} rejected of ${r.scanned} scanned` });
     const progress = withSourceFailures(listingsProgress(st, j.listings.length), sources);
     const payload = buildListingsPayload(card, requestedId, grade, printing, j, sources,
-      Date.now() - t0, progress);
+      Date.now() - t0, progress, edition);
     payload.fetchedAt = new Date(ts).toISOString();
     listingCacheSet(card.api_card_id, cacheGrade, payload, ts);
     return progress;
@@ -3001,11 +3064,17 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
     return res.status(400).json({ cardId, grade, listings: [],
       error: 'unknown printing "' + req.query.printing + '"', printings: Object.keys(cm.PRINTINGS) });
   }
+  // ?edition=1st-edition | shadowless | unlimited (TASK T3). Independent of
+  // printing. Checked against the CARD below — a 1st Edition asked of a 2026
+  // card is refused, never silently answered as All.
+  const edition = cm.parseEditionParam(req.query.edition);
+  if (req.query.edition && !edition && String(req.query.edition).toLowerCase() !== 'all') {
+    return res.status(400).json({ cardId, grade, listings: [],
+      error: 'unknown edition "' + req.query.edition + '"', editions: Object.keys(cm.EDITIONS) });
+  }
   // The cache answers ONE question: card + grade + printing. Keyed on less,
   // a Reverse Holo answer would be served for a Holo question — the
   // "number cached per card when it depends on the grade" failure.
-  const cacheGrade = printing ? grade + '|' + printing : grade;
-
   if (!db) return res.status(503).json({ cardId, grade, listings: [], error: 'database not configured' });
 
   let card;
@@ -3023,10 +3092,16 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
   // an ungated eBay search on the raw string).
   if (!card) return next();
 
+  if (edition && !editionsOfCard(card).includes(edition)) {
+    return res.status(400).json({ cardId, grade, listings: [],
+      error: `${cm.editionLabel(edition)} does not exist for this card's set`,
+      editions: editionsOfCard(card) });
+  }
+
   const dryRun = req.query.dryRun === '1' || req.query.dryRun === 'true';
   try {
     const payload = await listingsFor(card, cardId, grade, printing, {
-      dryRun, refresh: !!req.query.refresh, limit,
+      dryRun, refresh: !!req.query.refresh, limit, edition,
       // The page re-asks while a view is still loading; those are not views.
       poll: req.query.poll === '1' });
     res.json(payload);

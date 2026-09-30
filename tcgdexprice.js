@@ -50,14 +50,22 @@
 // `holofoil` IS its base printing. A bulk common has no `holofoil`.
 // Reverse holo is deliberately absent from this list: it is a
 // different physical card at a different price and gets its own row.
+//
+// Unlimited BEFORE 1st Edition (TASK T3, 2026-09-30). Read from TCGdex: on
+// WOTC sets there is no plain `holofoil`, only `1st-edition-holofoil` and
+// `unlimited-holofoil` — neo1-9 Lugia 164.80 / 531.39, gym1-14 Sabrina's
+// Gengar 549.50 / 505.36 — and this list tried the 1st Edition key first,
+// so the "base" was the 1st Edition price. The base is Unlimited; a 1st
+// Edition key is base only for a card TCGdex lists in no other printing.
 const BASE_PRINTINGS = [
   'normal',
   'holofoil',
+  'unlimited-holofoil',
+  'unlimited-normal',
+  'unlimited',
   '1st-edition-holofoil',
   '1st-edition-normal',
-  '1st-edition',
-  'unlimited-holofoil',
-  'unlimited'
+  '1st-edition'
 ];
 
 // Printings that are a reverse-holo of the base card.

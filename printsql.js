@@ -18,12 +18,42 @@
 // A module, not a string pasted into five queries: five copies of one rule
 // is how every pair in this project has drifted.
 
+// ── Edition (TASK T3, 2026-09-30) ──
+// The same rule on the edition axis. A 1st Edition price is NEVER the
+// card's headline: measured, 10 cards showed a tcgplayer_1stEdition price
+// as their price (PROGRESS 2026-09-30), the reverse-as-base shape again.
+// Stored 1st Edition prices carry the edition only in their SOURCE name
+// (tcgplayer_1stEdition, _1stEditionHolofoil, _mid): the `edition` column
+// is empty on all 611. Both are read, so a row written either way is kept
+// out. The base is Unlimited; a card holding ONLY a 1st Edition price shows
+// no headline price rather than another edition's.
+// Three spellings, all real: the scraped `tcgplayer_1stEdition*`, and
+// TCGdex's `1st-edition-holofoil` — in the harvest's source name
+// (`tcgdex_tcgplayer_1st-edition-holofoil`) and in source_meta.printing.
+// Read 2026-09-30 from TCGdex itself: on WOTC sets there is NO plain
+// `holofoil` key, only `1st-edition-holofoil` and `unlimited-holofoil`, and
+// tcgdexprice.BASE_PRINTINGS tried the 1st Edition key first — so a harvest
+// started before that was fixed writes 1st Edition prices under the base
+// name. Reading the printing makes every such row land in its own edition.
+function editionOfSql(ph = 'ph') {
+  return `(CASE WHEN ${ph}.edition IS NOT NULL AND ${ph}.edition <> '' THEN ${ph}.edition
+                WHEN ${ph}.source ILIKE '%1stedition%' OR ${ph}.source ILIKE '%1st-edition%'
+                  OR COALESCE(${ph}.source_meta->>'printing', '') LIKE '1st-edition%' THEN '1st-edition'
+                ELSE NULL END)`;
+}
+function baseEditionSql(ph = 'ph') {
+  return `(COALESCE(${editionOfSql(ph)}, 'unlimited') NOT IN ('1st-edition', 'shadowless'))`;
+}
+
 // ph: the price_history alias. c: the cards alias (must carry `variants`).
+// Base printing AND base edition: every headline reader already calls this,
+// so the edition rule reaches all of them at once (rule 5).
 function basePrintingSql(ph = 'ph', c = 'c') {
-  return `(COALESCE(${ph}.variant, '') NOT LIKE 'reverse%'
+  return `((COALESCE(${ph}.variant, '') NOT LIKE 'reverse%'
      OR (${c}.variants IS NOT NULL AND NOT EXISTS (
            SELECT 1 FROM jsonb_array_elements(${c}.variants->'printings') vp
-           WHERE vp->>'key' NOT LIKE 'reverse%')))`;
+           WHERE vp->>'key' NOT LIKE 'reverse%')))
+     AND ${baseEditionSql(ph)})`;
 }
 
 // The same rule in JS, for a row already in hand — used ONLY by tests to
@@ -34,4 +64,12 @@ function isBasePrintingRow(variant, cardVariants) {
   return !!(p && p.length && p.every(x => String(x.key).startsWith('reverse')));
 }
 
-module.exports = { basePrintingSql, isBasePrintingRow };
+// JS twin of editionOfSql, for rows already in hand.
+function editionOfRow(r) {
+  if (r && r.edition) return r.edition;
+  if (/1st-?edition/i.test(String((r && r.source) || ''))) return '1st-edition';
+  const pr = r && r.source_meta && r.source_meta.printing;
+  return /^1st-edition/.test(String(pr || '')) ? '1st-edition' : null;
+}
+
+module.exports = { basePrintingSql, isBasePrintingRow, editionOfSql, baseEditionSql, editionOfRow };

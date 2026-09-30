@@ -2486,15 +2486,15 @@ function updatePrices(grade,base){
   // printing's price under its name. Expedition Alakazam #33's reverse is
   // $71.39 against $19.23 normal — averaging or borrowing describes neither.
   var badge = document.getElementById('cd-chg');
-  var sp = SEL && SEL.printing && SEL.printing !== 'all' && /^reverse/.test(SEL.printing) ? SEL.printing : null;
-  if (sp) {
-    var held = (cc && Array.isArray(cc.printingPrices) ? cc.printingPrices : []).filter(function (x) { return x.printing === sp; })[0];
-    document.getElementById('cd-mkt').innerHTML = held ? fmtCurrency(held.price)
-      : '&mdash;';
-    if (badge) badge.innerHTML = held
-      ? '<span style="color:var(--gr)">&#9679; ' + liveEsc(printingLabelOf(sp)) + ' price, collector number</span> '
-        + '<span style="color:var(--fa);font-size:11px">' + liveEsc(held.source) + '</span>'
-      : '<span style="color:var(--mu)">no ' + liveEsc(printingLabelOf(sp)) + ' price held &mdash; listings below</span>';
+  // ...and the same for a non-base EDITION (T3): a 1st Edition price is
+  // shown under 1st Edition only, never as the card's price.
+  var sh = selectedHeld(cc);
+  if (sh) {
+    document.getElementById('cd-mkt').innerHTML = sh.price != null ? fmtCurrency(sh.price) : '&mdash;';
+    if (badge) badge.innerHTML = sh.price != null
+      ? '<span style="color:var(--gr)">&#9679; ' + liveEsc(sh.label) + ' price, collector number</span> '
+        + '<span style="color:var(--fa);font-size:11px">' + liveEsc(sh.source) + '</span>'
+      : '<span style="color:var(--mu)">no ' + liveEsc(sh.label) + ' price held &mdash; listings below</span>';
     return;
   }
   // The badge says where the headline came from, and only that.
@@ -2639,7 +2639,7 @@ function conditionsFor(status, otherGrader) {
   return STATUS_CONDITIONS[status] || ['All'];
 }
 
-var SEL = { status: 'Raw', condition: 'All', otherGrader: null, printing: 'all' };
+var SEL = { status: 'Raw', condition: 'All', otherGrader: null, printing: 'all', edition: 'all' };
 // A printing's label from cardmatch, read LIVE (the async-module lesson).
 // The server's own labels for this card come first: cardmatch.js is loaded
 // from Render's absolute URL, so a page ahead of the deployed module (or a
@@ -2655,6 +2655,28 @@ function printingLabelOf(k) {
 // beside grade and condition, and never replaces the print-run grouping
 // (1st Edition / Shadowless / Unlimited), which is a different question.
 function setPrinting(p) { SEL.printing = p || 'all'; renderSelector(); applySelection(); }
+// Edition (TASK T3): its own box, independent of Printing — a card can be
+// 1st Edition AND holo. Offered only where the card's set had editions.
+function setEdition(e) { SEL.edition = e || 'all'; renderSelector(); applySelection(); }
+// The price HELD for the selected printing + edition, when either is not the
+// base (T10 printing, T3 edition). null = the base is selected, so the
+// headline is the card's own price. { price: null } = a non-base selection
+// with no price held — shown as a dash, never the base price under its name.
+// One helper for the headline and the Typical block, so they cannot disagree.
+function selectedHeld(card) {
+  var sp = SEL && SEL.printing && /^reverse/.test(SEL.printing) ? SEL.printing : null;
+  var se = SEL && SEL.edition && SEL.edition !== 'all' && SEL.edition !== 'unlimited' ? SEL.edition : null;
+  if (!sp && !se) return null;
+  var label = [se ? editionLabelOf(se) : null, sp ? printingLabelOf(sp) : null].filter(Boolean).join(' ');
+  // No stored price is keyed on both axes at once: a 1st Edition reverse
+  // has none, and borrowing either half's price would misname it.
+  if (sp && se) return { price: null, label: label };
+  var list = se ? (Array.isArray(card && card.editionPrices) ? card.editionPrices : [])
+                : (Array.isArray(card && card.printingPrices) ? card.printingPrices : []);
+  var held = list.filter(function (x) { return se ? x.edition === se : x.printing === sp; })[0];
+  return held ? { price: Number(held.price), label: label, source: held.source } : { price: null, label: label };
+}
+function editionLabelOf(k) { return ({ '1st-edition': '1st Edition', 'shadowless': 'Shadowless', 'unlimited': 'Unlimited' })[k] || k; }
 
 // Build the grade STRING the rest of the app already speaks. Everything
 // downstream — buildQuery, verify, /api/listings?grade= — takes a string,
@@ -2707,6 +2729,24 @@ function renderSelector() {
         + 'onclick="setPrinting(&quot;' + liveEsc(p.key) + '&quot;)">' + liveEsc(p.label || printingLabelOf(p.key)) + '</button>';
     });
     printingBox += '</div></div>';
+  }
+
+  // ── EDITION ── (T3) only where the set had editions: Base Set to Neo
+  // Destiny. A 2026 card never shows this box.
+  var eds = (S.currentCard && Array.isArray(S.currentCard.editions)) ? S.currentCard.editions : [];
+  var editionBox = '';
+  if (eds.length > 1) {
+    editionBox = '<div class="selbox"><div class="sellbl">Edition</div><div class="selopts">'
+      + '<button class="selchip' + (SEL.edition === 'all' ? ' on' : '') + '" onclick="setEdition(&quot;all&quot;)">All</button>';
+    eds.forEach(function (e) {
+      editionBox += '<button class="selchip' + (SEL.edition === e.key ? ' on' : '') + '" '
+        + 'onclick="setEdition(&quot;' + liveEsc(e.key) + '&quot;)">' + liveEsc(e.label || editionLabelOf(e.key)) + '</button>';
+    });
+    editionBox += '<div class="selnote">' + (SEL.edition === 'all'
+      ? 'Every edition, each row labelled with what its title states.'
+      : 'Only <strong>' + liveEsc(editionLabelOf(SEL.edition)) + '</strong>. A title stating another '
+        + 'edition is refused; a title stating none is grouped as <em>edition not stated</em>, never assumed.')
+      + '</div></div></div>';
   }
 
   // ── CONDITION ── every option visible, no "more" button.
@@ -2768,6 +2808,7 @@ function renderSelector() {
           + 'printing is refused; a title stating none is grouped as <em>printing not stated</em>, never assumed.')
       + '</div></div>');
   }
+  if (editionBox) h += editionBox;
   h += '</div>';
 
   host.innerHTML = h;
@@ -2861,7 +2902,7 @@ async function openCard(id){
   
   // A new card starts at Raw + All, and the selector is redrawn so it never
   // shows the previous card's selection against this card's listings.
-  SEL.status='Raw'; SEL.condition='All'; SEL.otherGrader=null; SEL.printing='all';
+  SEL.status='Raw'; SEL.condition='All'; SEL.otherGrader=null; SEL.printing='all'; SEL.edition='all';
   document.getElementById('watch-btn').textContent='🤍 Watch';
   document.getElementById('cd-img').src='';
   document.getElementById('cd-name').textContent='Loading…';
@@ -3275,13 +3316,13 @@ function renderListingFinder(card) {
   // estimate, not the $122 reverse's. A reverse/mirror uses its OWN held
   // price (the lookup the headline uses) and, holding none, says so rather
   // than borrowing the base's.
-  var sp = SEL && SEL.printing && /^reverse/.test(SEL.printing) ? SEL.printing : null;
-  var spHeld = sp ? (Array.isArray(card.printingPrices) ? card.printingPrices : [])
-    .filter(function (x) { return x.printing === sp; })[0] : null;
-  var base = sp ? (spHeld ? Number(spHeld.price) : 0) : getBase(card);
+  // T3: the selected EDITION too, through the same helper as the headline.
+  var sh = selectedHeld(card);
+  var sp = sh ? sh.label : null;
+  var base = sh ? (sh.price != null ? sh.price : 0) : getBase(card);
   var mult = gradeMult(LF.grade);
   var est = base * mult;
-  var spLabel = sp ? ' &middot; ' + liveEsc(printingLabelOf(sp)) : '';
+  var spLabel = sp ? ' &middot; ' + liveEsc(sp) : '';
   if (base > 0) {
     html += '<div id="cd-gradeval" style="padding:12px 18px;background:var(--bg);'
       + 'border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;'
@@ -3290,14 +3331,14 @@ function renderListingFinder(card) {
       + ' &middot; <span style="color:var(--am);font-weight:700">estimate</span></div>'
       + '<div style="font-size:20px;font-weight:800">' + fmtCurrency(est) + '</div></div>';
     html += '<div style="font-size:11px;color:var(--fa);text-align:right;max-width:200px">'
-      + (sp ? liveEsc(printingLabelOf(sp)) + ' raw price' : 'Raw price')
+      + (sp ? liveEsc(sp) + ' raw price' : 'Raw price')
       + ' &times;' + mult + ', not measured from sales. The listings below are real.'
       + '</div>';
     html += '</div>';
   } else if (sp) {
     html += '<div id="cd-gradeval" style="padding:12px 18px;background:var(--bg);'
       + 'border-bottom:1px solid var(--bd);font-size:12px;color:var(--mu)">'
-      + 'No typical ' + gradeText(LF.grade) + ' estimate for ' + liveEsc(printingLabelOf(sp))
+      + 'No typical ' + gradeText(LF.grade) + ' estimate for ' + liveEsc(sp)
       + ' &mdash; no price held for that printing. The listings below are real.</div>';
   }
 
@@ -3387,13 +3428,16 @@ var LIVE_TTL   = 15 * 60 * 1000;      // mirrors the server's cache
 function fetchListings(cardId, grade, printing, opts) {
   opts = opts || {};
   var pr0 = (printing && printing !== 'all') ? printing : null;
-  var key = cardId + '|' + grade + (pr0 ? '|' + pr0 : '');
+  // T3: the edition rides on the key and the URL, exactly as printing does.
+  var ed0 = (opts.edition && opts.edition !== 'all') ? opts.edition : null;
+  var key = cardId + '|' + grade + (pr0 ? '|' + pr0 : '') + (ed0 ? '|ed:' + ed0 : '');
   var hit = LIVE_CACHE[key];
   if (!opts.poll && hit && Date.now() - hit.ts < LIVE_TTL) return Promise.resolve(hit.data);
   if (LIVE_INFLIGHT[key]) return LIVE_INFLIGHT[key];
   var pr = fetch(BACKEND + '/api/listings/' + encodeURIComponent(cardId)
                  + '?grade=' + encodeURIComponent(grade)
                  + (pr0 ? '&printing=' + encodeURIComponent(pr0) : '')
+                 + (ed0 ? '&edition=' + encodeURIComponent(ed0) : '')
                  + (opts.poll ? '&poll=1' : ''))
     .then(function (r) { if (!r.ok) throw new Error('API returned ' + r.status); return r.json(); })
     .then(function (d) { LIVE_CACHE[key] = { ts: Date.now(), data: d }; return d; });
@@ -3681,13 +3725,15 @@ var LIVE_POLL = null;
 var LIVE_POLL_MS = 2500;
 function liveScheduleProgress(card, grade, printing, d){
   if (LIVE_POLL) { clearTimeout(LIVE_POLL); LIVE_POLL = null; }
+  var edition = SEL.edition || 'all';
   var pg = d && d.progress;
   if (!pg || !pg.loading || !pg.loading.length) return;
   LIVE_POLL = setTimeout(function () {
     LIVE_POLL = null;
-    if (!LF.card || LF.card.id !== card.id || LF.grade !== grade || (SEL.printing || 'all') !== printing) return;
+    if (!LF.card || LF.card.id !== card.id || LF.grade !== grade || (SEL.printing || 'all') !== printing
+        || (SEL.edition || 'all') !== edition) return;
     // fetchListings stores the answer in LIVE_CACHE; the redraw reads it.
-    fetchListings(card.id, grade, printing, { poll: true })
+    fetchListings(card.id, grade, printing, { poll: true, edition: edition })
       .then(function () { renderLiveListings(card, grade, { quiet: true }); })
       .catch(function () { liveScheduleProgress(card, grade, printing, d); });
   }, LIVE_POLL_MS);
@@ -3714,6 +3760,7 @@ async function renderLiveListings(card, grade, opts){
   var cardId = card.id;
   var key = cardId + '|' + grade;
   var printing = SEL.printing || 'all';
+  var edition = SEL.edition || 'all';
 
   // A progress redraw keeps the rows on screen; only a new question blanks it.
   if (!opts.quiet) host.innerHTML = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd);'
@@ -3721,7 +3768,7 @@ async function renderLiveListings(card, grade, opts){
 
   var d;
   try {
-    d = await fetchListings(cardId, grade, printing);
+    d = await fetchListings(cardId, grade, printing, { edition: edition });
   } catch (err) {
     host.innerHTML = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd);'
       + 'font-size:11px;color:var(--mu);background:rgba(239,68,68,.06)">'
@@ -3731,7 +3778,16 @@ async function renderLiveListings(card, grade, opts){
   }
 
   // The user may have changed card, grade or printing while this was in flight.
-  if (!LF.card || LF.card.id !== cardId || LF.grade !== grade || (SEL.printing || 'all') !== printing) return;
+  if (!LF.card || LF.card.id !== cardId || LF.grade !== grade || (SEL.printing || 'all') !== printing
+      || (SEL.edition || 'all') !== edition) return;
+
+  // The editions this card was printed in arrive with its listings too (T3);
+  // the Edition box appears only when there is more than one.
+  if (Array.isArray(d.editions) && S.currentCard && S.currentCard.id === cardId
+      && JSON.stringify(S.currentCard.editions || null) !== JSON.stringify(d.editions.length ? d.editions : null)) {
+    S.currentCard.editions = d.editions.length ? d.editions : null;
+    renderSelector();
+  }
 
   // The printings this card exists in arrive with its listings; the
   // selector offers a printing box only when there is more than one (T10).
@@ -3792,6 +3848,17 @@ async function renderLiveListings(card, grade, opts){
     rows.forEach(function (l) { (l.printingStated ? keepP : unstatedPrint).push(l); });
     rows = keepP;
   }
+  // ── Edition (T3) — the same rule on its own axis ──
+  // Rows that state the asked edition are shown; rows that state none are the
+  // same card in an edition nobody named: their own group, never assumed.
+  var edFilter = edition !== 'all' ? edition : null;
+  var unstatedEd = [];
+  if (edFilter) {
+    var keepE = [];
+    rows.forEach(function (l) { (l.editionStated ? keepE : unstatedEd).push(l); });
+    rows = keepE;
+  }
+  var edRefused = (d.editionReport && d.editionReport.refused) || 0;
   var printRefused = 0;
   Object.keys(d.sources || {}).forEach(function (k) {
     var p = d.sources[k] && d.sources[k].printing; if (p && p.refused) printRefused += p.refused;
@@ -3804,7 +3871,8 @@ async function renderLiveListings(card, grade, opts){
     // Under Other, name the grader: "OTHER — ALL" did not say which slabs.
     : ((SEL.status === 'Other' ? (SEL.otherGrader || otherGraders()[0]) : SEL.status)
        + ' — ' + SEL.condition).toUpperCase())
-    + (printFilter ? ' — ' + printingLabelOf(printFilter).toUpperCase() : '');
+    + (printFilter ? ' — ' + printingLabelOf(printFilter).toUpperCase() : '')
+    + (edFilter ? ' — ' + editionLabelOf(edFilter).toUpperCase() : '');
   var head = '<div style="padding:14px 18px;border-bottom:1px solid var(--bd)">'
     + '<div style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em;margin-bottom:8px">'
     + 'FOR SALE NOW &mdash; ' + liveEsc(selLabel)
@@ -3837,7 +3905,23 @@ async function renderLiveListings(card, grade, opts){
     if (printRefused) out += '<div style="font-size:11px;color:var(--fa);margin-top:4px">'
       + printRefused + ' listing' + (printRefused === 1 ? '' : 's')
       + ' refused &mdash; the title states a different printing.</div>';
-    return out + unstatedPrintBlock();
+    if (edRefused) out += '<div style="font-size:11px;color:var(--fa);margin-top:4px">'
+      + edRefused + ' listing' + (edRefused === 1 ? '' : 's')
+      + ' refused &mdash; the title states a different edition.</div>';
+    return out + unstatedPrintBlock() + unstatedEdBlock();
+  }
+  // Same card, edition not stated (T3). Its own group, its own words.
+  function unstatedEdBlock() {
+    if (!unstatedEd.length) return '';
+    return '<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--bd)">'
+      + '<div style="font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;'
+      + 'letter-spacing:.06em;margin-bottom:4px">Edition not stated &mdash; ' + unstatedEd.length + '</div>'
+      + '<div style="font-size:11px;color:var(--mu);line-height:1.6;margin-bottom:8px">'
+      + 'The same card, but the seller does not say which edition. It may be '
+      + liveEsc(editionLabelOf(edFilter)) + ' or another this card was printed in. Shown, not hidden.'
+      + '</div>'
+      + unstatedEd.map(liveRow).join('')
+      + '</div>';
   }
   // Same card, printing not stated (T10). Its own group, its own words.
   function unstatedPrintBlock() {
@@ -5882,6 +5966,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260930-cd7794b-allsites &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260930-054a56b-editions &middot; click to hide</div>
 </body>
 </html>

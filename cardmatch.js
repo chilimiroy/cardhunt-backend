@@ -1261,6 +1261,49 @@ function printingRefusal(claim, want, card) {
   return `title says ${printingLabel(claim.key)} ("${claim.said}"), wanted ${printingLabel(want)} — a different printing`;
 }
 // A printing key as asked for in a request: a known key or reverse-<word>.
+// ── Edition (print run) — TASK T3, 2026-09-30 ─────────────────
+// A 1st Edition Base Set Charizard and an Unlimited one are different
+// products at very different prices; averaging them describes neither. The
+// same argument as holo vs reverse, on an independent axis: a card can be
+// 1st Edition AND reverse, so this never folds into PRINTINGS.
+//
+// WHERE editions exist is gradeprice.printRunsFor — the ten English sets
+// TCGdex counts first-edition cards in, Base Set to Neo Destiny, plus
+// Shadowless on Base Set. This module only reads what a TITLE states.
+//
+// The words, as sellers on every site write them: "1st Edition", German
+// "1. Edition" / "Erste Edition", Italian "Prima Edizione" / "1° Edizione",
+// Spanish "1ª Edición", French "Édition 1" / "ED1". French "Édition 2" /
+// "ED2" is UNLIMITED — measured on eBay FR: "Set de Base Édition 2".
+// "4th Print" (the 1999-2000 UK print run) is an Unlimited print.
+const EDITIONS = { '1st-edition': '1st Edition', 'shadowless': 'Shadowless', 'unlimited': 'Unlimited' };
+const EDITION_WORDS = [
+  ['1st-edition', /\b1st\s*ed(?:ition|\.)?(?![a-z])|\bfirst\s*ed(?:ition)?\b|(?:^|[\s(|,\/-])1\.?\s*(?:edition|ed\.|auflage)\b|\berste\s+(?:edition|auflage)\b|\bprima\s+edizione\b|(?:^|[\s(|,\/-])1\s*[ªa°º]\s*(?:edizione|edici[oó]n|[ée]dition)|[ée]dition\s*1(?!\d)|\bed\.?\s*1(?!\d)|\b1(?:ère|ere|re)\s+[ée]dition/i],
+  ['shadowless', /\bshadowless\b|\bohne\s+schatten\b|\bsenza\s+ombra\b|\bsin\s+sombra\b/i],
+  ['unlimited', /\bunlimited\b|\bunlimitiert\b|\billimitat[oa]\b|\bilimitad[oa]\b|\b4th\s*print\b|[ée]dition\s*2(?!\d)|\bed\.?\s*2(?!\d)|\b2(?:nde|nd|e)\s+[ée]dition/i]
+];
+// "not 1st edition", "no shadowless", "kein 1. Edition": a statement about
+// what the card is NOT is removed before anything is read.
+const EDITION_NEGATION = /\b(?:not|no|non|kein|keine|nicht|pas)\s+(?:a\s+|an\s+|la\s+|une\s+)?(?:1st|first|shadowless|prima|erste|1\.|1[ªa°º])(?:\s*(?:ed(?:ition|izione)?|edici[oó]n|[ée]dition))?/gi;
+function editionClaim(title) {
+  const t = String(title || '').replace(EDITION_NEGATION, ' ');
+  for (const [key, re] of EDITION_WORDS) if (re.test(t)) return { key, stated: true };
+  return { key: null, stated: false };
+}
+function editionLabel(key) { return EDITIONS[key] || key || null; }
+function parseEditionParam(p) {
+  const k = String(p || '').trim().toLowerCase();
+  if (!k || k === 'all') return null;
+  return EDITIONS[k] ? k : null;
+}
+// The gate: refuse only a title that STATES another edition. Silence is
+// kept and labelled unstated — on Base Set most titles say nothing, and a
+// filter that dropped them would hide the market.
+function editionRefusal(claim, want) {
+  if (!want || !claim || !claim.stated || claim.key === want) return null;
+  return `title states ${editionLabel(claim.key)}, asked for ${editionLabel(want)} — a different print run`;
+}
+
 function parsePrintingParam(p) {
   const k = String(p || '').trim().toLowerCase();
   if (!k || k === 'all') return null;
@@ -1355,6 +1398,12 @@ function buildQuery(card, grade, opts) {
   const PRINTING_TERMS = { 'reverse': 'reverse holo', 'reverse-pokeball': 'poke ball',
                            'reverse-masterball': 'master ball', 'reverse-cosmos': 'cosmos' };
   if (opts.printing && PRINTING_TERMS[opts.printing]) bits.push(PRINTING_TERMS[opts.printing]);
+  // An edition asked for is asked of the marketplace too (TASK T3) — on a
+  // busy Base Set card the 1st Edition rows are a small, expensive slice.
+  // Unlimited adds nothing: sellers rarely write it, and asking would drop
+  // every silent title.
+  const EDITION_TERMS = { '1st-edition': '1st edition', 'shadowless': 'shadowless' };
+  if (opts.edition && EDITION_TERMS[opts.edition]) bits.push(EDITION_TERMS[opts.edition]);
 
   if (opts.suffix !== false) bits.push('pokemon');
 
@@ -1537,6 +1586,15 @@ function verify(title, card, grade, opts) {
   if (r.ok && opts && opts.printing) {
     const why = printingRefusal(claim, opts.printing, card);
     if (why) { r.ok = false; r.reason = why; r.printingConflict = true; }
+  }
+  // Edition (TASK T3): the same rule on its own axis — every verdict says
+  // what the title stated; only opts.edition refuses.
+  const ed = editionClaim(title);
+  r.edition = ed.key;
+  r.editionStated = ed.stated;
+  if (r.ok && opts && opts.edition) {
+    const why = editionRefusal(ed, opts.edition);
+    if (why) { r.ok = false; r.reason = why; r.editionConflict = true; }
   }
   return r;
 }
@@ -1861,6 +1919,7 @@ const API = {
   REPRINT_FAMILIES, REPRINT_OF, setIdOf, familyOfSet, familyNamedBy, familiesReprinting, reprintCardsOf,
   reprintOf, asPrinted,
   PRINTINGS, printingLabel, printingClaim, printingRefusal, parsePrintingParam,
+  EDITIONS, editionClaim, editionLabel, editionRefusal, parseEditionParam,
   EBAY_KEYWORD_LIMIT
 };
 

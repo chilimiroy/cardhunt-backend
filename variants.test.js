@@ -113,7 +113,7 @@ const fnOf = name => { const i = server.search(new RegExp('\\n(?:async\\s+)?func
 ok('resolveListingCard SELECTs variants (else printings are always null)', /set_release, image_small, variants/.test(fnOf('resolveListingCard')));
 ok('ebayMatchCard carries printings', /printings: printingsOf\(card\)/.test(fnOf('ebayMatchCard')));
 ok('filterCard carries printings (Yahoo, Yuyu-tei)', /printings: printingsOf\(card\)/.test(fnOf('filterCard')));
-ok('sourceEbay gates on the printing', /printing \? \{ printing \}/.test(fnOf('sourceEbay')) && /buildQuery\([^;]*matchCard[^;]*grade, printing \? \{ printing \}/.test(fnOf('sourceEbay')));
+ok('sourceEbay gates on the printing', /printing \? \{ printing \}/.test(fnOf('sourceEbay')) && /buildQuery\([^;]*matchCard[^;]*grade, \(printing \|\| opts\.edition\) \? \{ printing, edition/.test(fnOf('sourceEbay')));
 ok('sourceYahoo gates on the printing', /cm\.printingRefusal\(pclaim, opts\.printing, fc\)/.test(fnOf('sourceYahoo')));
 ok('sourceYuyutei serves the asked mirror, else the base rule', /wantMirror/.test(fnOf('sourceYuyutei')) && /pickVariants/.test(fnOf('sourceYuyutei')));
 ok('every source reports printing', ['sourceEbay', 'sourceYahoo', 'sourceYuyutei'].every(f => /printingReport\(/.test(fnOf(f))));
@@ -136,12 +136,15 @@ ok('gatherListings copies the printing report into sources', /sources\[s\.id\]\.
   // gather — both are asserted there.
   const lf = (k => server.slice(k, server.indexOf('\n}\n', k)))(server.indexOf('async function listingsFor('));
   ok('/api/listings passes printing to listingsFor', /listingsFor\(card, cardId, grade, printing,/.test(route));
+  // T3: one helper keys on grade + printing + edition.
+  const vcg = (k => server.slice(k, server.indexOf('\n}\n', k)))(server.indexOf('function viewCacheGrade('));
+  ok('the view cache key carries the printing (and the edition)', /printing \? '\|' \+ printing/.test(vcg) && /edition \? '\|ed:' \+ edition/.test(vcg));
   ok('listingsFor keys its cache on the printing too',
-     /const cacheGrade = printing \? grade \+ '\|' \+ printing : grade;/.test(lf)
+     /const cacheGrade = viewCacheGrade\(grade, printing, edition\);/.test(lf)
      && /listingCacheGet\(key, cacheGrade\)/.test(lf) && /listingCacheSet\(key, cacheGrade/.test(lf));
   ok('listingsFor passes printing to gatherListings', /gatherListings\(card, grade, [^,]+,\s*\{[^}]*printing/.test(lf));
   ok('the continuation caches under the same printing key',
-     /const cacheGrade = printing \? grade \+ '\|' \+ printing : grade;/.test(
+     /const cacheGrade = viewCacheGrade\(grade, printing, edition\);/.test(
        (k => server.slice(k, server.indexOf('\n}\n', k)))(server.indexOf('async function continueListings('))));
   ok('/api/listings refuses an unknown printing (400), not silently All', /status\(400\)/.test(route));
 }
@@ -153,17 +156,20 @@ console.log('\n  3b. the page');
   const pfn = name => { const i = html.search(new RegExp('\\n(?:async\\s+)?function\\s+' + name + '\\s*\\(')); if (i < 0) return '';
     const j = html.slice(i + 5).search(/\n(?:async\s+)?function\s+[A-Za-z0-9_$]+\s*\(/); return html.slice(i, j < 0 ? undefined : i + 5 + j); };
   ok('fetchListings keys its cache on the printing and sends it', /key = cardId \+ '\|' \+ grade \+ \(pr0/.test(pfn('fetchListings')) && /&printing=/.test(pfn('fetchListings')));
-  ok('renderLiveListings asks with SEL.printing', /fetchListings\(cardId, grade, printing\)/.test(pfn('renderLiveListings')));
+  ok('renderLiveListings asks with SEL.printing', /fetchListings\(cardId, grade, printing[,)]/.test(pfn('renderLiveListings'))
+     && /var printing = SEL\.printing/.test(pfn('renderLiveListings')));
   ok('the printing box is drawn only when the card has MORE THAN ONE printing', /pr\.length > 1/.test(pfn('renderSelector')));
   ok('rows with no stated printing go to their own group, never dropped', /unstatedPrint/.test(pfn('renderLiveListings')) && /Printing not stated/.test(pfn('renderLiveListings')));
+  // T3: printing and edition share one helper, selectedHeld.
   ok('a selected non-base printing shows ITS price or says none is held — never the base price',
-    /printingPrices/.test(pfn('updatePrices')) && /price held/.test(pfn('updatePrices')));
+    /selectedHeld\(cc\)/.test(pfn('updatePrices')) && /price held/.test(pfn('updatePrices'))
+    && /card\.printingPrices/.test(pfn('selectedHeld')) && /x\.printing === sp/.test(pfn('selectedHeld')));
   ok('openCard resets the printing', /SEL\.printing='all'/.test(pfn('openCard')));
   // T4 (2026-09-29): the Typical grade block multiplied the BASE printing's
   // price whatever the Printing box said.
   const rlf = pfn('renderListingFinder');
   ok('the Typical block reads the selected printing\'s OWN held price',
-    /SEL\.printing/.test(rlf) && /card\.printingPrices/.test(rlf) && /var base = sp \?/.test(rlf));
+    /selectedHeld\(card\)/.test(rlf) && /var base = sh \?/.test(rlf) && /SEL\.printing/.test(pfn('selectedHeld')));
   ok('...and says none is held rather than borrowing the base price', /no price held for that printing/.test(rlf));
   ok('...and names the printing in its heading', /Typical ' \+ gradeText\(LF\.grade\) \+ spLabel/.test(rlf));
   ok("getBase's fallback never takes a reverseHolofoil as the base", !/'reverseHolofoil'/.test(pfn('getBase')));

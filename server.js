@@ -4319,6 +4319,47 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ══════════════════════════════════════════════════════════════
+// GET /api/ebay/aspects/:cardId?mp=EBAY_DE
+//
+// T1, 2026-09-30. On DE/FR/IT/ES eBay IGNORES the English
+// "Card Condition:{Near Mint or Better}" filter — measured, base1-4: Raw,
+// Raw NM and Raw HP all returned the same total there (DE 264, IT 1,250),
+// while GB went 1,441 -> 394 -> 125. Each site names its aspects in its own
+// language. This asks eBay what they are: one search call, limit=1, with
+// ASPECT_REFINEMENTS. Catalogue id + marketplace from MARKETPROBE_SITES
+// only, never a URL. Cached 30 min; nothing stored.
+// ══════════════════════════════════════════════════════════════
+const aspectProbeCache = new Map();
+app.get('/api/ebay/aspects/:cardId', async (req, res) => {
+  const mp = String(req.query.mp || 'EBAY_US').toUpperCase();
+  if (!MARKETPROBE_SITES.includes(mp) || /_NO/.test(mp)) return res.status(400).json({ error: 'unknown marketplace', allowed: MARKETPROBE_SITES.filter(m => !/_NO/.test(m)) });
+  const key = req.params.cardId + '|' + mp;
+  const hit = aspectProbeCache.get(key);
+  if (hit && Date.now() - hit.at < 30 * 60 * 1000) return res.json(hit.body);
+  try {
+    if (!ebay.ebayEnabled()) return res.status(503).json({ error: 'EBAY_ENABLED=false' });
+    const card = await resolveListingCard(req.params.cardId);
+    if (!card) return res.status(404).json({ error: 'card not in catalogue' });
+    const auth = await getEbayTokenDetailed({ background: true });
+    if (!auth.token) return res.status(503).json({ error: auth.error || auth.reason || 'no token' });
+    const q = cm.buildQuery(ebayMatchCard(card), 'Raw');
+    const r = await ebay.fetchEbay(db, { token: auth.token, kind: 'search', background: true,
+      url: 'https://api.ebay.com/buy/browse/v1/item_summary/search?q=' + encodeURIComponent(q)
+        + '&category_ids=183454&limit=1&fieldgroups=ASPECT_REFINEMENTS',
+      meta: { cardId: card.api_card_id, query: q, marketplace: mp, probe: 'aspects' } });
+    if (!r.ok) return res.status(502).json({ error: r.reason || r.blocked });
+    const ref = (r.data && r.data.refinement) || {};
+    const body = { cardId: card.api_card_id, marketplace: mp, query: q, total: r.data && r.data.total,
+      aspects: (ref.aspectDistributions || []).map(a => ({ name: a.localizedAspectName,
+        values: (a.aspectValueDistributions || []).map(v => ({ value: v.localizedAspectValue, count: v.matchCount })) })),
+      conditions: (ref.conditionDistributions || []).map(c => ({ condition: c.condition, id: c.conditionId, count: c.matchCount })),
+      stored: false, at: new Date().toISOString() };
+    aspectProbeCache.set(key, { at: Date.now(), body });
+    res.json(body);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/ebay/quota', async (req, res) => {
   try {
     const out = await quota.status(db);

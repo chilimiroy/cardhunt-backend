@@ -1921,12 +1921,14 @@ const EBAY_SITES = [
   // other languages and the junk/slab/reprint vocabulary was tested on three
   // sets of real DE titles (eusites.test.js); aspect names are DE's own
   // (cardmatch.EBAY_SITE_ASPECTS) — an English one is ignored there.
-  { id: 'EBAY_DE', country: 'DE', currency: 'EUR' }
+  { id: 'EBAY_DE', country: 'DE', currency: 'EUR' },
+  // FR: French sellers mark French cards "FR" / "VF" (cardmatch LANG_CASE_TOKENS);
+  // ~40% of what FR adds for an English card is the French card, refused.
+  { id: 'EBAY_FR', country: 'FR', currency: 'EUR' }
 ];
 // Not searched yet, each with the reason — reported on every response so a
 // short list is never mistaken for every marketplace having been asked.
 const EBAY_SITES_PENDING = {
-  EBAY_FR: 'French-language titles: junk, grade and language vocabulary not yet tested on real FR titles',
   EBAY_IT: 'machine-translated titles ("Portachiavi", "30° Celebrazione"): vocabulary not yet taught',
   EBAY_ES: 'machine-translated titles: vocabulary not yet taught',
   EBAY_JP: 'refused by eBay — 409 "12019: marketplace not supported"'

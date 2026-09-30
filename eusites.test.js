@@ -49,7 +49,11 @@ for (const [t, c] of [
   ['Cristal Dorado Lugia 149/147 Aquapolis 30ª Celebración Colección Clásica ¡Como Nuevo!!', 'lugia'],
   ['Selten! Pokémon 30 Jahre Lugia 149/147 Vintage Kollektion Jubiläum', 'lugia'],
   ['Lugia Aquapolis Crystal Type 149/147 – Pokemon 30ème Anniversaire Coréen', 'lugia'],
-  ['30° Pokemon TCG Lugia 149/147 Aquapolis Tipo Cristallo Segreto Raro Holo', 'lugia']
+  ['30° Pokemon TCG Lugia 149/147 Aquapolis Tipo Cristallo Segreto Raro Holo', 'lugia'],
+  // read live on eBay FR once it went on: "25 ans" = 25 years = Celebrations
+  ['Pokémon JCC Dracaufeu Charizard 4/102 Holo Set de Base 25 ans', 'zard'],
+  ['Charizard 4/102 Set Base Holo 25 anni', 'zard'],
+  ['Lugia 149/147 Aquapolis 30 años Pokémon', 'lugia']
 ]) {
   const v = V(t, c);
   ok('refused: ' + t.slice(0, 60), !v.ok && /Celebration|reprint|says ko/i.test(v.reason || ''), v.reason);
@@ -62,6 +66,7 @@ ok('kept: a 30th Classic Collection card titled in Spanish', V('Pokemon Lugia 14
 // "30" and "25" alone are numbers, never evidence.
 ok('kept: "30" as a number is not an anniversary', V('Charizard 4/102 Base Set Holo 120 HP 30 photos', 'zard').ok);
 ok('kept: an HP of 250 is not the 25th', V('Lugia 149/147 Aquapolis Holo Secret Rare 250 HP', 'lugia').ok);
+ok('kept: "25 answers" is not "25 ans"', V('Charizard 4/102 Base Set Holo 25 answers in description', 'zard').ok);
 
 console.log('\n2. NOT A SINGLE CARD — lotteries, customs, cases, replicas');
 for (const [t, c] of [

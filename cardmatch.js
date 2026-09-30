@@ -789,7 +789,7 @@ const REPRINT_FAMILIES = [
     // card until these were read. "30" alone is never evidence (a card
     // number, an HP); only with an ordinal mark or an anniversary word.
     says: [/\b30th\b/i, /\b30c\b/i,
-           /\b30\s*(?:°|º|ª|\.|e|eme|ème)?\s*(?:anniversario|aniversario|anniversaire|celebrazion[ei]|celebraci[oó]n(?:es)?|c[ée]l[ée]bration|jubil[äa]um|jahre)/i,
+           /\b30\s*(?:°|º|ª|\.|e|eme|ème)?\s*(?:anniversario|aniversario|anniversaire|celebrazion[ei]|celebraci[oó]n(?:es)?|c[ée]l[ée]bration|jubil[äa]um|jahre|ans|anni|a[ñn]os)\b/i,
            /(?:^|[\s(])30\s*[°ºª]/i],
     ask: '30th Celebration',
     // eBay negative keywords for a DEEP LINK on a card this family reprinted
@@ -814,7 +814,7 @@ const REPRINT_FAMILIES = [
            /\bcollezione classica\b/i, /\bcolecci[oó]n cl[aá]sica\b/i, /\bcollection classique\b/i,
            /\b(?:classic|klassische) sammlung\b/i],
     saysOnOriginal: [/\b25th\b/i,
-           /\b25\s*(?:°|º|ª|\.|e|eme|ème)?\s*(?:anniversario|aniversario|anniversaire|jubil[äa]um|jahre)/i,
+           /\b25\s*(?:°|º|ª|\.|e|eme|ème)?\s*(?:anniversario|aniversario|anniversaire|jubil[äa]um|jahre|ans|anni|a[ñn]os)\b/i,
            /(?:^|[\s(])25\s*[°ºª]/i],
     ask: 'Celebrations',
     linkMinus: ['-celebrations', '-25th', '-"classic collection"'],

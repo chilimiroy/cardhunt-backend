@@ -2974,8 +2974,14 @@ const viewExpanding = new Map();
 // US page 1 returning fewer than this many kept listings expands to every
 // site in the same request (T2): the card where US alone is not enough is
 // exactly the one where the other seven sites pay for themselves.
-// Measured, not guessed — see AUTO_EXPAND in CLAUDE.md for the numbers.
-const AUTO_EXPAND_BELOW = 10;
+// Measured 2026-09-30 on 20 random priced English cards (Raw, 5 per price
+// tier), US page 1 alone then all 8 sites: US 0-4 kept -> 5 cards, the other
+// sites added 0,0,+2,+3,+13 (ex15-95: nothing in the US, 13 in AU); US 5-9 ->
+// 2 cards, +1 and +12. At <10, 7 of 20 opens expand: ~3.5 calls per open,
+// over T2's 1-3. At <5, 5 of 20: ~2.75, and it still catches the card US
+// shows nothing for. A random sample over-weights obscure cards, so real
+// browsing should cost less. Re-measure from /api/listings-log byAction.
+const AUTO_EXPAND_BELOW = 5;
 
 // A failure worth retrying in a minute is not cached for fifteen.
 const TRANSIENT = ['busy', 'error', 'rate-limit'];

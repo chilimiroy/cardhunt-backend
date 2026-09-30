@@ -4223,7 +4223,7 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
   const bad = asked.filter(m => !MARKETPROBE_SITES.includes(m));
   if (bad.length) return res.status(400).json({ error: 'unknown marketplace', bad, allowed: MARKETPROBE_SITES });
   const sites = ['EBAY_US'].concat(asked.filter(m => m !== 'EBAY_US'));
-  const key = JSON.stringify([cardId, grade, sites]);
+  const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1']);
   const hit = marketProbeCache.get(key);
   if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') return res.json(hit.body);
   try {
@@ -4301,7 +4301,13 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
         keptCountries: countries, keptCurrencies: currencies,
         rejectReasons: p.rejectReasons,
         cheapestKeptUsd: cheapest(p.keptRows), cheapestNewUsd: cheapest(fresh),
-        newSample: fresh.slice(0, 5)
+        newSample: fresh.slice(0, 5),
+        // ?rows=1 (T1): every row this site kept that US did not, and why US
+        // did not — the titles a translated-vocabulary gate is taught from.
+        // Served, never stored (eBay's terms), like every listing response.
+        newRows: req.query.rows === '1'
+          ? fresh.map(k => Object.assign({ usScannedIt: usScanned.has(k.itemId), suspect: suspect.has(k.itemId) }, k))
+          : undefined
       };
     }
     const calls = sites.reduce((n, mp) => n + ((per[mp] && per[mp].pages && per[mp].pages.fetched) || 0), 0);

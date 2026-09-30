@@ -3432,15 +3432,22 @@ function fetchListings(cardId, grade, printing, opts) {
   var ed0 = (opts.edition && opts.edition !== 'all') ? opts.edition : null;
   var key = cardId + '|' + grade + (pr0 ? '|' + pr0 : '') + (ed0 ? '|ed:' + ed0 : '');
   var hit = LIVE_CACHE[key];
-  if (!opts.poll && hit && Date.now() - hit.ts < LIVE_TTL) return Promise.resolve(hit.data);
-  if (LIVE_INFLIGHT[key]) return LIVE_INFLIGHT[key];
+  // T2: opts.sites ('all') and opts.more are the buttons — a request the
+  // user asked for, which EXTENDS the cached view, so it skips both caches.
+  var expand = opts.sites === 'all' || !!opts.more;
+  if (!opts.poll && !expand && hit && Date.now() - hit.ts < LIVE_TTL) return Promise.resolve(hit.data);
+  if (LIVE_INFLIGHT[key] && !expand) return LIVE_INFLIGHT[key];
   var pr = fetch(BACKEND + '/api/listings/' + encodeURIComponent(cardId)
                  + '?grade=' + encodeURIComponent(grade)
                  + (pr0 ? '&printing=' + encodeURIComponent(pr0) : '')
                  + (ed0 ? '&edition=' + encodeURIComponent(ed0) : '')
+                 + (opts.sites === 'all' ? '&sites=all' : '')
+                 + (opts.more ? '&more=1' : '')
                  + (opts.poll ? '&poll=1' : ''))
     .then(function (r) { if (!r.ok) throw new Error('API returned ' + r.status); return r.json(); })
-    .then(function (d) { LIVE_CACHE[key] = { ts: Date.now(), data: d }; return d; });
+    // A busy/erroring eBay answer is worth asking again in a moment, so it
+    // is not held for LIVE_TTL (the server does not cache it either).
+    .then(function (d) { if (d && d.retryable) delete LIVE_CACHE[key]; else LIVE_CACHE[key] = { ts: Date.now(), data: d }; return d; });
   LIVE_INFLIGHT[key] = pr;
   var clear = function () { if (LIVE_INFLIGHT[key] === pr) delete LIVE_INFLIGHT[key]; };
   pr.then(clear, clear);
@@ -3716,40 +3723,48 @@ function applyMeasuredGrade(d){
     + 'The estimate was ' + fmtCurrency(base * gradeMult(d.grade)) + '.</div>';
 }
 
-// \u2500\u2500 The count climbing (T1) \u2500\u2500
-// The first answer is page 1 of every eBay site; the server keeps paging
-// each to exhaustion and its cached answer grows. While `progress.loading`
-// is non-empty the panel re-asks (&poll=1: not counted as a view) and
-// redraws in place. It stops when the card, grade or printing changes.
-var LIVE_POLL = null;
-var LIVE_POLL_MS = 2500;
-function liveScheduleProgress(card, grade, printing, d){
-  if (LIVE_POLL) { clearTimeout(LIVE_POLL); LIVE_POLL = null; }
-  var edition = SEL.edition || 'all';
-  var pg = d && d.progress;
-  if (!pg || !pg.loading || !pg.loading.length) return;
-  LIVE_POLL = setTimeout(function () {
-    LIVE_POLL = null;
-    if (!LF.card || LF.card.id !== card.id || LF.grade !== grade || (SEL.printing || 'all') !== printing
-        || (SEL.edition || 'all') !== edition) return;
-    // fetchListings stores the answer in LIVE_CACHE; the redraw reads it.
-    fetchListings(card.id, grade, printing, { poll: true, edition: edition })
-      .then(function () { renderLiveListings(card, grade, { quiet: true }); })
-      .catch(function () { liveScheduleProgress(card, grade, printing, d); });
-  }, LIVE_POLL_MS);
+// -- What is NOT shown, and the buttons that fetch it (T2) --
+// Opening a card asks eBay US, page 1: one call. Nothing loads by itself
+// afterwards (the T1 poller that watched a background crawl is gone with
+// the crawl). Every other marketplace and every deeper page is one press
+// away, and the line says what was not searched rather than letting a
+// short list pass for the whole market.
+var LIVE_EXPANDING = null;
+function liveExpand(kind){
+  var card = LF.card, grade = LF.grade;
+  if (!card || LIVE_EXPANDING) return;
+  var printing = SEL.printing || 'all', edition = SEL.edition || 'all';
+  var btn = document.getElementById(kind === 'more' ? 'cd-more-btn' : 'cd-sites-btn');
+  if (btn) { btn.disabled = true; btn.textContent = kind === 'more' ? 'Loading more listings\u2026' : 'Searching marketplaces\u2026'; }
+  LIVE_EXPANDING = kind;
+  fetchListings(card.id, grade, printing, kind === 'more' ? { more: true, edition: edition } : { sites: 'all', edition: edition })
+    .then(function () { LIVE_EXPANDING = null; renderLiveListings(card, grade, { quiet: true }); })
+    .catch(function (e) {
+      LIVE_EXPANDING = null;
+      if (btn) { btn.disabled = false; btn.textContent = 'Failed (' + e.message + ') \u2014 try again'; }
+    });
 }
-// "247 listings, still searching GB and AU" - never a silent partial list.
 function liveProgressLine(d){
   var pg = d && d.progress;
   if (!pg) return '';
-  var loading = pg.loading && pg.loading.length;
   var inc = pg.incomplete && pg.incomplete.length;
+  var a = pg.actions || {};
   var color = inc ? '#B45309' : 'var(--mu)';
+  var btnCss = 'font-size:11px;padding:5px 10px;margin:6px 6px 0 0;border:1px solid var(--bd);border-radius:6px;'
+    + 'background:var(--surface);color:var(--tx);cursor:pointer';
+  var btns = '';
+  if (a.searchAllSites) btns += '<button id="cd-sites-btn" type="button" style="' + btnCss + '" onclick="liveExpand(\'sites\')" '
+    + 'title="eBay ' + liveEsc((a.searchAllSites.sites || []).join(', ')) + ' \u2014 one search each">'
+    + liveEsc(a.searchAllSites.label) + '</button>';
+  if (a.loadMore) btns += '<button id="cd-more-btn" type="button" style="' + btnCss + '" onclick="liveExpand(\'more\')">'
+    + liveEsc(a.loadMore.label)
+    + (a.loadMore.notExamined ? ' (' + Number(a.loadMore.notExamined).toLocaleString('en-US') + ' more on eBay)' : '')
+    + '</button>';
   return '<div id="cd-progress" style="font-size:11px;color:' + color + ';margin-bottom:8px">'
-    + (loading ? '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--t);'
-        + 'margin-right:6px;animation:cdpulse 1s ease-in-out infinite alternate"></span>' : '')
     + liveEsc(pg.note || '')
-    + (loading ? ' &mdash; the list grows as pages arrive' : (inc ? '' : ' &middot; every page searched'))
+    + (d.autoExpanded ? ' &middot; ' + liveEsc(d.autoExpanded.reason) : '')
+    + (pg.complete ? ' &middot; every marketplace and page searched' : '')
+    + (btns ? '<div>' + btns + '</div>' : '')
     + '</div>';
 }
 
@@ -3878,7 +3893,6 @@ async function renderLiveListings(card, grade, opts){
     + 'FOR SALE NOW &mdash; ' + liveEsc(selLabel)
     + ' <span style="color:var(--gr)">&#10003; checked</span></div>'
     + liveProgressLine(d);
-  liveScheduleProgress(card, grade, printing, d);
 
   // The unstated group, rendered wherever it is needed. Built once here so
   // the empty case and the populated case cannot describe it differently.
@@ -5966,6 +5980,6 @@ function cleanSeries(name) {
      own landing. That is fine for the question it answers — what is deployed
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260930-054a56b-editions &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260930-589157c-dirty-ondemand &middot; click to hide</div>
 </body>
 </html>

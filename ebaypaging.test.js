@@ -52,8 +52,9 @@ const consts = constStart >= 0 && constEnd > constStart ? src.slice(constStart, 
 ok(/EBAY_OFFSET_CEILING = 10000;/.test(consts) && /EBAY_PAGE_MAX = 200;/.test(consts),
    'EBAY_PAGE_MAX and EBAY_OFFSET_CEILING are declared at top level');
 const fnSites = ['function newEbayState(', 'function mergeEbaySite(', 'function ebaySiteFailed(',
-  'function ebayStateResult(', 'async function sourceEbayAll(', 'async function continueEbaySite(']
-  .map(slice).join('\n');
+  'function ebayStateResult(', 'async function sourceEbayAll(', 'async function ebayLoadMore(',
+  'function listingsProgress(']
+  .map(slice).join('\n') + '\n' + (src.match(/\nconst siteName = [^\n]*/) || [''])[0];
 
 // One Charizard title that passes the gate at PSA 10, made unique per row.
 const CARD = { api_card_id: 'en-base1-4', name: 'Charizard', name_en: 'Charizard', number: '4',
@@ -103,22 +104,25 @@ function build(total, opts = {}) {
   };
   const factory = new Function('ebay', 'cm', 'lp', 'jpf', 'db', 'getEbayTokenDetailed', 'timing', 'fx',
     `${consts}\n${fnMatch}\n${fnNorm}\n${fnEbay}\n${fnSites}\n` +
-    'return { sourceEbay, sourceEbayAll, continueEbaySite, ebayStateResult, EBAY_SITES };');
+    'return { sourceEbay, sourceEbayAll, ebayLoadMore, ebayStateResult, listingsProgress, EBAY_SITES };');
   const mod = factory(ebay, cm, lp, jpf, null, async () => ({ token: 't' }), require('./timing'), fx);
   return { calls, ...mod };
 }
 
 // `pages` is absent on a build without paging: fail each assertion, don't abort.
 const run = async (b, ...a) => { const r = await b.sourceEbay(...a); r.pages = r.pages || {}; return r; };
-// Drive a multi-site view the way listingsFor does: page 1 everywhere, then
-// every site to exhaustion.
+// Drive a multi-site view the way a user who presses everything does (T2):
+// "Search all marketplaces", then "Load more" until nothing is owed. Each
+// press is foreground and fetches ONE page per site.
 async function fullView(b) {
-  const r = await b.sourceEbayAll(CARD, 'PSA 10', 25, { background: false });
+  const r = await b.sourceEbayAll(CARD, 'PSA 10', 25, { background: false, sites: 'all' });
   const st = r.ebayState;
-  let pagesSeen = 0;
-  await Promise.all(Object.keys(st.sites).map(mp =>
-    b.continueEbaySite(CARD, 'PSA 10', {}, st, mp, async () => { pagesSeen++; })));
-  return { first: r, final: b.ebayStateResult(st), st, pagesSeen };
+  let presses = 0;
+  while (Object.values(st.sites).some(s => s.status === 'ok' && s.nextOffset != null) && presses < 100) {
+    await b.ebayLoadMore(CARD, 'PSA 10', { background: false }, st);
+    presses++;
+  }
+  return { first: r, final: b.ebayStateResult(st), st, presses };
 }
 
 (async () => {
@@ -225,7 +229,57 @@ async function fullView(b) {
     ok(r.listings[0].currencyOriginal === null && r.listings[0].shippingTo === 'US', 'a US row is untouched, shipping to US');
   }
 
-  // ═══ Every site, every page (T1) ═══
+  // ═══ On demand (T2): opening a card is ONE call ═══
+  {
+    const b0 = build(0);
+    const sites = {};
+    for (const x of b0.EBAY_SITES) sites[x.id] = { total: 300, currency: x.currency };
+    const b = build(0, { sites });
+    const r = await b.sourceEbayAll(CARD, 'PSA 10', 25, { background: false });
+    ok(b.calls.length === 1 && b.calls[0].mp === 'EBAY_US' && b.calls[0].offset === 0 && !b.calls[0].background,
+       'the default view is eBay US page 1 — one foreground call: ' + JSON.stringify(b.calls));
+    const pg = b.listingsProgress(r.ebayState, r.kept);
+    const others = b0.EBAY_SITES.length - 1;
+    ok(pg.complete === false && pg.notSearched.length === others && !pg.notSearched.includes('EBAY_US'),
+       'and it says the other sites were NOT searched: ' + JSON.stringify(pg.notSearched));
+    ok(pg.actions.searchAllSites && pg.actions.searchAllSites.calls === others
+       && pg.actions.searchAllSites.label === 'Search ' + others + ' more marketplaces',
+       'the control says what it will do and cost: ' + JSON.stringify(pg.actions.searchAllSites));
+    ok(pg.actions.loadMore && pg.actions.loadMore.calls === 1 && pg.actions.loadMore.notExamined === 100,
+       'and that US has 100 more results not examined: ' + JSON.stringify(pg.actions.loadMore));
+    ok(new RegExp(others + ' more marketplaces not searched').test(pg.note) && /100 more results on eBay not yet examined/.test(pg.note),
+       'the note says what is not shown, in words: ' + pg.note);
+    ok(pg.loading.length === 0, 'nothing is "still loading" — nothing runs by itself');
+
+    // "Search all marketplaces" on the same view: only the sites not held.
+    await b.sourceEbayAll(CARD, 'PSA 10', 25, { background: false, sites: 'all', state: r.ebayState });
+    ok(b.calls.length === 1 + others && !b.calls.slice(1).some(c => c.mp === 'EBAY_US'),
+       'Search all marketplaces asks the ' + others + ' others, not US again (' + (b.calls.length - 1) + ' calls)');
+    // "Load more": one page of each site searched that has more.
+    const n0 = b.calls.length;
+    await b.ebayLoadMore(CARD, 'PSA 10', { background: false }, r.ebayState);
+    const more = b.calls.slice(n0);
+    ok(more.length === b0.EBAY_SITES.length && more.every(c => c.offset === 200 && !c.background),
+       'Load more fetches ONE more page per searched site, foreground: ' + JSON.stringify(more.map(c => c.mp + '@' + c.offset)));
+    const pg2 = b.listingsProgress(r.ebayState, 0);
+    ok(pg2.complete === true && !pg2.actions.loadMore && !pg2.actions.searchAllSites,
+       'complete only once every site is searched and every page examined');
+  }
+  {
+    // A refused site is not "searched": the next press asks it again.
+    const b = build(0, { sites: { EBAY_US: { total: 5 }, EBAY_GB: { total: 5, currency: 'GBP', blockAt: 1 } } });
+    const r = await b.sourceEbayAll(CARD, 'PSA 10', 25, { background: false, sites: 'all' });
+    ok(r.ebayState.sites.EBAY_GB.status === 'quota', 'a refused site keeps its status: ' + r.ebayState.sites.EBAY_GB.status);
+    const pg = b.listingsProgress(r.ebayState, r.kept);
+    ok(pg.notSearched.includes('EBAY_GB') && pg.incomplete.some(i => i.marketplace === 'EBAY_GB'),
+       'and is reported as not searched, with its reason');
+    const n0 = b.calls.length;
+    await b.sourceEbayAll(CARD, 'PSA 10', 25, { background: false, sites: 'all', state: r.ebayState });
+    ok(b.calls.slice(n0).some(c => c.mp === 'EBAY_GB') && !b.calls.slice(n0).some(c => c.mp === 'EBAY_US'),
+       'pressing again retries GB and does not re-ask US');
+  }
+
+  // ═══ Every site, every page — when asked (T1, T2) ═══
   {
     // US and GB share items 0-149; GB also has 150-349 of its own. Every
     // other site in the REAL EBAY_SITES answers with nothing (total 0), so
@@ -245,8 +299,8 @@ async function fullView(b) {
     ok(v.first.pending.length === 1 && v.first.pending[0].marketplace === 'EBAY_GB' && v.first.pending[0].nextOffset === 200,
        'the first answer says what is still owed: ' + JSON.stringify(v.first.pending));
     const cont = b.calls.slice(n);
-    ok(cont.length === 1 && cont[0].mp === 'EBAY_GB' && cont[0].offset === 200 && cont[0].background,
-       'the continuation fetches only what is owed, in the background: ' + JSON.stringify(cont));
+    ok(cont.length === 1 && cont[0].mp === 'EBAY_GB' && cont[0].offset === 200 && !cont[0].background,
+       'Load more fetches only what is owed, foreground, on request: ' + JSON.stringify(cont));
     ok(v.final.kept === 350 && v.final.listings.length === 350,
        `350 distinct items, each once (got ${v.final.kept})`);
     ok(v.st.sites.EBAY_GB.duplicates === 150 && v.st.sites.EBAY_US.kept === 150,
@@ -296,13 +350,22 @@ async function fullView(b) {
        'and the counts move with it: ' + JSON.stringify({ us: v.st.sites.EBAY_US.kept, it: v.st.sites.EBAY_IT.kept }));
   }
   {
-    // The quota's soft stop on page 3: the site says it is incomplete and why.
+    // A quota refusal on the third page (the second "Load more"): what
+    // arrived stays, the page stays OWED so pressing again retries it, and
+    // the progress says why it did not load.
     const b = build(0, { sites: { EBAY_US: { total: 1000, blockAt: 3 } } });
-    const v = await fullView(b);
-    const s = v.st.sites.EBAY_US;
-    ok(v.final.kept === 400 && s.exhausted === false && /quota|soft stop/.test(s.incompleteReason || ''),
-       'a budget stop keeps what arrived and says why: ' + JSON.stringify({ kept: v.final.kept, s }));
-    ok(v.final.pages.complete === false, 'and the view is not called complete');
+    const r = await b.sourceEbayAll(CARD, 'PSA 10', 25, { background: false });
+    await b.ebayLoadMore(CARD, 'PSA 10', { background: false }, r.ebayState);
+    await b.ebayLoadMore(CARD, 'PSA 10', { background: false }, r.ebayState);
+    const s = r.ebayState.sites.EBAY_US;
+    const fin = b.ebayStateResult(r.ebayState);
+    ok(fin.kept === 400 && s.nextOffset === 400 && /quota|soft stop/.test(s.lastError || ''),
+       'a refused page keeps what arrived, stays owed, and says why: ' + JSON.stringify({ kept: fin.kept, s }));
+    const pg = b.listingsProgress(r.ebayState, fin.kept);
+    ok(pg.complete === false && pg.morePages[0] && /quota|soft stop/.test(pg.morePages[0].lastError || ''),
+       'and the view is not called complete');
+    await b.ebayLoadMore(CARD, 'PSA 10', { background: false }, r.ebayState);
+    ok(b.ebayStateResult(r.ebayState).kept === 600 && !s.lastError, 'pressing again fetches it');
   }
   {
     // One site failing does not empty the view; every site failing reports

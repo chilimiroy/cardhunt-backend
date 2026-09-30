@@ -143,9 +143,9 @@ ok('gatherListings copies the printing report into sources', /sources\[s\.id\]\.
      /const cacheGrade = viewCacheGrade\(grade, printing, edition\);/.test(lf)
      && /listingCacheGet\(key, cacheGrade\)/.test(lf) && /listingCacheSet\(key, cacheGrade/.test(lf));
   ok('listingsFor passes printing to gatherListings', /gatherListings\(card, grade, [^,]+,\s*\{[^}]*printing/.test(lf));
-  ok('the continuation caches under the same printing key',
-     /const cacheGrade = viewCacheGrade\(grade, printing, edition\);/.test(
-       (k => server.slice(k, server.indexOf('\n}\n', k)))(server.indexOf('async function continueListings('))));
+  ok('an expansion caches under the same printing key',
+     /listingCacheSet\(card\.api_card_id, viewCacheGrade\(grade, printing, edition\)/.test(
+       (k => server.slice(k, server.indexOf('\n}\n', k)))(server.indexOf('async function rebuildView('))));
   ok('/api/listings refuses an unknown printing (400), not silently All', /status\(400\)/.test(route));
 }
 

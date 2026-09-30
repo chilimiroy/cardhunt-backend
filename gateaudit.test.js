@@ -90,9 +90,9 @@ ok('sourceEbay runs cm.verify', /cm\.verify\(/.test(slice(server, 'sourceEbay'))
 // continuation page — both must reach it with EVERY row.
 ok('judgeListings flags outliers on the rows it is given', /outlier\.flagOutliers\(listings\)/.test(slice(server, 'judgeListings')));
 ok('gatherListings judges every source\'s rows', /await judgeListings\(card, grade, listings, opts, memo\)/.test(slice(server, 'gatherListings')));
-ok('a continuation re-judges every row, not only the new page',
-   /gathered\.otherRows\.concat\(st\.listings\)/.test(slice(server, 'continueListings')) &&
-   /await judgeListings\(card, grade, rows,/.test(slice(server, 'continueListings')));
+ok('an expansion (more sites, more pages) re-judges every row, not only the new page',
+   /gathered\.otherRows\.concat\(st\.listings\)/.test(slice(server, 'rebuildView')) &&
+   /await judgeListings\(card, grade, rows,/.test(slice(server, 'rebuildView')));
 {
   const jpf = require('./jpfilter');
   ok('jpfilter exports jpItemRejectReason', typeof jpf.jpItemRejectReason === 'function');

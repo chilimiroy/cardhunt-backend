@@ -132,8 +132,8 @@ const route = (i => server.slice(i, server.indexOf('\napp.', i + 5)))(server.ind
 ok('/api/listings refuses an unknown edition (400)', /parseEditionParam\(req\.query\.edition\)/.test(route) && /unknown edition/.test(route));
 ok('/api/listings refuses an edition the card\'s set never had (400)', /editionsOfCard\(card\)\.includes\(edition\)/.test(route));
 ok('the view cache key carries the edition', /edition \? '\|ed:' \+ edition/.test(fnOf('viewCacheGrade')));
-ok('listingsFor and the continuation pass the edition on', /printing, edition \}\)/.test(fnOf('listingsFor'))
-   && /const opts = \{ printing, edition, background: true \};/.test(fnOf('continueListings')));
+ok('listingsFor and an expansion pass the edition on', /printing, edition, sites:/.test(fnOf('listingsFor'))
+   && /const opts = \{ background: false, printing, edition \};/.test(fnOf('expandView')));
 ok('sourceEbay asks for it and gates on it', /edition: opts\.edition \|\| null/.test(fnOf('sourceEbay'))
    && /opts\.edition \? \{ edition: opts\.edition \} : \{\}/.test(fnOf('sourceEbay')));
 ok('rows carry the edition key and whether it was stated', /editionKey: v\.edition \|\| null/.test(server)
@@ -153,7 +153,7 @@ ok('openCard resets the edition', /SEL\.edition='all'/.test(pfn('openCard')));
 ok('fetchListings keys its cache on the edition and sends it', /'\|ed:' \+ ed0/.test(pfn('fetchListings')) && /&edition=/.test(pfn('fetchListings')));
 ok('renderLiveListings asks with SEL.edition and drops a stale answer', /edition: edition/.test(pfn('renderLiveListings'))
    && /\(SEL\.edition \|\| 'all'\) !== edition/.test(pfn('renderLiveListings')));
-ok('the progress poll carries the edition too', /edition: edition/.test(pfn('liveScheduleProgress')));
+ok('the Search-all / Load-more buttons carry the edition too', /edition: edition/.test(pfn('liveExpand')));
 ok('rows with no stated edition go to their own group, never dropped', /unstatedEd/.test(pfn('renderLiveListings'))
    && /Edition not stated/.test(pfn('renderLiveListings')));
 ok('a selected 1st Edition shows ITS held price, or a dash — never the Unlimited price',

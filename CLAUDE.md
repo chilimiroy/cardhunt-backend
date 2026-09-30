@@ -68,7 +68,7 @@ cardhunt_preview.html  server.js  cardmatch.js  cardparse.js  ebaycall.js
 ebayquota.js  ebayratecheck.js  estimator.js  fx.js  gradeprice.js
 jpfilter.js  linkaudit.js  listingparse.js  outlier.js  setaudit.js
 sourceprobe.js  tcgdexprice.js  yuyutei.js  digital.js  trending.js
-searchaudit.js  certcheck.js  sitecheck.js
+searchaudit.js  certcheck.js  sitecheck.js  costmeter.js
 checkout-disabled.js  login-disabled.js   (preserved, never loaded or served)
 migration-grade-dimension.sql  migration-image-source.sql  migration-variants.sql
 printsql.js  variants.fixture.json  variants.pricing.fixture.json
@@ -336,6 +336,88 @@ only; that is a script run deliberately, the `gradeprices.js` shape.
 - **`node ingest.js scrape`** still exists (`scrapeEbaySold`). Banned, never
   run — T8's reasoning says delete it.
 - ~~Variant is gated nowhere~~ — built in T10. ~~Stored Yahoo medians carry no printing~~ — T4 `28ea4be`: a title stating a reverse/mirror leaves the base median and gets its own `variant` row. **Existing** Yahoo base rows are NOT repaired: of 191 JP cards holding both, 143 Yahoo bases sit >5x the Yuyu-tei base, 54 >20x — `jpcheck` over them is the measurement still owed. ~~"Typical" ignores the printing selector~~ — `a9ba5e3`.
+
+---
+
+# CALL COST — what spends eBay quota, measured (2026-10-01)
+
+**Every row was exercised, not read from the code.** Server and scripts ran
+under `node -r ./costmeter.js`: eBay stubbed (never sent), every guarded call
+counted by origin and kind, every outbound request counted by host, every DB
+write swallowed. The page was driven in a real browser against the metered
+server. Numbers are eBay HTTP calls. **Re-measure with costmeter.js before
+changing any row** — how to use it is at the top of that file.
+
+Budget: 5,000/day · 600/hour (all origins) · tooling 300/day inside the day.
+
+## Recurring — runs whether anyone is there or not
+| what | when | eBay | measured |
+|---|---|---|---|
+| Nightly refresh `refresh all --max=4000 --hours=4` | 03:00, Task Scheduler | **0** | 60 cards per language with dummy credentials SET (so an eBay path could not hide behind "no credentials"): 0 eBay. Per card: EN 1 TCGdex + 1 TCGplayer internal API; JA 2 Yahoo; ZH none. **`--max` is per language** — `all` loops en/ja/zh-tw/zh-cn, so the nightly cap is 4 x 4,000 cards |
+| Alert evaluation (inside refresh, per language; also `node ingest.js alerts all`) | nightly | **0 per alert** | 3 active alerts checked: **zero network requests of any kind** — it reads `price_history`. An alert costs nothing per refresh |
+| Render server, idle | always | **0** | 6 min idle under the meter: 0 outbound requests. No `setInterval` in any shipped module |
+| A page left open, any screen | every 5 min | **0** | `/api/alerts` + `/api/ebay/quota` (1 min while stopped) + alert tiles `cachedOnly` — 4 tiles, 0 eBay |
+| "CardHunt task watch" | hourly | **0** | no network |
+| **Token exchange** | per process per 2h, and **every Render cold start** | 1 — **or one per concurrent caller** | see below |
+
+**The token race (the 393).** `getEbayTokenDetailed` has no single-flight:
+callers arriving while no token is cached each exchange. With a realistic
+600ms exchange, 5 concurrent cold opens = **5 exchanges**; a cold "Search 7
+more marketplaces" = **8 exchanges + 8 searches**; sitecheck's first card = +8.
+Render sleeps when idle, so every wake is cold. At a 5ms stub the race never
+opens (1 exchange) — measure tokens with `tokenDelayMs`. Not fixed yet: one
+shared in-flight promise would make every row below cost at most +1 token.
+
+## User — costs only when someone acts
+| action | request | eBay |
+|---|---|---|
+| Home page load | 12 tiles `?cachedOnly=1` + trending + sets + alerts | **0** |
+| Open a card, US page 1 kept >= 5 | `/api/listings/:id` | **1** (Raw, Raw NM, PSA 10 alike; JA card 1 — Yuyu-tei is not eBay) |
+| **Open a card that has a known reprint** | same | **1 + 1 per reprint** — Blastoise 2 (Celebrations), Charizard 4/102 **3** (Celebrations + 30th). `flagReprintPriced` fetches each reprint's listings; the 55 originals in `REPRINT_OF` |
+| Open, US kept < 5 (auto-expand) | same | **8** (+ reprints: Venusaur 9); US empty: 8 |
+| Same card + grade again within 15 min | cache | **0** |
+| "Search 7 more marketplaces" | `?sites=all` | **7** (+8 tokens if cold) |
+| "Load more listings" | `?more=1` | **1 per site with more** (8 measured) |
+| Verify (PSA cert) | `/api/cert` | **1** getItem |
+| Photos, same listing as Verify | `/api/photos` | **0** — shared 15-min getItem cache; another listing 1 |
+| Search, query resolving to one card | `/api/search?q=` | **1 per resolved card** (+ reprints: "Charizard 4/102 Base Set" = 3); graded query 1 |
+| Search, ambiguous name ("Pikachu") / nonsense / `listings=0` | same | **0** — listings only when the query resolves |
+| Trending · cards · history · sets · set page · market · alerts (list, triggered) · portfolio · quota read · listings-log · `dryRun=1` | | **0** each |
+| Alerts screen, 6 alerts | render from the loaded list | **0** |
+
+## Tooling — counted against the 300/day allowance
+| tool / route | typical invocation | eBay |
+|---|---|---|
+| `/api/ebay/conditions` | `?items=25` | **26** (1 search + 25 getItem) |
+| `/api/ebay/conditions` | `?aspects=1&aspect=Card%20Condition&verify=4` | **>= 2** — the stub returns no aspect values, so the per-value verify loop did not run; real cost is higher |
+| `/api/ebay/conditionvalues` | default | **7** (5 search + 2 metadata) |
+| `/api/ebay/certprobe` | `?grader=PSA&single=12` | **13** (1 + 12 getItem) |
+| `/api/ebay/gradecost` | `?grade=PSA%2010` | **2** on a light card; more pages on a busy one |
+| `/api/ebay/marketprobe` | default sites | **11 per card** (8 sites + NOCAT/NOSET variants) — the 12-card run was ~132 |
+| `/api/ebay/marketprobe` | `?mp=EBAY_DE` | **2** |
+| `/api/ebay/aspects` | `?mp=EBAY_DE` | **1** |
+| `/api/ebay/quota?probe=1` · `node ebayratecheck.js` | | **1** rate_limit (+1 token cold; ratecheck always exchanges its own: **2**) |
+| `/ebay/status?probe=1` · `/api/scraper/test` · `/api/health/full` | | **0** with a cached token, **1** cold |
+| `/api/probe/sources` · `node sourceprobe.js` | | **0** — eBay is not a probed source |
+| `node sitecheck.js` | default 10 cards | **128** (8 cold tokens + 120) |
+| `node sitecheck.js <card>` | one fresh card, Raw NM | **8** light · **40** busy (8 sites x 5 pages) · `--grade=all` **16** · a card already cached **0** |
+| `node linkaudit.js sv10 --live --limit=8` | | **8** (1 per card); without `--live` **0** |
+| `node gradeprices.js --limit=2` | 4 default grades | **8** (1 per card per grade: default `--limit=20` = **80**) |
+| `node ebayprobe.js en-swsh3.5-74 "PSA 10"` | | **2** (token + search) |
+| `node setaudit.js` · `node searchaudit.js` | `--set=sv10` · `--set=sm9` (369 requests) | **0** — dryRun / `listings=0` |
+| `node yahoogate.js` · `tcgdexharvest.js` · `tcgdexprobe.js` | | **0** (yahoogate reads Render `/api/cards` only) |
+| Every `node ingest.js` command measured — status, audit, setcover, pricecheck, safeprices, tcgdexprices, manifest, setgap, names, lmingest, yuyutei, jpcheck, clean, imgreport, refresh, alerts | | **0** (credentials present) |
+| The whole test suite, `*.test.js` + jptest | | **0** |
+| `gateaudit.test.js --live` + `nosoldscrape.test.js --live` | against `CARDHUNT_API` | **1** |
+| `node ingest.js scrape` | **never run** | banned — not exercised |
+
+**What this says.** Nothing recurring touches eBay. Every call is someone
+pressing something — except the token race, which multiplies whatever a cold
+burst was going to spend anyway. The hidden per-view costs are the reprint
+check (+1/+2 on 55 cards) and auto-expand (8 on thin cards). The big
+spenders are all tooling: sitecheck, marketprobe, conditions `?items=`,
+gradeprices at its default — one run of any can take a third of the tooling
+day.
 
 ---
 
@@ -629,6 +711,10 @@ curl '<host>/api/ebay/conditions/en-base1-4?items=25'            # descriptors: 
 curl '<host>/api/ebay/conditions/en-base1-4?aspects=1&aspect=Card%20Condition&verify=4'  # filter vs descriptor
 curl '<host>/ebay/status?probe=1'          # does eBay ACCEPT the credentials
 curl '<host>/api/listings/en-swsh3.5-74?grade=PSA%2010&dryRun=1'   # spends nothing
+
+# what does an action cost in eBay calls? — measures, spends nothing (CALL COST)
+# eBay stubbed, calls counted by origin, DB writes swallowed; see the file header
+node -r ./costmeter.js server.js            # then exercise the action, read costmeter.out.json
 
 # end-to-end audits — tracked, read-only, run from anywhere
 node setaudit.js en --broken               # every set end to end, failures only
@@ -1239,10 +1325,10 @@ real `fetchEbay` in `ebaycall.test.js`; watched failing under mutation.
 Found on the way: `ebayprobe.js` exchanged its token with a raw `fetch` —
 uncounted, outside every guard. Now through `ebaycall`.
 
-**Still open:** 393 of today's 4,900 were TOKEN exchanges (8%) — far more
-than one per two-hour token life. Suspect concurrent requests each
-exchanging while no token is cached (no single-flight in
-`getEbayTokenDetailed`). Measure `token_calls` by origin tomorrow first.
+**Still open:** 393 of that day's 4,900 were TOKEN exchanges (8%).
+**Cause measured 2026-10-01** (CALL COST above): no single-flight in
+`getEbayTokenDetailed`, so each concurrent caller on a cold token
+exchanges — a cold Search-all is 8 exchanges. Not yet fixed.
 
 **The cost of a change is calls per card view — state it before shipping.**
 

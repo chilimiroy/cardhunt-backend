@@ -91,3 +91,6 @@ scratchpad/
 # Secrets
 .env
 *.env
+
+# costmeter.js output and stub control (measurement scratch)
+costmeter.*.json

@@ -1,5 +1,27 @@
 # CardHunt — Progress Log
 
+## 2026-10-01 — the call-cost chart, measured
+
+CLAUDE.md now carries CALL COST: every user action, recurring job and tool
+with its eBay cost, each EXERCISED under `costmeter.js` (new, tracked): eBay
+stubbed and never sent, calls counted by origin, DB writes swallowed so no
+production row moved. Page actions driven in the browser against the metered
+server; scripts against a second one.
+
+- **Recurring: nothing touches eBay.** Nightly refresh (credentials set, 60
+  cards per language): 0. Alert evaluation: 0 network requests at all — it
+  reads price_history. Server idle 6 min: 0 outbound. Page timers (alerts,
+  quota, alert tiles): 0.
+- **/api/search**: 1 per query that resolves to a card (+ reprints); 0 for an
+  ambiguous name, nonsense, or `listings=0`. **Trending**: 0.
+- **Hidden per-view costs**: the reprint check (+1 per known reprint —
+  Charizard 4/102 costs 3 to open) and auto-expand (8).
+- **The 393 token exchanges, explained**: no single-flight; 5 concurrent cold
+  opens = 5 exchanges, a cold Search-all = 8. Only visible with a realistic
+  600ms stub delay. Not fixed.
+- `refresh all --max=N` caps per LANGUAGE (4 x N).
+- Whole test suite: 0; with both `--live` variants: 1.
+
 ## 2026-09-30 (night) — three protections so the quota cannot be spent unnoticed
 
 State at the start: 4,900 of 5,000 used (4,507 searches + **393 token

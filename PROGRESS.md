@@ -1,5 +1,55 @@
 # CardHunt — Progress Log
 
+## 2026-09-30 (evening) — the queue, on demand, editions re-harvested
+
+**T1 — the queue** (`ea31877`). Live cause: 75,038ms queued, `calls: 0`,
+quota fine — T1's every-site crawl held a one-slot queue. ebaycall now has
+five slots, background capped at two, foreground first, 200ms pacing per
+marketplace, a 4s foreground cap answered `busy` (never sent later), and the
+quota check counts calls allowed but not recorded. Live: two cards at once
+during a background job, 2.1-2.6s, one call each.
+
+**T2 — on demand** (`f28274e`, tiles `c779b47`, threshold `f542953`). Open = eBay US page
+1, one call; "Search 7 more marketplaces" (+7) and "Load more listings"
+(+1 per site with more) on request; progress names every site not searched
+and every result not examined. Background continuation and poller deleted.
+- **Found live after deploy:** a home-page load opened 14 cards through the
+  tiles' "avg listing" — ~45 calls, some sites answered busy. Tiles now read
+  the cache only (`?cachedOnly=1`, 0 calls).
+- **Threshold measured:** 20 random priced EN cards, US p1 vs all sites. <10
+  expands 7/20 (~3.5 calls/open), <5 expands 5/20 (~2.75). Set to 5.
+  ex15-95: 0 US, 13 AU.
+- **Calls per view after:** plain opens 1 (11 of 11); open+auto 8; Search
+  all 7; Load more 6. Browser-verified on sv03.5-199: 128 -> 301 -> 372.
+- `listing_views`: +`action`, +`origin`. Marked (not deleted): 34 local test
+  views, 538 T1-era views (`t1-every-site`), 40 measurement views.
+- Quota: ~160 calls spent on the threshold measurement; 309 left at 12:00 UTC.
+
+**T3 — editions.** The morning harvest (old key order) filed every 1st
+Edition row correctly — 821 rows, 0 leaked into base — but wrote almost no
+Unlimited rows for WOTC holos (7 unlimited-holofoil vs 157 1st-edition), so
+11 of the 28 cards swinging ≥2x still showed a 1st Edition headline.
+Re-harvested the ten edition sets with the fixed order (835 rows): **all 28
+now take their headline from TCGdex Unlimited** (Lugia neo1-9 $531.39;
+1st Edition $164.80 held separately). `pricecheck en neo1` then flagged 10
+of 12 as MISMATCH — and its "live TCGPlayer" figure equals TCGdex's 1st
+Edition price to the cent on 10 of 12 (Lugia $826.60 and Feraligatr #5
+match neither). The tool asks the internal API the edition-blind question
+path P asks; our stored price is the Unlimited one. TCGdex-first in
+`safePriceFor` is now live (`loadProductConflicts` ready, 21 shared
+TCGplayer products), so the nightly refresh writes Unlimited; the internal
+API remains the fallback, still edition-blind. **Open:** give `pricecheck`
+the edition (compare Unlimited to Unlimited), and stop the internal API.
+- `manifest en` **stopped at the 2h tool limit after 62 of 220 sets** (last
+  complete: swsh9.5tg; swsh9 cut off). Diffed against a before-snapshot: 45
+  rarities corrected (swsh10tg/swsh11tg Trainer Gallery "Rare Holo" -> TCGdex
+  "Rare"/"Ultra Rare", printed holo — checked on TCGdex), **0 to Common**;
+  7,974 cards gained printings (880 -> 8,854). swsh9.5tg-swsh12.5tg: 30/30
+  "not found" each — nothing written. The rest needs a run outside the tool
+  limit.
+- Known, not built: "Nachtara … Umbreon" (needs eBay's Language aspect, one
+  getItem per listing); CMG (slab only with a grade number). Both in CLAUDE.md.
+
 ## 2026-09-30 (later) — T0 Lugia; every eBay site, every page; editions
 
 **T0 — Aquapolis Lugia.** `linkaudit en-ecard2-149 --live --kept` and every

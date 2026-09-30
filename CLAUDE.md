@@ -2649,11 +2649,22 @@ the 1st Edition price (Sabrina's Gengar 549.50 = TCGdex's 1st Edition
 figure). Order fixed; rows written before the fix are classified by
 `source_meta.printing`, so they land as 1st Edition, not base.
 
-**NOT fixed:** the internal-API writer (path P) stores `tcgplayer_market`
-that flips between the 1st Edition and Unlimited products on edition sets —
-27 of 924 cards swing ≥2x (control sets 5 of 570); Lugia 164.80-1,299.96,
-its headline $826.60 of unknown edition. TCGdex-first, after the harvest,
-is the route; re-measure then.
+**The swing, re-measured after the harvest (2026-09-30 evening).** The
+internal-API writer (path P) stored `tcgplayer_market` flipping between the
+1st Edition and Unlimited products — 28 of 924 edition-set cards swing ≥2x.
+The morning harvest (old key order) filed its 821 1st Edition rows
+correctly but wrote almost no Unlimited rows for WOTC holos, so 11 of the 28
+still headlined a 1st Edition price. The ten sets were re-harvested with the
+fixed order: **all 28 now headline TCGdex Unlimited** (Lugia neo1-9
+$531.39; its 1st Edition $164.80 held apart). TCGdex-first in
+`safePriceFor` is live (conflicts recorded), so the nightly refresh writes
+Unlimited; the internal API is the fallback only.
+
+**`pricecheck` asks the wrong edition.** On neo1 it flagged 10 of 12 as
+MISMATCH; its "live TCGPlayer" figure equals TCGdex's **1st Edition** price
+to the cent on 10 of 12 (Lugia's $826.60 and Feraligatr #5 match neither).
+On edition sets its MISMATCH means "we hold Unlimited", not "we are wrong".
+Open: give pricecheck the edition, and stop the internal API.
 
 # CONVENTIONS
 - Card ids: `{lang}-{setId}-{number}` — `en-me02.5-294`, `ja-M5-081`.

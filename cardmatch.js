@@ -103,7 +103,14 @@ const GRADERS_UNAMBIGUOUS = [
   'KSA',        // KSA Certification
   'PCA',        // PCA Grading
   'AIGRADE',    // AiGrade — the one this list was missing
-  'AI GRADE'    // the same company, spaced. \s+ via boundedTerm
+  'AI GRADE',   // the same company, spaced. \s+ via boundedTerm
+  // Named by eBay DE/IT's own grader aspect, and seen in raw searches there
+  // (T1, 2026-09-30): "gegraded GSG 6", "PGS 7,5", "GRAAD 7", "AiGrading 9,5".
+  'AIGRADING',  // AiGrade's own name for it on eBay IT ("AiGrading")
+  'GSG',        // Gold Standard Grading
+  'PGS',        // Platin Grading Service
+  'GRAAD',      // GRAAD (eBay IT's grader list)
+  'EGS'         // "EGS Certified"
 ];
 
 // Companies whose name is ALSO ordinary card vocabulary. They grade, so
@@ -385,20 +392,55 @@ function titleOnlyCondition(grade) {
   return TITLE_ONLY_CONDITIONS[g.condition] ? Object.assign({ code: g.condition }, TITLE_ONLY_CONDITIONS[g.condition]) : null;
 }
 
-// The aspect_filter for a raw grade, or null (Raw All, a graded search, or
-// a condition eBay has no value for).
-function ebayConditionFilter(grade) {
+// ── Each eBay site names its aspects in its own language (T1) ──
+// Read from each site's own ASPECT_REFINEMENTS (/api/ebay/aspects,
+// 2026-09-30, en-base1-4). An English aspect name sent to eBay DE/FR/IT/ES
+// is IGNORED, not refused: base1-4 on DE returned 264 for Raw, Raw NM and
+// Raw HP alike, while GB went 1,441 -> 394 -> 125. So a site missing here
+// gets NO filter — and then no row may claim eBay stated its condition or
+// grade. GB/AU/CA use US's names (measured: identical, and the filter bites).
+// ES carries no condition or grade aspect at all in category 183454 — only
+// Material and Vintage — so ES rows are title-stated, always.
+// Grader values are eBay's English names on every site; grades are numbers.
+const EBAY_SITE_ASPECTS = {
+  EN: { condition: 'Card Condition', conditionValues: null, grader: 'Professional Grader', grade: 'Grade' },
+  EBAY_DE: { condition: 'Kartenzustand', grader: 'Bewertungsexperte', grade: 'Bewertung',
+             conditionValues: { NM: 'Nahezu neuwertig oder besser (Near Mint or Better)',
+                                LP: 'Leicht bespielt (Exzellent/Excellent)',
+                                MP: 'Gebraucht (Sehr gut/Very Good)',
+                                HP: 'Stark bespielt (Minderwertig/Poor)' } },
+  EBAY_FR: { condition: 'État de la carte', grader: 'Société de gradation professionnelle', grade: 'Note',
+             conditionValues: { NM: 'Near Mint or Better (Quasi neuf ou mieux)',
+                                LP: 'Lightly Played/Excellent (légers défauts)',
+                                MP: 'Moderately Played/Very Good (état moyen)',
+                                HP: 'Heavily Played/Poor (très abîmée)' } },
+  EBAY_IT: { condition: 'Condizione della carta', grader: 'Valutatore professionista', grade: 'Classificazione',
+             conditionValues: { NM: 'Near Mint o migliore', LP: 'Lightly Played (Excellent)',
+                                MP: 'Moderately Played (Very Good)', HP: 'Heavily Played (Poor)' } },
+  EBAY_ES: null
+};
+function siteAspects(marketplace) {
+  const mp = String(marketplace || 'EBAY_US').toUpperCase();
+  if (['EBAY_US', 'EBAY_GB', 'EBAY_AU', 'EBAY_CA'].includes(mp)) return EBAY_SITE_ASPECTS.EN;
+  return EBAY_SITE_ASPECTS[mp] || null;     // unknown site: no filter, never a guess
+}
+
+// The aspect_filter for a raw grade, or null (Raw All, a graded search, a
+// condition eBay has no value for, or a site whose aspects we have not read).
+function ebayConditionFilter(grade, marketplace) {
   const g = parseGrade(grade);
   if (g.kind !== 'raw' || !g.condition) return null;
+  const site = siteAspects(marketplace);
+  if (!site) return null;
   // parseGrade reads a bare "Raw" as NM. That is "every raw listing", not
   // a filter — only an explicitly stated condition narrows.
   if (!/^\s*raw\s+\S/i.test(String(grade))) return null;
   // M and DMG have no eBay value: null here, TITLE_ONLY_CONDITIONS instead.
-  const value = EBAY_CARD_CONDITION[g.condition];
+  const value = site.conditionValues ? site.conditionValues[g.condition] : EBAY_CARD_CONDITION[g.condition];
   if (!value) return null;
   return {
     asked: g.condition, code: g.condition, value,
-    aspectFilter: 'categoryId:183454,Card Condition:{' + value + '}',
+    aspectFilter: 'categoryId:183454,' + site.condition + ':{' + value + '}',
     note: null
   };
 }
@@ -435,9 +477,14 @@ const EBAY_GRADER = {
   MNT:  'MNT Grading (MNT)'
 };
 
-function ebayGradeFilter(grade) {
+function ebayGradeFilter(grade, marketplace) {
   const g = parseGrade(grade);
   if (g.kind !== 'graded') return null;
+  // A site whose aspect names we have not read gets no filter — and so no
+  // row there can be kept "on eBay's grade field alone" (verify's
+  // structuredGrade), because eBay never checked that field for us.
+  const site = siteAspects(marketplace);
+  if (!site) return null;
   const value = EBAY_GRADER[g.grader];
   if (!value) return null;
   // eBay's Grade values are the bare numbers, halves included ("9.5").
@@ -445,8 +492,8 @@ function ebayGradeFilter(grade) {
   if (!g.anyGrade && !/^(10|[1-9](\.5)?)$/.test(String(g.grade))) return null;
   return {
     grader: g.grader, grade: g.anyGrade ? null : String(g.grade), graderValue: value,
-    aspectFilter: 'categoryId:183454,Professional Grader:{' + value + '}' +
-                  (g.anyGrade ? '' : ',Grade:{' + g.grade + '}')
+    aspectFilter: 'categoryId:183454,' + site.grader + ':{' + value + '}' +
+                  (g.anyGrade ? '' : ',' + site.grade + ':{' + g.grade + '}')
   };
 }
 
@@ -498,6 +545,18 @@ function gradesIn(title) {
 const SLAB_GENERIC = ['graded', 'slab', 'slabbed', 'gem mint', 'gemmint',
                       'gem mt', 'gemmt', 'pristine', 'black label'];
 
+// "Graded" in the languages of eBay DE/IT/ES/FR, and Beckett by name — slab
+// evidence ONLY with a grade beside it (T1, 2026-09-30: "GRAD 7", "Grad 7
+// Near Mint", "Gradate 9.5", "Beckett 8" were kept in Raw NM on eBay DE/IT).
+// Never alone: eBay translates a US "Ungraded" to "non gradata" / "Non
+// Classificata" on those sites, and "graduabile"/"gradeable" ("could be
+// graded") is a RAW card. A comma decimal is how Europe writes 9,5.
+const SLAB_WITH_GRADE = ['grad', 'gradate', 'gradata', 'gradato', 'gradati', 'graduada', 'graduado',
+                         'gradée', 'gradé', 'gegraded', 'gegradet', 'beckett',
+                         // "Black Grading 9", "cardmarket grading 9 Mint" (eBay DE/IT, Raw NM)
+                         'grading'];
+const GRADE_NUM_EU = '\\s*[-:]?\\s*(?:10|[1-9](?:[.,]5)?)(?![\\d.,])';
+
 const SLAB_WORDS = new RegExp('(?:' + [].concat(
   // An unambiguous company name is slab evidence on its own.
   GRADERS_UNAMBIGUOUS.map(boundedTerm),
@@ -505,6 +564,7 @@ const SLAB_WORDS = new RegExp('(?:' + [].concat(
   GRADERS_UNAMBIGUOUS.map(co => graderToken(co) + GRADE_NUM),
   // An ambiguous one only with a grade beside it — see GRADERS_AMBIGUOUS.
   GRADERS_AMBIGUOUS.map(co => boundedTerm(co) + GRADE_NUM),
+  SLAB_WITH_GRADE.map(w => boundedTerm(w) + GRADE_NUM_EU),
   SLAB_GENERIC.map(boundedTerm)
 ).join('|') + ')', 'i');
 
@@ -574,7 +634,47 @@ const NOT_A_SINGLE_CARD_TERMS = [
   // of an English gate production never ran (T9, 2026-09-29). Measured on
   // 516 titles production keeps: 0 carry it. NOT "quantity": the one kept
   // title with it ("… #74/73 … Quantity (5)") is a single, five in stock.
-  'playset', 'play set', 'playsets'
+  'playset', 'play set', 'playsets',
+  // ── eBay DE/FR/IT/ES (T1, 2026-09-30) ──
+  // Read on the titles those sites returned for English cards — sellers'
+  // own words and eBay's machine translation of US titles. Each is a phrase
+  // or a word with no card meaning; bare "metal" is NOT here (a Pokémon
+  // type), nor bare "oro"/"gold" (Gold Star, gold secret rares).
+  // lotteries: one "ticket" sold per listing, ~$6-10 against a $400 card
+  'pokelotterie', 'pokelotteria', 'pokélotteria', 'pokélotterie', 'lotteria', 'lotterie', 'lotería',
+  // lots
+  'lotto', 'lotti', 'lote', 'lotes', 'konvolut',
+  // customs, fan-made, replicas — and the translations of "fan made" /
+  // "fan art" that eBay produced literally ("made by fan" = a ventilator)
+  'personalizzata', 'personalizzato', 'personalizada', 'personalizado', 'personnalisée', 'personnalisee',
+  'hecho por ventilador', 'ventaglio', 'fälschung', 'faelschung', 'réplica', 'replika',
+  // NOT bare "metallo": the Metal TYPE in a translated title ("Energia
+  // Metallo") is a genuine card.
+  'metallkarte', 'carta metallo', 'lámina de metal', 'lamina de metal',
+  // NOT "gold foil" (nor "lámina de oro", its translation): measured, the
+  // genuine Mega Dragonite ex MUR 250/193 — a gold card — is sold as "Gold
+  // Foil" at the card's median price, 10 rows. The fake gold Charizards at
+  // $50 are the outlier check's job, not a word's.
+  'goldcard', 'carta oro', 'tarjeta de oro', 'placcata oro', 'chapada en oro',
+  // extended-art cases and holders. NOT bare "custodia"/"estuche": a genuine
+  // single "spedita in custodia rigida" ships in one.
+  'custodia estesa', 'estuche extendido', 'estuche de arte',
+  // "extended art" display cases, as translated: "Vitrina de Arte
+  // Extendido", "Carpeta de Arte Extendida Inserto", "Custodia Arte Estesa"
+  'arte extendido', 'arte extendida', 'arte estesa', 'arte esteso', 'estenso espositore', 'vitrina',
+  // held-out check (12 more cards): the same cases, other word orders. NOT
+  // "custodia magnetica"/"estuche magnético": a genuine $462 Magikarp IR is
+  // sold "¡ESTUCHE MAGNÉTICO!" — in a holder, not as one.
+  'extendido arte', 'artistica estesa', 'ilustraciones extendido', 'carpeta inserto',
+  // "fan art" as eBay translates it: "Opera d'arte di un fan", "Obra de arte de un fan"
+  'di un fan', 'de un fan',
+  'personalizzate', 'personalizzati', 'personalizadas', 'personalizados', 'carta de metal',
+  'supporto magnetico', 'soporte magnético', 'soporte magnetico', 'espositore',
+  // keychains
+  'portachiavi', 'llavero', 'porte-clés', 'porte-cles', 'schlüsselanhänger',
+  // sealed — plural only: "busta"/"sobre" is also the envelope a single is
+  // posted in
+  'pacchetti'
 ];
 
 // The one entry that is genuinely a pattern rather than a word: "50 cards",
@@ -677,7 +777,15 @@ const REPRINT_FAMILIES = [
   // "Classic Collection" or "CC". Whatever else it says, "30th" decides.
   { id: '30th', label: '30th Celebration (2026)', year: 2026,
     sets: ['30th', '30th-c'],
-    says: [/\b30th\b/i, /\b30c\b/i],
+    // T1 (2026-09-30): eBay IT/ES/DE/FR machine-translate US titles, and a
+    // German or Italian seller writes their own words. Measured on eBay IT
+    // and ES for Aquapolis Lugia: "30° Anniversario", "30ª Celebración",
+    // "30 aniversario", "30 Jahre … Jubiläum" — every one kept on the 1999
+    // card until these were read. "30" alone is never evidence (a card
+    // number, an HP); only with an ordinal mark or an anniversary word.
+    says: [/\b30th\b/i, /\b30c\b/i,
+           /\b30\s*(?:°|º|ª|\.|e|eme|ème)?\s*(?:anniversario|aniversario|anniversaire|celebrazion[ei]|celebraci[oó]n(?:es)?|c[ée]l[ée]bration|jubil[äa]um|jahre)/i,
+           /(?:^|[\s(])30\s*[°ºª]/i],
     ask: '30th Celebration',
     // eBay negative keywords for a DEEP LINK on a card this family reprinted
     // (T0, 2026-09-30). A link has no gate: the Aquapolis Lugia link returned
@@ -693,8 +801,16 @@ const REPRINT_FAMILIES = [
   // 25th Anniversary card it could be.
   { id: 'cel25', label: 'Celebrations (2021)', year: 2021,
     sets: ['cel25', 'cel25cc'],
-    says: [/\bcelebrations?\b/i, /\bclassic collection\b/i],
-    saysOnOriginal: [/\b25th\b/i],
+    // The same words in the languages of eBay IT/ES/FR/DE (T1): measured,
+    // "Celebrazioni: Collezione Classica", "Celebraciones 25 Aniversario",
+    // kept on Base Set Charizard at Celebrations prices.
+    says: [/\bcelebrations?\b/i, /\bclassic collection\b/i,
+           /\bcelebrazion[ei]\b/i, /\bcelebraci[oó]n(?:es)?\b/i, /\bc[ée]l[ée]brations?\b/i,
+           /\bcollezione classica\b/i, /\bcolecci[oó]n cl[aá]sica\b/i, /\bcollection classique\b/i,
+           /\b(?:classic|klassische) sammlung\b/i],
+    saysOnOriginal: [/\b25th\b/i,
+           /\b25\s*(?:°|º|ª|\.|e|eme|ème)?\s*(?:anniversario|aniversario|anniversaire|jubil[äa]um|jahre)/i,
+           /(?:^|[\s(])25\s*[°ºª]/i],
     ask: 'Celebrations',
     linkMinus: ['-celebrations', '-25th', '-"classic collection"'],
     linkMinusFromReprint: ['-25th'] },
@@ -886,16 +1002,27 @@ const CJK = /[぀-ヿ㐀-䶿一-鿿가-힯]/;
 // Read only from what the title states. Most say nothing, and those are
 // kept — inference is for absent data, and rejecting silence would empty
 // the results.
+// T1 (2026-09-30): every language named in the languages eBay's European
+// sites are written in. A marketplace is where a card is SOLD, a language is
+// what the card IS — so a German seller's "Italienisch" is an Italian card,
+// exactly as "Italian" is. On eBay DE 78 of 383 added titles were other-
+// language cards the English-only list let through ("Italienisch", "ITA",
+// "Französisch", "Spanisch", "Portugiesisch", "GER", "Holland"). The words
+// for ENGLISH (Englisch, inglese, inglés, anglais) are deliberately absent:
+// they are the right answer. Bare "IT", "DE", "ES" are absent too — each is
+// an ordinary word in some language ("de" is "of" in three of them).
 const LANG_WORDS = {
-  ja: /\b(japanese|japan|jpn|jp\b|nihongo)\b/i,
-  ko: /\b(korean|korea|kor\b)\b/i,
-  zh: /\b(chinese|china|traditional chinese|simplified chinese|t-chinese|s-chinese)\b/i,
-  de: /\b(german|deutsch)\b/i,
-  fr: /\b(french|francais|français)\b/i,
-  it: /\b(italian|italiano)\b/i,
-  es: /\b(spanish|espanol|español)\b/i,
-  pt: /\b(portuguese|portugues)\b/i,
-  ru: /\b(russian)\b/i,
+  ja: /\b(japanese|japan|jpn|jp\b|nihongo|japanische?|japonais|japonaise|giapponese|japon[eé]s|japonesa)\b/i,
+  ko: /\b(korean|korea|kor\b|koreanische?|coréen|coreen|coreano|coreana)\b/i,
+  zh: /\b(chinese|china|traditional chinese|simplified chinese|t-chinese|s-chinese|chinesische?|chinois|cinese)\b/i,
+  de: /\b(german|deutsch|deutsche|deutsches|ger|allemand|allemande|tedesco|tedesca|alem[aá]n|alemana)\b/i,
+  // "VF" is "version française" — how French sellers mark a French card.
+  fr: /\b(french|francais|français|française|francaise|vf|franz[öo]sische?|francese|franc[eé]s|francesa)\b/i,
+  it: /\b(italian|italiano|italiana|ita|italienische?|italien|italienne)\b/i,
+  es: /\b(spanish|espanol|español|española|espanola|esp|spanische?|espagnol|espagnole|spagnolo|spagnola)\b/i,
+  pt: /\b(portuguese|portugues|português|portugiesische?|portugais|portoghese|portugu[eé]s)\b/i,
+  nl: /\b(dutch|nederlands|holland|holländische?|hollandische?|niederländische?|niederlandische?|olandese|holand[eé]s|néerlandais)\b/i,
+  ru: /\b(russian|russische?|russe|russo|ruso)\b/i,
   // "Indonesia" and "Bahasa": how sellers actually write it (T1, 2026-09-30).
   // Four Indonesian Mega Dragonite ex MA3 250/193 were kept on the Japanese
   // M2a 250/193 ("Pokemon Indonesia", "Bahasa Indonesia Language") — found
@@ -918,6 +1045,15 @@ const LANG_CJK_WORDS = {
   ja: /日本語版/
 };
 
+// Country flags as language evidence (T1, 2026-09-30, eBay DE/FR). The US
+// and UK flags are absent: an English card is the right answer, and a US
+// seller's 🇺🇸 is decoration.
+const LANG_FLAGS = [
+  ['🇩🇪', 'de'], ['🇦🇹', 'de'], ['🇫🇷', 'fr'], ['🇮🇹', 'it'], ['🇪🇸', 'es'], ['🇵🇹', 'pt'],
+  ['🇧🇷', 'pt'], ['🇳🇱', 'nl'], ['🇯🇵', 'ja'], ['🇰🇷', 'ko'], ['🇨🇳', 'zh'], ['🇹🇼', 'zh'],
+  ['🇮🇩', 'id'], ['🇹🇭', 'th']
+];
+
 // What language does this title claim? null when it says nothing, and
 // silence is accepted — most English sellers never write "English".
 // Script is evidence too: a title in kana is a Japanese listing whether or
@@ -937,6 +1073,10 @@ function languageOf(title, opts) {
   for (const code of Object.keys(LANG_CJK_WORDS)) {
     if (LANG_CJK_WORDS[code].test(t)) return code;
   }
+  // A flag is how a European seller states the card's language ("Neo
+  // Genesis\ud83c\udde9\ud83c\uddea", "CARTE POKEMON \ud83c\uddeb\ud83c\uddf7"). After the words, so a title that
+  // SAYS its language is read by what it says.
+  for (const [flag, code] of LANG_FLAGS) if (t.includes(flag)) return code;
   if (/[\uac00-\ud7af]/.test(t)) return 'ko';      // hangul
   if (/[\u3040-\u30ff]/.test(t)) return 'ja';      // kana
   if (opts.cjkIsChinese !== false && CJK.test(t)) return 'zh';
@@ -1688,7 +1828,7 @@ const API = {
   buildQuery, verify, filterListings,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
   qualifiersIn, sellerCondition, stripHitPoints,
-  EBAY_CARD_CONDITION, EBAY_CONDITION_CODES, ebayConditionFilter,
+  EBAY_CARD_CONDITION, EBAY_CONDITION_CODES, ebayConditionFilter, EBAY_SITE_ASPECTS, siteAspects,
   TITLE_ONLY_CONDITIONS, titleOnlyCondition,
   EBAY_GRADER, ebayGradeFilter, titleGradeClaims,
   GRADE_QUALIFIERS, RAW_CONDITIONS, RAW_CONDITION_PATTERNS,

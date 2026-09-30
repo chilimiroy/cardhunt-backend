@@ -384,5 +384,50 @@ console.log('\n5. INDONESIAN PRINTS — the words sellers use (T1, 2026-09-30)')
      cm.languageOf('Mega Dragonite ex 250/193 Japanese') === 'ja');
 }
 
+console.log('\n6. EUROPEAN SITES — a marketplace is where a card is sold, a language is what it is');
+// Real titles eBay DE/FR/IT/ES returned for ENGLISH cards (T1, 2026-09-30,
+// marketprobe ?rows=1). Every one below was KEPT by the English-only word
+// list. Measured on the rows production keeps today (4,512 over US/GB/AU/CA
+// and three Japanese cards): the new words change none of them.
+{
+  const ZARD = { cardId: 'en-base1-4', name: 'Charizard', number: '4', setTotal: 102, setName: 'Base Set', lang: 'en', setYear: 1999 };
+  const refuse = [
+    ['Charizard - 4/102 - Base Set - Holo Rare - Italienisch ITA', 'it'],
+    ['CHARIZARD HOLO SET BASE 4/102 - POKEMON KARTE VINTAGE - ITA', 'it'],
+    ['2000 Pokemon ITALIENISCH Unlimited Base Set Charizard Holo 4/102 GUT', 'it'],
+    ['Pokémon TCG Charizard 4/102 Base Set Holo - Französisch (Dracaufeu)', 'fr'],
+    ['Charizard Base Set Glurak 1999 Holo GER Pokemon 4/102', 'de'],
+    ['Charizard bs4 Holo Base Set Holland 4/102', 'nl'],
+    ['Charizard 4/102 Holo Base Set Unlimited Neo Genesis🇩🇪 POOR', 'de'],
+    ['CARTE POKEMON 🇫🇷 Charizard Holo 4/102 - Base Set FR - VINTAGE', 'fr'],
+    ['Carte Pokémon Charizard 4/102 Base Set VF FR', 'fr'],
+    ['Pokemon Charizard 4/102 Base Set Holo Rare 1999 SPANISCH', 'es'],
+    ['CPokémon Charizard Oro Holo Rare. Base Set 4/102. 1999, Esp.', 'es'],
+    ['1999 Pokemon PORTUGIESISCH Unlimited Base Set Charizard Holo 4/102 EX-MT', 'pt'],
+    ['Charizard 4/102 Holo Raro Set Base Ilimitado Pokemon LP (Portugués)', 'pt'],
+    ['Charizard 4/102 Set Base Holo Raro 120 HP Olandese 1999', 'nl']
+  ];
+  for (const [t, code] of refuse) {
+    const v = cm.verify(t, ZARD, 'Raw');
+    ok(`refused (${code}): ${t.slice(0, 52)}`, !v.ok && new RegExp('title says ' + code).test(v.reason || ''), v.reason);
+  }
+  // The words for ENGLISH are the right answer, in every language.
+  const keep = [
+    'Pokémon TCG Charizard 4/102 Base Set Gold Holo Rare Englisch 120 KP 1999',
+    'Charizard 4/102 Base Set Holo Rare Pokémon TCG 120 PS Englisch 1999',
+    'Pokemon Charizard 4/102 Set Base Holo Raro Inglese Wizards',
+    'Charizard 4/102 Set Base Holo Raro Inglés WOTC 1999',
+    'Carte Pokémon Dracaufeu Charizard 4/102 Set de Base Holo Anglais',
+    'Pokémon Charizard 4/102 Base Set Holo Rare EN 🇺🇸',
+    'Charizard 4/102 Holo Base Set de 1999 es original'
+  ];
+  for (const t of keep) {
+    const v = cm.verify(t, ZARD, 'Raw');
+    ok(`kept: ${t.slice(0, 52)}`, v.ok, v.reason);
+  }
+  ok('a Japanese card still refuses Korean, and keeps "Japanisch"',
+     cm.languageOf('Glurak ex 201/165 Koreanisch') === 'ko' && cm.languageOf('Glurak ex 201/165 Japanisch') === 'ja');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

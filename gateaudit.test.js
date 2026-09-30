@@ -209,7 +209,10 @@ const searchSites = [];
     searchSites.push(fn ? (fn[1] || fn[2]) : '?');
   }
 }
-const ALLOWED = ['sourceEbay', '/api/ebay/conditions/:cardId', '/api/ebay/certprobe/:cardId', '/api/ebay/gradecost/:cardId', '/api/ebay/conditionvalues'];
+// /api/ebay/aspects (T1): read-only probe of one site's aspect NAMES, limit=1,
+// returns no listings at all.
+const ALLOWED = ['sourceEbay', '/api/ebay/conditions/:cardId', '/api/ebay/certprobe/:cardId', '/api/ebay/gradecost/:cardId', '/api/ebay/conditionvalues',
+                 '/api/ebay/aspects/:cardId'];
 const unknown = searchSites.filter(s => !ALLOWED.includes(s));
 ok('every eBay search site is a known one', unknown.length === 0, 'unexpected: ' + unknown.join(', '));
 ok('ebayActive (ungated eBay name search) is gone', !/ebayActive\s*\(/.test(server));

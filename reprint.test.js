@@ -71,7 +71,10 @@ lands(['aquapolis', 'lugia30c'], [
   // The originals. Stating nothing about a reprint, they are KEPT on the
   // original and REFUSED on the reprint — silence is not neutral there.
   ['Lugia Aquapolis 149/147 Crystal Type Holo Rare 80 HP Pokemon TCG English', 'aquapolis'],
-  ['2003 Pokemon Lugia 149/147 Aquapolis ITA GRADE 3 Crystal Holo Secret Rare', 'aquapolis'],
+  // "ITA" is an Italian card (T1, 2026-09-30: eBay DE/IT sellers write it
+  // that way; 65 of 407 eBay DE rows). Written as kept before the language
+  // gate read "ITA" — neither card is the Italian printing.
+  ['2003 Pokemon Lugia 149/147 Aquapolis ITA GRADE 3 Crystal Holo Secret Rare', 'none'],
   ['Lugia Crystal Type 149/147 Aquapolis Secret Rare WOTC 2002 Pokemon HOLO e-Card', 'aquapolis'],
   ['Lugia Crystal 149/147 Aquapolis Holo Secret Rare Vintage Pokemon TCG WOTC MP', 'aquapolis'],
   ['2003 Pokemon Aquapolis Crystal Lugia Secret Rare 149/147 - Raw NM/EX  Grail Holo', 'aquapolis'],

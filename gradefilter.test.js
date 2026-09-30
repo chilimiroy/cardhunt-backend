@@ -130,7 +130,37 @@ ok(V('Charizard 4/102 Base Set Holo PSA 9', 'PSA 9', null).gradeSource === 'titl
 
 // ── wired, and reported ──
 const server = fs.readFileSync('server.js', 'utf8');
-ok(/const gradeFilter = condFilter \? null : cm\.ebayGradeFilter\(grade\);/.test(server), 'sourceEbay builds the grade filter');
+ok(/const gradeFilter = condFilter \? null : cm\.ebayGradeFilter\(grade, opts\.marketplace \|\| 'EBAY_US'\);/.test(server),
+   'sourceEbay builds the grade filter for the site it is asking');
+ok(/const condFilter = cm\.ebayConditionFilter\(grade, opts\.marketplace \|\| 'EBAY_US'\);/.test(server),
+   'and the condition filter');
+
+// ── Each site's own aspect names (T1, 2026-09-30) ──
+// An English aspect name is IGNORED by eBay DE/FR/IT/ES (measured: base1-4
+// on DE, 264 for Raw, Raw NM and Raw HP alike). Names read from each site.
+{
+  const us = cm.ebayGradeFilter('PSA 10'), gb = cm.ebayGradeFilter('PSA 10', 'EBAY_GB');
+  ok(us.aspectFilter === gb.aspectFilter && cm.ebayGradeFilter('PSA 10', 'EBAY_US').aspectFilter === us.aspectFilter,
+     'US, GB (and AU, CA) use the same English names — the US filter is unchanged');
+  ok(cm.ebayGradeFilter('PSA 10', 'EBAY_DE').aspectFilter ===
+       'categoryId:183454,Bewertungsexperte:{Professional Sports Authenticator (PSA)},Bewertung:{10}',
+     'DE: Bewertungsexperte / Bewertung');
+  ok(/Société de gradation professionnelle:\{Professional Sports Authenticator \(PSA\)\},Note:\{9\.5\}$/.test(
+       cm.ebayGradeFilter('PSA 9.5', 'EBAY_FR').aspectFilter), 'FR: Société de gradation professionnelle / Note');
+  ok(/Valutatore professionista:\{.*\},Classificazione:\{8\}$/.test(cm.ebayGradeFilter('CGC 8', 'EBAY_IT').aspectFilter),
+     'IT: Valutatore professionista / Classificazione');
+  ok(cm.ebayGradeFilter('PSA 10', 'EBAY_ES') === null && cm.ebayConditionFilter('Raw NM', 'EBAY_ES') === null,
+     'ES has no grade or condition aspect: no filter — so no row there can claim eBay stated one');
+  ok(cm.ebayGradeFilter('PSA 10', 'EBAY_XX') === null && cm.ebayConditionFilter('Raw NM', 'EBAY_XX') === null,
+     'an unread site gets no filter, never a guessed name');
+  ok(cm.ebayConditionFilter('Raw NM', 'EBAY_DE').aspectFilter ===
+       'categoryId:183454,Kartenzustand:{Nahezu neuwertig oder besser (Near Mint or Better)}', 'DE condition: Kartenzustand');
+  ok(cm.ebayConditionFilter('Raw HP', 'EBAY_IT').aspectFilter === 'categoryId:183454,Condizione della carta:{Heavily Played (Poor)}',
+     'IT condition: Condizione della carta');
+  ok(cm.ebayConditionFilter('Raw LP', 'EBAY_FR').value === 'Lightly Played/Excellent (légers défauts)', 'FR condition value');
+  ok(cm.ebayConditionFilter('Raw NM').aspectFilter === 'categoryId:183454,Card Condition:{Near Mint or Better}',
+     'US condition filter unchanged');
+}
 ok(/cm\.verify\(title, matchCard, grade, gateOpts\)/.test(server), 'the gate receives the structured grade');
 ok(/aspectFilter \? '&aspect_filter='/.test(server), 'the filter reaches the request');
 ok(/gradeSource: v\.gradeSource \|\| null/.test(server) && /gradeSource: o\.gradeSource \|\| null/.test(server), 'rows carry gradeSource');

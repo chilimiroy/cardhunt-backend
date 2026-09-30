@@ -1986,13 +1986,13 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // which search can filter on. Measured: the filtered rows agreed with each
   // item's descriptor 36 of 36 times. Same one call as before — each raw
   // condition was already its own search. See cardmatch.ebayConditionFilter.
-  const condFilter = cm.ebayConditionFilter(grade);
+  const condFilter = cm.ebayConditionFilter(grade, opts.marketplace || 'EBAY_US');
   // A slab's grader and grade are asked of eBay's own aspects the same way
   // (cardmatch.ebayGradeFilter, measured before it was built). The filter
   // NARROWS; the title is then checked against it, and where they disagree
   // the row is refused — neither is authoritative. Where the title is silent
   // ("TAG Graded 8") the field answers. No extra calls.
-  const gradeFilter = condFilter ? null : cm.ebayGradeFilter(grade);
+  const gradeFilter = condFilter ? null : cm.ebayGradeFilter(grade, opts.marketplace || 'EBAY_US');
   const aspectFilter = condFilter ? condFilter.aspectFilter : gradeFilter ? gradeFilter.aspectFilter : null;
   const gateOpts = Object.assign({},
     gradeFilter ? { structuredGrade: { grader: gradeFilter.grader, grade: gradeFilter.grade } } : {},

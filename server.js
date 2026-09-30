@@ -3153,9 +3153,13 @@ app.get('/api/listings-log', async (req, res) => {
   const fresh = rows.filter(r => !r.cached);
   const byAction = {};
   for (const r of fresh) (byAction[r.action || 'unrecorded'] = byAction[r.action || 'unrecorded'] || []).push(r);
-  const opens = rows.filter(r => !r.action || /^open/.test(r.action) || r.cached);
+  // Per-open figures are about BROWSING: my threshold measurement
+  // (`measure:*`) and views under T1's every-site design (`t1-every-site`,
+  // marked 2026-09-30) are reported under byAction but never averaged in.
+  const browsing = rows.filter(r => !/^(measure|t1-)/.test(r.action || ''));
+  const opens = browsing.filter(r => !r.action || /^open/.test(r.action) || r.cached);
   const openCalls = opens.reduce((a, r) => a + r.calls, 0);
-  const allCalls = rows.reduce((a, r) => a + r.calls, 0);
+  const allCalls = browsing.reduce((a, r) => a + r.calls, 0);
   const perOpen = opens.length ? openCalls / opens.length : null;
   res.json({ from, origin, since, views: rows.length, cachedViews: rows.length - fresh.length,
     callsPerUncachedView: stats(fresh),

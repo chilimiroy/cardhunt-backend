@@ -896,7 +896,12 @@ const LANG_WORDS = {
   es: /\b(spanish|espanol|español)\b/i,
   pt: /\b(portuguese|portugues)\b/i,
   ru: /\b(russian)\b/i,
-  id: /\b(indonesian)\b/i,
+  // "Indonesia" and "Bahasa": how sellers actually write it (T1, 2026-09-30).
+  // Four Indonesian Mega Dragonite ex MA3 250/193 were kept on the Japanese
+  // M2a 250/193 ("Pokemon Indonesia", "Bahasa Indonesia Language") — found
+  // by sitecheck.js's independent reader. Across 4,097 kept rows on 13 cards
+  // those 4 were the only titles carrying either word.
+  id: /\b(indonesian|indonesia|bahasa)\b/i,
   th: /\b(thai)\b/i
 };
 

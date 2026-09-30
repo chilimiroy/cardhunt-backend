@@ -351,5 +351,38 @@ for (const [title, expectKept] of PARITY) {
     `gate kept=${viaGate}, verify kept=${viaVerify}, expected kept=${expectKept}`);
 }
 
+console.log('\n5. INDONESIAN PRINTS — the words sellers use (T1, 2026-09-30)');
+// Four real eBay titles kept on ja-M2a-250 (Mega Dragonite ex 250/193) until
+// "Indonesia" / "Bahasa" were read. Found by sitecheck.js's independent
+// reader, not by any suite. Both directions: refused, and the same card's
+// ordinary titles still kept.
+{
+  const M2A = { cardId: 'ja-M2a-250', name: 'Mega Dragonite ex', number: '250', setTotal: 193,
+                setName: 'MEGA Dream ex', lang: 'ja', setYear: 2025 };
+  const refuse = [
+    'Pokemon TCG Indonesia Mega Dragonite EX MUR MA3 250/193 NM A',
+    'Mega Dragonite ex MA3 250/193 MUR Mega Dream Ascended Heroes Pokemon Indonesia',
+    'Pokémon TCG Bahasa Indonesia Language Mega Dragonite ex MUR Gold MA3 250/193',
+    'Mega Dragonite ex MA3 250/193 MUR Mega Dream Ascended Heroes Pokemon Indonesia'
+  ];
+  const keep = [
+    'Pokemon Card Japanese Mega Dragonite ex MUR 250/193 M2a MEGA Dream ex',
+    'Mega Dragonite ex 250/193 MUR Gold Mega Dream ex Japanese Pokemon NM',
+    'Mega Dragonite ex MUR 250/193 m2a Japanese'
+  ];
+  for (const t of refuse) {
+    const v = cm.verify(t, M2A, 'Raw NM');
+    ok(`refused: ${t.slice(0, 50)}`, !v.ok && /title says id/.test(v.reason || ''), v.reason);
+  }
+  for (const t of keep) {
+    const v = cm.verify(t, M2A, 'Raw NM');
+    ok(`kept: ${t.slice(0, 50)}`, v.ok, v.reason);
+  }
+  ok('English card: "Indonesia" is a different card there too',
+     cm.languageOf('Charizard ex 199/165 Pokemon 151 Indonesia') === 'id');
+  ok('"Japanese" still wins over a seller\'s location word on a JA title',
+     cm.languageOf('Mega Dragonite ex 250/193 Japanese') === 'ja');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

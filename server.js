@@ -2155,7 +2155,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       }
     } catch (e) { /* the parser must never break the gate */ }
 
-    if (!v.ok) { dropped.push({ title, reason: v.reason, gradeConflict: v.gradeConflict || undefined,
+    if (!v.ok) { dropped.push({ title, itemId: it.itemId || undefined, reason: v.reason, gradeConflict: v.gradeConflict || undefined,
                                 printingConflict: v.printingConflict || undefined }); continue; }
 
     // eBay's own condition field, which the gate never read. A $1,114.99
@@ -2165,7 +2165,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     // Graded. Structured marketplace data beats a word in a title, and it
     // was there all along. Raw direction only — see conditionSaysGraded.
     if (jpf.isRawGrade(grade) && cm.conditionSaysGraded(it.condition)) {
-      dropped.push({ title, reason: `wants raw, eBay states condition: ${it.condition}` });
+      dropped.push({ title, itemId: it.itemId || undefined, reason: `wants raw, eBay states condition: ${it.condition}` });
       continue;
     }
 
@@ -4261,7 +4261,8 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
                       shippingUsd: l.shipping, country: l.country, title: l.title.slice(0, 140) });
         }
         per[mp] = { scanned: r.scanned, kept: r.kept, rejected: r.rejected, pages: r.pages, scannedIds: r.scannedIds || [],
-                    rejectReasons: reasons, keptRows: kept };
+                    rejectReasons: reasons, keptRows: kept,
+                    droppedRows: r.dropped.map(d => ({ itemId: d.itemId, title: String(d.title || '').slice(0, 140), reason: d.reason })) };
       } catch (e) {
         per[mp] = { error: e.message, status: e.ebayStatus || null };
       }
@@ -4322,7 +4323,20 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
       };
     }
     const calls = sites.reduce((n, mp) => n + ((per[mp] && per[mp].pages && per[mp].pages.fetched) || 0), 0);
-    const body = { cardId, grade, sites, summary, union: allIds.size, usKept: usIds.size,
+    // ?rows=1 (T1): the same item REFUSED on one site and KEPT on another,
+    // with both titles — so "which site's title was right" is read, not
+    // assumed. The sticky-refusal rule in mergeEbaySite rests on this.
+    let crossRefused;
+    if (req.query.rows === '1') {
+      crossRefused = [];
+      const keptBy = {};
+      for (const mp of sites) for (const k of ((per[mp] && per[mp].keptRows) || [])) (keptBy[k.itemId] = keptBy[k.itemId] || []).push({ mp, title: k.title });
+      for (const mp of sites) for (const d of ((per[mp] && per[mp].droppedRows) || [])) {
+        if (d.itemId && keptBy[d.itemId]) crossRefused.push({ itemId: d.itemId, refusedOn: mp, refusedTitle: d.title,
+          reason: d.reason, keptOn: keptBy[d.itemId] });
+      }
+    }
+    const body = { cardId, grade, sites, summary, crossRefused, union: allIds.size, usKept: usIds.size,
                    usCapped, usMaxExaminedUsd: usMax, outliers: judged.stats,
                    quotaSpentSearch: calls, stored: false, at: new Date().toISOString() };
     marketProbeCache.set(key, { at: Date.now(), body });

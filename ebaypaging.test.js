@@ -281,6 +281,21 @@ async function fullView(b) {
     ok(v.final.kept === 20, `20 kept: 10 from US, 10 more from IT (got ${v.final.kept})`);
   }
   {
+    // The same item from an earlier site replaces a later site's copy,
+    // whatever order pages arrive in: IT's page 1 lands first carrying US's
+    // items 200-399 (translated); US's page 2 then brings them in English.
+    const b = build(0, { sites: {
+      EBAY_US: { total: 400 },
+      EBAY_IT: { total: 200, currency: 'EUR', idFor: i => 'v1|' + (i + 200),
+                 titleFor: i => `Pokemon Charizard 4/102 Set Base Holo PSA 10 Inglese #${1200 + i}` } } });
+    const v = await fullView(b);
+    const it = v.final.listings.filter(l => l.marketplace === 'EBAY_IT').length;
+    ok(v.final.kept === 400 && it === 0,
+       `every shared item shown as its US copy (IT rows ${it}, total ${v.final.kept})`);
+    ok(v.st.sites.EBAY_IT.kept === 0 && v.st.sites.EBAY_US.kept === 400,
+       'and the counts move with it: ' + JSON.stringify({ us: v.st.sites.EBAY_US.kept, it: v.st.sites.EBAY_IT.kept }));
+  }
+  {
     // The quota's soft stop on page 3: the site says it is incomplete and why.
     const b = build(0, { sites: { EBAY_US: { total: 1000, blockAt: 3 } } });
     const v = await fullView(b);

@@ -2365,10 +2365,26 @@ function mergeEbaySite(st, mp, r) {
     const i = st.listings.findIndex(l => l.itemId === id);
     if (i >= 0) { st.listings.splice(i, 1); s.overturned++; }
   }
+  const rank = m => { const i = EBAY_SITES.findIndex(x => x.id === m); return i < 0 ? 99 : i; };
   for (const l of r.listings || []) {
     if (!l.itemId) { st.listings.push(l); s.kept++; continue; }
     if (st.refused.has(l.itemId)) { s.overturned++; continue; }
-    if (st.seen.has(l.itemId)) { s.duplicates++; continue; }
+    if (st.seen.has(l.itemId)) {
+      // The same item from a site EARLIER in EBAY_SITES replaces a later
+      // site's copy, whichever page arrived first (T1, measured): eBay IT
+      // re-returns US listings under machine-translated titles, and when
+      // IT's page landed before US's, 346 of one card's rows were shown with
+      // Italian titles and EUR-converted prices. The seller's own words, in
+      // their own currency, are the copy to show.
+      const i = st.listings.findIndex(x => x.itemId === l.itemId);
+      if (i >= 0 && rank(mp) < rank(st.listings[i].marketplace)) {
+        const was = st.listings[i].marketplace;
+        st.listings[i] = l;
+        s.kept++;
+        if (st.sites[was]) { st.sites[was].kept--; st.sites[was].duplicates++; }
+      } else s.duplicates++;
+      continue;
+    }
     st.seen.add(l.itemId);
     st.listings.push(l);
     s.kept++;

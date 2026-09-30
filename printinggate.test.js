@@ -146,7 +146,9 @@ console.log('\n3. REACHABLE — the gate can get its inputs on the real path');
 
 // The bug was never in the logic. It was a SELECT that did not return the
 // column the logic reads, so this asserts the query itself.
-const serverSrc = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
+// CRLF-tolerant: a Windows checkout (autocrlf) has CRLF on disk and the
+// slices below end on a bare LF, so they found nothing and failed there only.
+const serverSrc = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8').replace(/\r\n/g, String.fromCharCode(10));
 const resolver = serverSrc.slice(serverSrc.indexOf('async function resolveListingCard'));
 // The SQL ONLY — between the backticks. Slicing the whole function body was
 // the first attempt and it passed with the columns removed, because the

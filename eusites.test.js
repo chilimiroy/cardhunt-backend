@@ -143,5 +143,26 @@ for (const t of [
 // A graded search still reads its own grader.
 ok('graded: "AiGrading 10" is not a PSA 10', !V('Celebi V 245/264 - Pokémon Fusion Strike - AiGrading 10', 'celebi', 'PSA 10').ok);
 
+console.log('\n4. CONDITION AS THE TITLE STATES IT — eBay ES has no condition aspect at all');
+for (const [t, want] of [
+  ['Juego Base Charizard 4/102 — Dañado — Auténtico Holo Raro Tarjeta Pokémon', 'DMG'],
+  ['Pokemon 1999 Set Base Charizard 4/102 Holo Raro Illimitato Inglese DANNEGGIATO', 'DMG'],
+  ['Base Set Charizard 4/102 — beschädigt — Authentic Holo Rare Vintage Pokemon Karte', 'DMG'],
+  ['Charizard 4/102 Holo Raro Set Base Pokemon Illimitato 1999 Molto Giocato', 'HP'],
+  ['Pokémon Arcanine 1/123 Holo Raro HeartGold y SoulSilver Jugado Moderadamente', 'MP'],
+  ['Clefairy 5/102 Holo Raro Conjunto Base Ilimitado Pokemon Ligeramente Jugado', 'LP'],
+  ['Carta Pokemon Charizard 4/102 quasi nuova', 'NM'],
+  ['Ultra Ball Trainer 186/172 Brilliant Stars Gold, casi nuevo/como nuevo', 'NM'],
+  // "HP 120" is hit points in either order — 21 US/GB titles were labelled
+  // Heavily Played for writing it this way round.
+  ['Pokémon TCG Charizard 4/102 Base Set Holo Rare HP 120 English Stage 2', null],
+  ['The Pokémon Company Charizard 4/102 Base Set Etapa 2 Holo Raro HP 120 Inglés', null],
+  ['Pokemon Charizard Base Set Holo Rare 4/102 Unlimited HP', 'HP'],
+  ['Charizard 4/102 Base Set Holo Rare 1999 Nuevo', null]          // "nuevo" alone is not a grade
+]) {
+  const c = cm.sellerCondition(t);
+  ok(`${String(want).padEnd(4)} ${t.slice(0, 60)}`, c.code === want, JSON.stringify(c));
+}
+
 console.log(`\neusites.test.js — ${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

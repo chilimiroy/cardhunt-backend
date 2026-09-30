@@ -301,12 +301,23 @@ const RAW_CONDITIONS = ['M', 'NM', 'LP', 'MP', 'HP', 'DMG'];
 
 // Order matters: the most specific spelling wins, so "Near Mint" is not
 // read as "Mint".
+// The European forms (T1, 2026-09-30): eBay ES has no condition aspect at
+// all, so every ES row's condition is its title's — "Dañado", "Jugado
+// Moderadamente", "Casi Nuevo" were read as nothing and sat in the unstated
+// group. Italian, German and French as eBay IT/DE/FR sellers write them.
+// Phrases only: bare "nuevo"/"neu" (new) and "gebraucht" (used) are not a
+// grade of condition.
 const RAW_CONDITION_PATTERNS = [
   { code: 'DMG', re: /\b(?:damaged|dmg|poor)\b/i },
+  { code: 'DMG', re: /\b(?:dañad[oa]|danad[oa]|danneggiat[oa]|beschädigt|beschaedigt|endommagée?|abîmée?|mauvais\s+[ée]tat|pobre)(?![a-z])/i },
   { code: 'HP',  re: /\bheav(?:y|ily)\s*(?:played|play)\b/i },
+  { code: 'HP',  re: /\b(?:muy\s+jugad[oa]|molto\s+giocat[oa]|pesantemente\s+giocat[oa]|stark\s+bespielt|tr[eè]s\s+jou[ée])(?![a-z])/i },
   { code: 'MP',  re: /\bmoderat(?:e|ely)\s*(?:played|play)\b/i },
+  { code: 'MP',  re: /\b(?:moderadamente\s+jugad[oa]|jugad[oa]\s+moderadamente|moderatamente\s+giocat[oa]|m[äa]ßig\s+bespielt|moyennement\s+jou[ée])(?![a-z])/i },
   { code: 'LP',  re: /\blight(?:ly)?\s*(?:played|play)\b/i },
+  { code: 'LP',  re: /\b(?:ligeramente\s+jugad[oa]|leggermente\s+giocat[oa]|leicht\s+bespielt|l[ée]g[eè]rement\s+jou[ée])(?![a-z])/i },
   { code: 'NM',  re: /\b(?:near\s*mint|nm)\b/i },
+  { code: 'NM',  re: /\b(?:casi\s+nuev[oa]|quasi\s+nuov[oa]|nahezu\s+neuwertig|proche\s+du\s+neuf)(?![a-z])/i },
   // "Excellent-Mint" / "EX-MT" is the grade BELOW Near Mint — eBay's own
   // "Lightly played (Excellent)". Read as Mint, it sat in the Raw M list
   // (live: "Blastoise … EX MT Excellent-Mint", 2026-09-27). Only the
@@ -324,7 +335,10 @@ const RAW_CONDITION_PATTERNS = [
 // for the same reason GENUINE_ART_PHRASES is: a space would let the
 // neighbours join up and match something else.
 function stripHitPoints(title) {
-  return String(title || '').replace(/\b\d{1,3}\s*hp\b/gi, ' ~ ');
+  // Both orders: "120 HP", and "HP 120" as eBay ES writes it ("Holo Raro HP
+  // 120 Inglés" was labelled Heavily Played). German/French/Italian "KP" /
+  // "PV" / "PS" are hit points too and were never condition words.
+  return String(title || '').replace(/\b\d{1,3}\s*hp\b/gi, ' ~ ').replace(/\bhp\s*\d{2,3}\b/gi, ' ~ ');
 }
 
 // Returns { code, stated }. `stated:false` means the seller said nothing —
@@ -554,7 +568,9 @@ const SLAB_GENERIC = ['graded', 'slab', 'slabbed', 'gem mint', 'gemmint',
 const SLAB_WITH_GRADE = ['grad', 'gradate', 'gradata', 'gradato', 'gradati', 'graduada', 'graduado',
                          'gradée', 'gradé', 'gegraded', 'gegradet', 'beckett',
                          // "Black Grading 9", "cardmarket grading 9 Mint" (eBay DE/IT, Raw NM)
-                         'grading'];
+                         'grading',
+                         // "CMG 8 Casi Como Nuevo" — $1,078 in Raw NM on eBay ES
+                         'cmg'];
 const GRADE_NUM_EU = '\\s*[-:]?\\s*(?:10|[1-9](?:[.,]5)?)(?![\\d.,])';
 
 const SLAB_WORDS = new RegExp('(?:' + [].concat(
@@ -674,6 +690,9 @@ const NOT_A_SINGLE_CARD_TERMS = [
   'carta da esposizione', 'tarjeta de exhibición', 'tarjeta de exhibicion',
   'scheda metallo', 'carta metallica', 'tarjeta metálica', 'tarjeta metalica', 'tarjeta de metal',
   'opera estesa', 'arte inserto', 'master set',
+  // NOT "tarjeta dorada" ("gold card"): tried on eBay ES's gold fakes at
+  // $42-48, and it refused the GENUINE Ultra Ball 186/172 and Shining
+  // Charizard 107/105 gold secret rares too — the "gold foil" trap again.
   'supporto magnetico', 'soporte magnético', 'soporte magnetico', 'espositore',
   // keychains
   'portachiavi', 'llavero', 'porte-clés', 'porte-cles', 'schlüsselanhänger',
@@ -1017,16 +1036,19 @@ const CJK = /[぀-ヿ㐀-䶿一-鿿가-힯]/;
 // they are the right answer. Bare "IT", "DE", "ES" are absent too — each is
 // an ordinary word in some language ("de" is "of" in three of them).
 const LANG_WORDS = {
-  ja: /\b(japanese|japan|jpn|jp\b|nihongo|japanische?|japonais|japonaise|giapponese|japon[eé]s|japonesa)\b/i,
+  ja: /\b(japanese|japan|jpn|jp\b|nihongo|japanische?|japonais|japonaise|giapponese|giapponesi|japon[eé]s|japonesa|japoneses|japonesas)\b/i,
   ko: /\b(korean|korea|kor\b|koreanische?|coréen|coreen|coreano|coreana)\b/i,
   zh: /\b(chinese|china|traditional chinese|simplified chinese|t-chinese|s-chinese|chinesische?|chinois|cinese)\b/i,
-  de: /\b(german|deutsch|deutsche|deutsches|ger|allemand|allemande|tedesco|tedesca|alem[aá]n|alemana)\b/i,
+  de: /\b(german|deutsch|deutsche|deutsches|ger|allemand|allemande|tedesco|tedesca|tedeschi|tedesche|alem[aá]n|alemana|alemanes|alemanas)\b/i,
   // "VF" is "version française" — how French sellers mark a French card.
-  fr: /\b(french|francais|français|française|francaise|vf|franz[öo]sische?|francese|franc[eé]s|francesa)\b/i,
-  it: /\b(italian|italiano|italiana|ita|italienische?|italien|italienne)\b/i,
+  fr: /\b(french|francais|français|française|francaise|vf|franz[öo]sische?|francese|francesi|franc[eé]s|francesa|franceses|francesas)\b/i,
+  // Plurals, and the country: eBay ES, live — "Pokémon italianos",
+  // "Charizard base set pokemon card 4/102 holo Italia" ($851), both kept.
+  it: /\b(italian|italiano|italiana|italianos|italianas|italiani|italiane|italia|ita|italienische?|italien|italienne)\b/i,
   es: /\b(spanish|espanol|español|española|espanola|esp|spanische?|espagnol|espagnole|spagnolo|spagnola)\b/i,
-  pt: /\b(portuguese|portugues|português|portugiesische?|portugais|portoghese|portugu[eé]s)\b/i,
-  nl: /\b(dutch|nederlands|holland|holländische?|hollandische?|niederländische?|niederlandische?|olandese|holand[eé]s|néerlandais)\b/i,
+  pt: /\b(portuguese|portugues|português|portugiesische?|portugais|portoghese|portoghesi|portugu[eé]s|portugueses)\b/i,
+  // "Olanda" / "Holanda" — eBay ES, live: "Charizard bs4 holo set base Olanda".
+  nl: /\b(dutch|nederlands|holland|holländische?|hollandische?|niederländische?|niederlandische?|olandese|olandesi|olanda|holanda|holand[eé]s|holandeses|néerlandais)\b/i,
   ru: /\b(russian|russische?|russe|russo|ruso)\b/i,
   // "Indonesia" and "Bahasa": how sellers actually write it (T1, 2026-09-30).
   // Four Indonesian Mega Dragonite ex MA3 250/193 were kept on the Japanese
@@ -1278,7 +1300,7 @@ function printingRefusal(claim, want, card) {
 // "4th Print" (the 1999-2000 UK print run) is an Unlimited print.
 const EDITIONS = { '1st-edition': '1st Edition', 'shadowless': 'Shadowless', 'unlimited': 'Unlimited' };
 const EDITION_WORDS = [
-  ['1st-edition', /\b1st\s*ed(?:ition|\.)?(?![a-z])|\bfirst\s*ed(?:ition)?\b|(?:^|[\s(|,\/-])1\.?\s*(?:edition|ed\.|auflage)\b|\berste\s+(?:edition|auflage)\b|\bprima\s+edizione\b|(?:^|[\s(|,\/-])1\s*[ªa°º]\s*(?:edizione|edici[oó]n|[ée]dition)|[ée]dition\s*1(?!\d)|\bed\.?\s*1(?!\d)|\b1(?:ère|ere|re)\s+[ée]dition/i],
+  ['1st-edition', /\b1st\s*ed(?:ition|\.)?(?![a-z])|\bfirst\s*ed(?:ition)?\b|(?:^|[\s(|,\/-])1\.?\s*(?:edition|ed\.|auflage)\b|\berste\s+(?:edition|auflage)\b|\bprima\s+edizione\b|\bprimera\s+edici[oó]n|\bpremi[eè]re\s+[ée]dition|(?:^|[\s(|,\/-])1\s*[ªa°º]\s*(?:edizione|edici[oó]n|[ée]dition)|[ée]dition\s*1(?!\d)|\bed\.?\s*1(?!\d)|\b1(?:ère|ere|re)\s+[ée]dition/i],
   ['shadowless', /\bshadowless\b|\bohne\s+schatten\b|\bsenza\s+ombra\b|\bsin\s+sombra\b/i],
   ['unlimited', /\bunlimited\b|\bunlimitiert\b|\billimitat[oa]\b|\bilimitad[oa]\b|\b4th\s*print\b|[ée]dition\s*2(?!\d)|\bed\.?\s*2(?!\d)|\b2(?:nde|nd|e)\s+[ée]dition/i]
 ];

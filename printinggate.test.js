@@ -405,7 +405,12 @@ console.log('\n6. EUROPEAN SITES — a marketplace is where a card is sold, a la
     ['CPokémon Charizard Oro Holo Rare. Base Set 4/102. 1999, Esp.', 'es'],
     ['1999 Pokemon PORTUGIESISCH Unlimited Base Set Charizard Holo 4/102 EX-MT', 'pt'],
     ['Charizard 4/102 Holo Raro Set Base Ilimitado Pokemon LP (Portugués)', 'pt'],
-    ['Charizard 4/102 Set Base Holo Raro 120 HP Olandese 1999', 'nl']
+    ['Charizard 4/102 Set Base Holo Raro 120 HP Olandese 1999', 'nl'],
+    // read live on eBay ES once it went on
+    ['Charizard bs4 holo set base Olanda 4/102', 'nl'],
+    ['Charizard Moderadamente Jugado - 4/102 - Holo Raro Conjunto Base Unltd. Pokémon italianos', 'it'],
+    ['Charizard base set pokemon card 4/102 holo Italia', 'it'],
+    ['Juego de cartas coleccionables Pokémon alemanes ilimitado Charizard muy jugado - 4/102 - Holo raro', 'de']
   ];
   for (const [t, code] of refuse) {
     const v = cm.verify(t, ZARD, 'Raw');

@@ -68,7 +68,7 @@ cardhunt_preview.html  server.js  cardmatch.js  cardparse.js  ebaycall.js
 ebayquota.js  ebayratecheck.js  estimator.js  fx.js  gradeprice.js
 jpfilter.js  linkaudit.js  listingparse.js  outlier.js  setaudit.js
 sourceprobe.js  tcgdexprice.js  yuyutei.js  digital.js  trending.js
-searchaudit.js  certcheck.js
+searchaudit.js  certcheck.js  sitecheck.js
 checkout-disabled.js  login-disabled.js   (preserved, never loaded or served)
 migration-grade-dimension.sql  migration-image-source.sql  migration-variants.sql
 printsql.js  variants.fixture.json  variants.pricing.fixture.json
@@ -238,7 +238,7 @@ machine via `node sourceprobe.js`. **Do not re-derive these — re-run the probe
 |---|---|---|---|
 | **Yuyu-tei** | 200 | **200, markers present** | **LIVE in production** — listings + prices |
 | **eBay Browse API** | 200 | **200** | **LIVE in production** — credentials work |
-| eBay Browse, other sites | — | GB/DE/AU/CA/FR/IT/ES 200; **JP 409** | US only in production. `EBAY_JP`: "12019: marketplace not supported" (2026-09-30) |
+| eBay Browse, other sites | — | GB/DE/AU/CA/FR/IT/ES 200; **JP 409** | **All eight LIVE since 2026-09-30** (`EBAY_SITES`). `EBAY_JP`: "12019: marketplace not supported" |
 | PriceCharting | 200, JSON | **200, JSON** | viable, not built — `search-products` returns `{"products":[…]}` |
 | Troll and Toad | 200, 61 KB | **200, 61 KB** | viable, not built — needs an HTML parser |
 | Card Kingdom | 200, 201 KB | **200, 201 KB** | viable, not built — needs an HTML parser |
@@ -392,6 +392,39 @@ summary, droppedSample, query`. **A set of listings carrying no rejection count
 has not run the gate** — that is the tell, and it has caught a defect twice.
 
 `?dryRun=1` builds the request, sends nothing and spends no quota.
+
+### Every site, every page (T1, 2026-09-30)
+`/api/listings` and `/api/search` both answer through `listingsFor` — one
+payload builder, **every row returned** (it had sliced to 25 while
+`count` said 58). eBay is `sourceEbayAll`: page 1 of each site in
+`EBAY_SITES` (US, GB, AU, CA, DE, FR, IT, ES) foreground, then
+`continueListings` pages each site to exhaustion at 200 a page in the
+background, re-judging (outliers, reprint band) and re-caching after every
+page. The response carries `progress {complete, loading[], incomplete[],
+calls, note}` — "247 listings, still searching GB" — and the page polls
+(`&poll=1`, not counted as a view) until nothing is loading. eBay's own
+ceiling (offset+limit ≤ 10,000) and a quota soft stop are STATED as
+incomplete, never passed off as complete. Also `?edition=` (T3).
+
+- **Shipping is never a filter.** Rows carry `shippingTo` (whose buyer the
+  site quotes) and `shippingKnown`; every non-USD row goes through `fx.js`
+  with `priceOriginal`/`currencyOriginal`/`fx` on the row.
+- **One item, one row.** De-duplicated by item id; the copy from the site
+  EARLIER in `EBAY_SITES` wins whatever page lands first (IT re-returns US
+  listings under machine-translated titles).
+- **A refusal on an English-titled site (US/GB/AU/CA) is sticky
+  everywhere**; a refusal on a translated site (`originalTitles: false`)
+  drops only its own copy — see the lesson below.
+- **Pages per view are recorded**: `listing_views` (counts only, no eBay
+  item data), summarised at `GET /api/listings-log`. Local servers write to
+  the same table — filter them out before reading averages.
+- `node sitecheck.js [--grade=all]` reads the real view to completion and
+  reports rows per site plus an INDEPENDENT language reader's suspects.
+  Run it after any change to `EBAY_SITES` or the gate's vocabulary.
+
+Measured 2026-09-30, 10 English cards × Raw NM + PSA 10: calls per uncached
+view mean 7.6 (p50 6 before ES/IT, min 8 with all eight sites), max 32 —
+~550-650 uncached views/day on 5,000. Cached views cost 0.
 
 ### The registry
 
@@ -600,7 +633,7 @@ Standalone by design, so a revert of `ingest.js` cannot take them with it.
 Counts are today's; a suite that suddenly reports fewer has lost assertions.
 
 ```powershell
-node approute.test.js        # 47   /app serves, and the project root does not leak
+node approute.test.js        # 50   /app serves, and the project root does not leak
 node cardmatch.test.js       # 27   the gate
 node cardmatch2.test.js      # 29
 node cardmatch3.test.js      # 44   NOT_A_SINGLE_CARD word boundaries, both directions
@@ -615,12 +648,12 @@ node jptest.js               # 88   39 of them assert the filter KEEPS; English 
 node listingparse.test.js    # 26
 node matchparity.test.js     # 102  /api/listings and /api/search cannot disagree
 node outlier.test.js         # 12   the price test, on the real Giratina #186 spread
-node outlierwire.test.js     # 32   ...and that it is actually REACHED: both payloads
-node printinggate.test.js    # 69   reprint/language/year, BOTH marketplaces
-node reprint.test.js         # 116  reprints by SET ID, both directions, real titles
+node outlierwire.test.js     # 33   ...and that it is actually REACHED: both payloads
+node printinggate.test.js    # 116   reprint/language/year, BOTH marketplaces
+node reprint.test.js         # 126  reprints by SET ID, both directions, real titles
 node printrun.test.js        # 39   1st Edition / Shadowless / Unlimited, only where they existed
-node selector.test.js        # 517  every grader, every published grade, through the real gate
-node rawgate.test.js         # 69   every grader's slab refused from a raw search — AND
+node selector.test.js        # 531  every grader, every published grade, through the real gate
+node rawgate.test.js         # 74   every grader's slab refused from a raw search — AND
                              #      TAG TEAM / ACE SPEC / Alt Art kept
 node scopeguard.test.js      # 28
 node setlist.test.js         # 27   the browsed set list resolves; set page == card page; ingest.js tracked
@@ -629,10 +662,10 @@ node tcgdexprice.test.js     # 70
 node digital.test.js         # 49   Pocket hidden at every read; server never writes `cards`
 node reprintprice.test.js    # 98   reprint-price band, both directions, on live rows
 node cardid.test.js          # 51   foreign ids refused; producers closed; DB count zero
-node gradefilter.test.js     # 46   eBay grade fields; refuse where title and field disagree
+node gradefilter.test.js     # 58   eBay grade fields; refuse where title and field disagree
 node anygrade.test.js        # 27   grader-wide mode still checks the card
 node cdlayout.test.js        # 17   one spacing rule down the card page's price column
-node ebaypaging.test.js      # 19   the REAL sourceEbay pages past 75, capped at 3, says so
+node ebaypaging.test.js      # 53   the REAL sourceEbay + every-site layer: pages to exhaustion, fx, sticky refusals, one row per item
 node unspaced.test.js        # 41   "PSA10" read; TAG TEAM / ACE SPEC still reachable raw
 node certcheck.test.js       # 47   cert + photos from one getItem; never claims verified; never padded; nothing eBay persisted
 node reprintpricing.test.js  # 13   reprints priced by printed number in their own TCGPlayer set (SKIP w/o ingest.js)
@@ -640,9 +673,11 @@ node manifestmap.test.js     # 12   manifest never maps "None" to Common (SKIP w
 node marketwait.test.js      # 12   no /api/market request; one /api/listings per card+grade
 node nofabricated.test.js    # 48   no password/card input, no invented shops/holdings/prices (--deployed: Render's HTML too)
 node nosoldscrape.test.js    # 17   no eBay sold-page scrape; real /api/market handler, network stubbed (--live: +3)
-node gateaudit.test.js       # 57   T9: every path reaches the gates it needs, and reports (--live: +8)
-node variants.test.js        # 75   T10: printings from the REAL TCGdex shape; the gate; every reader; the page; Typical follows the printing (--db: +6)
+node gateaudit.test.js       # 62   T9: every path reaches the gates it needs, and reports (--live: +8)
+node variants.test.js        # 81   T10: printings from the REAL TCGdex shape; the gate; every reader; the page; Typical follows the printing (--db: +6)
 node pricesource.test.js     # 49   T1/T4: set-checked TCGplayer match; shared products refused; Yahoo mirrors kept out of the base
+node eusites.test.js         # 80   T1: eBay DE/FR/IT/ES titles — reprints, junk, slabs, conditions; both directions, real titles
+node edition.test.js         # 69   T3: 1st Edition/Shadowless/Unlimited — reader, gate, query, headline rule, page (--db: +2)
 ```
 
 Run them all:
@@ -2491,6 +2526,72 @@ their own page. And `pricecheck` checked a number the page never showed
 as text, no set check), reading "no match" on 151 where both agree to the
 cent. **A verification tool is a reader: give it the page's rule and the
 writer's question.**
+
+## A marketplace is where a card is sold; a language is what it is (T1, 2026-09-30)
+Adding eBay DE/FR/IT/ES changed WHERE we look, never what the gate accepts
+— and every one of them needed teaching first, because the English-only
+vocabulary passed their wrong cards. Measured on 2,408 rows those four
+added for 12 English cards: "Italienisch", "ITA", "Französisch", "GER",
+"Holland", "VF"; Celebrations and 30th reprints ("Celebrazioni",
+"30° Anniversario", "30 Jahre … Jubiläum", "25 ans"); lotteries, customs,
+extended-art cases, "fan made" as eBay translates it ("Hecho por
+Ventilador", "Ventaglio"); slabs in Raw ("GRAD 7", "AiGrading 9,5").
+Taught on one set of 12 cards, checked on 12 held out, then on 12 more
+through the production gate; across 4,512 rows US/GB/AU/CA keep, not one
+verdict changed. `eusites.test.js` holds the real titles, both directions.
+
+Four things that are not obvious:
+- **eBay's aspect NAMES are localized, and an English one is IGNORED.**
+  base1-4 on DE returned 264 for Raw, Raw NM and Raw HP alike; the English
+  "Card Condition" filter did nothing and every row claimed eBay said NM.
+  `cardmatch.EBAY_SITE_ASPECTS` holds each site's own names, read with
+  `/api/ebay/aspects/:cardId?mp=`. **ES has no condition or grade aspect at
+  all** — no filter, so no ES row may claim eBay stated a condition.
+- **Bare "DE" and "FR" are language codes on eBay DE/FR** ("… Holo DE
+  33/181", "Carte Pokémon FR") — found only by reading every DE row after it
+  went live, when the independent reader had reported 0. Case-sensitive, and
+  "DE" before its noun ("SET DE BASE", "DE COLECCIÓN") is the preposition.
+- **A translated title's refusal must not cross sites.** 8 of 8 items
+  IT/ES/DE refused that an English site kept were the translation's fault:
+  "ENG" -> "ESP", "WALL ART" -> "ARTE DE PARED", "Ethan's Pinsir" ->
+  "Pinsir di Ethan". Only US/GB/AU/CA refusals are sticky
+  (`originalTitles: false` marks the rest).
+- **"+26% from IT" was attribution, not listings.** Total rows went 2,942
+  -> 2,938 when IT went on; IT re-returns US listings, and whichever page
+  landed first owned the row — with an Italian title and a EUR price. The
+  earlier site's copy now wins. Measure a new site by the TOTAL, not by
+  the rows labelled with its name.
+
+And the gold-foil trap, twice in one day: "gold foil" and "tarjeta dorada"
+(gold card) each refused a GENUINE gold card (Mega Dragonite ex MUR at its
+median; Ultra Ball 186/172). A word cannot tell a real gold rare from a $50
+fake; the outlier check can. Both were measured, then removed.
+
+## Edition is its own axis — and TCGdex names it differently on WOTC sets (T3)
+1st Edition / Shadowless / Unlimited sit BESIDE printing (a card can be 1st
+Edition and holo), only on gradeprice.printRunsFor's ten sets.
+`cardmatch.editionClaim` is the one reader (listingparse labels from it) —
+the old reader disagreed on 1,090 of 5,000 real titles, missing every
+European form. French "Édition 2" is UNLIMITED.
+
+Stored prices: 1st Edition rows carry the edition only in their source name
+(`tcgplayer_1stEdition*`; the `edition` column is empty on all 611), and no
+headline reader excluded them — 10 cards showed a 1st Edition price as
+their price. `printsql.basePrintingSql` now carries `baseEditionSql`, so
+every reader got the rule at once; exactly those 10 changed.
+
+**Read from TCGdex, not assumed:** on WOTC holos there is no plain
+`holofoil` key, only `1st-edition-holofoil` and `unlimited-holofoil`, and
+`BASE_PRINTINGS` tried the 1st Edition key first — the harvest's "base" was
+the 1st Edition price (Sabrina's Gengar 549.50 = TCGdex's 1st Edition
+figure). Order fixed; rows written before the fix are classified by
+`source_meta.printing`, so they land as 1st Edition, not base.
+
+**NOT fixed:** the internal-API writer (path P) stores `tcgplayer_market`
+that flips between the 1st Edition and Unlimited products on edition sets —
+27 of 924 cards swing ≥2x (control sets 5 of 570); Lugia 164.80-1,299.96,
+its headline $826.60 of unknown edition. TCGdex-first, after the harvest,
+is the route; re-measure then.
 
 # CONVENTIONS
 - Card ids: `{lang}-{setId}-{number}` — `en-me02.5-294`, `ja-M5-081`.

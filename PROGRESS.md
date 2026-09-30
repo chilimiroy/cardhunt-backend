@@ -1,5 +1,65 @@
 # CardHunt — Progress Log
 
+## 2026-09-30 (later) — T0 Lugia; every eBay site, every page; editions
+
+**T0 — Aquapolis Lugia.** `linkaudit en-ecard2-149 --live --kept` and every
+grade: the FETCHED rows were clean (the gate refused 10 of 132 Raw NM and 10
+of 192 Graded as 30th Celebration; the page's 36 rows carried none). The
+eBay DEEP LINK had no reprint exclusion, so clicking out showed exactly
+those — all 20 refused titles say "30th". `11928c9`: links on a card a
+family reprinted spend `-30th` / `-celebrations -25th -"classic collection"`.
+Cause 1 (a deep link), not the gate. Not asked of Roy which he saw — both
+remaining causes were answered by measurement.
+
+**T1 — completeness.** Found first: `/api/listings` returned 25 rows while
+`count` said 58, and `/api/search` cached its own 25-row copy under the same
+key. Now one `listingsFor`, every row, page 1 of each site then every page
+in the background, `progress` on the response, the page polling.
+- Sites, in order, each verified live both ways with `sitecheck.js`:
+  US+GB+AU+CA (English titles; GB +42%, AU +15%, CA +6% over US; 0 language
+  suspects), then **DE** (after the language gate learned German/French/
+  Italian/Spanish words, the junk/slab/reprint vocabulary was taught on 12
+  cards, checked on 12 held out and 12 fresh through the production gate,
+  and aspect names were localized — the English condition filter was being
+  IGNORED there), **FR**, **IT**, **ES**. Reading DE's live rows found bare
+  "DE" as a German-card marker; ES's found "Olanda", "italianos", "CMG 8".
+- Two structural fixes found live: a translated title's refusal was
+  removing English copies (8/8 wrong; now only US/GB/AU/CA refusals cross
+  sites), and IT's "+26%" was attribution (total rows 2,942 -> 2,938) —
+  the earlier site's copy now wins the row.
+- Before -> after, US 3-page cap (25 shown) -> every site, every page:
+  base1-4 Raw NM 25 shown (64 counted) -> 844 rows (478 NM-labelled; ES
+  adds all conditions, grouped on the page); ecard2-149 25/58 -> 83;
+  sm9-33 25/159 -> 328; sv10-1 25/165 -> 1,206; sv03.5-199 25/149 -> 371;
+  sv03.5-199 PSA 10 25/66 -> 94. Every view complete.
+- **Calls per view**: 8 minimum with eight sites (page 1 each), mean 7.6 over
+  192 uncached production views today (mostly before IT/ES), max 32 on
+  sv10-1 Raw NM (1,206 rows). ~550-650 uncached views/day fit in 5,000;
+  cache hits cost 0. eBay's own 10,000-result ceiling was never reached.
+  Views ending incomplete: 0 for eBay; 12 JA views for Yahoo's 403 (as
+  always); 34 were my local server (no keys) — it shares `listing_views`.
+- A higher eBay tier: worth applying for if views exceed ~500/day; the
+  Browse getItems (bulk) API stays refused ("1100: Access denied").
+- Not built: eBay's structured Language/Sprache aspect as a refusal source
+  ("Nachtara Vmax … Drachenwandel Umbreon Vmax" names the card in German AND
+  English — words cannot settle it; one extra call per site could).
+
+**T3 — editions.** A dimension beside printing, on gradeprice's ten sets
+only. One reader (`cardmatch.editionClaim`, five languages; old reader
+missed 1,090 of 5,000). Gate refuses only a STATED other edition. 1st
+Edition rows kept out of every headline: exactly the 10 cards whose
+headline was one changed. Verified in a browser: Lugia 1st Edition
+$1,299.96 vs base; Base Set 3 editions; Expedition printings only; sv10
+none. Found: TCGdex's WOTC keys are `1st-edition-holofoil` /
+`unlimited-holofoil` and BASE_PRINTINGS took the 1st Edition one — fixed;
+the harvest running now loaded the old order, and its rows are classified
+by `source_meta.printing`. **Not fixed**: `tcgplayer_market` flips between
+editions on 27 of 924 edition-set cards (Lugia 164.80-1,299.96).
+
+**T2 — not run.** `tcgdexharvest.js en` (started 05:41 by someone else) was
+at 11,500 / 23,752 at the end of this session; `manifest en` waits for it,
+then `manifest ja`. Nothing here needs to change before they run.
+
 ## 2026-09-30 — pushed; JA both-source check; eBay marketplaces measured; readers aligned
 
 **T0.** 6 commits pushed; `/app` byte-identical to local (359,993 bytes,

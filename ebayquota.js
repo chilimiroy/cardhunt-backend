@@ -345,6 +345,11 @@ async function status(db) {
     percentUsed: c.percentUsed, countedBy: c.source,
     resetsInMinutes: c.resetsInMin, resetsAt: c.resetsAt, reserve: RESERVE,
     hour: c.hour, tooling: c.tooling, byOrigin: c.byOrigin,
+    // Calls made before origins were counted (2026-09-30), or recorded by a
+    // path that lost its tag: shown as such, never folded into "user".
+    unattributed: c.byOrigin
+      ? Math.max(0, (c.used || 0) - c.byOrigin.user - c.byOrigin.background - c.byOrigin.tooling)
+      : null,
     level, visible: level !== 'quiet',
     limitHit: c.limitHit || null, liftsAt: c.liftsAt || null,
     liftsInMinutes: c.liftsInMin || null,

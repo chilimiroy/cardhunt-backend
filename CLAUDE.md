@@ -54,7 +54,7 @@ has drifted apart eventually, and each drift is a lesson below.
 | `yuyutei.js` | Japanese shop prices and listings from yuyu-tei.jp |
 | `fx.js` | currency conversion, with the rate recorded not buried |
 | `ebaycall.js` | the ONLY way this codebase talks to eBay |
-| `ebayquota.js` | stay inside eBay's limits, by their count not ours |
+| `ebayquota.js` | stay inside eBay's limits, by their count not ours — daily, **hourly (600)**, and a **tooling allowance (300)**, counted per origin |
 | `sourceprobe.js` | does this source answer RENDER, or only a home IP? |
 | `digital.js` | is this set digital-only (Pokémon TCG Pocket)? — by SERIES, hidden at every read |
 | `certcheck.js` | what cert number did the seller enter on this eBay slab, and what photos did they post? — on demand, ONE shared getItem per listing (Verify + Photos), 15 min; PSA answer permanent (PSA half NOT built) |
@@ -657,8 +657,8 @@ node cardmatch2.test.js      # 29
 node cardmatch3.test.js      # 44   NOT_A_SINGLE_CARD word boundaries, both directions
 node cardparse.test.js       # 156  free text -> card identity (191 with --db:
                              #      reachable-by-name cases + SQL/JS fold agree)
-node ebaycall.test.js        # 86   every guard tripped; two lanes, five slots, 4s foreground cap
-node ebayquota.test.js       # 25   the quota gate
+node ebaycall.test.js        # 103  every guard tripped; two lanes, five slots, 4s foreground cap; hourly + tooling through fetchEbay
+node ebayquota.test.js       # 69   the quota gate; hourly ceiling and tooling allowance TRIPPED; what the app shows
 node ebaytoken.test.js       # 49   which failure is reported, not merely that one was
 node estimator.test.js       # 31   the one estimator
 node gradeprice.test.js      # 27
@@ -667,7 +667,7 @@ node listingparse.test.js    # 26
 node matchparity.test.js     # 102  /api/listings and /api/search cannot disagree
 node outlier.test.js         # 12   the price test, on the real Giratina #186 spread
 node outlierwire.test.js     # 33   ...and that it is actually REACHED: both payloads
-node printinggate.test.js    # 116   reprint/language/year, BOTH marketplaces
+node printinggate.test.js    # 116   reprint/language/year, BOTH marketplaces (CRLF-tolerant)
 node reprint.test.js         # 126  reprints by SET ID, both directions, real titles
 node printrun.test.js        # 39   1st Edition / Shadowless / Unlimited, only where they existed
 node selector.test.js        # 531  every grader, every published grade, through the real gate
@@ -695,6 +695,7 @@ node gateaudit.test.js       # 62   T9: every path reaches the gates it needs, a
 node variants.test.js        # 81   T10: printings from the REAL TCGdex shape; the gate; every reader; the page; Typical follows the printing (--db: +6)
 node pricesource.test.js     # 49   T1/T4: set-checked TCGplayer match; shared products refused; Yahoo mirrors kept out of the base
 node eusites.test.js         # 80   T1: eBay DE/FR/IT/ES titles — reprints, junk, slabs, conditions; both directions, real titles
+node quotaui.test.js         # 24   T3: a quota refusal reaches the panel in words; indicator wiring (23 fail on the old page)
 node edition.test.js         # 69   T3: 1st Edition/Shadowless/Unlimited — reader, gate, query, headline rule, page (--db: +2)
 ```
 
@@ -1201,6 +1202,49 @@ The pieces that are not obvious:
 **`DAILY_LIMIT = 5000` is still an assumption.** `node ebayratecheck.js` (or
 `/api/ebay/quota?probe=1`) asks eBay for the real figure. If it differs, every
 threshold is calibrated to the wrong number.
+
+## The guard worked and nobody saw it (2026-09-30, TASK T1-T3)
+The daily 5,000 went in twelve hours: the every-marketplace design spent
+**723 and 713 calls in two consecutive hours** on card views, probes ~950
+more. Warn at 70%, soft stop at 92%, the reserve — every guard held, and
+every one spoke only to a server log. Roy saw an empty panel reading "No
+listing matched this exact card", which was false: eBay was never asked.
+Three protections, all in `ebayquota.js` + `ebaycall.js`:
+
+- **Hourly ceiling `HOURLY_LIMIT = 600`**, UTC clock hours, EVERY origin (a
+  runaway looks like a user). Heaviest post-fix browsing hour measured at 195
+  (`listing_views`), so ~3x headroom; both runaway hours would have tripped.
+  Table `ebay_quota_hour`.
+- **Origins: user / background / tooling**, counted per origin in
+  `ebay_quota` (`user_calls` …) and the hour table. **Tooling has its own
+  `TOOLING_DAILY = 300`** inside the daily limit; past it a tool is refused
+  (`limitHit: 'tooling'`) and never borrows from the user budget. Tooling also
+  yields at the soft stop. Origin comes from the REQUEST (`ebaycall.withOrigin`,
+  server.js middleware): `/api/ebay/*`, `/ebay/status`, `/api/scraper/test`,
+  `/api/health/full`, and anything sending `X-CardHunt-Origin: tooling`
+  (sitecheck, linkaudit, setaudit, searchaudit, gradeprices — the spending
+  ones STOP on refusal). Only `tooling` can be claimed; it only narrows. A
+  `background: true` call inside a user request stays background.
+  **A new tool that drives /api/listings must send the header.**
+- **The number is on the page**: bottom-right indicator from
+  `/api/ebay/quota` (`level` quiet/notice/warn/stopped — visible from 50% of
+  the day or the hour), click for the breakdown, and the listings panel says
+  "eBay listings are paused … return at HH:MM" instead of an empty list.
+  Calls made before origins existed show as `unattributed`, never as user.
+  A quota refusal is no longer cached (`TRANSIENT`): the hour lifts sooner.
+
+Every refusal carries `limitHit` ('daily' | 'hourly' | 'tooling' |
+'soft-stop') and `liftsAt`. Tripped in `ebayquota.test.js` and through the
+real `fetchEbay` in `ebaycall.test.js`; watched failing under mutation.
+Found on the way: `ebayprobe.js` exchanged its token with a raw `fetch` —
+uncounted, outside every guard. Now through `ebaycall`.
+
+**Still open:** 393 of today's 4,900 were TOKEN exchanges (8%) — far more
+than one per two-hour token life. Suspect concurrent requests each
+exchanging while no token is cached (no single-flight in
+`getEbayTokenDetailed`). Measure `token_calls` by origin tomorrow first.
+
+**The cost of a change is calls per card view — state it before shipping.**
 
 ## eBay DOES state raw condition — in a field we never read (2026-09-27)
 The 2026-09-22 conclusion below ("binary, filter from titles") was right

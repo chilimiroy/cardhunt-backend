@@ -1,5 +1,42 @@
 # CardHunt — Progress Log
 
+## 2026-09-30 (night) — three protections so the quota cannot be spent unnoticed
+
+State at the start: 4,900 of 5,000 used (4,507 searches + **393 token
+exchanges**), user requests refused at the reserve until 00:00 UTC.
+`listing_views` by hour: the runaway hours were 723 and 713 calls; the
+heaviest hour after the on-demand fix, 195.
+
+**T1 — hourly ceiling** (`eaf6cea`). `HOURLY_LIMIT = 600` per UTC clock
+hour, every origin, table `ebay_quota_hour`. Refusal: `limitHit: 'hourly'`,
+"Lifts in N min", `liftsAt`. Tripped in ebayquota.test (10 assertions fail
+with the check removed) and through the real fetchEbay.
+
+**T2 — tooling allowance** (`eaf6cea`, wiring `45045d8`). Every call is
+user/background/tooling; per-origin columns on `ebay_quota`. Tooling capped
+at 300/day and refused past it (4 fail with the check removed); a user call
+at the same moment goes through. Four concurrent tooling calls at 299: one
+sent. Request-scoped origin in server.js: `/api/ebay/*` and
+`X-CardHunt-Origin: tooling`. sitecheck/linkaudit/gradeprices send it and
+stop on refusal; ebayprobe's raw-fetch token exchange now goes through
+ebaycall. Verified on a local server against the real DB: /api/listings
+answered `status quota, limitHit daily, liftsAt 2026-10-01T00:00Z,
+retryable`; the probe route and the header both logged `[tooling]`.
+
+**T3 — on the page** (`1de91ba`). Indicator bottom right, hidden under 50%,
+visible from 50%, amber from 70%, red when stopped; click for today / hour /
+app / background / tooling / before-tracking. Card panel: "eBay listings
+are paused. Today's eBay allowance is used up. eBay listings return at 03:00
+(in 7h 25m)" instead of "No listing matched". Browser-verified against the
+real DB (stopped) and with injected 49/52/74% states. quotaui.test.js 24
+(23 fail against the previous page).
+
+Also: printinggate.test read CRLF server.js wrongly on this checkout
+(`6b5e224`), 116/116 now.
+
+**Not deployed** — commits are local until pushed. **Open:** 393 token
+exchanges in one day; suspected concurrent exchanges with no single-flight.
+
 ## 2026-09-30 (evening) — the queue, on demand, editions re-harvested
 
 **T1 — the queue** (`ea31877`). Live cause: 75,038ms queued, `calls: 0`,

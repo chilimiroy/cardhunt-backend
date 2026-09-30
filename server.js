@@ -1912,6 +1912,9 @@ const EBAY_OFFSET_CEILING = 10000;
 // (marketprobe, 10 cards): GB +51%, AU +19%, CA +7% — English-titled sites,
 // no vocabulary work needed. `country` is whose buyer the site's shipping
 // quote is for; `currency` goes through fx.js (pinned for all four).
+// `originalTitles: false` marks a site whose titles may be eBay's machine
+// translation of another site's listing: its refusals are not sticky across
+// sites (see mergeEbaySite for the measurement).
 const EBAY_SITES = [
   { id: 'EBAY_US', country: 'US', currency: 'USD' },
   { id: 'EBAY_GB', country: 'GB', currency: 'GBP' },
@@ -1921,16 +1924,16 @@ const EBAY_SITES = [
   // other languages and the junk/slab/reprint vocabulary was tested on three
   // sets of real DE titles (eusites.test.js); aspect names are DE's own
   // (cardmatch.EBAY_SITE_ASPECTS) — an English one is ignored there.
-  { id: 'EBAY_DE', country: 'DE', currency: 'EUR' },
+  { id: 'EBAY_DE', country: 'DE', currency: 'EUR', originalTitles: false },
   // FR: French sellers mark French cards "FR" / "VF" (cardmatch LANG_CASE_TOKENS);
   // ~40% of what FR adds for an English card is the French card, refused.
-  { id: 'EBAY_FR', country: 'FR', currency: 'EUR' },
+  { id: 'EBAY_FR', country: 'FR', currency: 'EUR', originalTitles: false },
   // IT: eBay MACHINE-TRANSLATES US titles here ("Portachiavi", "30°
   // Celebrazione", "Hecho por Ventilador" on ES). Vocabulary taught and
   // tested on three sets of real IT titles (eusites.test.js); a refusal on
   // any site stays a refusal everywhere (mergeEbaySite), so a translation
   // cannot overturn the English title's verdict.
-  { id: 'EBAY_IT', country: 'IT', currency: 'EUR' }
+  { id: 'EBAY_IT', country: 'IT', currency: 'EUR', originalTitles: false }
 ];
 // Not searched yet, each with the reason — reported on every response so a
 // short list is never mistaken for every marketplace having been asked.
@@ -2346,9 +2349,18 @@ function mergeEbaySite(st, mp, r) {
   s.exhausted = !!p.exhausted;
   if (p.atEbayCeiling) s.atEbayCeiling = true;
   if (p.pageError) { s.incompleteReason = p.pageError; s.nextOffset = null; }
-  // A refusal anywhere is a refusal everywhere, including of a row an
-  // earlier page kept on another site.
+  // A refusal on an ENGLISH-titled site (US/GB/AU/CA — the seller's own
+  // words) is a refusal everywhere, including of a row an earlier page kept
+  // on another site: a translated copy of that title cannot overturn it.
+  // A refusal on a TRANSLATED site is not, measured (T1, marketprobe
+  // crossRefused, 10 cards): of 8 items IT/ES/DE refused that an English
+  // site kept, all 8 refusals were the translation's fault — eBay turned
+  // "ENG" into "ESP", "WALL ART" into "ARTE DE PARED", "Metal Foil" into
+  // "lámina de metal", "Ethan's Pinsir" into "Pinsir di Ethan". Such a
+  // refusal drops that site's own copy only.
+  const titlesAreOriginal = ebaySite(mp).originalTitles !== false;
   for (const id of (r.refusedIds || [])) {
+    if (!titlesAreOriginal) continue;
     st.refused.add(id);
     const i = st.listings.findIndex(l => l.itemId === id);
     if (i >= 0) { st.listings.splice(i, 1); s.overturned++; }

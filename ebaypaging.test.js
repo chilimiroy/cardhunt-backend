@@ -267,6 +267,20 @@ async function fullView(b) {
     ok(v.final.kept === 9, `9 kept (got ${v.final.kept})`);
   }
   {
+    // ...but a refusal read from a TRANSLATED title is not sticky. Measured:
+    // eBay ES turned "ENG" into "ESP" and IT "Ethan's Pinsir" into "Pinsir di
+    // Ethan" — 8 of 8 such refusals were the translation's fault. IT refuses
+    // item 3 on its translated title; the US copy stays. IT's own item 20,
+    // which only IT has, is refused — its own copy, its own verdict.
+    const badIt = i => `Pokemon Carta Charizard 4/102 Set Base Holo ESP #${i}`;
+    const b = build(0, { sites: { EBAY_US: { total: 10 },
+      EBAY_IT: { total: 21, currency: 'EUR', titleFor: i => (i === 3 || i === 20) ? badIt(i) : title(i) } } });
+    const v = await fullView(b);
+    ok(v.final.listings.some(l => l.itemId === 'v1|3'), 'a translated site\'s refusal does not remove the English copy');
+    ok(!v.final.listings.some(l => l.itemId === 'v1|20'), 'and its own copy of an item only it has is still refused');
+    ok(v.final.kept === 20, `20 kept: 10 from US, 10 more from IT (got ${v.final.kept})`);
+  }
+  {
     // The quota's soft stop on page 3: the site says it is incomplete and why.
     const b = build(0, { sites: { EBAY_US: { total: 1000, blockAt: 3 } } });
     const v = await fullView(b);

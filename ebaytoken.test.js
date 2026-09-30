@@ -66,8 +66,9 @@ const sandboxSrc = [
   extract('ebayCreds', 'function'),
   extract('ebayConfigured', 'function'),
   'let ebayToken = null, ebayTokenExp = 0, ebayTokenCredKey = "";',
+  'let ebayTokenInflight = null;',
   extract('getEbayTokenDetailed'),
-  'return { getEbayTokenDetailed, ebayConfigured, reset: () => { ebayToken = null; ebayTokenExp = 0; ebayTokenCredKey = ""; } };'
+  'return { getEbayTokenDetailed, ebayConfigured, reset: () => { ebayToken = null; ebayTokenExp = 0; ebayTokenCredKey = ""; ebayTokenInflight = null; } };'
 ].join('\n');
 
 // getEbayTokenDetailed now routes the exchange through ebaycall so token
@@ -91,17 +92,18 @@ function fakeDb() {
   }};
 }
 
-function freshModule(fetchImpl) {
+function freshModule(fetchImpl, dbOverride) {
   realEbayCall.resetBreaker();
   realEbayCall._resetPacing();
   const ebayShim = {
     fetchEbay: (db, opts) => realEbayCall.fetchEbay(db, { ...opts, fetchImpl }),
-    ebayEnabled: realEbayCall.ebayEnabled
+    ebayEnabled: realEbayCall.ebayEnabled,
+    originFor: realEbayCall.originFor
   };
   // eslint-disable-next-line no-new-func
   return new Function('fetch', 'Buffer', 'process', 'ebay', 'db', 'quota',
     `${sandboxSrc}`)(
-    fetchImpl, Buffer, { env: process.env }, ebayShim, fakeDb(), realQuota);
+    fetchImpl, Buffer, { env: process.env }, ebayShim, dbOverride || fakeDb(), realQuota);
 }
 
 const okResponse = (body, status = 200) => ({
@@ -294,6 +296,65 @@ ok(src.includes('readyMeans'),
   '/ebay/status distinguishes "variables set" from "eBay accepted them"');
 ok(src.includes("req.query.probe === '1'"),
   '/ebay/status can actually probe the exchange');
+
+// ══════════════════════════════════════════════════════════════
+console.log('\n  ONE EXCHANGE IN FLIGHT, SHARED (2026-10-01)\n');
+// ══════════════════════════════════════════════════════════════
+// The race only opens at a realistic latency — at 5ms it made 1 exchange,
+// at 600ms 5 — so every case here gives the exchange 300ms.
+const slowToken = (counter, body, status) => async (url) => {
+  if (/oauth2\/token/.test(url)) { counter.n++; await new Promise(r => setTimeout(r, 300)); }
+  return okResponse(body || { access_token: 'T-shared', expires_in: 7200 }, status || 200);
+};
+await withEnv('id', 'secret', async () => {
+  const c = { n: 0 };
+  const m = freshModule(slowToken(c));
+  const rs = await Promise.all(Array.from({ length: 8 }, () => m.getEbayTokenDetailed({})));
+  eq(c.n, 1, 'eight concurrent cold callers (a cold Search-all) — ONE exchange');
+  ok(rs.every(r => r.token === 'T-shared'), 'all eight get the token');
+  eq(rs.filter(r => r.shared).length, 7, 'seven of them say they shared it');
+  const again = await m.getEbayTokenDetailed({});
+  ok(again.cached && c.n === 1, 'afterwards it is cached — no ninth exchange');
+});
+await withEnv('id', 'secret', async () => {
+  const c = { n: 0 };
+  const m = freshModule(slowToken(c, { error: 'invalid_client', error_description: 'client authentication failed' }, 401));
+  const rs = await Promise.all([1, 2, 3].map(() => m.getEbayTokenDetailed({})));
+  eq(c.n, 1, "eBay's refusal is shared too — three callers, one exchange");
+  ok(rs.every(r => /invalid_client/.test(r.error || '')), '  and every caller gets eBay\'s own reason');
+  await m.getEbayTokenDetailed({});
+  eq(c.n, 2, 'a failure is not cached — the next caller tries again');
+});
+await withEnv('id', 'secret', async () => {
+  // Tooling allowance spent. A tool starts the exchange and is refused; a
+  // user waiting on it must NOT inherit "tooling allowance spent".
+  const spent = { query: async (sql) => {
+    if (/CREATE TABLE|ALTER TABLE/i.test(sql)) return { rows: [] };
+    if (/INSERT INTO ebay_quota_hour/i.test(sql) && /RETURNING/i.test(sql)) return { rows: [{ calls: 0 }] };
+    if (/INSERT INTO ebay_quota\b/i.test(sql) && /RETURNING/i.test(sql))
+      return { rows: [Object.assign({}, QUOTA_ROW, { calls_made: 500, tooling_calls: realQuota.TOOLING_DAILY })] };
+    return { rows: [] };
+  }};
+  const c = { n: 0 };
+  const m = freshModule(slowToken(c), spent);
+  const [tool, user] = await Promise.all([
+    m.getEbayTokenDetailed({ origin: 'tooling' }),
+    new Promise(r => setTimeout(r, 20)).then(() => m.getEbayTokenDetailed({ origin: 'user' }))
+  ]);
+  ok(tool.blocked === 'quota' && tool.limitHit === 'tooling', 'the tool is refused on its own allowance');
+  ok(user.token === 'T-shared', 'the user waiting on it gets a token of its own', JSON.stringify(user).slice(0, 120));
+  eq(c.n, 1, '  one real exchange — the tool\'s was refused before it was sent');
+});
+await withEnv('id', 'secret', async () => {
+  const c = { n: 0 };
+  const m = freshModule(slowToken(c));
+  const r = await Promise.all([m.getEbayTokenDetailed({}), m.getEbayTokenDetailed({})]);
+  ok(r[0].token && r[1].token, 'the in-flight slot is released — nothing left pending');
+  m.reset();
+  await m.getEbayTokenDetailed({});
+  eq(c.n, 2, '  and a later cold start exchanges afresh');
+});
+ok(/ebayTokenInflight/.test(extract('getEbayTokenDetailed')), 'the shipped function uses the in-flight slot');
 
 // ══════════════════════════════════════════════════════════════
 console.log('');

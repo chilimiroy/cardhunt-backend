@@ -971,6 +971,8 @@ function ebayConfigured() {
 }
 
 let ebayToken = null, ebayTokenExp = 0, ebayTokenCredKey = '';
+// The exchange in flight, if any: { credKey, origin, promise } (getEbayTokenDetailed).
+let ebayTokenInflight = null;
 
 /**
  * Acquire an eBay OAuth token, SAYING WHY when it cannot.
@@ -1002,6 +1004,33 @@ async function getEbayTokenDetailed(opts) {
     return { token: ebayToken, cached: true };
   }
 
+  // ── One exchange in flight, shared (2026-10-01) ──
+  // Every caller that found no cached token used to exchange its own: 393
+  // of 4,900 calls on 2026-09-30 were token exchanges. Measured under
+  // costmeter.js at a realistic 600ms exchange: 5 concurrent cold opens made
+  // 5 exchanges, and a cold "Search 7 more marketplaces" made 8 on top of its
+  // 8 searches (at a 5ms stub the race never opened — 1). Render sleeps when
+  // idle, so every wake starts cold. Now the first caller exchanges and the
+  // rest await its answer.
+  //
+  // The exchange is gated and counted under the INITIATOR's origin. A guard
+  // refusal is an answer about that origin only — a tooling allowance spent,
+  // background paused at the soft stop — so a waiter of a different origin
+  // does not inherit it: it makes its own attempt, under its own origin.
+  // Every other answer, a token or eBay's own refusal, is shared as is.
+  const origin = ebay.originFor(opts || {});
+  const f = ebayTokenInflight;
+  if (f && f.credKey === credKey) {
+    const r = await f.promise;
+    if (!(r.blocked && f.origin !== origin)) return Object.assign({}, r, { shared: true });
+    return exchange();
+  }
+  const promise = exchange();
+  ebayTokenInflight = { credKey, origin, promise };
+  try { return await promise; }
+  finally { if (ebayTokenInflight && ebayTokenInflight.promise === promise) ebayTokenInflight = null; }
+
+  async function exchange() {
   const auth = Buffer.from(`${id}:${secret}`).toString('base64');
 
   // Through ebaycall like every other eBay request, so the token exchange
@@ -1018,6 +1047,8 @@ async function getEbayTokenDetailed(opts) {
           encodeURIComponent('https://api.ebay.com/oauth/api_scope'),
     kind: 'token',
     background: !!(opts && opts.background),
+    // The origin this exchange is gated and counted under — the initiator's.
+    origin,
     meta: { cardId: 'token-exchange' }
   });
 
@@ -1064,6 +1095,7 @@ async function getEbayTokenDetailed(opts) {
   ebayTokenExp = Date.now() + (ttl - 60) * 1000;
   ebayTokenCredKey = credKey;
   return { token: ebayToken, expiresIn: ttl };
+  }
 }
 
 // Back-compat wrapper for callers that only want the token.

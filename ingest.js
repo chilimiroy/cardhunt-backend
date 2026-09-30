@@ -37,7 +37,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.9.0';   // bump when this file changes
+const VERSION = '5.9.1';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -4168,15 +4168,31 @@ async function buildManifest(lang, arg1, arg2) {
   }
 
   const cutoff = recent ? "AND MAX(set_release) > NOW() - INTERVAL '2 years'" : '';
+  // TCG Pocket is skipped (2026-10-01): digital-only and hidden at every
+  // read the app makes, so correcting its rarity meant TCGdex fetches for
+  // 15 English sets, 2,480 cards held, that nobody is shown. The server's
+  // own predicate (digital.visibleSql — by SERIES, never by id shape), and
+  // the skip is printed, not silent.
+  const hiddenQ = await db.query(`
+    SELECT COUNT(DISTINCT set_api_id)::int AS sets, COUNT(*)::int AS cards
+    FROM cards
+    WHERE api_card_id LIKE $1 AND ($2::text IS NULL OR set_api_id = $2)
+      AND NOT ${digital.visibleSql()}`, [lang + '-%', onlySet]);
+  const hidden = hiddenQ.rows[0] || { sets: 0, cards: 0 };
   const sets = await db.query(`
     SELECT set_api_id, MAX(set_name) AS set_name, MAX(set_release) AS release,
            COUNT(*)::int AS cards
     FROM cards
     WHERE api_card_id LIKE $1 AND ($2::text IS NULL OR set_api_id = $2)
+      AND ${digital.visibleSql()}
     GROUP BY set_api_id
     HAVING TRUE ${cutoff}
     ORDER BY MAX(set_release) DESC NULLS LAST`, [lang + '-%', onlySet]);
 
+  if (hidden.sets) {
+    console.log(`  Skipping ${hidden.sets} TCG Pocket set${hidden.sets === 1 ? '' : 's'} `
+      + `(${hidden.cards} cards) — digital-only, hidden at every read`);
+  }
   console.log(`  ${sets.rows.length} sets to verify`);
   const totalCards = sets.rows.reduce((a, r) => a + r.cards, 0);
   console.log(`  ${totalCards} cards — roughly ${Math.round(totalCards * 0.35 / 60)} minutes\n`);

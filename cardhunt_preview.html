@@ -4900,7 +4900,7 @@ function setTileHTML(x, opts) {
   } else if (x.lo) {
     // The logo may still 404 even when the API reported one, so the named
     // tile stays as the onerror target. Belt and braces, deliberately.
-    logoHTML = '<img src="' + x.lo + '" alt="" loading="lazy" '
+    logoHTML = '<img data-src="' + x.lo + '" alt="" loading="lazy" '
       + 'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\'">'
       + '<div class="slogtxt" style="display:none">' + liveEsc((x.n || '').substring(0, 34)) + '</div>';
   } else if (x.sampleImage) {
@@ -4915,7 +4915,7 @@ function setTileHTML(x, opts) {
     // be mistaken for branding. If it fails to load, the name tile is
     // still the fallback underneath.
     logoHTML = '<div class="scard">'
-      + '<img src="' + x.sampleImage + '" alt="" loading="lazy" '
+      + '<img data-src="' + x.sampleImage + '" alt="" loading="lazy" '
       + 'onerror="this.parentElement.style.display=\'none\';'
       + 'this.parentElement.nextElementSibling.style.display=\'flex\'">'
       + '<span class="scardn">' + liveEsc((x.n || '').substring(0, 28)) + '</span>'
@@ -5708,6 +5708,39 @@ function cardTile(c, deal) {
     + '</div></div>';
 }
 
+// ── Images: ask for what is on screen, not 1,250px around it (T1) ──
+// Measured 2026-10-01, uncached, one tab: TCGdex's asset host delivers
+// ~1.5-2.5 thumbnails a second however many are asked for — 12 at once
+// finished in 4.7-7.6s, 36 at once in 26.2s (p50 11.9s). pokemontcg.io did
+// 36 in 4.3s. Native loading="lazy" fetches everything within ~1,250px of
+// the viewport: 36 requests on opening sv06, with ~12 tiles visible, all
+// queued behind one another at TCGdex. So grid and set tiles carry
+// data-src, and one observer gives an image its src only when it comes
+// within 200px of the viewport. Any renderer that inserts tiles gets this
+// without a call of its own — the MutationObserver finds them.
+var IMG_IO = ('IntersectionObserver' in window)
+  ? new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var i = e.target; IMG_IO.unobserve(i);
+        if (i.dataset.src) { i.src = i.dataset.src; i.removeAttribute('data-src'); }
+      });
+    }, { rootMargin: '200px 0px' })
+  : null;
+function watchImgs(root) {
+  var list = root.querySelectorAll ? root.querySelectorAll('img[data-src]') : [];
+  if (root.matches && root.matches('img[data-src]')) list = [root].concat([].slice.call(list));
+  [].forEach.call(list, function (i) {
+    if (IMG_IO) IMG_IO.observe(i);
+    else { i.src = i.dataset.src; i.removeAttribute('data-src'); }
+  });
+}
+if ('MutationObserver' in window) {
+  new MutationObserver(function (ms) {
+    ms.forEach(function (m) { [].forEach.call(m.addedNodes, function (n) { if (n.nodeType === 1) watchImgs(n); }); });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+}
+
 function imgOrSk(c) {
   var imgSrc = c.images && (c.images.small || c.images.large) ? (c.images.small || c.images.large) : '';
   // Artwork borrowed from the English release — same illustration, English text
@@ -5716,7 +5749,7 @@ function imgOrSk(c) {
       + 'background:rgba(0,0,0,.55);color:#fff;padding:1px 4px;border-radius:3px" '
       + 'title="Artwork from the English release">EN art</span>' : '';
   if (imgSrc) {
-    return '<img src="' + imgSrc + '" '
+    return '<img data-src="' + imgSrc + '" '
       + 'alt="' + (c.name||'').replace(/"/g,'') + '" '
       + 'loading="lazy" '
       + 'style="height:144px;width:auto;max-width:100%;object-fit:contain;border-radius:5px;'
@@ -6116,6 +6149,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20260930-45045d8-dirty-quota &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261001-477505a-dirty-imgload &middot; click to hide</div>
 </body>
 </html>

@@ -2431,8 +2431,7 @@ const UNAVAILABLE = {
 // them or not, holding the single-lane queue long enough that a user sat
 // 75s behind it and got nothing. Now opening a card is eBay US page 1, one
 // call; every other site and every deeper page is fetched because someone
-// asked (or because US found almost nothing — AUTO_EXPAND_BELOW), and the
-// response says what was NOT fetched.
+// asked, and the response says what was NOT fetched.
 // ══════════════════════════════════════════════════════════════
 function newEbayState() {
   return { seen: new Set(), refused: new Set(), listings: [], dropped: [], sites: {},
@@ -3034,17 +3033,13 @@ function viewStateSet(k, v) {
 // One expansion per view at a time: a double click must not spend twice.
 const viewExpanding = new Map();
 
-// US page 1 returning fewer than this many kept listings expands to every
-// site in the same request (T2): the card where US alone is not enough is
-// exactly the one where the other seven sites pay for themselves.
-// Measured 2026-09-30 on 20 random priced English cards (Raw, 5 per price
-// tier), US page 1 alone then all 8 sites: US 0-4 kept -> 5 cards, the other
-// sites added 0,0,+2,+3,+13 (ex15-95: nothing in the US, 13 in AU); US 5-9 ->
-// 2 cards, +1 and +12. At <10, 7 of 20 opens expand: ~3.5 calls per open,
-// over T2's 1-3. At <5, 5 of 20: ~2.75, and it still catches the card US
-// shows nothing for. A random sample over-weights obscure cards, so real
-// browsing should cost less. Re-measure from /api/listings-log byAction.
-const AUTO_EXPAND_BELOW = 5;
+// There is NO automatic expansion (removed 2026-10-01). US page 1 under 5
+// kept used to search all eight sites in the same request — 8 calls on the
+// thin cards, ~2.75 per open on a random sample. Opening a card is one
+// call; the other sites are a button the user presses. Deleted rather than
+// set to zero: a dormant branch is how renderRealListings kept a path to a
+// gated element with no callers. When US finds nothing, the page says that
+// only US was asked and offers the button — it never says "no listing".
 
 // A failure worth retrying in a minute is not cached for fifteen. A quota
 // refusal is one (T1): the hourly ceiling lifts on the hour, and a view cached
@@ -3098,8 +3093,7 @@ function viewRecord(key, grade, printing, st, payload, t0, calls, action) {
 // T2 (2026-09-30): fetch on demand. Opening a card is eBay US page 1 —
 // one call. opts.sites === 'all' adds every other site (one call each),
 // opts.more one more page of each site searched. Nothing runs by itself
-// afterwards; the one automatic case is a US answer under
-// AUTO_EXPAND_BELOW, which asks the other sites in the same request.
+// afterwards, and nothing expands by itself — not even when US finds none.
 async function listingsFor(card, requestedId, grade, printing, opts) {
   opts = opts || {};
   const key = card.api_card_id;
@@ -3152,16 +3146,7 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   }
   const ts = Date.now();
   const vs = { gathered, ts, t0 };
-  let action = wantSites ? 'all-sites' : 'open';
-  const us = st && st.sites.EBAY_US;
-  if (!wantSites && opts.auto !== false && us && us.status === 'ok' && us.kept < AUTO_EXPAND_BELOW) {
-    const callsBefore = st.calls;
-    await sourceEbayAll(card, grade, opts.limit || 25, { background: false, printing, edition, sites: 'all', state: st });
-    payload = await rebuildView(card, requestedId, grade, printing, edition, vs);
-    payload.autoExpanded = { reason: `eBay US returned ${us.kept} listing${us.kept === 1 ? '' : 's'} `
-      + `(under ${AUTO_EXPAND_BELOW}), so every marketplace was searched`, calls: st.calls - callsBefore };
-    action = 'open+auto';
-  }
+  const action = wantSites ? 'all-sites' : 'open';
   if (st) viewStateSet(vkey, vs);
   if (transientFailure(payload.sources)) payload.retryable = true;
   else listingCacheSet(key, cacheGrade, payload, ts);
@@ -3307,10 +3292,8 @@ app.get('/api/listings/:cardId', async (req, res, next) => {
       dryRun, refresh: !!req.query.refresh, limit, edition,
       // T2: ?sites=all searches every eBay site, ?more=1 one more page of
       // each site searched — both extend the cached view, on request only.
-      // ?auto=0 turns off the few-results expansion (measurement only).
       sites: req.query.sites === 'all' ? 'all' : null,
       more: req.query.more === '1',
-      auto: req.query.auto !== '0',
       cachedOnly: req.query.cachedOnly === '1',
       poll: req.query.poll === '1' });
     res.json(payload);

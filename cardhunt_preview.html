@@ -3867,7 +3867,9 @@ function liveExpand(kind){
       if (btn) { btn.disabled = false; btn.textContent = 'Failed (' + e.message + ') \u2014 try again'; }
     });
 }
-function liveProgressLine(d){
+// sitesInBody: the empty panel carries the Search button in its own message
+// (see onlyUsNote), so the header must not draw a second one.
+function liveProgressLine(d, sitesInBody){
   var pg = d && d.progress;
   if (!pg) return '';
   var inc = pg.incomplete && pg.incomplete.length;
@@ -3876,7 +3878,7 @@ function liveProgressLine(d){
   var btnCss = 'font-size:11px;padding:5px 10px;margin:6px 6px 0 0;border:1px solid var(--bd);border-radius:6px;'
     + 'background:var(--surface);color:var(--tx);cursor:pointer';
   var btns = '';
-  if (a.searchAllSites) btns += '<button id="cd-sites-btn" type="button" style="' + btnCss + '" onclick="liveExpand(\'sites\')" '
+  if (a.searchAllSites && !sitesInBody) btns += '<button id="cd-sites-btn" type="button" style="' + btnCss + '" onclick="liveExpand(\'sites\')" '
     + 'title="eBay ' + liveEsc((a.searchAllSites.sites || []).join(', ')) + ' \u2014 one search each">'
     + liveEsc(a.searchAllSites.label) + '</button>';
   if (a.loadMore) btns += '<button id="cd-more-btn" type="button" style="' + btnCss + '" onclick="liveExpand(\'more\')">'
@@ -3885,9 +3887,30 @@ function liveProgressLine(d){
     + '</button>';
   return '<div id="cd-progress" style="font-size:11px;color:' + color + ';margin-bottom:8px">'
     + liveEsc(pg.note || '')
-    + (d.autoExpanded ? ' &middot; ' + liveEsc(d.autoExpanded.reason) : '')
     + (pg.complete ? ' &middot; every marketplace and page searched' : '')
     + (btns ? '<div>' + btns + '</div>' : '')
+    + '</div>';
+}
+
+// An empty panel when other marketplaces were NOT asked. Nothing searches
+// them by itself any more (2026-10-01), so "No listing matched this exact
+// card" would be a claim about eight marketplaces made after asking one.
+// Say which was asked, which were not, and put the button in the sentence.
+// Null when every site was searched — then "no listing" is the truth.
+function onlyUsNote(d) {
+  var pg = d && d.progress, a = pg && pg.actions && pg.actions.searchAllSites;
+  if (!a) return '';
+  var asked = (pg.searched || []).map(function (s) { return String(s).replace(/^EBAY_/, ''); });
+  return '<div id="cd-only-us" style="font-size:12px;line-height:1.6;padding:10px 12px;margin-top:4px;'
+    + 'border:1px solid var(--bd);border-radius:8px;background:var(--surface)">'
+    + '<strong>No listing of this exact card on eBay ' + liveEsc(asked.join(', ') || 'US') + '.</strong> '
+    + liveEsc(a.calls + ' more marketplace' + (a.calls === 1 ? ' was' : 's were') + ' not searched: '
+      + (a.sites || []).join(', ') + '.')
+    + ' Cards that are scarce in the US are often listed there.'
+    + '<div><button id="cd-sites-btn" type="button" onclick="liveExpand(\'sites\')" '
+    + 'style="font-size:12px;font-weight:700;padding:7px 12px;margin-top:8px;border:1px solid var(--tx);'
+    + 'border-radius:6px;background:var(--surface);color:var(--tx);cursor:pointer">'
+    + liveEsc(a.label) + ' &mdash; one search each</button></div>'
     + '</div>';
 }
 
@@ -4015,7 +4038,7 @@ async function renderLiveListings(card, grade, opts){
     + '<div style="font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.06em;margin-bottom:8px">'
     + 'FOR SALE NOW &mdash; ' + liveEsc(selLabel)
     + ' <span style="color:var(--gr)">&#10003; checked</span></div>'
-    + liveProgressLine(d);
+    + liveProgressLine(d, !rows.length && !!onlyUsNote(d));
   // T3: eBay not asked (quota, busy, …) is said first, in words.
   var pause = quotaPauseHtml(d);
   head += pause;
@@ -4081,13 +4104,13 @@ async function renderLiveListings(card, grade, opts){
     host.innerHTML = head
       // "No listing matched" is FALSE when eBay was never asked — the pause
       // message above has already said what happened.
-      + (pause ? '' : '<div style="font-size:11px;color:var(--mu);line-height:1.6">'
+      + (pause ? '' : (onlyUsNote(d) || ('<div style="font-size:11px;color:var(--mu);line-height:1.6">'
       + (condFilter
           ? ('No listing of this card is marked <strong>' + liveEsc(condFilter) + '</strong> '
              + 'in eBay&rsquo;s Card Condition field right now, and no shop title states it.')
           : ('No listing matched this exact card at this grade. A listing is only shown when its '
              + 'title confirms both the card and the set &mdash; a near miss is worse than nothing.'))
-      + '</div>') + excludedNote() + unstatedBlock() + liveSourceNote(d) + '</div>';
+      + '</div>'))) + excludedNote() + unstatedBlock() + liveSourceNote(d) + '</div>';
     applyMeasuredGrade(d);
     return;
   }
@@ -6149,6 +6172,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261001-477505a-dirty-imgload &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261001-0f9f24a-dirty-noauto &middot; click to hide</div>
 </body>
 </html>

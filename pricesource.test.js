@@ -96,6 +96,20 @@ if (fs.existsSync(__dirname + '/ingest.js')) {
   ok('safePriceFor fallback passes the set id', /tcgPlayerSearch\(card\.name, card\.set_name, card\.number, card\.rarity,\s*\{ setId: card\.set_api_id \}\)/.test(spf));
   const tps = I.slice(I.indexOf('async function tcgPlayerSearch'), I.indexOf('async function tcgPlayerSearch') + 3000);
   ok('tcgPlayerSearch filters hits by set', /opts\.setId && !sameTcgSet\(h\.setName, opts\.setId, setName\)/.test(tps));
+  // 2026-10-02: our set name in the QUERY ranked TCGplayer's own card out of
+  // the results for dpp and basep (88 cards unpriced); a second question in
+  // TCGplayer's name for the set finds it. Only after the first finds nothing.
+  const head = tps.slice(0, tps.indexOf("await hostDelay('tcgplayer'"));
+  ok('asked in our set name FIRST, and returned if it matched', /const first = await tcgPlayerSearch\([^;]*queryAs: setName \|\| ''[^;]*;\s*if \(first\) return first;/.test(head));
+  ok('the second question uses TCGplayer\'s own set name, and only when it differs',
+     /TCG_SET_NAME\[opts\.setId\]/.test(head) && /normTcgSetName\(theirs\) === normTcgSetName\(setName\)\) return null/.test(head));
+  ok('no recursion past one level (queryAs === undefined guard)', /opts\.queryAs === undefined/.test(head));
+  ok('never for a reprint (its set is fixed by REPRINT_OF)', /if \(!opts\.reprint && opts\.setId && opts\.queryAs === undefined\)/.test(head));
+  ok('the query is built from queryAs when given', /opts\.queryAs !== undefined \? opts\.queryAs : \(setName \|\| ''\)/.test(tps));
+  const tsn = require('./tcgsetname');
+  ok('dpp and basep are aliased to TCGplayer\'s names (probed 2026-10-02)',
+     tsn.sameTcgSet('Diamond and Pearl Promos', 'dpp', 'DP Black Star Promos') && tsn.sameTcgSet('WoTC Promo', 'basep', 'Wizards Black Star Promos'));
+  ok('...and the alias does not open "Jumbo Cards" for dpp', !tsn.sameTcgSet('Jumbo Cards', 'dpp', 'DP Black Star Promos'));
   const tpf = I.slice(I.indexOf('async function tcgdexPriceFor'), I.indexOf('async function tcgPlayerSearch'));
   ok('tcgdexPriceFor refuses without a recorded full harvest', /if \(!_tdxConflicts\.ready\)/.test(tpf));
   ok('tcgdexPriceFor refuses a shared product', /_tdxConflicts\.tcgplayer\.has\(String\(b\.productId\)\)/.test(tpf));

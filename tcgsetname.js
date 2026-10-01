@@ -39,8 +39,8 @@ function normTcgSetName(s) {
 // TCGdex prices them by product id.
 //
 // Not probed (no card where both sources agreed, 2026-09-29) and so refused
-// unless the name normalises equal: 2021swsh 2022swsh 2023sv 2024sv basep
-// bw10 bwp dpp ex5.5 fut2020 me01 mee mep mfb miscp sma sve svp swsh12.5gg
+// unless the name normalises equal: 2021swsh 2022swsh 2023sv 2024sv
+// bw10 bwp ex5.5 fut2020 me01 mee mep mfb miscp sma sve svp swsh12.5gg
 // swsh4.5sv tk-dp-l tk-dp-m tk-hs-g tk-sm-l xya xyp and the Trainer
 // Galleries swsh9tg-swsh12.5tg (which DO normalise equal — "SWSH09:
 // Brilliant Stars Trainer Gallery", measured).
@@ -75,6 +75,16 @@ const TCG_SET_NAME = {
   //   mep  #028 Celebratory Fanfare 1.00 (#066 Tyrantrum 0.31 — a stale hold)
   //   sve  #001 Grass Energy 0.86 · mee #001 / #006 0.96 / 1.05
   // NOT dpp: its #DP50 Arceus hit is in "Jumbo Cards" — a different product.
+  // ...superseded 2026-10-02: that was the search's ranking for one query.
+  // Asked "<name> Diamond and Pearl Promos", TCGplayer answers its own
+  // "Diamond and Pearl Promos" set, name and number agreeing:
+  //   dpp    #DP01 Turtwig $31.26 vs $29.43 held (1.06) · #DP50 Arceus 1.36
+  //          · #DP47 Rayquaza C LV.X 1.37 (holds two months old)
+  //   basep  #23 Zapdos $22.02 vs $19.98 (1.10) · #12 Mewtwo "12/53" $150.16
+  // These two sets were 88 of the 224 visible English cards with no headline
+  // price in 7 days (44 each) — the largest cluster of unpriced cards.
+  dpp:      ['Diamond and Pearl Promos'],
+  basep:    ['WoTC Promo'],
   svp:      ['SV: Scarlet & Violet Promo Cards'],
   xyp:      ['XY Promos'],
   bwp:      ['Black and White Promos'],

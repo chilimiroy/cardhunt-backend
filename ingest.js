@@ -637,7 +637,7 @@ const TCG_REPRINT_SET = {
 //
 // A hit now counts only in TCGplayer's own name for our set — see
 // tcgsetname.js, which holds the rule and the measured exceptions.
-const { sameTcgSet } = require('./tcgsetname.js');
+const { sameTcgSet, normTcgSetName, TCG_SET_NAME } = require('./tcgsetname.js');
 
 function reprintPricing(card) {
   const rp = cmatch.reprintOf({ api_card_id: card.api_card_id, number: card.number });
@@ -727,8 +727,25 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
   // A reprint with no known TCGPlayer set is refused rather than guessed.
   if (opts.reprint && !opts.reprint.tcgSet) return null;
 
+  // Asked in OUR set name first, as always. Only if that finds no match,
+  // once more in TCGplayer's OWN name for the set, where tcgsetname.js has
+  // one (2026-10-02): "Turtwig DP Black Star Promos" ranks TCGplayer's
+  // "Diamond and Pearl Promos" Turtwig out of the 48 results, "Turtwig
+  // Diamond and Pearl Promos" finds it first. The second question can only
+  // add a match the first missed — every hit still passes the same set and
+  // number checks below — and costs one request, on a miss only.
+  if (!opts.reprint && opts.setId && opts.queryAs === undefined) {
+    const first = await tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, Object.assign({}, opts, { queryAs: setName || '' }));
+    if (first) return first;
+    const theirs = (TCG_SET_NAME[opts.setId] || [])[0];
+    if (!theirs || normTcgSetName(theirs) === normTcgSetName(setName)) return null;
+    const second = await tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, Object.assign({}, opts, { queryAs: theirs }));
+    if (second) second.queriedAs = theirs;
+    return second;
+  }
+
   await hostDelay('tcgplayer', 1800);
-  const q = `${cardName} ${setName || ''}`.trim();
+  const q = `${cardName} ${opts.queryAs !== undefined ? opts.queryAs : (setName || '')}`.trim();
   const wantNum = normNum(cardNumber);
 
   try {

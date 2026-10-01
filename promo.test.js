@@ -44,7 +44,8 @@ for (const c of [sy, ro, xy, sp, pk]) {
 ok(q(ch) === 'Charizard 4/102 Base pokemon', 'numbered set card query unchanged: ' + q(ch));
 // Non-promo queries identical to HEAD's cardmatch (read from git, not retyped).
 try {
-  const head = require('child_process').execSync('git show HEAD:cardmatch.js', { encoding: 'utf8' });
+  // 2292a9e = the last commit before the promo rule.
+  const head = require('child_process').execSync('git show 2292a9e:cardmatch.js', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
   const m = { exports: {} };
   new Function('module', 'exports', 'window', head)(m, m.exports, undefined);
   if (m.exports.promoOf) console.log('  SKIP HEAD comparison — HEAD already has the promo rule');
@@ -71,6 +72,16 @@ keep(sp, 'Sprigatito 001 SVP Black Star Promo Pokemon');
 keep(sp, 'Pokemon Sprigatito SVP 001 Promo NM');
 keep(sp, 'Sprigatito SVP001 Scarlet Violet');                   // the series code stands for "promo"
 keep(pk, 'Pikachu #1 WOTC Black Star Promo Ivy Pikachu');
+// Real titles kept against SVP 001 on the first live run (2026-10-01):
+for (const t of [
+  'Pokemon Scarlet & Violet Black Star Promo Sprigatito SVP 001',
+  'SPRIGATITO 001 HOLO P SCARLET & VIOLET PROMO POKEMON NEAR MINT SPRIG',
+  'Sprigatito Holofoil [SVP - 001]',
+  'Sprigatito - 001 (001) Holofoil Promo NM SVP SV: Scarlet & Violet Pr',
+  'Sprigatito 001 - Scarlet & Violet Promo Holo Pokemon NM/M',
+  'Sprigatito Holo Black Star Promo - SVP001 - Scarlet & Violet Pokemon',
+  'Pokemon Card Sprigatito Scarlet & Violet Promo 001 Near Mint',
+]) keep(sp, t);
 
 // ── the gate: REFUSES ──
 drop(sy, 'Sylveon V SWSH020 promo', /promo number/);             // another promo
@@ -82,6 +93,10 @@ drop(sp, 'Sprigatito #001 Pokemon card', /does not say promo/);   // any set's #
 drop(sp, 'Sprigatito 001 MEP promo', /MEP promo/);
 drop(sp, 'Sprigatito 0010 promo', /promo number/);
 drop(pk, 'Pikachu 58/102 Base Set', /numbered set card/);
+// Real title, kept against SVP 001 on the first live run (2026-10-01):
+drop(sp, 'POKEMON S&V McDonalds *2023* HOLO 1st PARTNER Gen9 Starter PROMO #001 Sprigatito', /McDonalds/);
+drop(sp, 'Sprigatito 001 Happy Meal promo 2023', /Happy Meal/);
+drop(pk, 'Pikachu Trick or Treat promo 1', /Trick or Treat/);
 drop(pk, 'Pikachu Promo #11 Wizards', /promo number/);
 drop(sy, 'Sylveon V SWSH202 promo lot of 5', /not a single card/); // earlier gates still run
 drop(sy, 'Sylveon V SWSH202 promo', /slab|graded|PSA/i, 'PSA 10');

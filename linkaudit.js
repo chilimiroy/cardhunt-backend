@@ -19,6 +19,7 @@
 //   node linkaudit.js en-sv10-1               one card
 // ══════════════════════════════════════════════════════════════
 
+const cm = require('./cardmatch.js');   // the gate's own readers, for --kept
 const BASE = process.env.CARDHUNT_API || 'https://cardhunt-backend.onrender.com';
 const args = process.argv.slice(2);
 const target = args[0];
@@ -109,7 +110,11 @@ async function auditCard(cardId, cardName, cardNumber) {
       const pair = t.match(/\b([A-Za-z]{0,4}\d{1,4})\s*\/\s*([A-Za-z]{0,4}\d{1,4})\b/);
       const num  = pair ? pair[1].replace(/^0+/, '') : null;
       const want = String(cardNumber).replace(/^0+/, '');
-      const numOk = num ? num === want : null;
+      // A promo prints no total, so "no N/M" is its normal shape — ask the
+      // gate's own promo reader instead (T2), or every genuine promo is "!!".
+      const promo = cm.promoOf({ cardId, number: cardNumber });
+      const numOk = promo ? (pair ? false : (cm.promoNumberIn(t, promo) || null))
+                          : (num ? num === want : null);
       if (num) nums.add(pair[0]);
 
       const flags = [];

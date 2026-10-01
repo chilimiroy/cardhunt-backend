@@ -1031,6 +1031,10 @@ const PROMO_CODE_IN_TITLE = {
   XY: /\bxy[\s-]?\d{1,3}[a-z]?\b/i, SM: /\bsm[\s-]?\d{1,3}\b/i, SWSH: /\bswsh[\s-]?\d{1,3}\b/i,
 };
 const PROMO_WORDS = /\bpromos?\b|\bblack\s*star\b/i;
+// Other giveaway sets sellers ALSO call "promo", plain-numbered like svp:
+// "POKEMON S&V McDonalds *2023* HOLO ... PROMO #001" was kept against SVP
+// 001 Sprigatito on the first live run. Each is its own catalogue set.
+const NOT_BLACK_STAR = /\bmc\s*donald'?s?\b|\bhappy\s*meal\b|\btrick\s*or\s*treat\b/i;
 
 function promoOf(card) {
   if (!card || reprintOf(card)) return null;
@@ -1061,6 +1065,10 @@ function verifyPromoNumber(t, card, grade, p) {
   if (pairs.length) {
     return { ok: false, reason: 'title has ' + pairs.map(x => x.raw).join(', ') +
       ' — a numbered set card, wanted promo ' + p.number };
+  }
+  const other = t.match(NOT_BLACK_STAR);
+  if (other) {
+    return { ok: false, reason: `title names ${other[0]} — another promo set, wanted ${card.setName || p.setId}` };
   }
   if (!promoNumberIn(t, p)) {
     return { ok: false, reason: 'title does not state promo number ' + p.number };

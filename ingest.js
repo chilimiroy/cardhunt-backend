@@ -833,6 +833,8 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
 // old always-keep filter. If `require('./jpfilter')` is missing from this
 // file, the fix is not in place -- run `node ingest.js filtertest` first.
 const srank = require('./sourcerank');
+// A refresh that prices nothing for a whole set says so (TASK T2, 2026-10-02).
+const setyield = require('./setyield');
 const {
   JPY_PER_USD, YAHOO_MAX_SPREAD,
   JP_LOT_WORDS, JP_GRADED_WORDS, JP_CARD_CATEGORY, JP_SEALED_CATEGORIES,
@@ -896,18 +898,19 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
           'Accept-Language': 'ja,en-US;q=0.7,en;q=0.3'
         }
       });
-      if (!r.ok) continue;
+      if (!r.ok) { yahooSaw('HTTP ' + r.status); continue; }
       const html = await r.text();
 
       // Pull the embedded Next.js payload
       const m = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
-      if (!m) continue;
+      if (!m) { yahooSaw('200, no __NEXT_DATA__'); continue; }
 
       let data;
-      try { data = JSON.parse(m[1]); } catch { continue; }
+      try { data = JSON.parse(m[1]); } catch { yahooSaw('200, payload not JSON'); continue; }
 
       const listing = data?.props?.pageProps?.initialState?.search?.items?.listing;
-      if (!listing) continue;
+      if (!listing) { yahooSaw('200, no listing block'); continue; }
+      yahooSaw('200, answered');
 
       // Yahoo hands us aggregate statistics directly
       const stats = listing.metadata?.statistics;
@@ -1025,9 +1028,23 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
           currency: 'JPY->USD'
         };
       }
-    } catch (e) { /* try next url */ }
+    } catch (e) { yahooSaw('threw: ' + String(e && (e.cause && e.cause.code || e.message) || e).slice(0, 40)); }
   }
   return null;
+}
+
+// What Yahoo actually answered this run, by kind (TASK T2, 2026-10-02).
+// Every refusal above is a `continue`, and a card Yahoo refused looked
+// exactly like a card nobody sells: on 1 Oct the ja refresh priced 110 of
+// the first 1,200 cards and then NOTHING for 1,500 in a row, and the log
+// could not say whether Yahoo had stopped answering. Printed at the end
+// of each refresh.
+const YAHOO_SAW = {};
+function yahooSaw(kind) { YAHOO_SAW[kind] = (YAHOO_SAW[kind] || 0) + 1; }
+function yahooSawSummary() {
+  const e = Object.entries(YAHOO_SAW);
+  if (!e.length) return null;
+  return e.sort((a, b) => b[1] - a[1]).map(([k, n]) => `${n} x ${k}`).join(', ');
 }
 
 
@@ -5071,6 +5088,9 @@ async function refreshDue(lang, ...flags) {
 
   let priced = 0, missed = 0, moved = 0, demoted = 0;
   const t0 = Date.now();
+  // Per set: asked / priced / refused / nothing. A guard that over-blocks
+  // fails invisibly; this is what makes a whole silent set visible.
+  const tally = setyield.createTally();
 
   let ranOut = false;
   for (let i = 0; i < batch.length; i++) {
@@ -5094,6 +5114,7 @@ async function refreshDue(lang, ...flags) {
       // sourcerank.js.
       if (!srank.canOverwrite(res.source, card.held_source)) {
         demoted++;
+        tally.add(card, 'kept');
         console.log(`  keep  ${String(card.name).slice(0,22).padEnd(24)}` +
           `$${Number(card.price).toFixed(2)} ${card.held_source}` +
           `  <- refused $${res.price.toFixed(2)} ${res.source}` +
@@ -5107,13 +5128,14 @@ async function refreshDue(lang, ...flags) {
         [card.api_card_id, res.price, res.source, res.marketplace || res.source.split('_')[0],
          res.meta ? JSON.stringify(res.meta) : null]).catch(() => {});
       priced++;
+      tally.add(card, 'priced');
       const delta = card.price ? ((res.price - card.price) / card.price) * 100 : 0;
       if (Math.abs(delta) >= 10) {
         moved++;
         console.log(`  ${delta > 0 ? '+' : ''}${delta.toFixed(0)}%  ${String(card.name).slice(0,24).padEnd(26)}`
           + `$${card.price.toFixed(2)} -> $${res.price.toFixed(2)}   [${card.tier}]`);
       }
-    } else missed++;
+    } else { missed++; tally.add(card, 'missed'); }
 
     if ((i + 1) % 50 === 0) {
       const pct = (((i + 1) / batch.length) * 100).toFixed(1);
@@ -5126,6 +5148,25 @@ async function refreshDue(lang, ...flags) {
   console.log(`  ${demoted} kept — a lower-confidence source was refused` +
     (demoted ? '  (see "keep" lines above)' : ''));
   console.log('');
+
+  // Whole sets that came back with nothing. A regressed set (its cards HAD
+  // prices) exits non-zero, so Task Scheduler's LastTaskResult and
+  // task-watch.log carry it — refresh.log alone is where svp hid for two days.
+  const yieldRep = tally.report();
+  setyield.format(yieldRep, lang).forEach(l => console.log(l));
+  const ySaw = yahooSawSummary();
+  if (ySaw) console.log(`  Yahoo answered (requests, this process): ${ySaw}\n`);
+  const longStreak = yieldRep.streak.length >= setyield.STREAK_MIN;
+  if (yieldRep.regressed.length || longStreak) {
+    process.exitCode = 2;
+    try {
+      require('fs').appendFileSync(require('path').join(__dirname, 'refresh-empty-sets.log'),
+        JSON.stringify({ at: new Date().toISOString(), lang, sets: yieldRep.regressed,
+                         streak: longStreak ? yieldRep.streak : null, yahoo: ySaw }) + '\n');
+    } catch (e) { console.log('  (could not append refresh-empty-sets.log: ' + e.message + ')'); }
+  } else if (yieldRep.judged) {
+    console.log(`  Every set with ${yieldRep.minAsked}+ cards due got at least one answer (${yieldRep.judged} sets judged).`);
+  }
 
   // Prices just moved, so this is the moment alerts become true or false.
   if (!dry) await evaluateAlerts(lang);

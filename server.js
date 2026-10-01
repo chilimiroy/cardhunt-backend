@@ -2893,6 +2893,10 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
     // run. "Not applied: median $0.99 is below $15" is a different fact
     // from "applied, nothing flagged".
     outliers: j.outliers,
+    // Can a row's photo be checked for a reprint's stamp (/api/stamp)? Only
+    // on a card a known reprint copies, and only where a template was built
+    // from that reprint's scan. Zero eBay calls; offered per row, on demand.
+    stampCheck: stampCheckFor(card),
     // What this grade is worth, measured from the listings that passed the
     // gate. Computed, not stored: this is a read endpoint.
     gradePrice: gp.aggregate(listings, { grade }),
@@ -4557,6 +4561,77 @@ app.get('/api/photos/:cardId', async (req, res) => {
       ebay: ebayItemMeta(got.hit, got.calls),
       attribution: 'Photos from the seller’s eBay listing'
     }));
+  } catch (e) { res.status(500).json(Object.assign(base, { error: e.message })); }
+});
+
+// ── Does ONE listing's photo show a reprint's stamp? When a person asks (TASK T1) ──
+//
+//   GET /api/stamp/:cardId?item=v1|167236883977|0
+//
+// ZERO eBay API calls: the photo is the row's own image, already in the
+// listing this server served in the last 15 minutes, fetched from eBay's
+// image CDN (i.ebayimg.com, which is not the API and not the quota) at
+// s-l500. Only on a card a known reprint copies (cardmatch.REPRINT_OF), and
+// only when someone presses the button. stampcheck.js holds the rules.
+//
+// Three answers, deliberately unequal: a stamp FOUND is strong evidence this
+// is the reprint; NOT VISIBLE is weak (cropped, angled, glared, small) and
+// never "verified original"; UNREADABLE is neither. The verdict lives 15
+// minutes in memory, keyed by the eBay item, and nothing is stored.
+// Takes a catalogue card id and an eBay item id — never a URL (SSRF).
+const stampcheck = require('./stampcheck');
+// What the page may offer on this card's rows: null when nothing can be checked.
+function stampCheckFor(card) {
+  const reprints = card ? cm.reprintCardsOf(card) : [];
+  if (!reprints.length) return null;
+  const T = stampcheck.templates().templates || {};
+  const ok = reprints.filter(r => T[r.cardId]);
+  return { available: ok.length > 0, reprints: reprints.map(r => ({ cardId: r.cardId,
+    label: r.family ? r.family.label : r.cardId, template: !!T[r.cardId] })), ebayCalls: 0 };
+}
+function cachedListingRow(cardIds, itemId) {
+  for (const [k, e] of listingCache) {
+    if (!cardIds.some(id => k.startsWith(id + '|'))) continue;
+    if (Date.now() - e.ts > LISTING_TTL) continue;
+    const row = ((e.data && e.data.listings) || []).find(l => l && l.itemId === itemId);
+    if (row) return row;
+  }
+  return null;
+}
+app.get('/api/stamp/:cardId', async (req, res) => {
+  const cardId = req.params.cardId;
+  const itemId = String(req.query.item || '');
+  const base = { cardId, itemId, stored: false, ebayCalls: 0 };
+  if (!certcheck.ITEM_ID.test(itemId)) return res.status(400).json(Object.assign(base, { error: 'item must be an eBay Browse item id, e.g. v1|167236883977|0' }));
+  try {
+    const card = await resolveListingCard(cardId);
+    if (!card) return res.status(404).json(Object.assign(base, { error: 'card not in catalogue' }));
+    const reprints = cm.reprintCardsOf(card);
+    if (!reprints.length) return res.status(400).json(Object.assign(base, { error: 'no known reprint of this card carries a stamp — there is nothing to look for' }));
+    const hit = stampcheck.cacheGet(itemId);
+    if (hit) return res.json(Object.assign(base, hit.verdict, { cached: true, ageSec: Math.round((Date.now() - hit.at) / 1000) }));
+    const row = cachedListingRow([cardId, card.api_card_id].filter(Boolean), itemId);
+    if (!row) return res.status(404).json(Object.assign(base, { error: 'this listing is no longer in the 15-minute view — reopen the card and press again' }));
+    const url = stampcheck.photoUrl(row.imageUrl);
+    const t0 = Date.now();
+    let verdict;
+    if (!url) verdict = { state: 'unreadable', says: 'The listing has no eBay photo to check.', scores: [] };
+    else {
+      let r = null;
+      try { r = await fetch(url, { signal: AbortSignal.timeout(8000) }); } catch (e) { r = null; }
+      const type = r && r.headers.get('content-type') || '';
+      if (!r || !r.ok) {
+        // Not cached: a failed fetch is worth pressing again.
+        return res.json(Object.assign(base, { state: 'unreadable', says: 'eBay\'s image server did not return the photo' + (r ? ' (HTTP ' + r.status + ')' : '') + '. Press again to retry.', retryable: true }));
+      }
+      if (!/jpe?g/i.test(type)) verdict = { state: 'unreadable', says: 'The photo is not a JPEG (' + type.slice(0, 30) + ').', scores: [] };
+      else verdict = await stampcheck.judgeInWorker(Buffer.from(await r.arrayBuffer()), reprints, 20000);
+    }
+    verdict = Object.assign({}, verdict, { photo: url, photoSize: stampcheck.PHOTO_SIZE, threshold: stampcheck.THRESHOLD,
+      tookMs: Date.now() - t0, keptFor: '15 minutes, in memory only',
+      attribution: 'Checked against the seller’s own eBay photo; the photo is not stored' });
+    stampcheck.cacheSet(itemId, verdict);
+    res.json(Object.assign(base, verdict, { cached: false }));
   } catch (e) { res.status(500).json(Object.assign(base, { error: e.message })); }
 });
 

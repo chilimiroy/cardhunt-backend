@@ -135,6 +135,8 @@ async function waitForBoot(server, ms = 20000) {
       // T3 (2026-09-29): tracked, and still never served — a design mockup
       // full of sample prices, and a script that writes prices.
       '/cardhunt-redesign.html', '/tcgdexharvest.js', '/tcgsetname.js',
+      // T1 (2026-10-02): the stamp matcher, its templates and their builder.
+      '/stampcheck.js', '/stamps.json', '/stampbuild.js', '/setyield.js',
       '/server.js.bak-v4.1-20260820',
       // traversal, both spellings a client can send
       '/app/../package.json', '/app%2f..%2fpackage.json',

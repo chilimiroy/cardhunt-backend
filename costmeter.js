@@ -20,6 +20,7 @@
 //   CARDHUNT_API=http://localhost:3001), then read meter.json before/after.
 //
 // $COSTMETER_CTRL names a JSON file read on every eBay request, so the stub
+// ("images": [i.ebayimg.com URLs] gives the stub rows real photos, in turn)
 // can be changed between actions without a restart:
 //   {"default":{"items":60,"total":60}, "EBAY_US":{"items":2,"total":2},
 //    "tokenDelayMs":600, "searchDelayMs":400}
@@ -59,11 +60,14 @@ function stubEbay(url, init) {
     const title = q.replace(/\s-\S+/g, '').replace(/["()]/g, '').replace(/\s+/g, ' ').trim();
     const cur = { EBAY_GB: 'GBP', EBAY_AU: 'AUD', EBAY_CA: 'CAD', EBAY_DE: 'EUR', EBAY_FR: 'EUR', EBAY_IT: 'EUR', EBAY_ES: 'EUR' }[mp] || 'USD';
     body = { total, offset, limit, itemSummaries: Array.from({ length: n }, (_, i) => ({
-      itemId: `v1|${mp}${offset + i}|0`, title,
+      // Numeric, as eBay's are (certcheck.ITEM_ID), and unique per site.
+      itemId: `v1|${100000000000 + ['EBAY_US','EBAY_GB','EBAY_AU','EBAY_CA','EBAY_DE','EBAY_FR','EBAY_IT','EBAY_ES'].indexOf(mp) * 1000000 + offset + i}|0`, title,
       price: { value: String(40 + offset + i), currency: cur },
       condition: /PSA|BGS|CGC/.test(q) ? 'Graded' : 'Ungraded',
       itemWebUrl: 'https://www.ebay.com/itm/' + (offset + i),
-      image: { imageUrl: 'https://i.ebayimg.com/x.jpg' },
+      // ctrl.images: real i.ebayimg.com photo URLs, used in turn (the stamp
+      // check fetches them from eBay's image CDN, which is not the API).
+      image: { imageUrl: (Array.isArray(c.images) && c.images.length) ? c.images[(offset + i) % c.images.length] : 'https://i.ebayimg.com/x.jpg' },
       shippingOptions: [{ shippingCost: { value: '4.00', currency: cur } }],
       buyingOptions: ['FIXED_PRICE'], seller: { username: 's' + i }, itemLocation: { country: 'US' }
     })) };

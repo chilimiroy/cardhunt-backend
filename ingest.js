@@ -487,23 +487,6 @@ async function refreshPrices() {
 
 
 // ══════════════════════════════════════════════════════════════
-// PRICE SCRAPING — real market values from eBay sold comps
-//
-// Scraping every card is impractical: ~250k cards at 3s each is
-// months of running. So we prioritise. Cheap commons get estimates;
-// the cards that actually matter get real sold-comp data.
-//
-//   node ingest.js scrape           all languages, rarity >= Illustration Rare
-//   node ingest.js scrape ja        Japanese only
-//   node ingest.js scrape ja 50     also raise the minimum price floor
-// ══════════════════════════════════════════════════════════════
-
-const SUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-            '(KHTML, like Gecko) Chrome/120.0 Safari/537.36';
-
-// Which rarities are worth a scrape. Everything below this gets an estimate.
-
-// ══════════════════════════════════════════════════════════════
 // DIGITAL-ONLY SETS — no physical market, so no market price
 //
 // Pokemon TCG Pocket (the mobile game, launched Oct 2024) cards exist
@@ -561,205 +544,18 @@ function isDigitalSet(setId) {
   return DIGITAL_SETS.has(setId);
 }
 
+// The rarities safeprices / ytest price by default (the name is historical:
+// it once chose which cards the deleted eBay sold-page scrape visited).
 const SCRAPE_RARITIES = [
   'Hyper Rare','Special Illustration Rare','Illustration Rare',
   'Rare Secret','Rare Rainbow','Rare Ultra','ACE SPEC Rare',
   'Rare Shiny','Amazing Rare','Double Rare'
 ];
 
-const lastHostHit = {};
-async function politeDelay(host, ms) {
-  const wait = Math.max(0, (lastHostHit[host] || 0) + ms - Date.now());
-  if (wait) await sleep(wait);
-  lastHostHit[host] = Date.now();
-}
-
-// Build the best eBay query for a card. Japanese cards sell under both
-// their Japanese name and a romanised one, so we search both.
-function buildQueries(card) {
-  const qs = [];
-  const set = card.set_name || '';
-  const isJP = /[\u3040-\u30ff\u4e00-\u9faf]/.test(card.name);
-
-  if (isJP) {
-    qs.push(`${card.name} ポケモンカード`);                    // native
-    qs.push(`${card.name} ${card.number} pokemon japanese`);   // native + number
-  } else {
-    qs.push(`${card.name} ${set} ${card.number} pokemon`);
-    qs.push(`${card.name} ${card.number} pokemon card`);
-  }
-  return qs;
-}
-
-// eBay sold listings, scraped from the public completed-items page
-async function scrapeEbaySold(query) {
-  await politeDelay('ebay.com', 2500);          // 1 request per 2.5s — well under any limit
-  const url = 'https://www.ebay.com/sch/i.html'
-    + '?_nkw=' + encodeURIComponent(query)
-    + '&_sacat=183454&LH_Complete=1&LH_Sold=1&_sop=13&_ipg=60';
-  try {
-    const r = await fetch(url, {
-      headers: { 'User-Agent': SUA, 'Accept-Language': 'en-US,en;q=0.9' }
-    });
-    if (!r.ok) return { ok: false, status: r.status };
-    const html = await r.text();
-
-    const prices = [];
-    const re = /class="s-item__price"[^>]*>(?:<span[^>]*>)?\$([\d,]+\.\d{2})/g;
-    let m;
-    while ((m = re.exec(html)) && prices.length < 60) {
-      prices.push(parseFloat(m[1].replace(/,/g, '')));
-    }
-    if (!prices.length) return { ok: true, count: 0 };
-
-    // Drop outliers — lots, bundles and mispriced listings skew the median
-    prices.sort((a, b) => a - b);
-    const q1 = prices[Math.floor(prices.length * 0.25)];
-    const q3 = prices[Math.floor(prices.length * 0.75)];
-    const iqr = q3 - q1;
-    const clean = prices.filter(p => p >= q1 - 1.5 * iqr && p <= q3 + 1.5 * iqr);
-    const use = clean.length >= 3 ? clean : prices;
-
-    return {
-      ok: true,
-      count: use.length,
-      median: use[Math.floor(use.length / 2)],
-      low: use[0],
-      high: use[use.length - 1],
-      average: +(use.reduce((a, b) => a + b, 0) / use.length).toFixed(2)
-    };
-  } catch (e) {
-    return { ok: false, error: e.message };
-  }
-}
-
-// TCGPlayer market price via their public search endpoint
-async function scrapeTcgPlayer(cardName, setName) {
-  await politeDelay('tcgplayer.com', 1500);
-  const q = `${cardName} ${setName}`.trim();
-  try {
-    const r = await fetch('https://mp-search-api.tcgplayer.com/v1/search/request?q=' +
-      encodeURIComponent(q) + '&isList=false', {
-      method: 'POST',
-      headers: { 'User-Agent': SUA, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        algorithm: 'sales_dismax', from: 0, size: 5,
-        filters: { term: { productLineName: ['pokemon'] }, range: {}, match: {} },
-        context: { cart: {}, shippingCountry: 'US' },
-        settings: { useFuzzySearch: true, didYouMean: {} }, sort: {}
-      })
-    });
-    if (!r.ok) return null;
-    const d = await r.json();
-    const hit = d?.results?.[0]?.results?.[0];
-    if (!hit) return null;
-    return { market: hit.marketPrice || null, lowest: hit.lowestPrice || null, name: hit.productName };
-  } catch (e) { return null; }
-}
-
-async function scrapePrices(langFilter, minPrice) {
-  if (!db) { console.log('  DATABASE_URL required for scraping'); return; }
-  const floor = parseFloat(minPrice) || 0;
-
-  console.log(`\n${'='.repeat(64)}`);
-  console.log('  PRICE SCRAPING — real eBay sold comps');
-  console.log(`${'='.repeat(64)}\n`);
-  console.log(`  Rarities: ${SCRAPE_RARITIES.slice(0, 4).join(', ')} + ${SCRAPE_RARITIES.length - 4} more`);
-  console.log(`  Rate: 1 eBay request / 2.5s  (~1,400/hour, comfortably safe)\n`);
-
-  // Highest-value cards first, so a partial run still delivers the cards that matter
-  const where = langFilter
-    ? `AND api_card_id LIKE '${langFilter}-%'`
-    : '';
-  const rows = await db.query(`
-    SELECT DISTINCT ON (c.api_card_id)
-      c.api_card_id, c.name, c.number, c.rarity, c.set_name, c.set_api_id,
-      COALESCE((SELECT price_usd FROM price_history p
-                WHERE p.card_api_id = c.api_card_id AND p.grade IS NULL
-                ORDER BY recorded_at DESC LIMIT 1), 0) AS last_price,
-      (SELECT price_usd FROM price_history p
-        WHERE p.card_api_id = c.api_card_id AND p.grade IS NULL
-          AND p.source NOT LIKE 'estimate%'
-        ORDER BY recorded_at DESC LIMIT 1) AS held_price,
-      (SELECT source FROM price_history p
-        WHERE p.card_api_id = c.api_card_id AND p.grade IS NULL
-          AND p.source NOT LIKE 'estimate%'
-        ORDER BY recorded_at DESC LIMIT 1) AS held_source,
-      EXISTS(SELECT 1 FROM price_history p
-             WHERE p.card_api_id = c.api_card_id
-               AND p.grade IS NULL
-               AND p.source LIKE 'ebay%'
-               AND p.recorded_at > NOW() - INTERVAL '7 days') AS recently_scraped
-    FROM cards c
-    WHERE c.rarity = ANY($1) ${where}
-    ORDER BY c.api_card_id
-  `, [SCRAPE_RARITIES]);
-
-  const todo = rows.rows
-    .filter(r => !r.recently_scraped)
-    .filter(r => parseFloat(r.last_price) >= floor)
-    .sort((a, b) => parseFloat(b.last_price) - parseFloat(a.last_price));
-
-  console.log(`  ${rows.rows.length} eligible cards, ${todo.length} need scraping\n`);
-  if (!todo.length) { console.log('  Nothing to do — all scraped within the last 7 days\n'); return; }
-
-  const est = Math.round(todo.length * 2.5 / 60);
-  console.log(`  Estimated time: ~${est} minutes (${Math.round(est/60*10)/10} hours)\n`);
-
-  let done = 0, found = 0, failed = 0;
-  const startedAt = Date.now();
-
-  for (const card of todo) {
-    const queries = buildQueries(card);
-    let result = null;
-
-    for (const q of queries) {
-      const r = await scrapeEbaySold(q);
-      if (r.ok && r.count >= 3) { result = r; break; }
-      if (r.status === 403 || r.status === 429) {
-        console.log(`\n  eBay returned ${r.status} — backing off 60s`);
-        await sleep(60000);
-      }
-    }
-
-    // Fall back to TCGPlayer for English cards
-    if (!result && !/[\u3040-\u30ff\u4e00-\u9faf]/.test(card.name)) {
-      const t = await scrapeTcgPlayer(card.name, card.set_name);
-      if (t && t.market > 0) {
-        result = { count: 1, median: t.market, low: t.lowest, high: t.market, average: t.market };
-      }
-    }
-
-    done++;
-    const pct = ((done / todo.length) * 100).toFixed(1);
-    const elapsed = (Date.now() - startedAt) / 1000 / 60;
-    const eta = Math.round((elapsed / done) * (todo.length - done));
-
-    if (result && result.median > 0) {
-      await db.query(
-        `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition)
-         VALUES ($1,$2,$3,'ebay','raw_nm')`,
-        [card.api_card_id, result.median,
-         `ebay_sold_${result.count}`]).catch(() => {});
-      found++;
-      console.log(`  [${pct}%] ${card.name.slice(0,26).padEnd(28)} $${String(result.median).padEnd(9)} ${result.count} sales   eta ${eta}m`);
-    } else {
-      failed++;
-      if (done % 10 === 0) {
-        console.log(`  [${pct}%] ${card.name.slice(0,26).padEnd(28)} no comps                  eta ${eta}m`);
-      }
-    }
-
-    // Checkpoint every 25 cards
-    if (done % 25 === 0) {
-      const p = loadProgress(langFilter || 'scrape');
-      p.scraped = (p.scraped || 0) + 25;
-      saveProgress(p, langFilter || 'scrape');
-    }
-  }
-
-  console.log(`\n  Done: ${found} cards priced from real sales, ${failed} without comps\n`);
-}
+// node ingest.js scrape — DELETED 2026-10-01: scrapeEbaySold (eBay's completed-listings
+// HTML, banned since T8 — eBay's terms, and an IP-block risk), scrapeTcgPlayer (TCGplayer's
+// internal search, unfiltered, top hit taken) and scrapePrices. Nothing called them but the
+// banned command. Sold data has no licensed source; see CLAUDE.md OPEN WORK.
 
 
 // ══════════════════════════════════════════════════════════════
@@ -855,9 +651,22 @@ function reprintPricing(card) {
 // which products TCGdex maps to two cards: without that list, Trainer
 // Gallery TG16 would take the main-set card's $3.62 for an $86.55 card.
 const tdxp = require('./tcgdexprice.js');
+const fx = require('./fx.js');   // Cardmarket EUR -> USD, the rate recorded on the row
 let _tdxConflicts = null, _tdxWarned = false;
+// No price says WHY (2026-10-01) — `{ price: null, none: reason }`:
+//   'no-tcgplayer'  TCGdex has the card and no TCGplayer price for it
+//   'not-on-tcgdex' TCGdex answers 404 for the card
+//   'shared'        TCGdex's product is given to two cards, trusted for neither
+//   'unreachable'   TCGdex did not answer — say so, retry another night
+//   'not-ready'     no harvest has recorded shared products yet
+// Only the first three may fall back to TCGplayer's internal search, which
+// is kept for exactly the cards TCGdex cannot price (2,025 visible English
+// cards on 2026-10-01: promos, 30th, Shiny Vaults, Galarian Gallery,
+// Classic Collection). A bare null used to send an unreachable TCGdex's
+// every card to the internal API.
+const TCGDEX_FALLBACK_OK = new Set(['no-tcgplayer', 'not-on-tcgdex', 'shared']);
 async function tcgdexPriceFor(card) {
-  if (!card.set_api_id || !String(card.api_card_id).startsWith('en-')) return null;
+  if (!card.set_api_id || !String(card.api_card_id).startsWith('en-')) return { price: null, none: 'not-english' };
   if (!_tdxConflicts) {
     _tdxConflicts = await tdxp.loadProductConflicts(db, 'en').catch(() => ({ ready: false }));
   }
@@ -865,16 +674,31 @@ async function tcgdexPriceFor(card) {
     if (!_tdxWarned) {
       _tdxWarned = true;
       console.log('\n  TCGdex pricing NOT used: no full harvest has recorded shared products.');
-      console.log('  Run  node tcgdexharvest.js en  once. Falling back to TCGplayer search.\n');
+      console.log('  Run  node tcgdexharvest.js en  once. Nothing is priced until then.\n');
     }
-    return null;
+    return { price: null, none: 'not-ready' };
   }
   await hostDelay('tcgdex', DELAY_TCGDEX);
-  const d = await get(`${TCGDEX}/en/cards/${card.set_api_id}-${card.number}`);
-  if (!d) return null;
+  const url = `${TCGDEX}/en/cards/${card.set_api_id}-${encodeURIComponent(card.number)}`;
+  let d = null, status = 0;
+  for (let i = 0; i < 3 && !d; i++) {
+    try {
+      const r = await fetch(url);
+      status = r.status;
+      if (r.status === 404) return { price: null, none: 'not-on-tcgdex' };
+      if (r.ok) d = await r.json();
+    } catch (e) { status = 'network: ' + e.message; }
+    if (!d) await sleep(2000 * (i + 1));
+  }
+  if (!d) return { price: null, none: 'unreachable', detail: String(status) };
   const p = tdxp.parsePricing(d);
   const b = p.tcgplayerBase;
-  if (!b || _tdxConflicts.tcgplayer.has(String(b.productId))) return null;
+  // No TCGplayer price: hand back TCGdex's Cardmarket block, which the caller
+  // stores as a SECOND READING beside the headline, never as it (printsql).
+  if (!b) return { price: null, none: 'no-tcgplayer',
+    cardmarket: p.cardmarket && !_tdxConflicts.cardmarket.has(String(p.cardmarket.idProduct)) ? p.cardmarket : null,
+    cardmarketShared: !!(p.cardmarket && _tdxConflicts.cardmarket.has(String(p.cardmarket.idProduct))) };
+  if (_tdxConflicts.tcgplayer.has(String(b.productId))) return { price: null, none: 'shared' };
   return {
     price: b.price, source: `tcgdex_tcgplayer_${b.printing}`, marketplace: 'tcgplayer',
     matched: d.name, matchedBy: 'productId',
@@ -2130,6 +1954,20 @@ async function rarityFill(lang, ...flags) {
 // Yahoo mirror price. The headline readers never show these as the card's
 // price (printsql.basePrintingSql); /api/history charts them as their own
 // series.
+// Another market's price, stored BESIDE the headline (source_meta.role =
+// 'second-reading', which printsql.basePrintingSql keeps out of every
+// headline reader). One writer, called wherever writeVariantPrices is.
+async function writeSecondReading(card, res) {
+  const s = res && res.secondReading;
+  if (!db || !s || !(s.price > 0) || s.meta.role !== 'second-reading') return 0;
+  const r = await db.query(
+    `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition, source_meta)
+     VALUES ($1,$2,$3,$4,'raw_nm',$5)`,
+    [card.api_card_id, s.price, s.source, s.marketplace, JSON.stringify(s.meta)])
+    .catch(e => { console.log(`  second-reading write failed ${card.api_card_id}: ${e.message}`); return null; });
+  return r ? 1 : 0;
+}
+
 async function writeVariantPrices(card, res) {
   if (!db || !res || !Array.isArray(res.variantPrices)) return 0;
   let n = 0;
@@ -2168,13 +2006,14 @@ async function safePriceFor(card) {
     // Yahoo Auctions is the real Japanese market. Nothing else is close.
     res = await attempt(() => yahooJapanSearch(card.name, card.number, jpCtx(card)));
   } else {
+    // A reprint (Classic Collection) follows the same order — TCGdex first,
+    // the internal search only where TCGdex has no TCGplayer price — and is
+    // then asked by its PRINTED number in its own TCGplayer set, nothing
+    // else: a name-only question is how an original's price lands on a
+    // reprint. (Until 2026-10-01 a reprint went straight to the internal
+    // search; TCGdex has no TCGplayer price for 30th-c or cel25cc today.)
     const rp = reprintPricing(card);
-    if (rp) {
-      // A reprint: its own TCGPlayer set, its printed number, and NOTHING
-      // else. The two fallbacks below search by NAME ONLY ("Charizard"),
-      // which is exactly how an original's price lands on a reprint.
-      res = await attempt(() => tcgPlayerSearch(card.name, rp.tcgSet, rp.number, card.rarity, { reprint: rp }));
-    } else {
+    {
       // TCGPlayer by collector number, and nothing else. Two fallbacks
       // followed until 2026-09-29 (T9), both NAME ONLY, which is the
       // Phantasmal Flames failure this file exists to prevent:
@@ -2190,9 +2029,44 @@ async function safePriceFor(card) {
       // cards one product (recorded by tcgdexharvest.js; see tcgdexprice.js).
       // The internal search API remains the fallback only, and must now
       // match the set as well as the number.
-      res = await attempt(() => tcgdexPriceFor(card));
-      if (!res) res = await attempt(() => tcgPlayerSearch(card.name, card.set_name, card.number, card.rarity,
-                                                         { setId: card.set_api_id }));
+      // 2026-10-01: the internal search API is the fallback ONLY where TCGdex
+      // has no usable TCGplayer price (TCGDEX_FALLBACK_OK). Unreachable or
+      // not-ready is reported and nothing is written — never a quiet switch
+      // of the whole catalogue to the internal API.
+      //
+      // WHY it is kept at all (decided 2026-10-01, CLAUDE.md "TCGplayer has no
+      // route"): TCGplayer grants no API access to anyone, so for the cards
+      // TCGdex cannot price there is no sanctioned source to move to —
+      // stopping it moves them to NO source. It runs from the home machine,
+      // nightly, never from Render. Every row it writes is LABELLED
+      // (source_meta.via) so those cards can be found and re-priced the day
+      // TCGdex fills them or TCGplayer reopens access.
+      const td = await attempt(() => tcgdexPriceFor(card));
+      let second = null;
+      if (td && td.price > 0) res = td;
+      else if (td && TCGDEX_FALLBACK_OK.has(td.none)) {
+        res = await attempt(() => rp
+          ? tcgPlayerSearch(card.name, rp.tcgSet, rp.number, card.rarity, { reprint: rp })
+          : tcgPlayerSearch(card.name, card.set_name, card.number, card.rarity, { setId: card.set_api_id }));
+        if (res) res.meta = Object.assign({}, res.meta || {}, {
+          via: 'tcgplayer-internal-search', tcgdexNone: td.none,
+          recheck: 'last-resort fallback: re-price from TCGdex once it lists a TCGplayer price for this card' });
+        // TCGdex's Cardmarket price, where it has one: a SECOND reading,
+        // stored beside the headline and never as it — EU retail, ~1.6x,
+        // a different market (printsql.notSecondReadingSql keeps it out of
+        // every headline reader).
+        if (td.cardmarket) {
+          const conv = await attempt(() => fx.toUsd(td.cardmarket.price, td.cardmarket.unit));
+          if (conv && conv.usd > 0) second = { price: conv.usd, source: 'tcgdex_cardmarket', marketplace: 'cardmarket',
+            meta: { role: 'second-reading', why: 'TCGdex has no TCGplayer price for this card; EU retail, not the headline',
+                    currency: conv.currency, original: conv.original, fxRate: conv.rate, fxDate: conv.rateDate,
+                    fxSource: conv.rateSource, idProduct: td.cardmarket.idProduct, updated: td.cardmarket.updated } };
+        }
+        if (res) res.secondReading = second;
+        else if (second) return { price: null, source: null, secondReading: second };
+      } else {
+        console.log(`    ${card.api_card_id}: TCGdex ${td ? td.none + (td.detail ? ' (' + td.detail + ')' : '') : 'threw'} — not priced, internal search NOT asked`);
+      }
     }
   }
 
@@ -2291,6 +2165,7 @@ async function safePrices(langFilter, ...flags) {
   for (const card of todo) {
     const res = await safePriceFor(card);
     await writeVariantPrices(card, res);
+    await writeSecondReading(card, res);
     done++;
     const pct = ((done / todo.length) * 100).toFixed(1);
     const eta = Math.round(((Date.now() - t0) / 60000 / done) * (todo.length - done));
@@ -2459,11 +2334,11 @@ async function testSources(arg1, arg2) {
         console.log('no data');
       }
     } else {
-      process.stdout.write('  TCGPlayer ......... ');
-      const rpc = reprintPricing(card);
-      const t = rpc ? await tcgPlayerSearch(card.name, rpc.tcgSet, rpc.number, card.rarity, { reprint: rpc })
-                    : await tcgPlayerSearch(card.name, card.set_name, card.number);
-      console.log(t ? `OK  $${t.price}   matched "${t.matched}" #${t.matchedNumber} via ${t.matchedBy}` : 'no data');
+      // TCGdex first, as the writer asks; the internal search is shown only
+      // by safePriceFor below, and only where TCGdex has no usable price.
+      process.stdout.write('  TCGdex (TCGplayer) ');
+      const t = await tcgdexPriceFor(card);
+      console.log(t && t.price ? `OK  $${t.price}   ${t.source}` : `none — ${t ? t.none : 'threw'}`);
 
     }
 
@@ -4050,25 +3925,75 @@ async function priceCheck(lang, setId) {
     rows = await pick('');
   }
 
-  console.log('  #     card                       rarity                  ours      live TCGPlayer');
-  console.log('  ' + '-'.repeat(74));
+  // PER EDITION (2026-10-01). "Live" was TCGplayer's internal search, whose
+  // top hit on a WOTC holo is often the 1st Edition product — on neo1 it
+  // equalled TCGdex's 1st Edition price to the cent on 10 of 12 cards, while
+  // ours is (correctly) Unlimited, so it flagged 10 MISMATCHes that meant
+  // only "you hold the other edition". Now each edition is compared with the
+  // same edition: TCGdex's Unlimited key with our base row, its 1st Edition
+  // key with our 1st Edition row. Where TCGdex has no TCGplayer price, the
+  // writer's own fallback (the internal search, set-checked) is asked and
+  // labelled — the tool asks the writer's question, never a different one.
+  const firstEdOurs = await db.query(`
+    SELECT DISTINCT ON (p.card_api_id) p.card_api_id, p.price_usd
+    FROM price_history p JOIN cards c ON c.api_card_id = p.card_api_id
+    WHERE c.set_api_id = $1 AND c.api_card_id LIKE $2 AND p.source NOT LIKE 'estimate%'
+      AND p.grade IS NULL AND COALESCE(p.variant, '') NOT LIKE 'reverse%'
+      AND ${require('./printsql').editionOfSql('p')} = '1st-edition'
+    ORDER BY p.card_api_id, p.recorded_at DESC`, [setId, lang + '-%']);
+  const ours1st = new Map(firstEdOurs.rows.map(r => [r.card_api_id, Number(r.price_usd)]));
+
+  const fmt = v => v ? '$' + Number(v).toFixed(2) : '-';
+  // >40% apart AND worth >= $0.25 — a ratio alone at the price floor is
+  // rounding (LESSONS: a ratio is meaningless at the price floor).
+  const off = (a, b) => (a && b && Math.abs(a - b) / b > 0.4 && Math.abs(a - b) >= 0.25);
+  let mism = 0, compared = 0, fallback = 0, unreachable = 0;
+
+  console.log('  #     card                     edition      ours        live            source');
+  console.log('  ' + '-'.repeat(84));
+  const line = (num, name, ed, ours, live, src, bad) =>
+    console.log(`  ${String(num).padEnd(5)} ${String(name).slice(0, 23).padEnd(24)} ${ed.padEnd(12)} `
+      + `${fmt(ours).padStart(9)}   ${fmt(live).padStart(9)}       ${src}${bad ? '  MISMATCH' : ''}`);
 
   for (const c of rows.rows) {
-    // pricecheck must ask the same question the price writer asks.
-    const rpc = reprintPricing({ api_card_id: c.api_card_id, number: c.number });
-    const live = rpc ? await tcgPlayerSearch(c.name, rpc.tcgSet, rpc.number, c.rarity, { reprint: rpc })
-                     // The writer's exact question (safePriceFor): the set NAME, and
-                     // the set-name check. This passed the set ID — "Charizard ex
-                     // sv03.5" — with no check, and read "no match" on 151, Base Set
-                     // and Expedition, where the writer finds the product.
-                     : await tcgPlayerSearch(c.name, c.set_name, c.number, c.rarity, { setId });
-    const ours = c.price ? '$' + Number(c.price).toFixed(2) : '   -';
-    const theirs = live ? '$' + Number(live.price).toFixed(2) + '  (' + live.matchedBy + ')' : 'no match';
-    const off = (c.price && live && Math.abs(c.price - live.price) / live.price > 0.4) ? '  MISMATCH' : '';
-    console.log(`  ${String(c.number).padEnd(5)} ${String(c.name).slice(0,24).padEnd(26)} `
-      + `${String(c.rarity).slice(0,20).padEnd(22)} ${ours.padStart(9)}  ${theirs}${off}`);
+    await hostDelay('tcgdex', DELAY_TCGDEX);
+    let d = null, none = null;
+    try {
+      const r = await fetch(`${TCGDEX}/${lang}/cards/${setId}-${encodeURIComponent(c.number)}`);
+      if (r.status === 404) none = 'not-on-tcgdex';
+      else if (r.ok) d = await r.json();
+      else none = 'unreachable (HTTP ' + r.status + ')';
+    } catch (e) { none = 'unreachable (' + e.message + ')'; }
+    const ed = d ? tdxp.tcgplayerByEdition(d.pricing && d.pricing.tcgplayer) : { unlimited: null, firstEdition: null };
+    if (d && !ed.unlimited && !ed.firstEdition) none = 'no-tcgplayer';
+
+    if (ed.unlimited || ed.firstEdition) {
+      // Unlimited (or the card's only printing) against our base row.
+      if (ed.unlimited) {
+        const bad = off(c.price, ed.unlimited.price); compared++; if (bad) mism++;
+        line(c.number, c.name, 'unlimited', c.price, ed.unlimited.price, 'TCGdex ' + ed.unlimited.printing, bad);
+      }
+      if (ed.firstEdition) {
+        // A card TCGdex lists ONLY as 1st Edition: that IS its base row.
+        const mine = ed.unlimited ? ours1st.get(c.api_card_id) : (ours1st.get(c.api_card_id) || c.price);
+        const bad = off(mine, ed.firstEdition.price); compared++; if (bad) mism++;
+        line(ed.unlimited ? '' : c.number, ed.unlimited ? '' : c.name, '1st edition', mine,
+             ed.firstEdition.price, 'TCGdex ' + ed.firstEdition.printing, bad);
+      }
+    } else if (none && TCGDEX_FALLBACK_OK.has(none)) {
+      // Not checkable, and said so. The internal search is the WRITER's last
+      // resort for these cards (decided 2026-10-01); a checker asking the same
+      // source the writer used would only agree with itself. No call.
+      fallback++;
+      line(c.number, c.name, 'base', c.price, null, `NOT CHECKABLE — TCGdex: ${none}; no second TCGplayer source`, false);
+    } else {
+      unreachable++;
+      line(c.number, c.name, '-', c.price, null, 'NOT CHECKED — TCGdex ' + none, false);
+    }
   }
-  console.log('\n  MISMATCH means our stored price is more than 40% away from live data.\n');
+  console.log(`\n  ${compared} comparisons, ${mism} MISMATCH (>40% and >= $0.25), ` +
+    `${fallback} not checkable (TCGdex has no TCGplayer price), ${unreachable} not checked (TCGdex unreachable).`);
+  console.log('  Each edition is compared with the SAME edition. "-" under ours: we hold no row for it.\n');
 }
 
 
@@ -5152,6 +5077,7 @@ async function refreshDue(lang, ...flags) {
     const card = batch[i];
     const res = await safePriceFor(card);
     await writeVariantPrices(card, res);
+    await writeSecondReading(card, res);
 
     if (res && res.price > 0) {
       // A lower-confidence source must never replace a higher-confidence
@@ -5234,7 +5160,7 @@ async function main() {
 
   if (cmd === 'status')          { await status(); }
   else if (cmd === 'prices')     { await refreshPrices(); }
-  else if (cmd === 'scrape')     { await scrapePrices(process.argv[3], process.argv[4]); }
+  else if (cmd === 'scrape')     { console.log('  scrape was DELETED (2026-10-01) — banned since T8; use safeprices or refresh.'); process.exitCode = 1; }
   else if (cmd === 'safeprices') { await safePrices(process.argv[3], ...process.argv.slice(4)); }
   else if (cmd === 'clean')      { await cleanBadPrices(process.argv[3] === '--delete'); }
   else if (cmd === 'test')       { await testSources(process.argv[3], process.argv[4]); }

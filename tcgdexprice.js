@@ -173,6 +173,32 @@ function readCardmarket(cm) {
  * Every field may be null — absence is normal and is not an error.
  * Callers must treat null as "not listed", never as zero.
  */
+/**
+ * TCGdex's TCGplayer block by EDITION (2026-10-01) — what pricecheck asks.
+ * `base` above is "the card's headline price", which on a card listed ONLY
+ * as 1st Edition is the 1st Edition figure. A checker comparing our stored
+ * Unlimited price must compare it with TCGdex's Unlimited figure and our
+ * 1st Edition with its 1st Edition: pricecheck once flagged 10 of 12 Neo
+ * Genesis cards because its "live" number was the 1st Edition price.
+ * Returns { unlimited, firstEdition }, each { printing, price, productId }
+ * or null. Same key order as BASE_PRINTINGS, split at the edition line.
+ */
+const UNLIMITED_KEYS = BASE_PRINTINGS.filter(k => !k.startsWith('1st-edition'));
+const FIRST_EDITION_KEYS = BASE_PRINTINGS.filter(k => k.startsWith('1st-edition'));
+function tcgplayerByEdition(tcgplayer) {
+  const pick = names => {
+    if (!tcgplayer || typeof tcgplayer !== 'object') return null;
+    for (const n of names) {
+      const blk = tcgplayer[n];
+      if (!blk || typeof blk !== 'object') continue;
+      const price = firstPrice(blk, ['marketPrice', 'midPrice', 'lowPrice']);
+      if (price !== null) return { printing: n, price, productId: blk.productId ?? null };
+    }
+    return null;
+  };
+  return { unlimited: pick(UNLIMITED_KEYS), firstEdition: pick(FIRST_EDITION_KEYS) };
+}
+
 function parsePricing(card) {
   const p = (card && card.pricing) || null;
   if (!p || typeof p !== 'object') {
@@ -432,7 +458,7 @@ async function loadProductConflicts(db, lang) {
 module.exports = {
   productConflicts, recordProductClaims, loadProductConflicts,
   printingsFromTcgdex, printingPrices,
-  BASE_PRINTINGS, REVERSE_PRINTINGS, SOURCE, PRICING_LANGS,
+  BASE_PRINTINGS, REVERSE_PRINTINGS, SOURCE, PRICING_LANGS, tcgplayerByEdition, UNLIMITED_KEYS, FIRST_EDITION_KEYS,
   isUsablePrice, firstPrice, splitTcgplayer, readCardmarket, parsePricing,
   pricingAllowedFor
 };

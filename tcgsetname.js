@@ -67,6 +67,20 @@ const TCG_SET_NAME = {
   'swsh10.5': ['Pokemon GO'],
   swshp:    ['SWSH: Sword & Shield Promo Cards'],
   xy1:      ['XY Base Set'],
+  // Probed 2026-10-01 — name AND number agree, price against what we held
+  // before the 9/29 set check silently stopped refreshing these sets:
+  //   svp  #085 Pikachu with Grey Felt Hat  $1019.29 vs $1031.27 (0.99)
+  //   xyp  #XY124 Pikachu EX 1.00 · #XY60 Gyarados 1.33
+  //   bwp  #BW97 Eevee 1.00
+  //   mep  #028 Celebratory Fanfare 1.00 (#066 Tyrantrum 0.31 — a stale hold)
+  //   sve  #001 Grass Energy 0.86 · mee #001 / #006 0.96 / 1.05
+  // NOT dpp: its #DP50 Arceus hit is in "Jumbo Cards" — a different product.
+  svp:      ['SV: Scarlet & Violet Promo Cards'],
+  xyp:      ['XY Promos'],
+  bwp:      ['Black and White Promos'],
+  mep:      ['ME: Mega Evolution Promo'],
+  sve:      ['SVE: Scarlet & Violet Energies'],
+  mee:      ['MEE: Mega Evolution Energies'],
 };
 
 function sameTcgSet(hitSetName, setId, ourSetName) {

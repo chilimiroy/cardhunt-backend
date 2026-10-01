@@ -325,26 +325,42 @@ until T9 (`jpItemRejectReason`). Stored-price paths report to the console
 only; that is a script run deliberately, the `gradeprices.js` shape.
 
 ## Open, and a decision rather than a fix
-- **`tcgPlayerSearch` (path P) uses TCGplayer's internal search API** —
-  `mp-search-api.tcgplayer.com`, the endpoint withdrawn from Render on
-  2026-09-29 — from the home IP, nightly. It is the source of
-  **72,174 `tcgplayer_market` rows** (last written 2026-09-28); TCGdex has
-  supplied ~220. The premise "we get TCGplayer prices via TCGdex and
-  pokemontcg.io" is true of the Render path and not of the stored prices.
-  Moving P to TCGdex (`tcgdexprices`, validated 37/37 at 1.020x) is the
-  legitimate route; it has not been run at catalogue scale.
-  **2026-09-29 (T1): measured, and half moved.** See the lesson "The stored
-  price was right 90% of the time — and wrong by SET, not by H-number".
-  `safePriceFor` now asks TCGdex FIRST and the internal API only as a
-  set-checked fallback — but TCGdex-first is **inert until one full
-  `node tcgdexharvest.js en` has recorded shared products**
-  (`tcgdex_product_conflicts`); until then it says so and falls back.
-  The internal API is not stopped: stop it once that harvest's coverage is
-  measured.
+- **TCGplayer's internal search — KEPT as the last-resort fallback, decided
+  2026-10-01.** TCGdex is asked first for every English card (reprints
+  included); `tcgPlayerSearch` runs only where TCGdex answers no-tcgplayer,
+  not-on-tcgdex or shared (`TCGDEX_FALLBACK_OK`) — never when TCGdex is
+  unreachable. Measured that day: **2,025 visible English cards (9.6%) have
+  only ever been priced by it**, and TCGdex returns `tcgplayer: null` for
+  them — promos (svp 214, xyp 210, bwp 100, mep 60…), 30th (156), Shiny
+  Vaults (216), Galarian Gallery (69), the 55 Classic Collection reprints.
+  **Why kept, when the eBay sold scrape was deleted:** with eBay we held
+  credentials under its terms AND were scraping, so a sanctioned route
+  existed and we moved to it. TCGplayer has no route at all ("We are no
+  longer granting new API access at this time" — no form, no partner path),
+  so stopping it moves those cards to NO source, not a better one. It runs
+  from the home machine during ingest, never from Render on a page view.
+  Every row it writes carries `source_meta.via = 'tcgplayer-internal-search'`
+  and `tcgdexNone`, so the cards can be found and re-priced the day TCGdex
+  fills them or TCGplayer reopens access. Every other caller is gone:
+  pricecheck says NOT CHECKABLE for these cards, the `test` command shows
+  TCGdex, and the banned scrape path is deleted.
+  Where TCGdex has a Cardmarket price for one of these, it is stored as a
+  **second reading** (`source_meta.role = 'second-reading'`, converted by
+  fx.js) — EU retail at ~1.6x, a different market, never the headline:
+  `printsql.basePrintingSql` excludes it from every headline reader
+  (`pricecheck.test.js --db` proves a newer one does not take over).
+  The 9/29 set check had silently stopped svp/xyp/bwp/mep/sve/mee refreshing
+  (their TCGplayer set names were unmapped); probed and aliased 2026-10-01 in
+  `tcgsetname.js`. NOT dpp: its hit was "Jumbo Cards".
+  **Re-check TCGdex coverage around 2027-01**: promos, Shiny Vaults and
+  Galarian Gallery are the kind of gap that gets filled —
+  `SELECT count(*) FROM price_history WHERE source_meta->>'via' =
+  'tcgplayer-internal-search' AND recorded_at > now() - interval '30 days'`,
+  then `node tcgdexharvest.js en --dry` on those sets.
 - **`yahoojp_avg_N`** — Yahoo's own average, lots and slabs included, used
   only when a search returns no items. Ungated by construction; 0 rows held.
-- **`node ingest.js scrape`** still exists (`scrapeEbaySold`). Banned, never
-  run — T8's reasoning says delete it.
+- **`node ingest.js scrape`** — DELETED 2026-10-01 (scrapeEbaySold, scrapeTcgPlayer,
+  scrapePrices). The command now refuses and exits 1.
 - ~~Variant is gated nowhere~~ — built in T10. ~~Stored Yahoo medians carry no printing~~ — T4 `28ea4be`: a title stating a reverse/mirror leaves the base median and gets its own `variant` row. **Existing** Yahoo base rows are NOT repaired: of 191 JP cards holding both, 143 Yahoo bases sit >5x the Yuyu-tei base, 54 >20x — `jpcheck` over them is the measurement still owed. ~~"Typical" ignores the printing selector~~ — `a9ba5e3`.
 
 ---
@@ -811,7 +827,8 @@ node edition.test.js         # 69   T3: 1st Edition/Shadowless/Unlimited — rea
 node promo.test.js           # 69   Black Star Promos: no set total asked or checked; real live titles kept; McDonald's refused
 node subset.test.js          # 27   TG16/TG30, SV107/SV122, GG01/GG70 asked and kept; Generations RC by number alone
 node noautoexpand.test.js    # 19   opening a card is one call: no auto-expansion in any form; empty panel names the sites not asked
-node claudesplit.test.js     #      every CLAUDE_ARCHIVE.md heading kept or cited here; the restored lessons present
+node claudesplit.test.js     # 23   every CLAUDE_ARCHIVE.md heading kept or cited here; the restored lessons present
+node pricecheck.test.js      # 33   editions compared like for like; the internal search only where TCGdex cannot price, labelled; Cardmarket a second reading (--db: +2, rolled back)
 ```
 
 Run them all:
@@ -820,8 +837,9 @@ Run them all:
 Get-ChildItem *.test.js | ForEach-Object { node $_.Name } ; node jptest.js
 ```
 
-**Never run `node ingest.js scrape`** — it parses eBay's completed-listings HTML
-and risks an IP block. Use `safeprices` or `refresh`.
+**`node ingest.js scrape` is deleted** (2026-10-01) — it parsed eBay's
+completed-listings HTML and risked an IP block; it now refuses. Never bring it
+back in any form. Use `safeprices` or `refresh`.
 
 ## Windows: replacing ingest.js
 ```powershell
@@ -1033,6 +1051,18 @@ refuse automation; deep-link them. No probe endpoint ever takes a URL (SSRF).
 Yahoo Auctions also rejects a category filter from a foreign IP — never add
 `auccat`; parse `__NEXT_DATA__`.
 *Archive:* "Scraping is not a production strategy", "…but \"datacentre IP\" is a per-source fact, not a law", "The probe's first run was wrong, and catching that is why it exists"; restored from `CLAUDE.md.bak-20260803`: "Yahoo Auctions rejects category filters from foreign IPs"
+
+**Before stopping a source, ask where its cards go.** Where a sanctioned
+route exists, take it: eBay's sold-page scrape was deleted because we hold
+Browse API credentials under eBay's terms. Where none exists, stopping moves
+the cards to NO source: TCGplayer grants no API access to anyone, and its
+internal search is the only TCGplayer price for 2,025 cards TCGdex cannot
+price — so it is kept as a labelled last resort, run from the home machine,
+never from Render (OPEN WORK). Measure the dependants first: "the reason to
+keep it has gone" was true of 90% of cards and false of the other 10%.
+A tightened check can also stop a source silently — the 9/29 set check left
+six promo/energy sets unrefreshed until probed and aliased.
+*Archive:* "The TCGplayer API has no application to put in", "Read the terms before writing a source off"
 
 **A status code means what the service says, not what it meant elsewhere.**
 Yahoo Shopping's 403 with a key is the KEY refused (keyless gets 401 from
@@ -1270,7 +1300,7 @@ what was NOT fetched; nothing runs by itself (the auto-expansion is deleted).
 5. **A fix is not installed until every path that needs it HAS it** — and a
    shared table is reached by every path that needs it.
 6. **The size of an apparent win is a reason to check it harder.**
-7. **Never run `node ingest.js scrape`.**
+7. **Never scrape eBay** — `node ingest.js scrape` is deleted; it stays deleted.
 8. **Use a literal-text editor for anything carrying regex escapes**, then run
    the 0x08 byte check (COMMANDS — `grep -P` does not work here).
 9. **One definition per thing.** A second implementation drifts; derive, or

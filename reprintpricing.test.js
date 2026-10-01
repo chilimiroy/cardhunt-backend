@@ -53,13 +53,22 @@ ok('an ordinary modern card is not a reprint', reprintPricing({ api_card_id: 'en
 console.log('\n  wiring');
 const spf = grab('async function safePriceFor');
 ok('safePriceFor asks reprintPricing', /reprintPricing\(card\)/.test(spf));
-ok('a reprint gets NO name-only fallback (eBay / Cardmarket by name)',
-  /if \(rp\) \{[^}]*?\{ reprint: rp \}\)\);\s*\} else \{[\s\S]*?cardmarketSearch/.test(spf));
+// 2026-10-01: a reprint asks TCGdex first like every card; where it falls
+// back, the internal search is asked the reprint's question ONLY — its
+// printed number in its own TCGplayer set — never the name-and-set one.
+ok('a reprint gets NO name-only fallback (asked by printed number in its own set)',
+  /rp\s*\?\s*tcgPlayerSearch\(card\.name, rp\.tcgSet, rp\.number, card\.rarity, \{ reprint: rp \}\)\s*:\s*tcgPlayerSearch\(card\.name, card\.set_name/.test(spf)
+  && !/cardmarketSearch\(|ebayBrowseActive\(/.test(spf));
 const tps = grab('async function tcgPlayerSearch');
 ok('tcgPlayerSearch filters hits to the reprint set by exact name',
   /opts\.reprint && String\(h\.setName \|\| ''\)\.toLowerCase\(\) !== opts\.reprint\.tcgSet\.toLowerCase\(\)/.test(tps));
 ok('a reprint with no known TCGPlayer set is refused, not guessed', /opts\.reprint && !opts\.reprint\.tcgSet\) return null/.test(tps));
-ok('pricecheck asks the same question the writer asks', /const live = rpc \? await tcgPlayerSearch/.test(src));
+// 2026-10-01: pricecheck no longer asks the internal search at all — for a
+// card only it prices, a checker asking the writer's own source agrees with
+// itself. It says NOT CHECKABLE instead (pricecheck.test.js).
+const pcSrc = grab('async function priceCheck');
+ok('pricecheck never calls the internal search (and was found: ' + pcSrc.length + ' chars)',
+  pcSrc.length > 1000 && !/tcgPlayerSearch\(/.test(pcSrc));
 ok('safePrices declares --force (it threw "force is not defined" on every priced card)',
   /const force\s*= flags\.includes\('--force'\)/.test(grab('async function safePrices')));
 

@@ -45,15 +45,28 @@ function baseEditionSql(ph = 'ph') {
   return `(COALESCE(${editionOfSql(ph)}, 'unlimited') NOT IN ('1st-edition', 'shadowless'))`;
 }
 
+// ── Second readings (2026-10-01) ──
+// A price from ANOTHER market, stored beside the headline and never as it:
+// source_meta.role = 'second-reading'. First use: TCGdex's Cardmarket price
+// on the cards TCGdex has no TCGplayer price for (promos, Shiny Vaults,
+// Galarian Gallery …) — EU retail at ~1.6x, a different market; shown as the
+// card's (US) price it would be wrong. /api/history still charts it as its
+// own series. Headline readers are "the newest real row", so without this
+// rule the newer Cardmarket row WOULD have become the headline.
+function notSecondReadingSql(ph = 'ph') {
+  return `(COALESCE(${ph}.source_meta->>'role', '') <> 'second-reading')`;
+}
+
 // ph: the price_history alias. c: the cards alias (must carry `variants`).
-// Base printing AND base edition: every headline reader already calls this,
-// so the edition rule reaches all of them at once (rule 5).
+// Base printing AND base edition AND not a second reading: every headline
+// reader already calls this, so each rule reaches all of them at once (rule 5).
 function basePrintingSql(ph = 'ph', c = 'c') {
   return `((COALESCE(${ph}.variant, '') NOT LIKE 'reverse%'
      OR (${c}.variants IS NOT NULL AND NOT EXISTS (
            SELECT 1 FROM jsonb_array_elements(${c}.variants->'printings') vp
            WHERE vp->>'key' NOT LIKE 'reverse%')))
-     AND ${baseEditionSql(ph)})`;
+     AND ${baseEditionSql(ph)}
+     AND ${notSecondReadingSql(ph)})`;
 }
 
 // The same rule in JS, for a row already in hand — used ONLY by tests to
@@ -72,4 +85,4 @@ function editionOfRow(r) {
   return /^1st-edition/.test(String(pr || '')) ? '1st-edition' : null;
 }
 
-module.exports = { basePrintingSql, isBasePrintingRow, editionOfSql, baseEditionSql, editionOfRow };
+module.exports = { basePrintingSql, isBasePrintingRow, editionOfSql, baseEditionSql, editionOfRow, notSecondReadingSql };

@@ -4331,7 +4331,7 @@ app.get('/api/ebay/setprobe/:cardId', async (req, res) => {
     return res.status(400).json({ error: 'unknown marketplace' });
   const single = Math.max(0, Math.min(40, parseInt(req.query.single, 10) || 0));
   const verifyFilter = req.query.verify === '1';
-  const key = JSON.stringify([cardId, mp, single, verifyFilter]);
+  const key = JSON.stringify([cardId, mp, single, verifyFilter, req.query.epidSearch || 0]);
   const hit = setProbeCache.get(key);
   if (hit && Date.now() - hit.at < 30 * 60 * 1000) return res.json(hit.body);
   try {
@@ -4375,9 +4375,24 @@ app.get('/api/ebay/setprobe/:cardId', async (req, res) => {
     // The gate over the returned page, so getItem rows can be split kept/refused
     const rows = its.map(it => {
       const v = cm.verify(it.title, mc, 'Raw');
-      return { itemId: it.itemId, title: String(it.title || '').slice(0, 120),
+      return { itemId: it.itemId, title: String(it.title || '').slice(0, 120), epid: it.epid || null,
                price: it.price && +it.price.value, kept: !!v.ok, reason: v.ok ? null : v.reason };
     });
+    // eBay's catalogue product id (T4 follow-up, 2026-10-01): free on the
+    // summary. Does one card print get one epid, and a reprint another?
+    const epids = {};
+    for (const r of rows) {
+      const k = r.epid || '(none)';
+      const e = epids[k] || (epids[k] = { count: 0, kept: 0, prices: [], titles: [] });
+      e.count++; if (r.kept) e.kept++;
+      if (r.price) e.prices.push(r.price);
+      if (e.titles.length < 3) e.titles.push(r.title.slice(0, 80));
+    }
+    for (const e of Object.values(epids)) {
+      e.prices.sort((a, b) => a - b);
+      e.median = e.prices.length ? e.prices[Math.floor(e.prices.length / 2)] : null;
+      e.low = e.prices[0] || null; e.high = e.prices[e.prices.length - 1] || null; delete e.prices;
+    }
 
     // 3. getItem — kept rows first, they are the ones a gate would act on
     const order = rows.filter(x => x.kept).concat(rows.filter(x => !x.kept));
@@ -4414,8 +4429,33 @@ app.get('/api/ebay/setprobe/:cardId', async (req, res) => {
       }
     }
 
+    // Per epid, the Set eBay's getItem gives on the sampled rows — the
+    // cross-check of epid against the seller's Set field.
+    for (const s of sampled) {
+      const e = epids[s.epid || '(none)'];
+      if (!e) continue;
+      e.sampledSets = e.sampledSets || {};
+      const k = s.aspects.Set || '(no Set)';
+      e.sampledSets[k] = (e.sampledSets[k] || 0) + 1;
+    }
+    // ?epidSearch=N: search BY the N most frequent epids (1 call each) — is
+    // epid a free filter, and how many listings does each product hold?
+    const epidSearch = Math.max(0, Math.min(4, parseInt(req.query.epidSearch, 10) || 0));
+    const epidTotals = [];
+    for (const [id] of Object.entries(epids).filter(([k]) => k !== '(none)')
+        .sort((a, b) => b[1].count - a[1].count).slice(0, epidSearch)) {
+      const er = await ebay.fetchEbay(db, {
+        url: 'https://api.ebay.com/buy/browse/v1/item_summary/search?epid=' + encodeURIComponent(id) + '&limit=50',
+        token: auth.token, kind: 'search', background: true,
+        meta: { cardId, probe: 'setprobe-epid', marketplace: mp },
+        countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
+      calls++;
+      epidTotals.push({ epid: id, ok: er.ok, total: er.ok ? er.data.total : null, error: er.ok ? null : (er.reason || er.blocked),
+        sampleTitles: er.ok ? (er.data.itemSummaries || []).slice(0, 4).map(i => String(i.title).slice(0, 80)) : [] });
+    }
+
     const body = { cardId, marketplace: mp, query: q, ebayTotal: total, returned: its.length,
-      summaryKeys, aspectNames, histograms,
+      summaryKeys, aspectNames, histograms, epids, epidTotals,
       getItem: { sampled: sampled.length, keptSampled: sampled.filter(s => s.kept).length, present },
       filterTests, kept: rows.filter(x => x.kept).length, calls, stored: false, sampled,
       at: new Date().toISOString() };

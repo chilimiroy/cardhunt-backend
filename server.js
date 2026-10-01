@@ -4327,6 +4327,120 @@ app.get('/api/ebay/certprobe/:cardId', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Set / Year / Card Number: where do they live? (TASK T4, 2026-10-01) ──
+// The Lugia problem: a 30th Classic Collection Lugia reproduces Aquapolis
+// Lugia's artwork exactly, so a picture cannot separate them; eBay's item
+// specifics (Set, Year Manufactured, Card Number) might. Before building
+// anything, three places, measured in one run:
+//   1. the search SUMMARY  — which keys an itemSummary carries (free)
+//   2. the search FILTER   — whether Set / Year are refinement aspects, and
+//      their histogram over eBay's WHOLE result set (free, 1 call): the
+//      fill rate is (sum of valued counts) / total
+//   3. getItem             — localizedAspects on ?single=N listings (N calls)
+// Read-only, tooling origin, catalogue id only (never a URL), nothing
+// stored. ?verify=1 adds one filtered search per top Set value (+2 calls).
+const setProbeCache = new Map();
+const SET_ASPECT = /^(set|year|year manufactured|card number|manufacturer|release year|edition|features|language|card name)$/i;
+app.get('/api/ebay/setprobe/:cardId', async (req, res) => {
+  const cardId = req.params.cardId;
+  const mp = String(req.query.mp || 'EBAY_US').toUpperCase();
+  if (!MARKETPROBE_SITES.includes(mp) || /_NO/.test(mp) || mp === 'EBAY_JP')
+    return res.status(400).json({ error: 'unknown marketplace' });
+  const single = Math.max(0, Math.min(40, parseInt(req.query.single, 10) || 0));
+  const verifyFilter = req.query.verify === '1';
+  const key = JSON.stringify([cardId, mp, single, verifyFilter]);
+  const hit = setProbeCache.get(key);
+  if (hit && Date.now() - hit.at < 30 * 60 * 1000) return res.json(hit.body);
+  try {
+    if (!ebay.ebayEnabled()) return res.status(503).json({ error: 'EBAY_ENABLED=false' });
+    const card = await resolveListingCard(cardId);
+    if (!card) return res.status(404).json({ error: 'card not in catalogue', cardId });
+    const auth = await getEbayTokenDetailed({ background: true });
+    if (!auth.token) return res.status(503).json({ error: auth.reason || auth.error || 'no token' });
+    const mc = ebayMatchCard(card);
+    const q = cm.buildQuery(mc, 'Raw');
+    const base = 'https://api.ebay.com/buy/browse/v1/item_summary/search?q=' + encodeURIComponent(q)
+      + '&category_ids=183454&limit=200';
+    let calls = 0;
+    const r = await ebay.fetchEbay(db, { url: base + '&fieldgroups=ASPECT_REFINEMENTS,MATCHING_ITEMS',
+      token: auth.token, kind: 'search', background: true,
+      meta: { cardId, probe: 'setprobe', marketplace: mp },
+      countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
+    calls++;
+    if (!r.ok) return res.status(502).json({ error: r.reason || r.blocked, query: q });
+    const total = r.data.total;
+    const its = r.data.itemSummaries || [];
+
+    // 1. Summary keys
+    const summaryKeys = {};
+    for (const it of its) for (const k of Object.keys(it)) summaryKeys[k] = (summaryKeys[k] || 0) + 1;
+
+    // 2. Refinement aspects: names, and the set/year histograms
+    const dists = ((r.data.refinement || {}).aspectDistributions || []);
+    const aspectNames = dists.map(a => a.localizedAspectName);
+    const histograms = {};
+    for (const a of dists) {
+      if (!SET_ASPECT.test(a.localizedAspectName)) continue;
+      const values = (a.aspectValueDistributions || []).map(v => ({ value: v.localizedAspectValue, count: v.matchCount }));
+      const named = values.filter(v => !/^not specified$/i.test(v.value));
+      const sum = named.reduce((s, v) => s + v.count, 0);
+      histograms[a.localizedAspectName] = { valuesListed: values.length, sumValued: sum,
+        ofTotal: total, fillUpperBound: total ? +(sum / total).toFixed(3) : null,
+        top: values.slice(0, 15) };
+    }
+
+    // The gate over the returned page, so getItem rows can be split kept/refused
+    const rows = its.map(it => {
+      const v = cm.verify(it.title, mc, 'Raw');
+      return { itemId: it.itemId, title: String(it.title || '').slice(0, 120),
+               price: it.price && +it.price.value, kept: !!v.ok, reason: v.ok ? null : v.reason };
+    });
+
+    // 3. getItem — kept rows first, they are the ones a gate would act on
+    const order = rows.filter(x => x.kept).concat(rows.filter(x => !x.kept));
+    const present = {}, sampled = [];
+    for (const row of order.slice(0, single)) {
+      const g = await ebay.fetchEbay(db, {
+        url: 'https://api.ebay.com/buy/browse/v1/item/' + encodeURIComponent(row.itemId),
+        token: auth.token, kind: 'item', background: true,
+        meta: { cardId, probe: 'setprobe-item', marketplace: mp }, countFrom: () => 1 });
+      calls++;
+      if (!g.ok) { if (g.blocked) break; continue; }
+      const asp = {};
+      for (const a of (g.data.localizedAspects || [])) if (SET_ASPECT.test(a.name)) asp[a.name] = a.value;
+      for (const k of Object.keys(asp)) present[k] = (present[k] || 0) + 1;
+      sampled.push(Object.assign({}, row, { aspects: asp }));
+    }
+
+    // Filter test: does aspect_filter on Set narrow, and does it agree?
+    const filterTests = [];
+    if (verifyFilter && histograms.Set) {
+      for (const v of histograms.Set.top.filter(x => !/^not specified$/i.test(x.value)).slice(0, 2)) {
+        const f = 'categoryId:183454,Set:{' + v.value + '}';
+        const fr = await ebay.fetchEbay(db, { url: base + '&aspect_filter=' + encodeURIComponent(f),
+          token: auth.token, kind: 'search', background: true,
+          meta: { cardId, probe: 'setprobe-filter', marketplace: mp },
+          countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
+        calls++;
+        const ids = new Set(((fr.ok && fr.data.itemSummaries) || []).map(i => i.itemId));
+        const known = sampled.filter(s => ids.has(s.itemId));
+        filterTests.push({ value: v.value, histogramCount: v.count, filteredTotal: fr.ok ? fr.data.total : null,
+          error: fr.ok ? null : (fr.reason || fr.blocked),
+          sampledInFilter: known.length,
+          agreeWithGetItem: known.filter(s => s.aspects.Set === v.value).length });
+      }
+    }
+
+    const body = { cardId, marketplace: mp, query: q, ebayTotal: total, returned: its.length,
+      summaryKeys, aspectNames, histograms,
+      getItem: { sampled: sampled.length, keptSampled: sampled.filter(s => s.kept).length, present },
+      filterTests, kept: rows.filter(x => x.kept).length, calls, stored: false, sampled,
+      at: new Date().toISOString() };
+    setProbeCache.set(key, { at: Date.now(), body });
+    res.json(body);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Verify ONE listing's cert, when a person asks (TASK T2) ──
 //
 //   GET /api/cert/:cardId?item=v1|167236883977|0&grade=PSA%2010

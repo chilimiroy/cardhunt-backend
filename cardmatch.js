@@ -1085,6 +1085,42 @@ function verifyPromoNumber(t, card, grade, p) {
            matched: { number: p.number, set: card.setName, grade: grade } };
 }
 
+// ── Prefixed subsets (T3, 2026-10-01) ─────────────────────────
+// A Trainer Gallery card prints "TG16/TG30", Shining Fates' Shiny Vault
+// "SV107/SV122" — the total carries the prefix. We hold set_total 30, so
+// the query asked "TG16/30" and the gate REFUSED the true printing
+// ("set size does not match: title says TG16/TG30, wanted TG16/30").
+// Pure subsets, keyed by set id: every card carries the prefix and our
+// set_total is the subset's own printed total.
+const SUBSET_SETS = {
+  swsh9tg: 'TG', 'swsh9.5tg': 'TG', swsh10tg: 'TG', 'swsh10.5tg': 'TG',
+  swsh11tg: 'TG', 'swsh11.5tg': 'TG', swsh12tg: 'TG', 'swsh12.5tg': 'TG',
+  'swsh12.5gg': 'GG', 'swsh4.5sv': 'SV', sma: 'SV',
+};
+// A prefixed number inside a MIXED set (Generations RC5, Aquapolis H12,
+// Call of Legends SL3, Platinum SH/AR/RT) prints the SUBSET's total —
+// "RC5/RC32" — which we do not hold: our 83 is the main set's. Such a card
+// is asked by its number alone, and a title total with the same prefix is
+// accepted without a size check.
+function numberPrefix(card) {
+  const m = String((card && card.number) || '').match(/^([A-Za-z]{1,4})\d/);
+  return m ? m[1].toUpperCase() : null;
+}
+function printedTotal(card) {
+  const pre = numberPrefix(card);
+  if (!pre || !card.setTotal) return card.setTotal ? String(card.setTotal) : null;
+  return SUBSET_SETS[setIdOf(card)] === pre ? pre + String(card.setTotal) : null;
+}
+// Does a title's total (normNum form: "TG30", "102") fit this card?
+function totalFits(titleTotal, card) {
+  const want = card.setTotal ? normNum(card.setTotal) : null;
+  if (!want || titleTotal === want) return true;
+  const pre = numberPrefix(card);
+  if (!pre || !String(titleTotal).startsWith(pre)) return false;
+  if (SUBSET_SETS[setIdOf(card)] === pre) return titleTotal === pre + want;
+  return true;   // mixed set: the subset's total is not held
+}
+
 function asPrinted(card) {
   const rp = reprintOf(card);
   if (!rp) return card;
@@ -1457,7 +1493,7 @@ function buildQuery(card, grade, opts) {
     if (!promo.prefix) bits.push('promo');
   } else if (card.number) {
     const num = String(card.number);
-    const tot = card.setTotal ? String(card.setTotal) : null;
+    const tot = printedTotal(card);   // "TG30" on a Trainer Gallery; none for Generations RC5
     if (tot) {
       // Sellers pad both halves alike: "074/073", never "074/73"
       const nd = num.replace(/[^0-9]/g, '');
@@ -1925,7 +1961,7 @@ function verifyCore(title, card, grade, opts) {
   if (pairs.length) {
     // A title with an N/M pair must carry OUR pair
     const exact = pairs.find(p => p.num === wantNum &&
-                                  (!wantTot || p.total === wantTot));
+                                  totalFits(p.total, card));
     if (!exact) {
       const sameNum = pairs.find(p => p.num === wantNum);
       if (sameNum && wantTot) {
@@ -1933,7 +1969,7 @@ function verifyCore(title, card, grade, opts) {
         // This is the master-ball mirror class of error.
         return { ok: false, reason:
           `number ${wantNum} matches but set size does not: title says ` +
-          `${sameNum.raw}, wanted ${wantNum}/${wantTot}` };
+          `${sameNum.raw}, wanted ${wantNum}/${printedTotal(card) || wantTot}` };
       }
       return { ok: false, reason: `wrong number: title has ` +
         pairs.map(p => p.raw).join(', ') + `, wanted ${wantNum}` +
@@ -2036,7 +2072,7 @@ const API = {
   SET_NAME_PHRASES, GENUINE_ART_PHRASES, boundedTerm,
   REPRINT_FAMILIES, REPRINT_OF, setIdOf, familyOfSet, familyNamedBy, familiesReprinting, reprintCardsOf,
   reprintOf, asPrinted,
-  PROMO_SETS, promoOf, promoNumberIn,
+  PROMO_SETS, promoOf, promoNumberIn, SUBSET_SETS, printedTotal, totalFits,
   PRINTINGS, printingLabel, printingClaim, printingRefusal, parsePrintingParam,
   EDITIONS, editionClaim, editionLabel, editionRefusal, parseEditionParam,
   EBAY_KEYWORD_LIMIT

@@ -49,7 +49,8 @@ try {
   const m = { exports: {} };
   new Function('module', 'exports', 'window', head)(m, m.exports, undefined);
   if (m.exports.promoOf) console.log('  SKIP HEAD comparison — HEAD already has the promo rule');
-  else for (const c of [ch, tg]) for (const g of ['Raw NM', 'PSA 10'])
+  // Trainer Gallery deliberately changed in T3 (TG12/TG30) — subset.test.js.
+  else for (const c of [ch]) for (const g of ['Raw NM', 'PSA 10'])
     ok(m.exports.buildQuery(c, g) === cm.buildQuery(c, g), 'non-promo query unchanged vs HEAD: ' + c.cardId + ' ' + g);
 } catch (e) { console.log('  SKIP HEAD comparison — ' + String(e.message).split('\n')[0]); }
 ok(/SWSH202/.test(cm.buildQuery(sy, 'PSA 10', { forLink: true })), 'deep link carries the promo number');

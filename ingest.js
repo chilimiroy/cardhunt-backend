@@ -699,10 +699,24 @@ async function tcgdexPriceFor(card) {
     cardmarket: p.cardmarket && !_tdxConflicts.cardmarket.has(String(p.cardmarket.idProduct)) ? p.cardmarket : null,
     cardmarketShared: !!(p.cardmarket && _tdxConflicts.cardmarket.has(String(p.cardmarket.idProduct))) };
   if (_tdxConflicts.tcgplayer.has(String(b.productId))) return { price: null, none: 'shared' };
+  // The 1st Edition price is in the same response. Until 2026-10-02 it was
+  // dropped here, and nothing else wrote one: every 1st Edition price on
+  // the card page was whatever a harvest had left, frozen (Lugia neo1-9
+  // held $164.80 while TCGdex said $1,134.85). Carried out beside the
+  // headline and written as its own edition row (writeEditionPrice) —
+  // never as the headline, which baseEditionSql keeps Unlimited.
+  let firstEdition = null;
+  if (!String(b.printing).startsWith('1st-edition')) {
+    const fe = tdxp.tcgplayerByEdition(d.pricing && d.pricing.tcgplayer).firstEdition;
+    if (fe && fe.price > 0 && !_tdxConflicts.tcgplayer.has(String(fe.productId))) firstEdition = fe;
+  }
   return {
     price: b.price, source: `tcgdex_tcgplayer_${b.printing}`, marketplace: 'tcgplayer',
     matched: d.name, matchedBy: 'productId',
-    meta: { printing: b.printing, productId: b.productId, currency: 'USD', updated: p.tcgplayerUpdated }
+    meta: { printing: b.printing, productId: b.productId, currency: 'USD', updated: p.tcgplayerUpdated },
+    firstEdition: firstEdition && { price: firstEdition.price, source: `tcgdex_tcgplayer_${firstEdition.printing}`,
+      meta: { printing: firstEdition.printing, productId: firstEdition.productId, currency: 'USD',
+              updated: p.tcgplayerUpdated, role: 'edition' } }
   };
 }
 
@@ -1985,6 +1999,21 @@ async function writeSecondReading(card, res) {
   return r ? 1 : 0;
 }
 
+// A 1st Edition price, in its own row: edition '1st-edition', so
+// printsql.baseEditionSql keeps it out of every headline and the card
+// page's editionPrices reads it. Not gated by sourcerank — it never
+// competes with the headline.
+async function writeEditionPrice(card, res) {
+  const e = res && res.firstEdition;
+  if (!db || !e || !(e.price > 0)) return 0;
+  const r = await db.query(
+    `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition, edition, source_meta)
+     VALUES ($1,$2,$3,'tcgplayer','raw_nm','1st-edition',$4)`,
+    [card.api_card_id, e.price, e.source, JSON.stringify(e.meta)])
+    .catch(err => { console.log(`  edition write failed ${card.api_card_id}: ${err.message}`); return null; });
+  return r ? 1 : 0;
+}
+
 async function writeVariantPrices(card, res) {
   if (!db || !res || !Array.isArray(res.variantPrices)) return 0;
   let n = 0;
@@ -2183,6 +2212,7 @@ async function safePrices(langFilter, ...flags) {
     const res = await safePriceFor(card);
     await writeVariantPrices(card, res);
     await writeSecondReading(card, res);
+    await writeEditionPrice(card, res);
     done++;
     const pct = ((done / todo.length) * 100).toFixed(1);
     const eta = Math.round(((Date.now() - t0) / 60000 / done) * (todo.length - done));
@@ -5105,6 +5135,7 @@ async function refreshDue(lang, ...flags) {
     const res = await safePriceFor(card);
     await writeVariantPrices(card, res);
     await writeSecondReading(card, res);
+    await writeEditionPrice(card, res);
 
     if (res && res.price > 0) {
       // A lower-confidence source must never replace a higher-confidence

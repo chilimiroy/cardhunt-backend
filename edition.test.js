@@ -161,6 +161,28 @@ ok('a selected 1st Edition shows ITS held price, or a dash — never the Unlimit
    && /price: null/.test(pfn('selectedHeld')));
 ok('edition + printing together has no stored price and says so', /if \(sp && se\) return \{ price: null/.test(pfn('selectedHeld')));
 
+// 2026-10-02 (TASK T2): nothing WROTE a 1st Edition price. TCGdex returns it
+// in the same response the refresh reads; tcgdexPriceFor dropped it, so
+// every 1st Edition price was frozen at what a harvest left (Lugia neo1-9
+// $164.80 held, $1,134.85 live). Measured after: neo3 refresh, 7 rows.
+if (fs.existsSync(__dirname + '/ingest.js')) {
+  console.log('\n6b. THE WRITER (ingest.js)');
+  const ing = fs.readFileSync(__dirname + '/ingest.js', 'utf8');
+  const fnOf = name => { const a = ing.indexOf('async function ' + name + '(');
+    const b = ing.indexOf('\nasync function ', a + 10); return a < 0 ? '' : ing.slice(a, b > a ? b : undefined); };
+  const tpf = fnOf('tcgdexPriceFor'), wep = fnOf('writeEditionPrice');
+  ok('tcgdexPriceFor reads the 1st Edition price with the shared reader',
+     /tdxp\.tcgplayerByEdition\(/.test(tpf) && /\.firstEdition/.test(tpf));
+  ok('...refuses a 1st Edition product TCGdex gives to two cards', /_tdxConflicts\.tcgplayer\.has\(String\(fe\.productId\)\)/.test(tpf));
+  ok('...and never when the headline itself is a 1st Edition key', /startsWith\('1st-edition'\)/.test(tpf));
+  ok('writeEditionPrice stores edition = \'1st-edition\' (kept out of every headline)', /'1st-edition',\$4/.test(wep));
+  ok('the refresh writes it', /await writeEditionPrice\(card, res\);/.test(fnOf('refreshDue')));
+  ok('safeprices writes it', /await writeEditionPrice\(card, res\);/.test(fnOf('safePrices')));
+  // The column is what the headline rule reads first.
+  ok('baseEditionSql excludes a row whose edition column is 1st-edition',
+     /ph\.edition IS NOT NULL/.test(printsql.editionOfSql('ph')) && /'1st-edition'/.test(printsql.baseEditionSql('ph')));
+}
+
 (async () => {
   if (process.argv.includes('--db')) {
     console.log('\n7. THE REAL TABLE (--db)');

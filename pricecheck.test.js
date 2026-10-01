@@ -65,7 +65,7 @@ function slice(src, start) {
       };
       const f = new Function('db', 'tdxp', 'hostDelay', 'DELAY_TCGDEX', 'TCGDEX', 'fetch', 'sleep', 'console',
         'let _tdxConflicts = null, _tdxWarned = false;\n' + src + '\nreturn tcgdexPriceFor;')(
-        null, { parsePricing: tdxp.parsePricing, loadProductConflicts: async () => conflicts || { ready: true, tcgplayer: new Set() } },
+        null, { parsePricing: tdxp.parsePricing, tcgplayerByEdition: tdxp.tcgplayerByEdition, loadProductConflicts: async () => conflicts || { ready: true, tcgplayer: new Set() } },
         async () => {}, 0, 'https://tcgdex.test', fakeFetch, async () => {}, { log() {} });
       // A bare null (the old function) must count as failures, not crash.
       try { return (await f({ api_card_id: 'en-neo1-9', set_api_id: 'neo1', number: '9' })) || { bare: null }; }
@@ -75,6 +75,10 @@ function slice(src, start) {
       '1st-edition-holofoil': { marketPrice: 164.8, productId: 11 }, 'unlimited-holofoil': { marketPrice: 531.39, productId: 12 } } } } };
     let r = await run([lugia]);
     ok(r.price === 531.39 && /unlimited-holofoil/.test(r.source), 'priced: the Unlimited figure (' + JSON.stringify(r && r.price) + ')');
+    // 2026-10-02: the 1st Edition figure in the same response is carried out
+    // beside the headline (it was dropped, and nothing else wrote one).
+    ok(r.firstEdition && r.firstEdition.price === 164.8 && /1st-edition-holofoil/.test(r.firstEdition.source)
+       && r.firstEdition.meta.role === 'edition', 'the 1st Edition figure rides beside it, as its own row (' + JSON.stringify(r && r.firstEdition && r.firstEdition.price) + ')');
     r = await run([{ status: 404, body: {} }]);
     ok(r.price === null && r.none === 'not-on-tcgdex', '404 -> not-on-tcgdex: ' + JSON.stringify(r));
     r = await run([{ status: 200, body: { name: 'Sprigatito', pricing: { tcgplayer: null, cardmarket: {} } } }]);

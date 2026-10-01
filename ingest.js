@@ -4974,7 +4974,13 @@ async function refreshDue(lang, ...flags) {
   });
   console.log('');
 
-  // Latest real price and when it was taken, per card
+  // Latest real HEADLINE price and when it was taken, per card — the card
+  // page's own number (ungraded, base printing, not a second reading).
+  // It was the latest row of ANY kind until 2026-10-02 (TASK T2): a
+  // Cardmarket second reading written while the TCGplayer match was
+  // blocked reset the card's clock, so a card that got NO price looked
+  // freshly priced for its whole interval — measured on mep, 7 of 7 — and
+  // its tier and held_source came from the EU reading or a slab aggregate.
   const rows = await db.query(`
     SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_name, c.set_api_id,
            c.set_total, c.set_release, c.variants, c.name_en,
@@ -4984,6 +4990,7 @@ async function refreshDue(lang, ...flags) {
     LEFT JOIN LATERAL (
       SELECT price_usd, recorded_at, source FROM price_history p
       WHERE p.card_api_id = c.api_card_id AND p.source NOT LIKE 'estimate%'
+        AND p.grade IS NULL AND ${require('./printsql').basePrintingSql('p', 'c')}
       ORDER BY recorded_at DESC LIMIT 1
     ) lp ON TRUE
     WHERE c.api_card_id LIKE $1

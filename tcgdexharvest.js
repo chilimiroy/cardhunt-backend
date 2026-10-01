@@ -191,7 +191,7 @@ async function harvest(lang, flags) {
   const fetched = [];
   for (let i = 0; i < batch.length; i++) {
     const c = batch[i];
-    const d = await get(`${TCGDEX}/${lang}/cards/${c.set_api_id}-${c.number}`);
+    const d = await get(`${TCGDEX}/${lang}/cards/${c.set_api_id}-${encodeURIComponent(c.number)}`);
     await sleep(DELAY);
     if (!d) { notFound++; continue; }
     const p = T.parsePricing(d);

@@ -1093,8 +1093,9 @@ function verifyPromoNumber(t, card, grade, p) {
 // Pure subsets, keyed by set id: every card carries the prefix and our
 // set_total is the subset's own printed total.
 const SUBSET_SETS = {
-  swsh9tg: 'TG', 'swsh9.5tg': 'TG', swsh10tg: 'TG', 'swsh10.5tg': 'TG',
-  swsh11tg: 'TG', 'swsh11.5tg': 'TG', swsh12tg: 'TG', 'swsh12.5tg': 'TG',
+  // (swsh9.5tg..swsh12.5tg were duplicates of these, deleted 2026-10-01 —
+  // dupsets-purged-20261001.json)
+  swsh9tg: 'TG', swsh10tg: 'TG', swsh11tg: 'TG', swsh12tg: 'TG',
   'swsh12.5gg': 'GG', 'swsh4.5sv': 'SV', sma: 'SV',
 };
 // A prefixed number inside a MIXED set (Generations RC5, Aquapolis H12,

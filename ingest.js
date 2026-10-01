@@ -37,7 +37,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.9.1';   // bump when this file changes
+const VERSION = '5.9.2';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -4223,7 +4223,7 @@ async function buildManifest(lang, arg1, arg2) {
     const rarityCounts = {};
 
     for (const c of cards.rows) {
-      const d = await get(`${TCGDEX}/${lang}/cards/${setId}-${c.number}`);
+      const d = await get(`${TCGDEX}/${lang}/cards/${setId}-${encodeURIComponent(c.number)}`);
       await sleep(DELAY_TCGDEX);
       checked++;
 
@@ -4334,7 +4334,7 @@ async function verifySetData(lang, setId) {
 
   for (let i = 0; i < cards.rows.length; i += step) {
     const c = cards.rows[i];
-    const d = await get(`${TCGDEX}/${lang}/cards/${setId}-${c.number}`);
+    const d = await get(`${TCGDEX}/${lang}/cards/${setId}-${encodeURIComponent(c.number)}`);
     await sleep(DELAY_TCGDEX);
 
     if (!d || !d.name) {
@@ -4638,7 +4638,7 @@ async function nameProbe(lang, setId) {
   // 1. TCGdex per-card endpoint
   console.log('  TCGdex per-card endpoint');
   for (const n of nums) {
-    const url = `${TCGDEX}/${lang}/cards/${setId}-${n}`;
+    const url = `${TCGDEX}/${lang}/cards/${setId}-${encodeURIComponent(n)}`;
     const d = await get(url);
     await sleep(DELAY_TCGDEX);
     const ok = !!(d && d.name);
@@ -4773,7 +4773,7 @@ async function cnProbe(lang, setIdArg) {
   console.log('  TCGdex per-card rarity');
   let tcgdexRarity = 0;
   for (const n of ['1','2','3']) {
-    const d = await get(`${TCGDEX}/${lang}/cards/${setId}-${n}`);
+    const d = await get(`${TCGDEX}/${lang}/cards/${setId}-${encodeURIComponent(n)}`);
     await sleep(DELAY_TCGDEX);
     const has = !!(d && d.rarity);
     if (has) tcgdexRarity++;

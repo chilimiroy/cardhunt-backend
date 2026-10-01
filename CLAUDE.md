@@ -66,6 +66,8 @@ has drifted apart eventually, and each drift is a lesson below.
 | `sourceprobe.js` | does this source answer RENDER, or only a home IP? |
 | `digital.js` | is this set digital-only (Pokémon TCG Pocket)? — by SERIES, hidden at every read |
 | `certcheck.js` | what cert number did the seller enter on this eBay slab, and what photos did they post? — on demand, ONE shared getItem per listing (Verify + Photos), 15 min; PSA answer permanent (PSA half NOT built) |
+| `stampcheck.js` | does this listing's PHOTO show a reprint's commemorative stamp? — on demand, **0 eBay calls** (eBay's image CDN), per-card templates in `stamps.json` (built by `stampbuild.js` from OUR scans); found / not visible / unreadable, never "verified original" |
+| `setyield.js` | did a refresh price NOTHING for a whole set, or for 200+ cards in a row? — names it, exits 2 |
 
 ## What ships and what does not
 
@@ -77,6 +79,7 @@ ebayquota.js  ebayratecheck.js  estimator.js  fx.js  gradeprice.js
 jpfilter.js  linkaudit.js  listingparse.js  outlier.js  setaudit.js
 sourceprobe.js  tcgdexprice.js  yuyutei.js  digital.js  trending.js
 searchaudit.js  certcheck.js  sitecheck.js  costmeter.js
+stampcheck.js  stamps.json  stampbuild.js  stamp.fixture.json  setyield.js
 checkout-disabled.js  login-disabled.js   (preserved, never loaded or served)
 migration-grade-dimension.sql  migration-image-source.sql  migration-variants.sql
 printsql.js  variants.fixture.json  variants.pricing.fixture.json
@@ -273,6 +276,14 @@ machine via `node sourceprobe.js`. **Do not re-derive these — re-run the probe
 | Mercari JP | — | — | App Router, no `__NEXT_DATA__`; API needs DPoP signing |
 | Facebook Marketplace | — | — | login-gated — deep link only, never scraped |
 
+**Re-probed from home 2026-10-02** (`node sourceprobe.js`): PriceCharting now
+**403** (a Cloudflare "Just a moment" page — it was 200 JSON) and Cardrush now
+**200** with markers (it was 403). Render not re-probed. Yahoo **Auctions** is not
+in the probe's registry at all; `yahoogate.js` answered 200 from home. And
+Yahoo's LIVE search page (`/search/search`) no longer carries `__NEXT_DATA__`
+(closed search still does): `yahooJapanSearch`'s live-listings fallback has been
+returning nothing, silently, for every card with no closed sales. Not rebuilt.
+
 COMC and Cardrush are not IP problems to route around: they refuse a home
 connection as well, which puts them with Facebook — closed to automation, deep
 link only. Mercari and Facebook block automation deliberately; deep links are
@@ -377,6 +388,62 @@ only; that is a script run deliberately, the `gradeprices.js` shape.
 
 ---
 
+# REPRINT vs ORIGINAL — settled, and the stamp (2026-10-02)
+
+**Settled — do not explore a fourth time.** No eBay field separates a 30th
+Celebration / Celebrations reprint from its original. Three measurements,
+one answer: **Set** says "Celebrations" on 3 of 10 genuine 30th CC Lugias;
+**Year** is filled on 34-48%; **epid** (catalogue product) is seller-chosen
+and ~12% of 30th listings carry the Aquapolis one. All three are
+seller-entered signals, not gates. The title gate (`REPRINT_FAMILIES`,
+`printingConflict`) stays the answer; the photo is the second check.
+
+**The photo can tell them apart.** A note that "image matching cannot work
+because a reprint reproduces the artwork" was the wrong conclusion — it is
+not in this file or its git history today, but it is recorded here so it
+is not re-derived: we are not comparing artwork, we look for a mark present
+on one card and absent on the other. 30th Celebration reprints carry a
+Pikachu emblem with "3"/"0" cheeks beside the art; Celebrations Classic
+Collection the same emblem with "2"/"5". Measured on real listing photos
+(eBay CDN, 0 API calls; photos looked at, never kept):
+
+| question | answer |
+|---|---|
+| size | **s-l500** — legible when the card fills the frame at s-l225, gone on small/angled cards there (the row thumbnail is s-l225); s-l1600 rescued one glare photo |
+| framing | the stamp is visible to a person on ~97% of reprint photos (Aquapolis listings: 68 of 69 reprints at s-l500; the one: glare); slabs fine; 1 of 86 was a card back |
+| one template for all cards | **fails** — a Lugia-cut template caught 2/66 30th Pikachus, 0/57 Charizards, 0/77 Rayquazas; a bare masked emblem matched any yellow blob (Lugia originals median 0.69 vs reprints 0.81) |
+| a template per card, cut from OUR scan of the reprint with its surrounding art | **works.** At 0.70: 345 of 373 reprint photos (92.5%) across Lugia, Pikachu, Charizard, Rayquaza; **0 of 16 hand-labelled Aquapolis originals flagged**; every one of 22 flags inside the originals' own listings was a stamped reprint on inspection. 0.66 flags 3 Rayquaza originals |
+| Celebrations (CC002 Charizard) | 59 of 79 (75%) — but ~10 of the 20 misses are **metal** Charizards (a different product the gate keeps on the CC card) — ~86% of real CC photos |
+
+Labels are Claude's, by eye from the photos, with zooms where unsure — not
+Roy's. Re-label a sample before moving the threshold.
+
+**What it found that nothing else could.** Of the 86 Aquapolis Lugia rows
+on 2026-10-02, **69 were reprints**: 52 inside the reprint price band
+(flagged) and **18 outside it, unflagged**, $280-$2,100 — including the
+cheapest row on the page. Rayquaza-EX's reprint sells at the original's
+price ($25-30), so no price band can ever separate those two; 18 stamped
+reprints sat unflagged in its 162 rows.
+
+**Built, on demand** (`/api/stamp/:cardId?item=`, "Check photo for reprint
+stamp" on every eBay row of the 55 originals; `stampcheck.js`): 0 eBay
+calls, the row's own photo from `i.ebayimg.com` only (never a caller's URL),
+a worker thread (~1.2 s CPU), 15 minutes in memory. Three states: **found**
+(strong — "looks like the reprint"), **not visible** (weak — "not proof it
+is the original"), **unreadable**. 54 of 55 templates built; `30th-c-020`
+(the bottom half of Darkrai & Cresselia LEGEND) has no stamp on our scan
+and says so (`notBuilt`). BREAK/LEGEND print sideways: their stamp is
+matched a quarter turn round too. The JS matcher was cross-checked against
+the OpenCV measurement on 10 labelled photos (scores within ~0.03, same
+verdicts), 6 through the endpoint and 8 scans — **the full ~900-photo JS
+re-run is still owed** (stopped for low memory, 2026-10-02); its first version removed one
+mean across all three channels and called four original SCANS reprints —
+`stampcheck.test.js` fires on that.
+
+**Not built, deliberately:** anything automatic. Measure the hit rate on
+real presses first (TASK T1's rule). Open: the metal Charizards; the found
+state does not yet move the row into the suspects group.
+
 # CALL COST — what spends eBay quota, measured (2026-10-01)
 
 **Every row was exercised, not read from the code.** Server and scripts ran
@@ -420,6 +487,7 @@ is not handed to a waiter of another origin — it tries under its own. At a
 | "Load more listings" | `?more=1` | **1 per site with more** (8 measured) |
 | Verify (PSA cert) | `/api/cert` | **1** getItem |
 | Photos, same listing as Verify | `/api/photos` | **0** — shared 15-min getItem cache; another listing 1 |
+| Check photo for reprint stamp | `/api/stamp` | **0** — measured 2026-10-02 under costmeter: 6 presses, `ebayHttp` unchanged, 6 fetches from `i.ebayimg.com` (the CDN, not the API). ~2 s each (worker thread) |
 | Search, query resolving to one card | `/api/search?q=` | **1 per resolved card** (+ reprints: "Charizard 4/102 Base Set" = 3); graded query 1 |
 | Search, ambiguous name ("Pikachu") / nonsense / `listings=0` | same | **0** — listings only when the query resolves |
 | Trending · cards · history · sets · set page · market · alerts (list, triggered) · portfolio · quota read · listings-log · `dryRun=1` | | **0** each |
@@ -635,6 +703,18 @@ overdue they are relative to their own interval, weighted by value, so a partial
 run always covers what matters most. Roughly 3,700 cards a day, about 2.6 hours.
 Cards moving 10%+ are logged.
 
+**A refresh that prices nothing says so** (2026-10-02, `setyield.js`). At
+the end of each language: every set with 3+ cards asked and NONE priced
+or refused is named — loud, `refresh-empty-sets.log`, **exit code 2** (so
+Task Scheduler's LastTaskResult and task-watch.log carry it) when those
+cards HAD prices; quietly when they never did. Also any run of 200+
+consecutive cards with nothing (a source stopping mid-run — sets interleave
+by urgency, so no single set looks empty), and what Yahoo answered, by
+kind. Made to fire on the real refresh (mep with its alias removed: exit 2;
+restored: exit 0), and it named dpp/basep on its first real run. "Due" is
+judged on the headline row only (`basePrintingSql`, ungraded): a second
+reading used to reset the clock of a card that got no price.
+
 **`--max` applies PER LANGUAGE** (measured 2026-10-01): `refresh all` loops
 en, ja, zh-tw, zh-cn and gives each its own cap, so the nightly
 `--max=4000` allows up to **16,000 cards**, not 4,000. `--hours=4` is the
@@ -790,7 +870,7 @@ Standalone by design, so a revert of `ingest.js` cannot take them with it.
 Counts are today's; a suite that suddenly reports fewer has lost assertions.
 
 ```powershell
-node approute.test.js        # 50   /app serves, and the project root does not leak
+node approute.test.js        # 54   /app serves, and the project root does not leak
 node cardmatch.test.js       # 27   the gate
 node cardmatch2.test.js      # 29
 node cardmatch3.test.js      # 44   NOT_A_SINGLE_CARD word boundaries, both directions
@@ -832,15 +912,17 @@ node nofabricated.test.js    # 48   no password/card input, no invented shops/ho
 node nosoldscrape.test.js    # 17   no eBay sold-page scrape; real /api/market handler, network stubbed (--live: +3)
 node gateaudit.test.js       # 62   T9: every path reaches the gates it needs, and reports (--live: +8)
 node variants.test.js        # 81   T10: printings from the REAL TCGdex shape; the gate; every reader; the page; Typical follows the printing (--db: +6)
-node pricesource.test.js     # 49   T1/T4: set-checked TCGplayer match; shared products refused; Yahoo mirrors kept out of the base
+node pricesource.test.js     # 56   T1/T4: set-checked TCGplayer match; shared products refused; Yahoo mirrors kept out of the base
 node eusites.test.js         # 80   T1: eBay DE/FR/IT/ES titles — reprints, junk, slabs, conditions; both directions, real titles
 node quotaui.test.js         # 24   T3: a quota refusal reaches the panel in words; indicator wiring (23 fail on the old page)
-node edition.test.js         # 69   T3: 1st Edition/Shadowless/Unlimited — reader, gate, query, headline rule, page (--db: +2)
+node edition.test.js         # 76   T3: 1st Edition/Shadowless/Unlimited — reader, gate, query, headline rule, page (--db: +2)
 node promo.test.js           # 69   Black Star Promos: no set total asked or checked; real live titles kept; McDonald's refused
 node subset.test.js          # 27   TG16/TG30, SV107/SV122, GG01/GG70 asked and kept; Generations RC by number alone
 node noautoexpand.test.js    # 19   opening a card is one call: no auto-expansion in any form; empty panel names the sites not asked
 node claudesplit.test.js     # 23   every CLAUDE_ARCHIVE.md heading kept or cited here; the restored lessons present
-node pricecheck.test.js      # 33   editions compared like for like; the internal search only where TCGdex cannot price, labelled; Cardmarket a second reading (--db: +2, rolled back)
+node pricecheck.test.js      # 34   editions compared like for like; the internal search only where TCGdex cannot price, labelled; Cardmarket a second reading (--db: +2, rolled back)
+node setyield.test.js        # 42   a set (or 200+ cards in a row) that priced nothing is NAMED and exits 2; scattered gaps are not; the due-clock reads the headline row
+node stampcheck.test.js      # 59   the stamp check: CDN-only URL, three states, both directions on our scans (fires on the one-mean bug), 0 eBay calls (--live: +8)
 ```
 
 Run them all:
@@ -924,6 +1006,25 @@ the `looksLikeJunk` mistake, so discriminators skip when a field is missing —
 but invisibly is how the year gate died. `verify()` returns `evidence` and
 `unchecked`; a missing language raises `gateWarning`.
 *Archive:* "A gate that skips says nothing; now it says what it skipped"
+
+**A guard that over-blocks fails invisibly — make an empty result report.**
+The 9/29 set-name check stopped six sets for two days and the run said
+"N refreshed, M without data". Now `setyield.js` names a set that priced
+nothing (exit 2), and a 200-card run of nothing; on its first real run it
+named dpp and basep, whose cause was not the alias but our set name in the
+QUERY ranking the card out of TCGplayer's results (fixed: ask again in
+TCGplayer's own name, on a miss only). Every silent `continue` in a fetch
+is an over-block nobody can see: count what the source answered.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**A row that is not the headline must not move the headline's clock.** The
+refresh judged "due" on the newest row of any kind, so a Cardmarket second
+reading written for a card that got NO price made it look freshly priced
+(mep 7/7). Read the headline row (`basePrintingSql`, ungraded) wherever
+freshness is judged. And a value dropped on the way out is a value frozen:
+TCGdex's 1st Edition price came in every refresh response and was
+discarded, so every 1st Edition price was what a harvest once left.
+*Archive:* none — 2026-10-02, PROGRESS.md
 
 **A set of listings carrying no rejection count has not run the gate.** Every
 source reports `kept`, `rejected`, `scanned`, `dropped[]`, `gate`. Count what
@@ -1032,6 +1133,16 @@ a vintage Common can be ¥24,800 — read the source's own rarity label.
 Hidden is an answer: a set filtered out of one query fell through to a live
 fallback and came back as estimates, so hidden returns `hidden: {reason}`.
 *Archive:* "Not every gap is a bug", "Vintage changes the floor", "Vintage Commons can be genuinely valuable", "Hidden is an answer, not an absence (2026-09-27)"
+
+**A reprint is told apart by what is ON the card, not what sellers type.**
+Set, Year and epid are seller-entered (REPRINT vs ORIGINAL). The
+commemorative stamp is printed on every 30th / Celebrations reprint: a
+per-card template cut from our own scan finds it in 92.5% of photos with
+no false flags at 0.70. One template for every card does not work, and a
+port of a measured algorithm is not the algorithm until it is cross-checked
+against it on the same inputs (one channel mean vs three: 4 originals
+flagged). Absence of the stamp is weak evidence and is never shown as a pass.
+*Archive:* none — 2026-10-02, PROGRESS.md
 
 **Every grading scale is read from the company, not assumed.** PSA has no
 9.5; TAG no 9.5; ACE whole grades only; AGS "Legendary" only beside a 10.

@@ -1,5 +1,58 @@
 # CardHunt — Progress Log
 
+## 2026-10-02 — TASK T1 stamp detection; T2 the run's loose ends
+
+**T1 — the reprint stamp, measured then built** (CLAUDE.md "REPRINT vs ORIGINAL").
+- 14 eBay calls spent opening 7 cards (Aquapolis/30th Lugia, Base Set
+  Pikachu/Charizard, Rayquaza-EX and their reprints); ~900 photos fetched
+  from eBay's CDN (not the API) into the scratchpad, looked at, not kept.
+- Labelled by eye (Claude, not Roy): of 86 Aquapolis rows, 69 reprints, 16
+  originals, 1 card back. 18 reprints sat OUTSIDE the reprint price band,
+  unflagged, $280-$2,100, the cheapest row among them. Rayquaza: 18 stamped
+  reprints in 162 rows at the original's own price.
+- s-l500 is the size. Template matching (OpenCV): one template fails across
+  cards; a per-card template cut from OUR scan of the reprint works — at
+  0.70, 345/373 reprint photos (92.5%), 0/16 labelled originals, 22/22 flags
+  in originals' listings were reprints. Celebrations CC002 59/79, ~10 of the
+  misses metal Charizards.
+- Built: stampcheck.js + stamps.json (54 templates by stampbuild.js; 30th-c-020
+  has no stamp on its scan) + /api/stamp + "Check photo for reprint stamp" on
+  eBay rows of the 55 originals. 0 eBay calls, measured under costmeter (6
+  presses). Verified in the browser on the metered local server: found on a
+  reprint, "no stamp visible — not proof" on an original, no button on sv10-1.
+- Found by the cross-check: the first JS port removed one mean across all
+  channels and flagged all four original scans; fixed to OpenCV's per-channel
+  form, and stampcheck.test.js fires on the old one. BREAK/LEGEND print
+  sideways — the scan is turned to find the stamp. Cross-check JS vs OpenCV: 10 labelled photos side by side (scores within ~0.03, same verdicts), 6 through the real endpoint, 8 catalogue scans both ways. The FULL ~900-photo run was stopped by Claude Code for low memory and NOT re-run — still owed.
+- Correction asked for: the "image matching cannot work" note is not in
+  CLAUDE.md or its history; the corrected reasoning is recorded anyway.
+
+**T2 — loose ends.**
+- `0023b8b` refresh "due" reads the headline row: a second reading reset
+  the clock of a card that got no price (mep 7/7). EN due 1,147 -> 1,188.
+- `6b493f5` setyield.js: a set (3+ asked, nothing) or 200+ cards in a row
+  with nothing is named, exit 2, refresh-empty-sets.log; Yahoo's answers
+  counted. Fired on mep with its alias removed; silent when restored.
+- `1465f6a` 1st Edition prices written again (they were dropped on the way
+  out of tcgdexPriceFor). neo3: 7 rows. **Pikachu Star ex13-104 replaced**:
+  $900 -> $1,899.99. **Lugia neo1-9 1st Edition NOT yet**: the refresh never
+  wrote editions before this; Lugia is next due ~2026-10-02 22:00 UTC, so the
+  3 Oct 03:00 nightly writes it. Check then.
+- `f31734e` dpp and basep: the new report named both on its first run
+  (alias added and still nothing). Cause: our set name in the query ranks
+  the card out of TCGplayer's results. Asked again in TCGplayer's name on a
+  miss: dpp 45/48, basep 49/51, each at TCGplayer's price for that number.
+- The 222: 224 visible EN cards with no headline in 7 days (33 never). 88 were
+  dpp+basep (now priced); the rest are promos (svp 7, np 5, xyp 4), trainer
+  kits (~25), McDonald's (~17), lettered numbers (RC, 'a'). Mostly Commons.
+- JA, 1 Oct: 110 priced of the first 1,200, then nothing for 1,500 in a row
+  (time budget hit at 2,719). Yahoo answers from home now; most likely
+  throttling mid-run. The streak report and the Yahoo counter now show it.
+  Found with the counter: Yahoo's LIVE search page has no __NEXT_DATA__ —
+  the live fallback returns nothing. Not rebuilt.
+- Source probe drift (home): PriceCharting 403 now, Cardrush 200 now.
+- Not done: Tyrantrum mep-066 -68% is the known stale hold, not chased.
+
 ## 2026-10-01 (evening) — after manifest: sources, cleanup, art, epid, images
 
 - **Manifest's 125 not found:** 120 = the four duplicate `.5tg` sets

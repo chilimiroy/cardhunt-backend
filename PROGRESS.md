@@ -1,5 +1,25 @@
 # CardHunt — Progress Log
 
+## 2026-10-01 (late) — no auto-expansion; CLAUDE.md split
+
+- **Opening a card is one eBay call** (`f14b50e`). AUTO_EXPAND_BELOW, the
+  listingsFor branch, `open+auto`, `autoExpanded` and `?auto=0` deleted, not
+  zeroed. Live on `en-ex15-95` (0 in the US): 1 call, was 8. The empty panel
+  says only eBay US was asked, names the 7 not asked, carries the button;
+  pressed, it found the one listing (AU, $574). noautoexpand.test.js 19
+  (10 fail on the old files).
+- **CLAUDE.md split.** Full copy -> `CLAUDE_ARCHIVE.md` (body byte-identical
+  to 0f9f24a, frozen note on top). CLAUDE.md 2,883 -> ~1,290 lines: current
+  state, open work, commands kept; 122 lesson/history sections rewritten as
+  rules in LESSONS, each citing its archive heading. Restored from the .bak
+  files: Sources are not interchangeable, Silent failures, "Nothing happened"
+  is not proof, probe API shapes, verify the tool, Yahoo category filter.
+  Stale and corrected: T3 "alerts still simulated" (the page calls
+  /api/alerts 8 times; triggers record the listing); "one row violates the id
+  convention" (zero). The 0x08 one-liner moved into COMMANDS. Rules 9-11
+  added. `claudesplit.test.js` fails if an archive heading is neither kept
+  nor cited (watched fail on a removed citation).
+
 ## 2026-10-01 (night) — TASK T1-T4: images, promos, subsets, eBay Set/Year
 
 - **T1** (`6911f2a`): the biggest cost is TCGdex's asset throughput (~2

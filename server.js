@@ -3069,6 +3069,10 @@ async function rebuildView(card, requestedId, grade, printing, edition, vs) {
     status: 'ok', count: r.kept, scanned: r.scanned, rejected: r.rejected, sites: r.sites,
     pending: r.pending, pages: r.pages,
     printing: r.printing, editionRefused: r.editionRefused,
+    // The drop reasons ride on every view, as gatherListings already does —
+    // without them a column of "B: all 13 rejected" (T2, promo sets) cannot
+    // say WHY, and linkaudit had nothing to print.
+    droppedSample: (r.dropped || []).slice(0, 12),
     summary: `${r.kept} kept, ${r.rejected} rejected of ${r.scanned} scanned` });
   delete sources.ebay.reason;
   gathered.sources = sources;

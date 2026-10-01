@@ -1,5 +1,33 @@
 # CardHunt — Progress Log
 
+## 2026-10-01 (evening) — after manifest: sources, cleanup, art, epid, images
+
+- **Manifest's 125 not found:** 120 = the four duplicate `.5tg` sets
+  (deleted, `55b62fb`); 4 transient; 1 encoding bug (Unown `exu-?`), fixed.
+- **TCGplayer internal search kept as the labelled last resort** (`427ce50`,
+  decided with Roy): it is the only TCGplayer price for 2,025 visible English
+  cards and TCGplayer has no legitimate route. TCGdex first everywhere; rows
+  carry `source_meta.via`; TCGdex Cardmarket stored as a second reading,
+  never the headline (verified on Render: 38 cards whose newest row is a
+  second reading still headline their TCGplayer price). Six set aliases
+  probed and added — the 9/29 set check had stopped those sets refreshing.
+  Re-check TCGdex coverage ~2027-01.
+- **pricecheck per edition:** neo1 10/12 MISMATCH -> 1/24. Across 13 sets
+  after safeprices: 148 comparisons, 2 MISMATCH (both stale holds TCGdex now
+  prices: neo1-9 1st Edition $164.80 vs $1,134.85; ex13-104 $900 vs
+  $1,899.99), 29 "not checkable" (TCGdex has no TCGplayer price).
+- **safeprices en --all:** 672 priced (667 fallback, labelled; 5 TCGdex),
+  222 no data, 0 TCGdex-unreachable skips; 409 second readings. New
+  fallback prices vs each card's prior: median 1.00, 452/476 within 25%.
+- **Yahoo mirror rows:** rerun gave 23 cards / 26 rows (not 48), deleted
+  with backup; headlines fall to Yuyu-tei (Caterpie $9.55 -> $0.19).
+- **Art:** ccfill pass 2 — 508 cards, 25 logos, `set_logo_source` migration.
+- **epid:** different ids per print, but seller-chosen; ~12% of 30th CC
+  listings carry the Aquapolis epid. Signal, not gate. Not built.
+- **Images:** JA thumbnails -> `_SM` (8,359; 330 KB -> 58 KB); card page
+  paints the thumbnail, swaps the full art in (local: 178ms / 1.95s). ZH: no
+  smaller file exists.
+
 ## 2026-10-01 (late) — no auto-expansion; CLAUDE.md split
 
 - **Opening a card is one eBay call** (`f14b50e`). AUTO_EXPAND_BELOW, the

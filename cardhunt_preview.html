@@ -2974,7 +2974,7 @@ async function openCard(id){
     });
     document.getElementById('cd-set-lnk').textContent=c.set&&c.set.name?c.set.name:'Set';
     document.getElementById('cd-bc').textContent=nameWithEnPlain(c.name, c.nameEn);
-    document.getElementById('cd-img').src=c.images&&c.images.large?c.images.large:(c.images&&c.images.small?c.images.small:'');
+    showCardArt(c);
     document.getElementById('cd-name').textContent=c.name;
     document.getElementById('cd-sub').innerHTML=( c.set&&c.set.name?c.set.name:'')+' · #'+c.number+'/'+(c.set&&c.set.total?c.set.total:'?')+' · '+(c.set&&c.set.releaseDate?String(c.set.releaseDate).slice(0,4):'')+' · <span class="b bg2">'+(c.rarity||'?')+'</span>';
     var base=getBase(c);S.activeGradeBase=base;
@@ -5764,6 +5764,26 @@ if ('MutationObserver' in window) {
   }).observe(document.documentElement, { childList: true, subtree: true });
 }
 
+// ── The card page's art: thumbnail now, full size when it has arrived ──
+// The full image is 320-385 KB (TCGdex high.png: 4.4s measured 2026-10-01),
+// and the thumbnail is almost always already in the cache from the tile
+// just clicked. So the thumbnail paints at once and the full art replaces
+// it only when fully loaded — never a blank box while 385 KB crawls in. The
+// swap is keyed to the card, so a full image arriving late cannot land on
+// a different card opened since.
+function showCardArt(c) {
+  var img = document.getElementById('cd-img');
+  if (!img) return;
+  var small = c.images && c.images.small, large = c.images && c.images.large;
+  img.dataset.want = c.id || '';
+  img.src = small || large || '';
+  if (small && large && large !== small) {
+    var want = img.dataset.want, pre = new Image();
+    pre.onload = function () { if (img.dataset.want === want) img.src = large; };
+    pre.src = large;
+  }
+}
+
 function imgOrSk(c) {
   var imgSrc = c.images && (c.images.small || c.images.large) ? (c.images.small || c.images.large) : '';
   // Artwork borrowed from the English release — same illustration, English text
@@ -6172,6 +6192,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261001-0f9f24a-dirty-noauto &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261001-b927663-dirty-cardart &middot; click to hide</div>
 </body>
 </html>

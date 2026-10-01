@@ -208,6 +208,18 @@ Their rarity is positional inference. Yuyu-tei can supply it; still open.
 
 ## Known blemishes, measured today
 
+- **2026-10-01, data changes (each with a backup in the project root):**
+  the four duplicate Trainer Gallery sets `swsh9.5tg`…`swsh12.5tg` deleted
+  (120 cards, 729 price rows; every twin held its own price, median ratio
+  1.000 — `dupsets-purged-20261001.json`); 26 Yahoo base rows on 23 SV2a/SV8a
+  cards deleted where `jpcheck ja --both` showed the stored base price EQUAL
+  to today's Master Ball mirror median (`yahoojp-mirror-purged-20261001.json`;
+  "48" was the whole MIRROR class across all sets, not this criterion);
+  8,359 Japanese thumbnails pointed at `_SM` (`jpthumbs-backup-20261001.json`);
+  508 artworks + 25 logos from pokemontcg.io (`ccfill-backup-*.json`).
+  Manifest's 125 "not found" were those 120 duplicates, 4 transient fetch
+  failures and Unown `exu-?` (stored `%3F`, URL built unencoded — fixed).
+
 - **English names are thin where they matter most.** Japanese cards carry
   `name_en` on 5,097 of 14,023 (36%) and `set_name_en` on **653 (4.7%)**.
   eBay is searched with the English name, so for ~64% of Japanese cards the
@@ -1107,7 +1119,13 @@ data is cached 15 minutes and never stored (terms); aggregates may be.
 **Before inventing a source, check what the current query already
 computes** (the set list was selecting a sample image and discarding it).
 And before adding a third source, check why the second was never asked —
-setmeta's pokemontcg.io fallback covers 3 sets; 49 have no art.
+setmeta's pokemontcg.io fallback covered 3 sets while 49 had no art. Filled
+2026-10-01 by `ccfill.js` pass 2 (explicit `ART_SETS` map read off
+pokemontcg.io's /v2/sets): 508 cards' art, 25 sets' logos
+(`set_logo_source`), every URL fetched before writing — which refused four
+McDonald's sets whose listed image URLs answer 404. Still artless: McDonald's
+2023/2024, mep, mfb, xya, ex5.5, miscp, the BW/DP/HS/SM/XY trainer kits
+(no pokemontcg.io set), and sm7.5 #60/60a-style ambiguous numbers.
 *Archive:* "The data was already there, fetched and discarded", "TCGdex has no art and no logo for 49 English sets (T3, 2026-10-01)"
 
 **A ratio is meaningless at the price floor; a constant that is never printed
@@ -1120,6 +1138,21 @@ amount. (Still open: `jpfilter.js` uses a hardcoded 157 JPY.)
 in getItem (~79% of slabs), PSA alone has an API (100/day keyless); eBay Set
 is a free filter aspect, Year is filled 34-48% (not a gate); TCGdex's asset
 host is throughput-bound (~2 images/s); trending has no view data.
+**eBay's catalogue product id (epid) is seller-chosen** (2026-10-01,
+`setprobe?epidSearch=`): Aquapolis Lugia (6043385009) and 30th Celebration
+Lugia (9100724204, 19100822444) DO get different ids, but searching by the
+Aquapolis epid returns 30th CC listings first, ~12% of 30th listings carrying
+an epid carry the Aquapolis one, and 26-32% carry none. Errors run reprint ->
+original (the dangerous way); none seen the other way. A signal like Set,
+not a gate; the only safe one-way use is "a REPRINT product's epid on an
+original's search". Not built.
+**Image weights** (2026-10-01): Japanese grid thumbnails now Limitless's own
+`_SM` (274x381, mean 58 KB; was the 736x1024 330 KB full art) — 8,359 of
+8,360, each fetched first, `image_large` unchanged; the card page paints the
+thumbnail then swaps in the full art when loaded (`showCardArt`). Chinese
+art (asia.pokemon-card.com) is already 299x418 — a heavy 257 KB PNG with no
+smaller file; the site's own pages use the same one. Only re-encoding on our
+host would shrink it.
 *Archive:* "Cert verification — measured 2026-09-28, NOT built", "eBay's Set and Year: where they live (T4, 2026-10-01, `/api/ebay/setprobe`)", "Images: TCGdex's asset host is throughput-bound (T1, 2026-10-01)", "Trending, measured 2026-09-24 — `/api/trending`, rules in `trending.js`", "Narrowing vs the 75-row cap — measured 2026-09-27 (`/api/ebay/gradecost`)", "The cap is paged now (`ceadfbc`, 2026-09-28)", "Raw M and DMG: back, seller-stated (`08a05d0`, `d60dc0e`, `b96f1e3`)", "Known, deliberately not built"
 
 ## 4 · The page

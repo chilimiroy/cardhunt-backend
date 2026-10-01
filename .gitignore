@@ -81,6 +81,8 @@ TASK.md
 *.pid
 *-purged-*.json
 *-nulled-*.json
+*-backup-*.json
+jpcheck-*.json
 ingest-progress*.json
 pokedex-ja-en.json
 task-watch.log

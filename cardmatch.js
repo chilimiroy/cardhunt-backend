@@ -1003,6 +1003,80 @@ function reprintOf(card) {
 
 // The card as a seller would describe it: a Classic Collection card carries
 // its original's number. Everything else passes through untouched.
+// ── Black Star Promos (T2, 2026-10-01) ────────────────────────
+// A promo card prints NO set total. Our catalogue's set_total for a promo
+// set is a count of promos (swshp 307), so every promo was asked for as
+// "Sylveon V SWSH202/307 SWSH Black Star Promos" — a string no seller has
+// ever written. Measured live: eBay US answered ebayTotal 0 for SWSH202,
+// SM01 and SVP 001, with the set name dropped as well; what little a
+// query did return, the gate refused on the N/M rule.
+//
+// Keyed by SET ID, never by name (the REPRINT_FAMILIES rule). Two shapes:
+//   prefixed  SWSH202 · SM01 · XY39 · BW01 · DP01 · HGSS01 — the prefix
+//             IS the set, so the number alone identifies the card;
+//   plain     basep 1 · np 1 · svp 001 · mep 001 — a bare number says
+//             nothing about which promo series, so the title must also
+//             say "promo" / "black star" (or the series code) and must not
+//             name another promo series' code.
+const PROMO_SETS = {
+  basep: { code: null },  np: { code: null }, miscp: { code: null },
+  svp:   { code: 'SVP' }, mep: { code: 'MEP' },
+  dpp:   { code: 'DP' },  hgssp: { code: 'HGSS' }, bwp: { code: 'BW' },
+  xyp:   { code: 'XY' },  smp: { code: 'SM' },     swshp: { code: 'SWSH' },
+};
+// Another series' promo number in the title: "SWSH202", "SM 01", "XY-39".
+const PROMO_CODE_IN_TITLE = {
+  SVP: /\bsvp(?![a-z])/i, MEP: /\bmep(?![a-z])/i,   // "SVP001" as well as "SVP 001"
+  DP: /\bdp[\s-]?\d{1,3}\b/i, HGSS: /\bhgss[\s-]?\d{1,3}\b/i, BW: /\bbw[\s-]?\d{1,3}\b/i,
+  XY: /\bxy[\s-]?\d{1,3}[a-z]?\b/i, SM: /\bsm[\s-]?\d{1,3}\b/i, SWSH: /\bswsh[\s-]?\d{1,3}\b/i,
+};
+const PROMO_WORDS = /\bpromos?\b|\bblack\s*star\b/i;
+
+function promoOf(card) {
+  if (!card || reprintOf(card)) return null;
+  const id = String(card.cardId || card.api_card_id || card.id || '');
+  if (id && !/^en-/.test(id)) return null;           // English catalogue only
+  const setId = setIdOf(card);
+  const spec = setId && PROMO_SETS[setId];
+  if (!spec || !card.number) return null;
+  const m = String(card.number).trim().match(/^([A-Za-z]{0,4})0*(\d{1,4})([A-Za-z]?)$/);
+  if (!m) return null;
+  return { setId, code: spec.code, prefix: m[1].toUpperCase(), digits: m[2],
+           suffix: m[3].toLowerCase(), number: String(card.number).trim() };
+}
+
+// The promo's own number in a title, as sellers write it: "SWSH202",
+// "SWSH 202", "#SWSH-202", "SM01", "SVP 001", "#1".
+function promoNumberIn(t, p) {
+  const sfx = p.suffix ? p.suffix + '(?![0-9a-z])' : '(?![0-9a-z])';
+  if (p.prefix) {
+    return new RegExp('(?:^|[^a-z0-9])' + p.prefix + '[\\s#-]*0*' + p.digits + sfx, 'i').test(t);
+  }
+  // Plain: not inside another number, not a price, not one half of an N/M.
+  return new RegExp('(?:^|[^0-9/$€£¥.,])0*' + p.digits + sfx.replace('a-z', '/a-z'), 'i').test(t);
+}
+
+function verifyPromoNumber(t, card, grade, p) {
+  const pairs = numberPairsIn(t).filter(x => !(p.prefix && x.num === normNum(p.number)));
+  if (pairs.length) {
+    return { ok: false, reason: 'title has ' + pairs.map(x => x.raw).join(', ') +
+      ' — a numbered set card, wanted promo ' + p.number };
+  }
+  if (!promoNumberIn(t, p)) {
+    return { ok: false, reason: 'title does not state promo number ' + p.number };
+  }
+  for (const [code, re] of Object.entries(PROMO_CODE_IN_TITLE)) {
+    if (code === p.code) continue;
+    // A prefixed series's own code is fine; another series' code is not.
+    if (re.test(t)) return { ok: false, reason: `title names a ${code} promo, wanted ${p.number} (${card.setName || p.setId})` };
+  }
+  if (!p.prefix && !PROMO_WORDS.test(t) && !(p.code && PROMO_CODE_IN_TITLE[p.code].test(t))) {
+    return { ok: false, reason: `title has #${p.digits} but does not say promo — could be any set's #${p.digits}` };
+  }
+  return { ok: true, reason: null, confidence: p.prefix ? 'promo-number' : 'promo-number+word',
+           matched: { number: p.number, set: card.setName, grade: grade } };
+}
+
 function asPrinted(card) {
   const rp = reprintOf(card);
   if (!rp) return card;
@@ -1365,7 +1439,15 @@ function buildQuery(card, grade, opts) {
   const name = card.nameEn || card.name || '';
   if (name) bits.push(name);
 
-  if (card.number) {
+  const promo = promoOf(card);
+  if (promo) {
+    // The number as printed, no total; a plain number also says "promo",
+    // since "Pikachu 1" alone is every set's #1. The set name is not asked:
+    // sellers write "Promo" or "Black Star Promo", rarely "SWSH Black Star
+    // Promos" — measured, ebayTotal 0 with it and without the total too.
+    bits.push(promo.number);
+    if (!promo.prefix) bits.push('promo');
+  } else if (card.number) {
     const num = String(card.number);
     const tot = card.setTotal ? String(card.setTotal) : null;
     if (tot) {
@@ -1391,7 +1473,7 @@ function buildQuery(card, grade, opts) {
   // regardless — this only affects what is ASKED.
   // Omit a CJK set name specifically — not merely one lacking Latin letters,
   // which would also drop "151", a perfectly searchable English set name.
-  if (card.setName && !CJK.test(String(card.setName))) bits.push(card.setName);
+  if (card.setName && !promo && !CJK.test(String(card.setName))) bits.push(card.setName);
 
   const g = parseGrade(grade);
   if (g.kind === 'graded') {
@@ -1821,7 +1903,13 @@ function verifyCore(title, card, grade, opts) {
     }
   }
 
-  // 4. Collector number — the strongest signal available
+  // 4. Collector number — the strongest signal available. A promo prints
+  //    no set total, so it has its own rule (T2, PROMO_SETS above).
+  const promo = promoOf(card);
+  if (promo) {
+    const v = verifyPromoNumber(t, card, grade, promo);
+    return v.ok ? accept(v) : v;
+  }
   const wantNum = normNum(card.number);
   const wantTot = card.setTotal ? normNum(card.setTotal) : null;
   const pairs = numberPairsIn(t);
@@ -1940,6 +2028,7 @@ const API = {
   SET_NAME_PHRASES, GENUINE_ART_PHRASES, boundedTerm,
   REPRINT_FAMILIES, REPRINT_OF, setIdOf, familyOfSet, familyNamedBy, familiesReprinting, reprintCardsOf,
   reprintOf, asPrinted,
+  PROMO_SETS, promoOf, promoNumberIn,
   PRINTINGS, printingLabel, printingClaim, printingRefusal, parsePrintingParam,
   EDITIONS, editionClaim, editionLabel, editionRefusal, parseEditionParam,
   EBAY_KEYWORD_LIMIT

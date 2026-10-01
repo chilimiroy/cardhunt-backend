@@ -401,6 +401,7 @@ is not handed to a waiter of another origin — it tries under its own. At a
 | `/api/ebay/marketprobe` | default sites | **11 per card** (8 sites + NOCAT/NOSET variants) — the 12-card run was ~132 |
 | `/api/ebay/marketprobe` | `?mp=EBAY_DE` | **2** |
 | `/api/ebay/aspects` | `?mp=EBAY_DE` | **1** |
+| `/api/ebay/setprobe` | `?single=N&verify=1` | **1 + N (+2)** — 20 sampled = 23 |
 | `/api/ebay/quota?probe=1` · `node ebayratecheck.js` | | **1** rate_limit (+1 token cold; ratecheck always exchanges its own: **2**) |
 | `/ebay/status?probe=1` · `/api/scraper/test` · `/api/health/full` | | **0** with a cached token, **1** cold |
 | `/api/probe/sources` · `node sourceprobe.js` | | **0** — eBay is not a probed source |
@@ -794,6 +795,8 @@ node pricesource.test.js     # 49   T1/T4: set-checked TCGplayer match; shared p
 node eusites.test.js         # 80   T1: eBay DE/FR/IT/ES titles — reprints, junk, slabs, conditions; both directions, real titles
 node quotaui.test.js         # 24   T3: a quota refusal reaches the panel in words; indicator wiring (23 fail on the old page)
 node edition.test.js         # 69   T3: 1st Edition/Shadowless/Unlimited — reader, gate, query, headline rule, page (--db: +2)
+node promo.test.js           # 69   Black Star Promos: no set total asked or checked; real live titles kept; McDonald's refused
+node subset.test.js          # 27   TG16/TG30, SV107/SV122, GG01/GG70 asked and kept; Generations RC by number alone
 ```
 
 Run them all:
@@ -1951,6 +1954,47 @@ traffic before moving it.
   that under the budget above.
 - **CMG** — seen once ("CMG 8"), unconfirmed as a grading company. Counted
   as a slab only with a grade number beside it (the TAG/ACE rule). Leave it.
+
+## A promo prints no total; a subset's total carries its prefix (2026-10-01)
+Every Black Star Promo was asked as "Sylveon V SWSH202/307 SWSH Black Star
+Promos" — 307 is our COUNT of promos. eBay US: ebayTotal 0, with or without
+the set name. And the gate refused "TG16/TG30" on a Trainer Gallery card
+because our set_total is a bare 30. `cardmatch.PROMO_SETS` (11 sets, by id)
+and `SUBSET_SETS` (TG/GG/SV); a prefixed number in a MIXED set (Generations
+RC, Aquapolis H) is asked by number alone — its subset total is not held.
+Live after deploy: swshp A1 B2 -> 3 ok, svp A3 -> ok, smp A1 B2 -> 3 ok.
+The first survivors held a McDonald's 2023 "PROMO #001" against SVP 001.
+**`set_total` is the catalogue's count, not what the card prints.**
+
+## Images: TCGdex's asset host is throughput-bound (T1, 2026-10-01)
+~1.5-2.5 thumbnails/s however many are asked: 12 at once 4.7-7.6s, 36 at
+once 26.2s; pokemontcg.io 36 in 4.3s. All hosts HTTP/2; tiles already used
+low.png and loading="lazy" — but native lazy fetches ~1,250px ahead (36 on
+opening sv06, ~12 visible). Tiles now carry data-src and load within 200px
+of the viewport (`watchImgs`). Still unchanged, by choice: the card page
+loads high.png (385 KB); Japanese Limitless art is full-size where a
+`_SM` (54 KB vs 330 KB) exists; zh-tw art is 257 KB with no thumbnail.
+
+## TCGdex has no art and no logo for 49 English sets (T3, 2026-10-01)
+Trainer kits (20), McDonald's (12), Shiny Vaults (swsh4.5sv), Trainer and
+Galarian Galleries, Shining Legends, Dragon Majesty, bog, exu… — the set
+endpoint returns no `logo` and 0 card images. setmeta's pokemontcg.io
+fallback is a 3-set map (`PTCG_LOGO_SET`), so it was never asked for the
+rest. Their LINK failures were a different cause (the subset numbering
+above). **And `swsh9.5tg`/`10.5tg`/`11.5tg`/`12.5tg` (2026-07-27) duplicate
+`swsh9tg`…`12tg` (setgap, 2026-09-22) card for card** — no images,
+"30 not found" in manifest. Not deleted: awaiting a decision.
+
+## eBay's Set and Year: where they live (T4, 2026-10-01, `/api/ebay/setprobe`)
+Not in the search summary. `Set` and `Year Manufactured` ARE refinement
+aspects: free histogram over eBay's whole result, and `aspect_filter=Set:{…}`
+agreed with getItem 19/19. Fill: Set ~97-100% on five cards, US and GB.
+**Year: 38% Aquapolis Lugia US, 34% GB, 48% 30th CC Lugia** (87% Base Set
+Charizard, 82% Umbreon VMAX) — not a gate. Set is seller vocabulary: of 10
+genuine 30th CC Lugias, 3 say "Celebrations" (the 2021 family), 2 are blank,
+and one $450 row kept as Aquapolis by its TITLE carried Set "30th
+Anniversary Edition". Unmeasured lead: `epid` (eBay catalogue product) is in
+135 of 200 summaries — free, and possibly per-product.
 
 ## eBay listings are cached, never stored
 eBay's terms allow serving item data for a request, not retaining it. So:

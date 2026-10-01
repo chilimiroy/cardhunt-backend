@@ -1,5 +1,23 @@
 # CardHunt — Progress Log
 
+## 2026-10-01 (night) — TASK T1-T4: images, promos, subsets, eBay Set/Year
+
+- **T1** (`6911f2a`): the biggest cost is TCGdex's asset throughput (~2
+  images/s), multiplied by native lazy loading asking 3x more than is on
+  screen. Tiles now load within 200px of the viewport. Local, xy6 uncached:
+  17 requests, last 7.3s (was 36 requests, p50 11.9s / last 26.2s for 36).
+- **T2** (`c62f7db`, `a6e13bc`, `0889df2`): promos asked "SWSH202/307" —
+  ebayTotal 0. PROMO_SETS; live swshp/svp/smp all ok; McDonald's refused.
+  `droppedSample` restored on /api/listings views (linkaudit had no reasons).
+- **T3** (`350f24c`): no-logo sets = TCGdex has neither logo nor art for 49
+  sets; the pokemontcg fallback covers 3. Links were a separate cause:
+  TG16/TG30 refused. Four duplicate `.5tg` sets found, not deleted.
+- **T4** (`477505a`): Set/Year are free refinement aspects; Set ~97-100%
+  filled but seller-vocabulary, Year 34-48% on Lugia. Report only — not built.
+- ~70 tooling calls spent on linkaudit/marketprobe/setprobe.
+- T5 waits for manifest (still running at 03:43). T6: the 48 rows are not
+  identified in any file — asked rather than guessed.
+
 ## 2026-10-01 (later) — pushed; token race fixed; tool defaults; Pocket out of manifest
 
 - **Pushed** `5d1e6d4..5cffb73`: the quota protections and the call-cost chart.

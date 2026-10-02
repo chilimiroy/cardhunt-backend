@@ -633,6 +633,10 @@ const NOT_A_SINGLE_CARD_TERMS = [
   // not genuine cards
   'proxy', 'proxies', 'orica', 'custom', 'fake', 'replica', 'repro', 'reprint card',
   'metal card', 'gold plated',
+  // T4, 2026-10-02 — read on 1,010 labelled rows of 12 cards: each phrase
+  // hit only wrong cards (0 of 896 right ones). NOT bare "metal" (the type)
+  // nor "gold foil" / "textured" (genuine gold and full-art cards).
+  'gold metal', 'black metal', 'novelty', 'magnet', 'fridge magnet', 'wall art',
   // fan-made. "Giratina V 186/196 Shiny Holo Lost Origin *Fan Art*" was kept
   // at $8.50 against a card worth $800-1000.
   //
@@ -1178,7 +1182,7 @@ const LANG_WORDS = {
   // "Charizard base set pokemon card 4/102 holo Italia" ($851), both kept.
   it: /\b(italian|italiano|italiana|italianos|italianas|italiani|italiane|italia|ita|italienische?|italien|italienne)\b/i,
   es: /\b(spanish|espanol|español|española|espanola|esp|spanische?|espagnol|espagnole|spagnolo|spagnola)\b/i,
-  pt: /\b(portuguese|portugues|português|portugiesische?|portugais|portoghese|portoghesi|portugu[eé]s|portugueses)\b/i,
+  pt: /\b(portuguese|portugese|portugues|português|portugiesische?|portugais|portoghese|portoghesi|portugu[eé]s|portugueses)\b/i,
   // "Olanda" / "Holanda" — eBay ES, live: "Charizard bs4 holo set base Olanda".
   nl: /\b(dutch|nederlands|holland|holländische?|hollandische?|niederländische?|niederlandische?|olandese|olandesi|olanda|holanda|holand[eé]s|holandeses|néerlandais)\b/i,
   ru: /\b(russian|russische?|russe|russo|ruso)\b/i,
@@ -1216,8 +1220,20 @@ const LANG_CJK_WORDS = {
 // is an English word in any all-caps title.
 const LANG_CASE_TOKENS = [
   [/(?<![A-Za-z])DE(?![A-Za-z])(?!\s+(?:BASE|COLECCI[OÓ]N|ARTE|CARTAS?|JUEGO|LA|LAS|LOS|EL|UN|UNA)\b)/, 'de'],
-  [/(?<![A-Za-z])FR(?![A-Za-z])/, 'fr']
+  [/(?<![A-Za-z])FR(?![A-Za-z])/, 'fr'],
+  // "Giratina V 186/196 Lost Origin Alt Art Full Art Holo UR CN" — a Chinese
+  // print kept at $299.95 as the card's cheapest (T4, 2026-10-02).
+  [/(?<![A-Za-z])CN(?![A-Za-z])/, 'zh']
 ];
+
+// A JAPANESE set code. English sellers never write their own set's code
+// (LESSONS §3), but a Japanese card is sold under its code: on English
+// Mew ex 151/165, 33 of 34 rows were the Japanese SV2a print ("Mew ex Double
+// Rare SV2a: Pokemon Card 151"), same number, same art — no photo check can
+// tell them apart, and the cheapest ($2.02) was one. Japanese codes end in
+// a letter after the digits (SV2a, SV4a, S12a, SM12a, S8b); English codes
+// never do. Read only as evidence AGAINST an English card.
+const JA_SET_CODE = /(?<![A-Za-z0-9])(?:sv|s|sm)\d{1,2}[a-z](?![A-Za-z0-9])/i;
 
 // Country flags as language evidence (T1, 2026-09-30, eBay DE/FR). The US
 // and UK flags are absent: an English card is the right answer, and a US
@@ -1689,6 +1705,11 @@ function printingConflict(title, card, opts) {
     if (opts.scriptIsLanguageEvidence !== false && wantLang === 'en' && CJK.test(t)) {
       return 'wanted English, title is in CJK script';
     }
+    // A Japanese set code on an English card (JA_SET_CODE). A title that
+    // also says "English" is left to the rest of the gate.
+    if (wantLang === 'en' && said !== 'en' && JA_SET_CODE.test(t)) {
+      return `title names the Japanese set code ${t.match(JA_SET_CODE)[0]}, this card is en — a different language printing`;
+    }
   }
 
   // Year. A title with no year is NOT rejected — absence is not a mismatch.
@@ -1959,6 +1980,14 @@ function verifyCore(title, card, grade, opts) {
           ? `wants ${suffix.toUpperCase()}, title does not say so`
           : `title is a ${suffix.toUpperCase()}, wanted the plain card` };
       }
+    }
+    // A bare V, read only straight after the card's own name: "Pokemon TCG
+    // Charizard V 4/102 Holo Rare" was kept on Base Set Charizard at $21.48
+    // (T4, 2026-10-02). Not read anywhere else — "V" is also a roman numeral,
+    // a size, a grade-company suffix.
+    if (!/\bv\b/.test(wantName) && firstWord && firstWord.length > 2
+        && new RegExp('\\b' + firstWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+v(?![-a-z0-9])').test(lower)) {
+      return { ok: false, reason: 'title is a V, wanted the plain card' };
     }
     // " ex" and " gx" need word boundaries — "ex" appears inside many words
     for (const suffix of ['ex', 'gx']) {

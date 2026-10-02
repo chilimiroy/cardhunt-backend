@@ -2517,11 +2517,29 @@ function updatePrices(grade,base){
       : '<span style="color:var(--mu)">no ' + liveEsc(sh.label) + ' price held &mdash; listings below</span>';
     return;
   }
-  // The badge says where the headline came from, and only that.
+  // The badge says where the headline came from, and when.
   if (badge) badge.innerHTML = priceIsReal
     ? '<span style="color:var(--gr)">&#9679; matched on collector number</span> '
       + '<span style="color:var(--fa);font-size:11px">' + liveEsc(String(cc._priceSource || 'database')) + '</span>'
+      + priceAgeHtml(cc._priceDate)
     : '<span style="color:var(--mu)">no market data held — estimate</span>';
+}
+
+// When the headline was recorded (T2, 2026-10-02). The page never said, so
+// a price no source has re-priced since July read as today's: Rayquaza Gold
+// Star showed $2,500.99 from a 2026-07-27 row while TCGplayer now has no
+// market for it at all — 12 cards of $20+ sat like that. Under 30 days it is
+// a date; older, it says the price is old. No date held: nothing is claimed.
+function priceAgeHtml(when) {
+  var t = when ? Date.parse(when) : NaN;
+  if (!isFinite(t)) return '';
+  var d = new Date(t);
+  var label = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+  var days = Math.floor((Date.now() - t) / 86400000);
+  if (days > 30) return ' <span style="color:var(--am);font-size:11px;font-weight:600" '
+    + 'title="No source has re-priced this card since. The market may have moved.">'
+    + '&middot; recorded ' + liveEsc(label) + ' &mdash; ' + days + ' days old, not re-priced since</span>';
+  return ' <span style="color:var(--fa);font-size:11px">&middot; ' + liveEsc(label) + '</span>';
 }
 
 // The cheapest GATED live listing at the selected grade — the same number
@@ -6256,6 +6274,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261002-3e73b74-stampgate &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261002-0b0ddfb-priceage &middot; click to hide</div>
 </body>
 </html>

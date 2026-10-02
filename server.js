@@ -25,6 +25,7 @@ const outlier = require('./outlier');
 // every `FROM cards` / `JOIN cards` here either filters or says why not.
 const digital = require('./digital');
 const printsql = require('./printsql');   // T10: which stored row is a card's BASE price
+const pricequality = require('./pricequality');   // T1: is that headline current and measured?
 // A card id not matching ^(en|ja|zh-tw|zh-cn)- is a bug, not a card:
 // refused at every entry point that takes one, never served. cardid.js.
 const cardid = require('./cardid');
@@ -411,10 +412,10 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
                  c.set_api_id, c.set_name, c.set_name_en,
                  c.set_logo, c.set_series, c.set_release,
                  c.set_total, c.tcgplayer_data, c.cardmarket_data,
-                 lp.price_usd, lp.source AS price_source, lp.recorded_at
+                 lp.price_usd, lp.source AS price_source, lp.recorded_at, lp.source_meta AS price_meta
           FROM cards c
           LEFT JOIN LATERAL (
-            SELECT price_usd, source, recorded_at
+            SELECT price_usd, source, recorded_at, source_meta
             FROM price_history ph
             WHERE ph.card_api_id = c.api_card_id
               AND ph.grade IS NULL          -- the ungraded card, not a slab
@@ -473,6 +474,10 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
               _lang: dbLang
             };
           });
+          // Old, thin or unsettled says so on the tile too (T1) — one query for the set.
+          const pq = await pricequality.annotate(db, rows.rows.map(r => ({ id: r.api_card_id,
+            price: r.price_usd, source: r.price_source, recordedAt: r.recorded_at, meta: r.price_meta })));
+          cards.forEach(c => { c._priceQuality = pq.get(c.id) || null; });
           const realCount = cards.filter(c => c._priceIsReal).length;
           const result = {
             totalCount: cards.length,
@@ -637,10 +642,10 @@ app.get('/api/cards/:cardId', async (req, res) => {
       // page showed $0.66 on its own page. Two screens, one card, two
       // numbers — from one missing join.
       const row = await db.query(`
-        SELECT c.*, lp.price_usd, lp.source AS price_source, lp.recorded_at
+        SELECT c.*, lp.price_usd, lp.source AS price_source, lp.recorded_at, lp.source_meta AS price_meta
         FROM cards c
         LEFT JOIN LATERAL (
-          SELECT price_usd, source, recorded_at
+          SELECT price_usd, source, recorded_at, source_meta
           FROM price_history ph
           WHERE ph.card_api_id = c.api_card_id
             AND ph.grade IS NULL            -- the ungraded card, not a slab
@@ -686,6 +691,8 @@ app.get('/api/cards/:cardId', async (req, res) => {
           editionPrices = eds.rows.filter(r => r.ed).map(r => ({ edition: r.ed, label: cm.editionLabel(r.ed),
             price: r.price, source: r.source, date: r.recorded_at }));
         }
+        const pq = await pricequality.annotate(db, [{ id: c.api_card_id, price: c.price_usd,
+          source: c.price_source, recordedAt: c.recorded_at, meta: c.price_meta }]);
         return res.json({ data: {
           printings: pkeys ? pkeys.map(k => ({ key: k, label: cm.printingLabel(k) })) : null,
           printingPrices,
@@ -713,6 +720,7 @@ app.get('/api/cards/:cardId', async (req, res) => {
           _priceSource: c.price_source || 'estimate',
           _priceIsReal: !isEstimate,
           _priceDate: c.recorded_at,
+          _priceQuality: pq.get(c.api_card_id) || null,   // old / thin / unsettled (T1)
           _source: 'cardhunt_db'
         }});
       }
@@ -757,6 +765,10 @@ app.get('/api/trending', async (req, res) => {
       eligible = k.eligible;
       extra = { ranked: k.cards.length, excluded: k.excluded, suspect: k.suspect };
     }
+    // A price swinging 4500 / 1200 nightly ranks as a "mover" and tops
+    // price-desc; the tile says so rather than presenting it as settled (T1).
+    const pq = await pricequality.annotate(db, cards.map(c => ({ id: c.id, price: c.price,
+      source: c.price_source, recordedAt: c.price_date, meta: c.price_meta })));
     const body = Object.assign({
       sort: p.sort, sortLabel: trending.SORTS[p.sort].label,
       window: p.kind === 'move' ? p.window : null,
@@ -769,7 +781,7 @@ app.get('/api/trending', async (req, res) => {
         rarity: c.rarity, image: c.image_small || null,
         set: { id: c.set_api_id, name: c.set_name, nameEn: c.set_name_en || null },
         price: Number(c.price), priceSource: c.price_source, priceDate: c.price_date,
-        priceIsReal: true,
+        priceIsReal: true, priceQuality: pq.get(c.id) || null,
         prevPrice: c.prev_price != null ? Number(c.prev_price) : undefined,
         prevDate: c.prev_date || undefined,
         change: c.change, changePct: c.change_pct, suspect: c.suspect || undefined,

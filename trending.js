@@ -109,13 +109,13 @@ function priceSql(p) {
     text: `
       WITH latest AS (
         SELECT DISTINCT ON (ph.card_api_id)
-               ph.card_api_id, ph.price_usd, ph.source, ph.recorded_at
+               ph.card_api_id, ph.price_usd, ph.source, ph.recorded_at, ph.source_meta
         FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
         WHERE ${REAL} AND ph.card_api_id LIKE $1
           AND ${printsql.basePrintingSql('ph', 'c')}
         ORDER BY ph.card_api_id, ph.recorded_at DESC)
       SELECT ${CARD_COLS}, l.price_usd AS price, l.source AS price_source,
-             l.recorded_at AS price_date,
+             l.recorded_at AS price_date, l.source_meta AS price_meta,
              COUNT(*) OVER () AS eligible
       FROM latest l JOIN cards c ON c.api_card_id = l.card_api_id
       WHERE ${digital.visibleSql('c')}
@@ -135,7 +135,7 @@ function moverSql(p) {
       WITH cur AS (
         SELECT DISTINCT ON (ph.card_api_id)
                ph.card_api_id, ph.source, ph.edition, ph.variant,
-               ph.price_usd, ph.recorded_at
+               ph.price_usd, ph.recorded_at, ph.source_meta
         FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
         WHERE ${REAL} AND ph.card_api_id LIKE $1
           AND ${printsql.basePrintingSql('ph', 'c')}
@@ -155,7 +155,7 @@ function moverSql(p) {
         ORDER BY ph.card_api_id, ph.recorded_at DESC)
       SELECT ${CARD_COLS},
              cur.price_usd AS price, cur.source AS price_source,
-             cur.recorded_at AS price_date,
+             cur.recorded_at AS price_date, cur.source_meta AS price_meta,
              prev.price_usd AS prev_price, prev.recorded_at AS prev_date
       FROM cur JOIN prev USING (card_api_id)
       JOIN cards c ON c.api_card_id = cur.card_api_id

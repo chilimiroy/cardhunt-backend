@@ -2029,7 +2029,7 @@ async function loadSearchTrending(){
       id: c.id, name: c.name, number: c.number, rarity: c.rarity,
       set: { id: c.set && c.set.id, name: c.set && (c.set.nameEn || c.set.name) },
       images: { small: c.image || '', large: c.image || '' },
-      _price: c.price, _priceIsReal: true, _priceSource: c.priceSource }));
+      _price: c.price, _priceIsReal: true, _priceSource: c.priceSource, _priceQuality: c.priceQuality || null }));
     document.getElementById('search-trending').innerHTML=cards.map(c=>cardTile(c)).join('');
   }catch(e){ console.warn('[search-trending] ' + e.message); }
 }
@@ -2445,7 +2445,7 @@ function applyFilters(){
     // sort; an invented one beside it would contradict it card by card.
     var priceStr = price>0 ? fmtCurrency(price) : '&#8212;';
     var isReal = (c._priceIsReal === true) || (c._priceSource && !/^estimate/.test(c._priceSource));
-    var estMark = isReal ? '' : '<span style="font-size:9px;color:var(--fa);margin-left:3px" title="Estimated - no market data yet">est</span>';
+    var estMark = priceMarksHtml(isReal, c._priceQuality);
     tiles.push( '<div class="ct" onclick="openCard(\''+c.id+'\')">'
       +'<div class="cti">'+imgOrSk(c)+'</div>'
       +'<div class="ci">'
@@ -2522,6 +2522,7 @@ function updatePrices(grade,base){
     ? '<span style="color:var(--gr)">&#9679; matched on collector number</span> '
       + '<span style="color:var(--fa);font-size:11px">' + liveEsc(String(cc._priceSource || 'database')) + '</span>'
       + priceAgeHtml(cc._priceDate)
+      + priceMarksHtml(true, cc._priceQuality, { skip: ['old'], text: true })
     : '<span style="color:var(--mu)">no market data held — estimate</span>';
 }
 
@@ -2540,6 +2541,33 @@ function priceAgeHtml(when) {
     + 'title="No source has re-priced this card since. The market may have moved.">'
     + '&middot; recorded ' + liveEsc(label) + ' &mdash; ' + days + ' days old, not re-priced since</span>';
   return ' <span style="color:var(--fa);font-size:11px">&middot; ' + liveEsc(label) + '</span>';
+}
+
+// est / old / thin / unsettled beside a headline price, on EVERY tile that
+// shows one (T1, 2026-10-02). The server's pricequality.js decides; this
+// only draws its answer, so a tile and the card page cannot disagree. 130
+// cards over $100 carried a price that was old or swinging (Torchic Gold
+// Star 4500 / 1200 nightly) and looked, on every tile, like today's.
+// q missing (an older cached payload): nothing beyond est is claimed.
+// opts.skip: flags already said elsewhere (the card page's date line says old).
+// opts.text: spell the reason out (card page) rather than a one-word mark.
+function priceMarksHtml(isReal, q, opts) {
+  opts = opts || {};
+  var skip = opts.skip || [];
+  var out = '';
+  if (!isReal && skip.indexOf('estimate') < 0) out += '<span style="font-size:9px;color:var(--fa);margin-left:4px;font-weight:600"'
+    + ' title="Estimated from rarity and set age - no market data held for this card">est</span>';
+  if (!isReal || !q || !q.flags) return out;
+  var WORD = { old: 'old', thin: 'thin', unsettled: 'unsettled' };
+  var flags = q.flags.filter(function (f) { return WORD[f] && skip.indexOf(f) < 0; });
+  if (!flags.length) return out;
+  var why = liveEsc(q.title || flags.join(', '));
+  if (opts.text) return out + ' <span class="pqf" style="color:var(--am);font-size:11px;font-weight:600">&middot; '
+    + liveEsc(flags.map(function (f) { return WORD[f]; }).join(', ')) + ': ' + why + '</span>';
+  return out + flags.map(function (f) {
+    return '<span class="pqf" style="font-size:9px;color:var(--am);margin-left:4px;font-weight:600" title="' + why + '">'
+      + WORD[f] + '</span>';
+  }).join('');
 }
 
 // The cheapest GATED live listing at the selected grade — the same number
@@ -4859,6 +4887,7 @@ async function cardSummary(cardId) {
       // The est/real distinction the whole page depends on.
       out.marketIsReal = d._priceIsReal === true
         || !!(d._priceSource && !/^estimate/.test(d._priceSource));
+      out.quality = d._priceQuality || null;   // old / thin / unsettled (T1)
     }
   } catch (e) { out.listingNote = 'card lookup failed'; }
   CARD_SUMMARY_CACHE[cardId] = out;
@@ -4927,9 +4956,7 @@ function cardSummaryTile(s, opts) {
     price = '<span style="color:var(--mu);font-size:12px">no market price</span>';
   } else {
     price = '<span class="cp">' + fmtCurrency(s.market) + '</span>'
-      + (s.marketIsReal ? ''
-         : '<span style="font-size:9px;color:var(--fa);margin-left:4px;font-weight:600"'
-           + ' title="A multiplier estimate, not a measured market price">est</span>');
+      + priceMarksHtml(s.marketIsReal, s.quality);
   }
 
   // The listing average, stated as what it is — or stated as absent.
@@ -5223,7 +5250,7 @@ async function loadTrending() {
     return cardSummaryTile({
       cardId: c.id, name: c.nameEn && lang !== 'en' ? c.name + ' (' + c.nameEn + ')' : c.name,
       setName: (c.set && (c.set.nameEn || c.set.name) || '') + (c.number ? ' · #' + c.number : ''),
-      img: c.image, market: c.price, marketIsReal: true
+      img: c.image, market: c.price, marketIsReal: true, quality: c.priceQuality || null
     }, { noAvg: true, extra: extra });
   }).join('');
 }
@@ -5290,9 +5317,7 @@ function renderLatestSearches() {
         if (cr && !cr.getAttribute('data-filled')) {
           cr.setAttribute('data-filled', '1');
           cr.innerHTML = '<span class="cp">' + fmtCurrency(s.market) + '</span>'
-            + (s.marketIsReal ? ''
-               : '<span style="font-size:9px;color:var(--fa);margin-left:4px;font-weight:600"'
-                 + ' title="A multiplier estimate, not a measured market price">est</span>');
+            + priceMarksHtml(s.marketIsReal, s.quality);
         }
       }
       return fillListingAvg('#latest-searches', c.cardId, 'Raw NM');
@@ -5399,9 +5424,7 @@ function updateAlertsBarPrices() {
     if (cr && !cr.getAttribute('data-filled')) {
       cr.setAttribute('data-filled', '1');
       cr.innerHTML = '<span class="cp">' + fmtCurrency(s.market) + '</span>'
-        + (s.marketIsReal ? ''
-           : '<span style="font-size:9px;color:var(--fa);margin-left:4px;font-weight:600"'
-             + ' title="A multiplier estimate, not a measured market price">est</span>');
+        + priceMarksHtml(s.marketIsReal, s.quality);
     }
   });
 }
@@ -5790,26 +5813,23 @@ function nameWithEnPlain(name, nameEn) {
   return name + ' (' + nameEn + ')';
 }
 
-function cardTile(c, deal) {
+// The Search screen's trending tiles. Until 2026-10-02 this drew a "% change"
+// ((hash % 31) - 15) / 10, a "PSA 9/10" badge on one rare in four and a
+// "deal" flag — all from a hash of the card id, on a live screen, the
+// LESSONS §4 class nofabricated.test.js missed because it never looked at
+// this function. Price and what is known about it, nothing else.
+function cardTile(c) {
   var price = getBase(c);
-  var hash = 0;
   var cid = c.id || '';
-  for (var i = 0; i < cid.length; i++) hash += cid.charCodeAt(i);
-  var chg = (((hash % 31) - 15) / 10).toFixed(1);
-  var rare = isRare(c.rarity);
-  var tlBadge = (deal && rare) ? '<span class="badge b-teal btl">deal</span>' : '';
-  var trBadge = (rare && (hash % 4 === 0)) ? '<span class="badge b-pur btr">PSA ' + (9 + (hash % 2)) + '</span>' : '';
-  var chgClass = parseFloat(chg) >= 0 ? 'up' : 'dn';
-  var chgSym = parseFloat(chg) >= 0 ? '&#8593;' : '&#8595;';
+  var isReal = (c._priceIsReal === true) || (c._priceSource && !/^estimate/.test(c._priceSource));
   var priceStr = price > 0 ? fmtCurrency(price) : '&#8212;';
   var setName = (c.set && c.set.name) ? c.set.name : '';
   return '<div class="ct" onclick="openCard(&quot;' + cid + '&quot;)">'
-    + '<div class="cti">' + imgOrSk(c) + tlBadge + trBadge + '</div>'
+    + '<div class="cti">' + imgOrSk(c) + '</div>'
     + '<div class="ci">'
     + '<div class="cn" title="' + (c.nameEn || c.name || '') + '">' + nameWithEn(c.name, c.nameEn) + '</div>'
     + '<div class="cs">' + setName + ' &middot; #' + (c.number || '') + '</div>'
-    + '<div class="cr"><span class="cp">' + priceStr + '</span>'
-    + '<span class="cc ' + chgClass + '">' + chgSym + Math.abs(chg) + '%</span></div>'
+    + '<div class="cr"><span class="cp">' + priceStr + '</span>' + priceMarksHtml(isReal, c._priceQuality) + '</div>'
     + '</div></div>';
 }
 
@@ -6274,6 +6294,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261002-0b0ddfb-priceage &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261002-cb25585-pricequality &middot; click to hide</div>
 </body>
 </html>

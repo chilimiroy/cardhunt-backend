@@ -1,5 +1,31 @@
 # CardHunt — Progress Log
 
+## 2026-10-02 (night, 2) — T1 which prices are not current, and saying so
+
+**Measured** (read-only, every visible card, the readers' headline rule):
+EN 21,076 / 21,152 current and measured; 7 none, 10 estimates, 40 old,
+19 alternating. JA 2,274 / 14,023: 278 none (six sets), 2,177 estimates
+(vintage), 9,294 old — 9,058 are Yuyu-tei rows from the single 08-28 run.
+Over $100: 130 of 1,148 not current (113 JA, 10 EN old, 7 EN alternating).
+Internal-search listing counts: none stored yet (0b0ddfb post-dates the
+last run). Script: session scratchpad `t1.js`.
+
+**Shown.** `pricequality.js` classifies a headline (estimate / old / thin
+/ unsettled) in one batched query; `/api/sets/:id/cards`,
+`/api/cards/:id` and `/api/trending` carry it; the page's
+`priceMarksHtml` draws it on set tiles, both trending grids, alert and
+latest-search tiles, and the card page (spelled out). Four inline `est`
+markers folded into it. Browser, local: Team Rocket Returns shows exactly
+Mudkip ☆ old, Torchic ☆ / Treecko ☆ unsettled of 111; Torchic's card page
+"unsettled: … between $1200.00 and $4500.00". +~220 ms on an uncached
+207-card set.
+
+**Found on the way:** the Search screen's trending tiles (`cardTile`)
+still drew a % change, PSA 9/10 badge and deal flag from a hash of the
+card id. Removed; nofabricated.test.js pins it. The page's fallback
+estimator (`mockP`-style, ~line 1835) still jitters an estimate by a seed
+of the id — labelled est, left for a decision.
+
 ## 2026-10-02 (night) — T2 wrong listings split by kind; T2b Base Set 2
 
 **T2 — measured, not built** (CLAUDE.md "SPLIT BY KIND"). The 1,010

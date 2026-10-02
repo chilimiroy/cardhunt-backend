@@ -68,6 +68,7 @@ has drifted apart eventually, and each drift is a lesson below.
 | `certcheck.js` | what cert number did the seller enter on this eBay slab, and what photos did they post? — on demand, ONE shared getItem per listing (Verify + Photos), 15 min; PSA answer permanent (PSA half NOT built) |
 | `stampcheck.js` | does this listing's PHOTO show a reprint's commemorative stamp? — **a gate on every eBay row of the 55 originals** (found refuses; pool + item-id cache), **0 eBay calls** (eBay's image CDN), per-card templates in `stamps.json` (built by `stampbuild.js` from OUR scans); found / not visible / unreadable, never "verified original" |
 | `setyield.js` | did a refresh price NOTHING for a whole set, or for 200+ cards in a row? — names it, exits 2 |
+| `pricequality.js` | is a headline CURRENT and MEASURED? — estimate / old (>30 d) / thin (Yahoo N≤2, 0 listings) / unsettled (≥1.5x twice in 60 d); one batched query per payload, drawn by the page's `priceMarksHtml` on every tile |
 
 ## What ships and what does not
 
@@ -80,6 +81,7 @@ jpfilter.js  linkaudit.js  listingparse.js  outlier.js  setaudit.js
 sourceprobe.js  tcgdexprice.js  yuyutei.js  digital.js  trending.js
 searchaudit.js  certcheck.js  sitecheck.js  costmeter.js
 stampcheck.js  stamps.json  stampbuild.js  stamp.fixture.json  setyield.js
+pricequality.js
 checkout-disabled.js  login-disabled.js   (preserved, never loaded or served)
 migration-grade-dimension.sql  migration-image-source.sql  migration-variants.sql
 printsql.js  variants.fixture.json  variants.pricing.fixture.json
@@ -163,6 +165,42 @@ node approute.test.js                      # /app serves; the root does not leak
 ---
 
 # STATE
+
+## Is the headline current and measured? — 2026-10-02 (T1)
+
+Every visible card's headline (ungraded, `basePrintingSql`, real before
+estimate, newest — the rule every reader uses), classified. "Not current"
+= older than 30 days, Yahoo median of ≤2 items, or alternating (≥1.5x
+moves that return, 60 days).
+
+| | cards | current & measured | no price | estimate | not current |
+|---|---|---|---|---|---|
+| English | 21,152 | 21,076 (99.6%) | 7 | 10 | 59 (40 old, 19 alternating) |
+| Japanese | 14,023 | 2,274 (16%) | 278 | 2,177 | **9,294 old** |
+| Chinese (parked) | 8,313 | 0 | 0 | 8,313 | 0 |
+
+- **Over $100: 130 of 1,148 not current** — 113 Japanese, 10 English old
+  (Mudkip ☆ $3,999.99, Championship Arena $2,999, Rayquaza ☆, Espeon ☆,
+  Pokémon Center…), 7 English alternating (Torchic ☆ 4500/1200, Treecko ☆
+  2400/900, Tropical Beach 800/481, Charizard ☆ δ…).
+- **Japanese "old" is one job not repeating**: 9,058 of the 9,294 are
+  `yuyutei_shop` rows from the single 2026-08-28 run; the nightly asks only
+  Yahoo for Japanese. `node ingest.js yuyutei` re-run — or scheduled — is
+  the fix; not done (a decision, below in OPEN).
+- Japanese estimates are vintage: 1,427 of 1,462 WOTC-era and 715 of 722
+  EX-era cards. "No price" is six sets: SM7a 63, SM10b 59, XY8b 55, XY11b
+  50, SM8b 25, S8a 15.
+- English alternation is the TCGplayer internal search (svp/xyp/mep/bwp
+  promos, Gold Stars) — two products under one number, presumably;
+  `source_meta.productId` from the 2026-10-03 nightly will say.
+- **"0 listings behind it" is not countable yet**: no stored internal-search
+  row carries a listing count (`0b0ddfb` landed after the last run). Yahoo's
+  is in its source name; no headline is a Yahoo median of ≤2.
+
+**Shown** (`pricequality.js`): set tile, card page, both trending grids,
+alert tiles and latest searches say est / old / thin / unsettled with the
+reason in the tooltip. Alert EVALUATION is unchanged — an unsettled price
+can still trigger an alert (open).
 
 Measured 2026-09-22 against Supabase directly, not from a progress file.
 
@@ -1142,7 +1180,7 @@ node certcheck.test.js       # 47   cert + photos from one getItem; never claims
 node reprintpricing.test.js  # 13   reprints priced by printed number in their own TCGPlayer set (SKIP w/o ingest.js)
 node manifestmap.test.js     # 12   manifest never maps "None" to Common (SKIP w/o ingest.js)
 node marketwait.test.js      # 14   no /api/market request; one /api/listings per card+grade; tiles read the cache only
-node nofabricated.test.js    # 48   no password/card input, no invented shops/holdings/prices (--deployed: Render's HTML too)
+node nofabricated.test.js    # 54   no password/card input, no invented shops/holdings/prices, no tile badge from a hash of the id (--deployed: Render's HTML too)
 node nosoldscrape.test.js    # 17   no eBay sold-page scrape; real /api/market handler, network stubbed (--live: +3)
 node gateaudit.test.js       # 62   T9: every path reaches the gates it needs, and reports (--live: +8)
 node variants.test.js        # 81   T10: printings from the REAL TCGdex shape; the gate; every reader; the page; Typical follows the printing (--db: +6)
@@ -1157,6 +1195,7 @@ node claudesplit.test.js     # 23   every CLAUDE_ARCHIVE.md heading kept or cite
 node pricecheck.test.js      # 34   editions compared like for like; the internal search only where TCGdex cannot price, labelled; Cardmarket a second reading (--db: +2, rolled back)
 node setyield.test.js        # 42   a set (or 200+ cards in a row) that priced nothing is NAMED and exits 2; scattered gaps are not; the due-clock reads the headline row
 node priceage.test.js        # 11   the card page says when its headline was recorded, and when it is old
+node pricequality.test.js    # 36   old / thin / unsettled both ways; the page's REAL priceMarksHtml; every headline screen wired; 30 days one definition (--db: +3)
 node fakewords.test.js       # 26   T4: what the wrong cards said (merch phrases, CN, Portugese, a JA set code on an EN card, a bare V) and the genuine phrasings kept
 node stampcheck.test.js      # 86   the stamp GATE: found refuses, weak keeps, pending never waits; item-id cache; one job per item; poll never searches; both directions on our scans (--live: +8)
 ```
@@ -1561,6 +1600,16 @@ headline's date, so a July import nothing could re-price read as today's
 ($2,500.99 Rayquaza ☆). Every displayed price carries its date; past 30
 days it says it is old (`priceAgeHtml`). An old price is a fallback, and a
 fallback announces itself.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**…on every screen, not the one that was fixed.** The card page said a
+price's age; the set tile, trending and alert tiles drew the same $4,500
+bare, and 130 cards over $100 were old or swinging. Quality is decided
+once (`pricequality.js`), attached to every payload that carries a
+headline, and drawn by one function — a tile that draws its own `est` is
+the second definition. While there: the Search screen's trending tiles
+still drew a % change and PSA badge from a hash of the card id; check
+every renderer of a number, not the ones already audited.
 *Archive:* none — 2026-10-02, PROGRESS.md
 
 **Cache keys carry everything the value depends on.** A per-card cache served

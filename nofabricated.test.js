@@ -136,6 +136,19 @@ ok('no hand-typed hero stats (markets live, real-time, a stale build)',
 ok('the hero stats that remain are the two computed ones',
   (code.match(/class="hstat"/g) || []).length === 2 && /id="hstat-sets"/.test(code) && /id="hstat-cards"/.test(code));
 
+// The Search screen's trending tiles (cardTile) drew a "% change", a "PSA
+// 9/10" badge and a "deal" flag from a hash of the card id until
+// 2026-10-02 — live, and missed by every block above (T1).
+console.log('\n  tiles — no badge or movement from a hash of the card id');
+{
+  const i = code.indexOf('function cardTile(');
+  const body = i > 0 ? code.slice(i, code.indexOf('\n}', i)) : '';
+  ok('cardTile is defined (the Search trending grid draws with it)', i > 0);
+  ok('cardTile computes nothing from the card id\'s characters', body && !/charCodeAt|hash/.test(body), body.slice(0, 120));
+  ok('cardTile draws no PSA badge, deal flag or % change', body && !/PSA |b-teal|b-pur|chgSym|%<\/span>/.test(body));
+  ok('no `hash %` arithmetic anywhere in the page code', !/\bhash\s*%/.test(code));
+}
+
 (async () => {
   if (process.argv.includes('--deployed')) {
     console.log('\n  deployed — the HTML Render actually serves');

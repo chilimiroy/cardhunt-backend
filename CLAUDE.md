@@ -533,16 +533,95 @@ Lugia, Moonbreon, Charizard ex 199, Pikachu VMAX 188, Giratina V alt, Lugia
 V alt, Mew ex 151, Umbreon ex 161, JA Charizard ex 201), **every photo
 labelled by eye**: 896 right, 89 wrong, 12 stamped reprints, 13 unclear.
 SIFT as a WARNING at 47 inliers: **35 of 89 wrong warned (39%), 33 of 896
-right warned (3.7%)** — and 18 of those 33 are one card: the rainbow-foil
-Pikachu VMAX (18 of its 99 right photos). Rainbow foil defeats SIFT. At 75:
+right warned (3.7%)** — 18 of those 33 on Pikachu VMAX, then read as
+"rainbow foil defeats SIFT". **Wrong: most of those 18 were metal
+replicas labelled right** (re-labelled below, "SPLIT BY KIND"). At 75:
 48% / 6.5%; at 30: 33% / 2.1%. 33 of the 89 wrong are Mew ex's Japanese
 copies (same art: SIFT 0 of 33). **Base Charizard's `cheapest` is not made
 right at any threshold tried**: $35.99 replica -> $100 replica (47) ->
 $150 unidentifiable crop (75); right is $204.50. The cheapest-right count
 across the 12: 5 as shipped, **8 after the text gate (5e14670) and the
 stamp verdicts, 8 with SIFT at 47, 9 at 75**. Not built: it needs OpenCV
-on Render, and a 3.7% warning rate concentrated on one foil type is not a
-rate, it is a blind spot.
+on Render. (The "3.7%, one foil type" reason is superseded below.)
+
+## SPLIT BY KIND — re-measured 2026-10-02 (T2), NOT built
+
+The 35-of-89 above mixed problems a photo can and cannot solve. Every
+wrong row, sorted by eye (sheets in the session scratchpad):
+
+| kind | rows | can a photo tell? |
+|---|---|---|
+| **D** different illustration (Charizard ex 228 under Base Charizard, regular Giratina/Lugia/Umbreon under the alt arts, Ivysaur, EX-era Lugia) | 24 | yes |
+| **R** the right line-art in the wrong material/colour (gold/black/silver metal, recoloured foil) | 38 | yes — that is Roy's gold Shining Charizard |
+| **L** same art, other language (Mew ex SV2a ×33, JP/FR/DE/PT/CN/KR copies) | 43 | **no** — title gates only |
+| **S** same art, set mark differs (Base Set 2 titled as Base Set) | 6 | the mark, not the art (T2b below) |
+| P stamped reprint · M magnet · X lot/card back · U unclear | 12 · 2 · 3 · 18 | |
+
+**The labels were wrong where SIFT disagreed with them.** Art-only SIFT
+flagged "right" rows that, looked at again, were not: of Pikachu VMAX's
+99, **14 metal replicas, 1 German, 1 Ivysaur, 3 unclear**; plus a gold
+Umbreon VMAX, a silver regular-art Umbreon, a gold Lugia V, an EX-era
+Lugia, a different JA Charizard ex, and the 6 Base Set 2 copies. Final:
+864 right · 62 different-artwork (D+R) · 43 L. Measured on the 1,010 rows
+(OpenCV re-run reproduces the stored inliers exactly, 1,010/1,010):
+
+| rule (flag below / above) | right flagged | D | R | L | S+P |
+|---|---|---|---|---|---|
+| colour histogram < 0.4 (centre of photo vs our scan) | 15/864 (1.7%) | 1/24 | 6/38 | 3/43 | 0/18 |
+| colour histogram < 0.5 | 41/864 (4.7%) | 3/24 | 11/38 | 4/43 | 2/18 |
+| perceptual hash > 38 bits | 11/864 (1.3%) | 2/24 | 2/38 | 1/43 | 1/18 |
+| SIFT whole card < 47 | 15/864 (1.7%) | 18/24 | 30/38 | 2/43 | 0/18 |
+| SIFT whole card < 30 | 4/864 (0.5%) | 17/24 | 23/38 | 1/43 | 0/18 |
+| SIFT **illustration only** < 8 | 8/864 (0.9%) | **23/24** | 25/38 | 0/43 | 0/18 |
+| **SIFT whole < 25 AND illustration < 8** | **0/864** | 16/24 | 18/38 | 0/43 | 0/18 |
+| SIFT whole < 30 OR illustration < 3 | 7/864 (0.8%) | 23/24 | 27/38 | 1/43 | 0/18 |
+
+"Illustration only" keeps our scan's keypoints in the art band (y
+0.10-0.52 of the card): **a regular and an alt-art of one Pokémon share
+every word of card text**, and whole-card SIFT scored Giratina/Lugia/
+Umbreon regulars 45-82 inliers on the text alone. Colour after SIFT
+alignment was worse than either (right photos' colour moves with light
+and holo far more than the art does).
+
+**Roy's two cards, held out** (labelled by eye; thresholds NOT tuned on
+them). Shining Charizard Raw: **72 of 87 rows are gold/black metal
+replicas**, priced up to $949.99; 10 genuine. Bubble Mew ex 232: the
+cheapest row ($190) is the 30th Celebration Mew; 42 right.
+- SIFT strict rule: 0/52 right flagged, the 30th Mew caught, **2 of 72
+  gold replicas**. Whole < 47: 7 of 72. Replicas copy the line art (median
+  81 inliers); genuine copies score 252-589 — an absolute threshold
+  cannot use that gap, since a right photo elsewhere scores 4.
+- Colour < 0.5: **43 of 72 gold replicas, 0 of 10 genuine** — but 2 of 42
+  right bubble Mews, and 4.7% of right rows on the 12 cards.
+
+**What this says, per kind.**
+- **D, different illustration — a filter candidate.** The strict rule
+  flags 0 of 916 right photos over 14 cards and catches 16 of 24 + the
+  30th Mew; it misses the same-Pokémon-other-art cases (Giratina/Lugia V
+  regulars), which illustration-only SIFT catches (23/24) at 0.9% false.
+  At 0/916 the 95% upper bound on the false rate is ~0.3%. Not built:
+  OpenCV is not on Render (opencv.js/wasm, then timed THERE — the stamp
+  lesson), ~420 ms a photo here.
+- **R, right art in the wrong material — no clean rule.** SIFT keeps
+  them (the line art IS the card's); colour catches gold-on-red at 4.7%
+  false elsewhere. A warning at best; the per-card gap above (genuine
+  250+, replicas ≤155) suggests a rule relative to the card's own best
+  matches — not measured.
+- **L, other language — never a photo's job.** 0 of 43 at the strict
+  rule, as predicted; the title gates refuse 33 of 34 Mew ex by "SV2a".
+- **The rainbow-foil "blind spot" mostly was not one**: with the
+  replicas re-labelled, Pikachu VMAX's right rows flagged at 47 fall from
+  18 to 4.
+
+**T2b — Base Set 2 carries a mark; 6 copies found.** Our scans: Base Set
+2 and Legendary Collection both print a set symbol right of the
+length/weight bar; Base Set prints nothing there. Aligning every Base
+Set photo by SIFT and cropping that spot (63/84 Charizard, 124/128
+Blastoise, 187/187 Pikachu aligned): **3 Blastoise and 3 Pikachu "Base
+Set" rows were Base Set 2**, titles all saying 2/102 or 58/102 Base Set;
+0 Charizard; no Legendary Collection. The symbol is ~1/3 the stamp's
+size (~20 px at s-l500), so the unaligned stamp matcher will not see it;
+a check needs alignment first. Not built.
 
 **What T2 found that matters more.** The text gates do NOT catch nearly
 everything on the most-faked card. Base Charizard Raw, eBay US page 1
@@ -1591,10 +1670,24 @@ the page says what is still being checked.
 *Archive:* none — 2026-10-02, PROGRESS.md
 
 **One card's sample is not a rate.** SIFT's "0 of 100 correct flagged"
-on four cards became 33 of 896 on twelve — 18 of them one rainbow-foil
-card. A technique measured on one card's wrong listings and four cards'
-right ones has measured those cards. Widen before quoting a rate, and look
-at where the misses cluster.
+on four cards became 33 of 896 on twelve. A technique measured on one
+card's wrong listings and four cards' right ones has measured those
+cards. Widen before quoting a rate, and look at where the misses cluster.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**Split a mixed denominator by kind before judging a technique.** "35
+of 89 wrong caught" counted 43 other-language copies no photo can ever
+separate; on the 62 different-artwork rows alone the same SIFT caught 48.
+State what each kind of failure is, then measure each technique on the
+kind it could catch — and report false flags per kind.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**Where a technique and a label disagree, look again before blaming
+the technique.** The "rainbow foil defeats SIFT" cluster (18 false
+warnings on Pikachu VMAX) was mostly metal replicas labelled right;
+re-labelled, it is 4. 27 "right" rows across seven cards were wrong
+(5 more unclear).
+Labelling by eye at thumbnail size misses gold-on-rainbow — zoom.
 *Archive:* none — 2026-10-02, PROGRESS.md
 
 **A fold that helps matching can merge two cards.** `normNum` folds

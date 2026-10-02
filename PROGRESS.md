@@ -1,5 +1,35 @@
 # CardHunt — Progress Log
 
+## 2026-10-02 (night) — T2 wrong listings split by kind; T2b Base Set 2
+
+**T2 — measured, not built** (CLAUDE.md "SPLIT BY KIND"). The 1,010
+labelled rows' 89 wrong split by eye: 24 different illustration, 22 (later
+38) right line-art in metal/recolour, 42 (later 43) other language, 2
+magnets, 3 lots/backs. Colour histogram and pHash (pure JS, jpeg-js,
+77 ms/photo with decode) do not separate anything: two different cards'
+scans already score 0.7-0.9 against each other. SIFT re-run in a scratchpad
+venv (OpenCV 5.0) reproduced the stored inliers 1,010/1,010; added an
+illustration-only variant (scan keypoints in y 0.10-0.52) because every
+whole-card SIFT miss on a different illustration was the same Pokémon with
+the same card text.
+- Art-only SIFT flagged "right" rows that were not: re-labelled 27 (16
+  Pikachu VMAX — 14 metal replicas, a German, an Ivysaur — plus gold
+  Umbreon/Lugia, a silver regular Umbreon, an EX Lugia, a dark JA Charizard
+  ex, 6 Base Set 2). The rainbow-foil cluster was mostly replicas.
+- Final: 864 right / 62 D+R / 43 L. Whole<25 AND art<8: 0/864, 34/62.
+  Whole<47: 15/864, 48/62. Art<8: 8/864, 48/62 (D 23/24).
+- Roy's cards, held out (2 eBay calls via Render, tooling origin):
+  Shining Charizard 72 of 87 rows gold/black metal; bubble Mew's $190
+  cheapest is the 30th Mew. Strict rule: 0/52 right, 30th Mew caught, 2/72
+  gold. Colour <0.5: 43/72 gold, 0/10 genuine, 2/42 right Mews.
+- Decision: D (different illustration) is a filter candidate; R needs a
+  card-relative rule not yet measured; L stays with the title gates.
+
+**T2b.** Base Set 2 / Legendary Collection print a set symbol where Base
+Set prints none. SIFT-aligned crops of 374 Base Set photos: 6 BS2 copies
+titled Base Set (3 Blastoise, 3 Pikachu), 0 LC. ~20 px at s-l500 — needs
+alignment; not built.
+
 ## 2026-10-02 (evening) — T1 Render timing; T2 EX-era prices; T3 e-Card/McDonald's; T4 flag-not-hide on 12 cards
 
 **T1 — the stamp gate on Render, measured.** Cold after a deploy restart,

@@ -796,7 +796,8 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
           matched: hit.productName,
           matchedNumber: tcgHitNumber(hit),
           matchedBy: 'number',
-          set: hit.setName
+          set: hit.setName,
+          productId: hit.productId ?? null, listings: hit.totalListings ?? null
         };
       }
       // The number is known but nothing matched it. Try rarity as a
@@ -825,7 +826,8 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
             matched: hit.productName,
             matchedNumber: tcgHitNumber(hit),
             matchedBy: 'rarity',
-            set: hit.setName
+            set: hit.setName,
+            productId: hit.productId ?? null, listings: hit.totalListings ?? null
           };
         }
       }
@@ -843,7 +845,8 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
       matched: hit.productName,
       matchedNumber: tcgHitNumber(hit),
       matchedBy: wantNum ? 'name_unique' : 'name_only',
-      set: hit.setName
+      set: hit.setName,
+      productId: hit.productId ?? null, listings: hit.totalListings ?? null
     };
   } catch (e) { return null; }
 }
@@ -2113,6 +2116,12 @@ async function safePriceFor(card) {
           : tcgPlayerSearch(card.name, card.set_name, card.number, card.rarity, { setId: card.set_api_id }));
         if (res) res.meta = Object.assign({}, res.meta || {}, {
           via: 'tcgplayer-internal-search', tcgdexNone: td.none,
+          // WHICH product it matched (T2, 2026-10-02): Torchic ☆ alternated
+          // $4,500 / $1,200 nightly and no row could say why. TCGplayer's own
+          // listing count goes with it: a 'market' on 0 listings is a stale
+          // last sale (Torchic ☆: $4,500 on 0; Rayquaza ☆: no market at all).
+          matched: res.matched, matchedNumber: res.matchedNumber, matchedBy: res.matchedBy,
+          tcgSet: res.set, productId: res.productId, listings: res.listings, low: res.low,
           recheck: 'last-resort fallback: re-price from TCGdex once it lists a TCGplayer price for this card' });
         // TCGdex's Cardmarket price, where it has one: a SECOND reading,
         // stored beside the headline and never as it — EU retail, ~1.6x,

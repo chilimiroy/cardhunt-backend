@@ -211,6 +211,17 @@ Their rarity is positional inference. Yuyu-tei can supply it; still open.
 
 ## Known blemishes, measured today
 
+- **2026-10-02, e-Card and McDonald's (T3):** Skyridge 182/182 artwork,
+  Aquapolis 177/185 — the 18 H01-H09 from pokemontcg.io's H1-H9 (each
+  fetched first; `ccfill-backup-2026-10-02123815.json`), plus 5 sm3.5/sm7.5
+  cards the old letter-folding match had refused. The 8 left are Aquapolis
+  50a/50b-style pairs: pokemontcg.io has one #50 for two cards, so none.
+  **McDonald's 2014/2015/2017/2018 (48 cards) and 2023/2024 (30, no logo
+  either) have no host**: TCGdex `image: null`, pokemontcg.io 404s (and
+  has no 2023/2024 set). TCGplayer's CDN carries them — whether to use a
+  marketplace's product images is Roy's call, not taken. Links: queries
+  fixed `cc20e41`.
+
 - **2026-10-01, data changes (each with a backup in the project root):**
   the four duplicate Trainer Gallery sets `swsh9.5tg`…`swsh12.5tg` deleted
   (120 cards, 729 price rows; every twin held its own price, median ratio
@@ -462,10 +473,16 @@ BREAK/LEGEND print sideways and are matched a quarter turn round too.
   with 82 pending; all 82 checked **41.7 s** later (~490 ms each, 1
   worker), 68 refused, 14 kept; re-open with verdicts cached **342 ms**, from
   the view cache **78 ms**. eBay: 2 searches + 1 token for the open,
-  **0 for the stamp work** (82 CDN fetches, once each). Render is ~4x
-  slower per photo — **expect ~3 minutes to clear a cold Lugia there;
-  re-measure after deploying**, and raise STAMP_WORKERS only if the
-  instance has the cores.
+  **0 for the stamp work** (82 CDN fetches, once each).
+- **Measured on Render, 2026-10-02** (cold, after a deploy restart, 1
+  worker): Base Set Venusaur 137 photos **166 s** to clear; Mew VMAX 177
+  photos **219 s**; ~1.2-1.3 s a photo (`poolState().meanMs` 1,274 over
+  399) — ~2.5x this machine, not 4x. **The top five rows were resolved by
+  ~12 s on both**: ordering does its job, the headline settles long before
+  the tail. Re-open with verdicts held **98-125 ms**. A restart (every
+  deploy) forgets every verdict, so each of the 55 originals pays its full
+  photo count again on its next open — CDN fetches and CPU, no eBay calls.
+  Raise STAMP_WORKERS only if the instance has the cores.
 
 **The full re-run — done 2026-10-02**, all 906 s-l500 photos, shipped JS
 vs the OpenCV measurement: same verdict on 879 (97%); labelled Aquapolis
@@ -510,6 +527,23 @@ OpenCV on Render (opencv.js or a JS port, then measured again, at ~4x the
 CPU). Next step if wanted: the same measurement on 10+ cards including
 modern and Japanese ones.
 
+**Widened to 12 cards, 2026-10-02 (T4) — and the 0/100 does not hold.**
+1,010 eBay rows (Raw, US page 1: Base Charizard/Blastoise/Pikachu, Neo
+Lugia, Moonbreon, Charizard ex 199, Pikachu VMAX 188, Giratina V alt, Lugia
+V alt, Mew ex 151, Umbreon ex 161, JA Charizard ex 201), **every photo
+labelled by eye**: 896 right, 89 wrong, 12 stamped reprints, 13 unclear.
+SIFT as a WARNING at 47 inliers: **35 of 89 wrong warned (39%), 33 of 896
+right warned (3.7%)** — and 18 of those 33 are one card: the rainbow-foil
+Pikachu VMAX (18 of its 99 right photos). Rainbow foil defeats SIFT. At 75:
+48% / 6.5%; at 30: 33% / 2.1%. 33 of the 89 wrong are Mew ex's Japanese
+copies (same art: SIFT 0 of 33). **Base Charizard's `cheapest` is not made
+right at any threshold tried**: $35.99 replica -> $100 replica (47) ->
+$150 unidentifiable crop (75); right is $204.50. The cheapest-right count
+across the 12: 5 as shipped, **8 after the text gate (5e14670) and the
+stamp verdicts, 8 with SIFT at 47, 9 at 75**. Not built: it needs OpenCV
+on Render, and a 3.7% warning rate concentrated on one foil type is not a
+rate, it is a blind spot.
+
 **What T2 found that matters more.** The text gates do NOT catch nearly
 everything on the most-faked card. Base Charizard Raw, eBay US page 1
 (2026-10-02): **20 wrong cards shown unflagged among 84 rows**, and the
@@ -518,6 +552,51 @@ price, three by the stamp. Some titles say "Metal" or "Gold Foil"; ten say
 nothing ("Pokémon cards, Charizard Holo 4/102 Base Set 1999 ... 120 HP
 Rare", $289.99, gold metal). "Gold" alone is not a gate (genuine gold
 rares — LESSONS §1).
+
+**Read across 12 cards (T4, `5e14670`).** Of the 89 wrong rows, 56 outside
+Mew ex; 19 of those titles say what they are, 37 say nothing. Added, each
+at 0 of 896 right titles: gold metal / black metal / novelty / magnet /
+fridge magnet / wall art; "Portugese"; a case-sensitive `CN`; a Japanese
+set code (SV2a, S12a, SM12a…) on an ENGLISH card — 33 of English Mew ex's
+34 rows were the Japanese SV2a print; and a bare V straight after the name
+of a plain card. 43 wrong newly refused, 0 right. Still in: bare "metal",
+"gold foil", "textured" — each is also a genuine card's description.
+Raw searches also kept 4 slabs of the right card (a "GRADE 6.5", a PGC 10,
+two PSA) — the raw/slab gate's misses, not this section's.
+
+# EX-ERA PRICES — diagnosed 2026-10-02 (T2)
+
+Every 2003-2007 English card (2,745; 2,418 comparable) against TCGdex's
+TCGplayer figure the same day. **88 disagree by >1.4x.** Grouped:
+- **53: a `normal` block on a holo-only card.** TCGdex returns one (same
+  product id — a TCGplayer SKU a holo was listed under) and `normal` was
+  first in BASE_PRINTINGS: Emerald Rayquaza $49.99 vs $431.32; Rocket's
+  Raikou ex took a lone $2,300 ask (the ghost had no market). 92 headlines
+  catalogue-wide, 83 of them this era. **Fixed `af2f2c0`**: a block is used
+  only for a printing the card's own variants list. On the same blocks 81
+  EX-era cards move normal->holofoil, none loses its price. The rows
+  correct themselves as the nightly refresh reaches them.
+- **32: POP Series / Nintendo promos with two genuine printings**, normal
+  stored as the base — the convention, not a defect.
+- **3: holofoil, moved within the day** (thin cards: Regice ☆ $1,250 ->
+  $649.98).
+- Every disagreeing row was ≤7 days old: **age is not the cause there.**
+**Gold Stars (28) are not this.** 13 of 14 comparable agree with TCGdex to
+the cent; the problem is the market itself. TCGdex has no TCGplayer price
+for 14; for those the internal search finds Torchic ☆ and Latias ☆ at
+"market" $4,500 / $1,650 **on 0 listings** (a stale last sale), and
+Rayquaza ☆ / Mudkip ☆ with **no market at all** — so they keep a
+2026-07-27 pokemontcg.io row (`tcgplayer_normal` $2,500.99,
+`tcgplayer_holofoil_mid` $3,999.99) that nothing has re-priced. Roy's
+$23,600 / $9,513 / $6,199.99 come from no source we hold; a sold-price
+source (open, below) is the only fix. Since `0b0ddfb` internal-search rows
+record the product, number, set, listing count and low; since `8fdfcef`
+the page says a headline's age (12 cards of $20+ are >30 days old).
+Gold Star rarity is "Rare" because TCGdex says "Rare" (TCGplayer: "Ultra
+Rare"); it changes no match or estimate here — every Gold Star has a real
+price, and the internal search refuses Rayquaza ☆ either way.
+Torchic ☆ alternated $4,500 / $1,200 nightly from 9/16 to 10/01 under one
+label; the rows carry no product, so the second value is unexplained.
 
 # CALL COST — what spends eBay quota, measured (2026-10-01)
 
@@ -971,7 +1050,7 @@ node rawgate.test.js         # 74   every grader's slab refused from a raw searc
 node scopeguard.test.js      # 28
 node setlist.test.js         # 27   the browsed set list resolves; set page == card page; ingest.js tracked
 node sourcerank.test.js      # 48   9 of 15 decision cases PERMITTED, not only blocked
-node tcgdexprice.test.js     # 70
+node tcgdexprice.test.js     # 81   + a TCGdex block for a printing the card does not have is skipped (both directions)
 node digital.test.js         # 49   Pocket hidden at every read; server never writes `cards`
 node reprintprice.test.js    # 98   reprint-price band, both directions, on live rows
 node cardid.test.js          # 51   foreign ids refused; producers closed; DB count zero
@@ -993,11 +1072,13 @@ node eusites.test.js         # 80   T1: eBay DE/FR/IT/ES titles — reprints, ju
 node quotaui.test.js         # 24   T3: a quota refusal reaches the panel in words; indicator wiring (23 fail on the old page)
 node edition.test.js         # 76   T3: 1st Edition/Shadowless/Unlimited — reader, gate, query, headline rule, page (--db: +2)
 node promo.test.js           # 69   Black Star Promos: no set total asked or checked; real live titles kept; McDonald's refused
-node subset.test.js          # 27   TG16/TG30, SV107/SV122, GG01/GG70 asked and kept; Generations RC by number alone
+node subset.test.js          # 42   TG16/TG30, SV107/SV122, GG01/GG70 asked and kept; Generations RC by number alone; H01-H09 and McDonald's asked as sellers write them
 node noautoexpand.test.js    # 19   opening a card is one call: no auto-expansion in any form; empty panel names the sites not asked
 node claudesplit.test.js     # 23   every CLAUDE_ARCHIVE.md heading kept or cited here; the restored lessons present
 node pricecheck.test.js      # 34   editions compared like for like; the internal search only where TCGdex cannot price, labelled; Cardmarket a second reading (--db: +2, rolled back)
 node setyield.test.js        # 42   a set (or 200+ cards in a row) that priced nothing is NAMED and exits 2; scattered gaps are not; the due-clock reads the headline row
+node priceage.test.js        # 11   the card page says when its headline was recorded, and when it is old
+node fakewords.test.js       # 26   T4: what the wrong cards said (merch phrases, CN, Portugese, a JA set code on an EN card, a bare V) and the genuine phrasings kept
 node stampcheck.test.js      # 86   the stamp GATE: found refuses, weak keeps, pending never waits; item-id cache; one job per item; poll never searches; both directions on our scans (--live: +8)
 ```
 
@@ -1193,6 +1274,21 @@ headline reader uses `printsql.basePrintingSql` (base printing, Unlimited) —
 241 cards once showed a reverse price as the card's price.
 *Archive:* "Rarity is the card's; printing is the copy's (T10, 2026-09-29)", "Edition is its own axis — and TCGdex names it differently on WOTC sets (T3)", "1st Edition is a market where it existed, and nowhere else"
 
+**A price for a printing the card does not have is not the card's price.**
+TCGdex returns a `normal` block on holo-only cards (one product id, a SKU a
+holo was listed under) and `normal` was read first: Emerald Rayquaza at
+$49.99 against $431.32, a lone $2,300 ask on Rocket's Raikou ex. 53 of the
+88 EX-era disagreements, 92 headlines in all. Read the card's own printing
+list before its price list; an unknown list skips nothing.
+*Archive:* none — 2026-10-02, PROGRESS.md ("EX-ERA PRICES" above)
+
+**A thin market's "market price" is a stale sale, not a valuation.**
+TCGplayer quotes Torchic ☆ at $4,500 on 0 listings and Rayquaza ☆ at
+nothing; Roy's sold figures were 2-9x higher. Record the listing count
+beside the price, and do not expect a better match to fix a market that
+is not there.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
 **A source's "no value" is not a value.** TCGdex rarity "None" mapped to
 Common overwrote real rarities; 0 and null in TCGdex pricing both mean no data.
 *Archive:* "\"None\" is not \"Common\" — manifest's rarity map (2026-09-28, TASK T5)", "TCGdex embeds pricing, and the docs are wrong about its shape"
@@ -1292,7 +1388,11 @@ labelled with its name.
 prices 56% of unpriced Chinese cards" was the Japanese price in disguise.
 *Archive:* "A localised name does not mean localised data"
 
-**Ask a question the marketplace can answer.** A CJK set name in an eBay US
+**Ask a question the marketplace can answer.** eBay matches tokens: "H09"
+does not find "H9/H32", "1/15" does not find "001/015", and one word no
+seller writes ("McDonald's *Collection* 2014") empties the result —
+linkaudit `A` on all three (2026-10-02). When sellers write a number two
+ways, leave it out and let the gate check it. A CJK set name in an eBay US
 query returns zero; English sellers write the set NAME, never its code
 (apostrophes deleted, not spaced); a deep link has no gate, so every link goes
 through `cardmatch.buildQuery` and sits under UNFILTERED SEARCHES.
@@ -1376,6 +1476,13 @@ badges from a hash of the id. `grep Math.random` and `price\s*\*` first;
 cheapest test there is. A UI that writes only to itself loses quietly later:
 claim nothing before the server accepts it.
 *Archive:* "The page was still inventing numbers where nobody looked — found 2026-09-24", "Invented data, the fourth sweep (2026-09-28, TASK T7)", "A UI that writes only to itself"
+
+**A price says when it was measured.** The card page never showed a
+headline's date, so a July import nothing could re-price read as today's
+($2,500.99 Rayquaza ☆). Every displayed price carries its date; past 30
+days it says it is old (`priceAgeHtml`). An old price is a fallback, and a
+fallback announces itself.
+*Archive:* none — 2026-10-02, PROGRESS.md
 
 **Cache keys carry everything the value depends on.** A per-card cache served
 the PSA 10 median as Raw NM: 493x out, nothing on screen to suggest it.
@@ -1481,6 +1588,19 @@ one worker each, all ran past 20 s — and the timeout was cached as
 job per item; a failure is retryable and held briefly, never kept as an
 answer. A check that cannot finish inside the response runs after it, and
 the page says what is still being checked.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**One card's sample is not a rate.** SIFT's "0 of 100 correct flagged"
+on four cards became 33 of 896 on twelve — 18 of them one rainbow-foil
+card. A technique measured on one card's wrong listings and four cards'
+right ones has measured those cards. Widen before quoting a rate, and look
+at where the misses cluster.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**A fold that helps matching can merge two cards.** `normNum` folds
+"H01" to "H1" (needed) and "50a" to "50" (not): ccfill would have given
+Aquapolis Golduck 50a and 50b one image. Fold only what the comparison
+needs — padding — when a number identifies an artifact.
 *Archive:* none — 2026-10-02, PROGRESS.md
 
 **A "known correct" sample is labelled by eye, not by the gate that kept

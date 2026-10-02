@@ -1,5 +1,43 @@
 # CardHunt — Progress Log
 
+## 2026-10-02 (evening) — T1 Render timing; T2 EX-era prices; T3 e-Card/McDonald's; T4 flag-not-hide on 12 cards
+
+**T1 — the stamp gate on Render, measured.** Cold after a deploy restart,
+1 worker: Venusaur 137 photos 166 s, Mew VMAX 177 photos 219 s (~1.2-1.3 s
+a photo); top five rows resolved by ~12 s on both; re-open 98-125 ms.
+Lugia (26 left of 85) 21.6 s. ~16 eBay calls spent opening cards.
+
+**T2 — EX-era prices, diagnosed then fixed.** The three Gold Stars:
+Rayquaza ☆ $2,500.99 `tcgplayer_normal` and Mudkip ☆ $3,999.99
+`tcgplayer_holofoil_mid` are 2026-07-27 pokemontcg.io rows nothing has
+replaced (TCGplayer has no market for either now; the internal search
+refuses); Torchic ☆ $4,500 is TCGplayer's "market" on 0 listings,
+alternating with an untraceable $1,200. TCGdex has no TCGplayer price for
+any of the three; its Cardmarket price for Rayquaza ☆ ($16) is another
+card. Gold Star rarity is "Rare" at the source. Widened to 2,745 EX-era
+cards: 88 of 2,418 disagree >1.4x; 53 a ghost `normal` block on holo-only
+cards (fixed `af2f2c0`, 92 catalogue-wide), 32 genuine two-printing
+POP/promo cards, 3 same-day moves. `0b0ddfb`: internal-search rows record
+their product. `8fdfcef`: the page shows a headline's age (12 cards of
+$20+ are >30 days old).
+
+**T3 — e-Card and McDonald's.** linkaudit --live: Skyridge H09 A ("H09"
+misses "H9/H32"), McDonald's 2023 A ("1/15", "Collection"), McDonald's 2014
+1 scanned; Aquapolis H01/50a and Skyridge 146 fine. `cc20e41` asks as
+sellers write. Art: 18 H01-H09 + 5 sm3.5/sm7.5 from pokemontcg.io (ccfill,
+exact-number match — the old fold gave 50a and 50b one image). McDonald's
+2014/15/17/18/23/24: no host serves the art; not filled.
+
+**T4 — flag-not-hide, 12 cards, 1,010 rows labelled by eye.** SIFT at 47:
+35/89 wrong warned, 33/896 right warned (18 on rainbow Pikachu VMAX). Base
+Charizard's cheapest is not made right at any threshold. Text: 19 of 56
+wrong titles (outside Mew ex) carried a word; `5e14670` refuses 43 wrong
+rows, 0 right. Cheapest-right 5/12 as shipped -> 8/12 with the text gate
+and stamp. Photos kept in the scratchpad only.
+
+**Not done:** Lugia's 1st Edition from the 3 October nightly — that run has
+not happened yet (today is 2 October).
+
 ## 2026-10-02 (later) — T1 the stamp check is a gate; T2 the general photo check measured
 
 **T1 — automatic.** `stampcheck.gate` in `judgeListings`, after the text

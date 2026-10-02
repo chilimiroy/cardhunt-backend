@@ -456,12 +456,11 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .certchip.verified{background:#166534;color:#fff}
 .certchip.mismatch{background:#B91C1C;color:#fff}
 .certchip.error{background:transparent;color:#B91C1C;border:1px solid #B91C1C}
-/* Reprint stamp (T1): found is loud, not-visible is deliberately quiet —
-   absence of a stamp is weak evidence and must not look like a pass. */
-.certchip.stamp-found{background:#B91C1C;color:#fff}
-.certchip.stamp-not-visible{background:transparent;color:var(--mu);border:1px dashed var(--bd)}
-.certchip.stamp-unreadable,.certchip.stamp-unchecked{background:#E2E8F0;color:#334155}
-.certchip.stamp-error{background:transparent;color:#B91C1C;border:1px solid #B91C1C}
+/* Reprint stamp (T1): a found stamp never reaches the page (the row is
+   refused). Not-visible is deliberately quiet — absence of a stamp is weak
+   evidence and must not look like a pass. */
+.certchip.stamp-not-visible,.certchip.stamp-pending{background:transparent;color:var(--mu);border:1px dashed var(--bd)}
+.certchip.stamp-unreadable{background:#E2E8F0;color:#334155}
 .stampslot{display:contents}
 .certsays{flex-basis:100%;color:var(--mu);line-height:1.4}
 .certline a{color:var(--accent);font-weight:600}
@@ -3720,56 +3719,59 @@ function certLine(l){
     + '</div>';
 }
 
-// ── Reprint stamp, on demand (TASK T1) ──
-// Only on a card a known reprint copies (the server says so in stampCheck),
-// only on an eBay row with a photo. ZERO eBay calls: the server reads the
-// row's own photo from eBay's image CDN. Three answers, not two: a stamp
-// FOUND is strong evidence of the reprint; NOT VISIBLE is weak and never
-// reads as "verified original"; UNREADABLE is neither.
-var STAMP_SEEN = {};
+// ── Reprint stamp, checked by the server on every row (TASK T1, 2026-10-02) ──
+// On a card a known reprint copies, the server checks every eBay row's photo
+// for the reprint's commemorative stamp, after the text gates. A stamp FOUND
+// is a refusal: the row never reaches this page and is counted in
+// stampGate / sources.ebay. What reaches a row is the weak or unfinished
+// answer: not visible (never "verified original"), unreadable, or still
+// being checked — the panel re-reads the view while any are pending, and a
+// row found to be the reprint disappears when its verdict lands.
+// ZERO eBay calls: the photos come from eBay's image CDN.
 var STAMP_CHIP = {
-  'found':       '⚠ Reprint stamp visible',
+  'pending':     'Photo being checked for the reprint stamp',
   'not-visible': 'No stamp visible — not proof',
-  'unreadable':  'Photo unreadable',
-  'unchecked':   'No stamp template',
-  'error':       'Could not check'
+  'unreadable':  'Photo unreadable'
 };
-function stampRowEligible(l){
-  return !!(LF.stampCheck && LF.stampCheck.available && l && l.source === 'ebay' && l.itemId && l.imageUrl);
-}
 function stampLine(l){
-  if (!stampRowEligible(l)) return '';
-  var seen = STAMP_SEEN[l.itemId];
-  if (seen && Date.now() - seen.at > CERT_TTL_MS) { delete STAMP_SEEN[l.itemId]; seen = null; }
-  var names = (LF.stampCheck.reprints || []).map(function(r){ return r.label; }).join(' / ');
-  return '<span class="stampslot" data-stamp-item="' + liveEsc(l.itemId) + '">'
-    + (seen ? stampResultHtml(seen.r)
-       : '<button type="button" class="certbtn" onclick="stampCheck(this)" title="Looks for the '
-         + liveEsc(names) + ' commemorative stamp in the seller’s photo">Check photo for reprint stamp</button>'
-         + '<span>no eBay lookup</span>')
+  var st = l && l.stamp;
+  if (!st || !STAMP_CHIP[st.state]) return '';
+  return '<span class="stampslot"><span class="certchip stamp-' + st.state + '">' + STAMP_CHIP[st.state] + '</span>'
+    + (st.state === 'pending' ? '' : '<span class="certsays">' + liveEsc(st.says || '') + '</span>')
     + '</span>';
 }
-function stampResultHtml(r){
-  var state = STAMP_CHIP[r.state] ? r.state : 'error';
-  return '<span class="certchip stamp-' + state + '">' + STAMP_CHIP[state] + '</span>'
-    + '<span class="certsays">' + liveEsc(r.says || r.error || 'No answer.') + '</span>';
+// What the stamp gate refused and what it is still doing, in words.
+function liveStampNote(d){
+  var g = d && d.stampGate;
+  if (!g || !g.applied) return '';
+  var names = (g.reprints || []).filter(function (r) { return r.template; })
+    .map(function (r) { return r.label; }).join(' / ');
+  return '<div id="cd-stamp-note" style="font-size:11px;color:var(--fa);margin-top:4px">'
+    + (g.refused ? g.refused + ' listing' + (g.refused === 1 ? '' : 's') + ' refused &mdash; the seller&rsquo;s photo shows the '
+        + liveEsc(names) + ' reprint stamp. ' : '')
+    + (g.pending ? g.pending + ' photo' + (g.pending === 1 ? ' is' : 's are') + ' still being checked for it; '
+        + 'a row found to be the reprint will disappear.'
+      : 'Every photo was checked for the ' + liveEsc(names) + ' stamp' + (g.refused ? '' : ' and none showed it')
+        + '. No stamp visible is not proof of the original.')
+    + '</div>';
 }
-async function stampCheck(btn){
-  var slot = btn && btn.closest('.stampslot');
-  if (!slot || !LF.card) return;
-  var itemId = slot.getAttribute('data-stamp-item');
-  var cardId = LF.card.id || LF.card.api_card_id;
-  btn.disabled = true; btn.textContent = 'Checking photo…';
-  var r;
-  try {
-    var resp = await fetch(BACKEND + '/api/stamp/' + encodeURIComponent(cardId) + '?item=' + encodeURIComponent(itemId));
-    r = await resp.json();
-    if (!resp.ok && !r.error) r.error = 'HTTP ' + resp.status;
-  } catch (e) { r = { error: 'network: ' + e.message }; }
-  if (r.error) r.state = 'error';
-  // A failed or retryable answer is not remembered — pressing again tries again.
-  if (r.state !== 'error' && !r.retryable) STAMP_SEEN[itemId] = { at: Date.now(), r: r };
-  slot.innerHTML = stampResultHtml(r);
+// Re-read the view while photos are pending: ?poll=1 is a cache read on the
+// server and never a search. Stops when nothing is pending, when the card or
+// selection changes, or when the view leaves the server's 15-minute cache.
+var STAMP_POLL = null;
+function scheduleStampPoll(card, grade, d){
+  clearTimeout(STAMP_POLL); STAMP_POLL = null;
+  if (!(d && d.stampGate && d.stampGate.pending > 0)) return;
+  var printing = SEL.printing || 'all', edition = SEL.edition || 'all';
+  STAMP_POLL = setTimeout(function () {
+    if (!LF.card || LF.card.id !== card.id || LF.grade !== grade) return;
+    fetchListings(card.id, grade, printing, { edition: edition, poll: true })
+      .then(function (d2) {
+        if (!d2 || d2.notFetched) return;
+        if (!LF.card || LF.card.id !== card.id || LF.grade !== grade) return;
+        renderLiveListings(card, grade, { quiet: true });
+      }).catch(function () {});
+  }, 2500);
 }
 function certResultHtml(r){
   var state = CERT_CHIP[r.state] ? r.state : 'error';
@@ -4001,8 +4003,8 @@ async function renderLiveListings(card, grade, opts){
   // The user may have changed card, grade or printing while this was in flight.
   if (!LF.card || LF.card.id !== cardId || LF.grade !== grade || (SEL.printing || 'all') !== printing
       || (SEL.edition || 'all') !== edition) return;
-  // Whether this card's rows can be checked for a reprint's stamp (TASK T1).
-  LF.stampCheck = (d && d.stampCheck) || null;
+  // Photos still being checked for a reprint stamp: re-read in a moment (T1).
+  scheduleStampPoll(card, grade, d);
 
   // The editions this card was printed in arrive with its listings too (T3);
   // the Edition box appears only when there is more than one.
@@ -4133,7 +4135,7 @@ async function renderLiveListings(card, grade, opts){
     if (edRefused) out += '<div style="font-size:11px;color:var(--fa);margin-top:4px">'
       + edRefused + ' listing' + (edRefused === 1 ? '' : 's')
       + ' refused &mdash; the title states a different edition.</div>';
-    return out + unstatedPrintBlock() + unstatedEdBlock();
+    return out + liveStampNote(d) + unstatedPrintBlock() + unstatedEdBlock();
   }
   // Same card, edition not stated (T3). Its own group, its own words.
   function unstatedEdBlock() {
@@ -6254,6 +6256,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261002-f31734e-dirty-stampcheck &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261002-3e73b74-stampgate &middot; click to hide</div>
 </body>
 </html>

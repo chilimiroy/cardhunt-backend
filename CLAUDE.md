@@ -66,7 +66,7 @@ has drifted apart eventually, and each drift is a lesson below.
 | `sourceprobe.js` | does this source answer RENDER, or only a home IP? |
 | `digital.js` | is this set digital-only (Pokémon TCG Pocket)? — by SERIES, hidden at every read |
 | `certcheck.js` | what cert number did the seller enter on this eBay slab, and what photos did they post? — on demand, ONE shared getItem per listing (Verify + Photos), 15 min; PSA answer permanent (PSA half NOT built) |
-| `stampcheck.js` | does this listing's PHOTO show a reprint's commemorative stamp? — on demand, **0 eBay calls** (eBay's image CDN), per-card templates in `stamps.json` (built by `stampbuild.js` from OUR scans); found / not visible / unreadable, never "verified original" |
+| `stampcheck.js` | does this listing's PHOTO show a reprint's commemorative stamp? — **a gate on every eBay row of the 55 originals** (found refuses; pool + item-id cache), **0 eBay calls** (eBay's image CDN), per-card templates in `stamps.json` (built by `stampbuild.js` from OUR scans); found / not visible / unreadable, never "verified original" |
 | `setyield.js` | did a refresh price NOTHING for a whole set, or for 200+ cards in a row? — names it, exits 2 |
 
 ## What ships and what does not
@@ -425,24 +425,99 @@ cheapest row on the page. Rayquaza-EX's reprint sells at the original's
 price ($25-30), so no price band can ever separate those two; 18 stamped
 reprints sat unflagged in its 162 rows.
 
-**Built, on demand** (`/api/stamp/:cardId?item=`, "Check photo for reprint
-stamp" on every eBay row of the 55 originals; `stampcheck.js`): 0 eBay
-calls, the row's own photo from `i.ebayimg.com` only (never a caller's URL),
-a worker thread (~1.2 s CPU), 15 minutes in memory. Three states: **found**
-(strong — "looks like the reprint"), **not visible** (weak — "not proof it
-is the original"), **unreadable**. 54 of 55 templates built; `30th-c-020`
-(the bottom half of Darkrai & Cresselia LEGEND) has no stamp on our scan
-and says so (`notBuilt`). BREAK/LEGEND print sideways: their stamp is
-matched a quarter turn round too. The JS matcher was cross-checked against
-the OpenCV measurement on 10 labelled photos (scores within ~0.03, same
-verdicts), 6 through the endpoint and 8 scans — **the full ~900-photo JS
-re-run is still owed** (stopped for low memory, 2026-10-02); its first version removed one
-mean across all three channels and called four original SCANS reprints —
-`stampcheck.test.js` fires on that.
+**Built, and AUTOMATIC since 2026-10-02 (TASK T1)** — a gate, not a
+button. `stampcheck.gate` runs in `judgeListings` after the text gates and
+BEFORE the outlier check, on every eBay row of the 55 originals. A stamp
+**found** is a refusal: the row is not shown and is counted in
+`sources.ebay.rejected` / `stampRefused` / `droppedSample` and in the
+payload's `stampGate`. **Not visible** and **unreadable** KEEP the row
+(weak evidence never refuses; 2 of 86 Aquapolis photos show no usable stamp
+area). 0 eBay calls; the row's own photo from `i.ebayimg.com` only, never
+a caller's URL. 54 of 55 templates built; `30th-c-020` (bottom half of
+Darkrai & Cresselia LEGEND) has no stamp on our scan (`notBuilt`).
+BREAK/LEGEND print sideways and are matched a quarter turn round too.
 
-**Not built, deliberately:** anything automatic. Measure the hit rate on
-real presses first (TASK T1's rule). Open: the metal Charizards; the found
-state does not yet move the row into the suspects group.
+- **Verdicts cached by eBay item id, 7 days, in memory** (photo URL held
+  beside it — a changed photo is checked again). A retryable failure (CDN
+  down, timeout) is held 2 minutes, so a view is never left pending. A
+  Render restart forgets everything: the first viewer after a cold start
+  pays again.
+- **One persistent worker pool** (`STAMP_WORKERS`, default 1), a queue, one
+  job per item however many views ask. Measured on Render before this: one
+  check 4.2-5.9 s there vs ~1.2 s here, and **8 parallel workers all ran
+  past 20 s** — then the 20 s timeout was CACHED as "unreadable" (fixed:
+  retryable, never a verdict).
+- **The answer never waits.** An unchecked row is shown marked "Photo
+  being checked", the checks run after the response (`stampFollowUp`,
+  display order — the cheapest rows first), the view is re-judged as
+  verdicts land (`rebuildView` with `noFetch`: it can never spend), and the
+  page re-reads with `?poll=1` while `stampGate.pending > 0`. `poll=1` is
+  now cache-only: on a miss it says "not fetched", never searches.
+- **Faster matcher** (`stampcheck.MATCH`): scales from 28 px not 14 (real
+  stamps measure 36-88 px at s-l500; the small scales cost most and found
+  only false scores), largest first, stop at the threshold. 689 vs 2,179
+  ms a photo on the same loaded machine, same totals on 906 photos, and the
+  card back (o81, 0.709 "found" before) no longer flags.
+- **Measured, Lugia (82 real photos, local, costmeter):** cold open 954 ms
+  with 82 pending; all 82 checked **41.7 s** later (~490 ms each, 1
+  worker), 68 refused, 14 kept; re-open with verdicts cached **342 ms**, from
+  the view cache **78 ms**. eBay: 2 searches + 1 token for the open,
+  **0 for the stamp work** (82 CDN fetches, once each). Render is ~4x
+  slower per photo — **expect ~3 minutes to clear a cold Lugia there;
+  re-measure after deploying**, and raise STAMP_WORKERS only if the
+  instance has the cores.
+
+**The full re-run — done 2026-10-02**, all 906 s-l500 photos, shipped JS
+vs the OpenCV measurement: same verdict on 879 (97%); labelled Aquapolis
+**0 of 16 originals flagged**, 68 of 69 reprints found; reprint listings
+288/304; the 22 flags inside the originals' own listings (3 Base Charizard,
+19 Rayquaza-EX) **all show the stamp, checked by eye**. The JS port is a
+little more lenient than OpenCV at the threshold (F156: JS found, OpenCV
+missed — a reprint). Its first version removed one mean across all three
+channels and called four original SCANS reprints — `stampcheck.test.js`
+fires on that.
+
+Open: the metal Charizards (a different product the gate keeps on CC002).
+
+# IS THIS PHOTO THIS CARD AT ALL? — measured 2026-10-02, NOT built (TASK T2)
+
+The stamp technique cannot generalise: it looks for a mark cut from the
+reprint's own scan, and a card with no reprint has nothing to look for.
+Four techniques, each comparing a listing photo with OUR catalogue scan,
+on **100 correct photos** (labelled by eye: 16 Aquapolis Lugia, 30 Base
+Pikachu, 30 Base Charizard, 24 Rayquaza-EX) and **24 real wrong listings**
+(Base Charizard rows the text gate KEPT: metal replicas, modern Charizards,
+a Japanese and a French copy, a 3-card lot), plus 40 "same artwork, other
+set" pairs (Base Set 2 / Legendary Collection / promo) and 40 "same name,
+other artwork" pairs. Flagged = similarity below the threshold.
+
+| technique | wrongly flags correct | catches real wrong | same art, other set | ms |
+|---|---|---|---|---|
+| perceptual hash, whole photo | 0 at thr 24 | **4/24** | 0/40 | 5 |
+| art-box template match | 0 at 0.263 | 8/24 (22/24 at 5 flagged) | 5/40 | 766 |
+| **SIFT + RANSAC inliers** | **0 at 47** | **21/24** | **1/40** | 455 |
+| set-symbol strip, after SIFT alignment | 0 at 0.152 | 8/24 (11 unaligned) | 0/40 | — |
+
+SIFT is the only candidate, and only for one class. Run over every photo
+of the right card held (881), **2 correct photos fall below 47** — a tiny
+slab and a glared one (~0.2%) — and 6 more wrong cards the text gate kept
+are found (metal Charizards in the CC listings). It misses gold-metal
+replicas scoring 64-85, and it **cannot separate the same artwork in
+another set** (Base Set 2, Legendary Collection) or, by construction, a
+printed counterfeit of the real art. Not built: one card's wrong listings,
+four cards' correct ones; 0/100 still allows ~3% at 95%; and there is no
+OpenCV on Render (opencv.js or a JS port, then measured again, at ~4x the
+CPU). Next step if wanted: the same measurement on 10+ cards including
+modern and Japanese ones.
+
+**What T2 found that matters more.** The text gates do NOT catch nearly
+everything on the most-faked card. Base Charizard Raw, eBay US page 1
+(2026-10-02): **20 wrong cards shown unflagged among 84 rows**, and the
+headline cheapest ($35.99) was a gold-metal replica. Four were flagged by
+price, three by the stamp. Some titles say "Metal" or "Gold Foil"; ten say
+nothing ("Pokémon cards, Charizard Holo 4/102 Base Set 1999 ... 120 HP
+Rare", $289.99, gold metal). "Gold" alone is not a gate (genuine gold
+rares — LESSONS §1).
 
 # CALL COST — what spends eBay quota, measured (2026-10-01)
 
@@ -487,7 +562,8 @@ is not handed to a waiter of another origin — it tries under its own. At a
 | "Load more listings" | `?more=1` | **1 per site with more** (8 measured) |
 | Verify (PSA cert) | `/api/cert` | **1** getItem |
 | Photos, same listing as Verify | `/api/photos` | **0** — shared 15-min getItem cache; another listing 1 |
-| Check photo for reprint stamp | `/api/stamp` | **0** — measured 2026-10-02 under costmeter: 6 presses, `ebayHttp` unchanged, 6 fetches from `i.ebayimg.com` (the CDN, not the API). ~2 s each (worker thread) |
+| Reprint stamp gate, on opening one of the 55 originals | automatic | **0** — measured 2026-10-02 under costmeter: Lugia open = 2 searches + 1 token, stamp work 82 `i.ebayimg.com` fetches (CDN, not the API), once per item; the page's ~30 `?poll=1` re-reads **0** |
+| `/api/stamp` (one row, by hand) | | **0** — same queue and cache as the gate |
 | Search, query resolving to one card | `/api/search?q=` | **1 per resolved card** (+ reprints: "Charizard 4/102 Base Set" = 3); graded query 1 |
 | Search, ambiguous name ("Pikachu") / nonsense / `listings=0` | same | **0** — listings only when the query resolves |
 | Trending · cards · history · sets · set page · market · alerts (list, triggered) · portfolio · quota read · listings-log · `dryRun=1` | | **0** each |
@@ -922,7 +998,7 @@ node noautoexpand.test.js    # 19   opening a card is one call: no auto-expansio
 node claudesplit.test.js     # 23   every CLAUDE_ARCHIVE.md heading kept or cited here; the restored lessons present
 node pricecheck.test.js      # 34   editions compared like for like; the internal search only where TCGdex cannot price, labelled; Cardmarket a second reading (--db: +2, rolled back)
 node setyield.test.js        # 42   a set (or 200+ cards in a row) that priced nothing is NAMED and exits 2; scattered gaps are not; the due-clock reads the headline row
-node stampcheck.test.js      # 59   the stamp check: CDN-only URL, three states, both directions on our scans (fires on the one-mean bug), 0 eBay calls (--live: +8)
+node stampcheck.test.js      # 86   the stamp GATE: found refuses, weak keeps, pending never waits; item-id cache; one job per item; poll never searches; both directions on our scans (--live: +8)
 ```
 
 Run them all:
@@ -1397,6 +1473,22 @@ English names (set words, numbers, TAG/ACE in names) before SQL; guesses are
 scored under every reading, never used as filters; rank before the cap.
 Never compare timings while a bulk job is running (10x worse under load).
 *Archive:* "Search could not find cards we hold by their own name (2026-09-28)"
+
+**Measure a check's time where it runs, and a timeout is not a verdict.**
+The stamp check took ~1.2 s here and 4.2-5.9 s on Render; eight at once,
+one worker each, all ran past 20 s — and the timeout was cached as
+"unreadable" for 15 minutes. One pool sized to the instance, a queue, one
+job per item; a failure is retryable and held briefly, never kept as an
+answer. A check that cannot finish inside the response runs after it, and
+the page says what is still being checked.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**A "known correct" sample is labelled by eye, not by the gate that kept
+it.** 11 of 30 Base Charizard rows drawn as "correct" for T2 were metal
+replicas, modern Charizards and foreign copies the text gate had kept —
+measured against them, any technique would have scored as wrong what was
+right. Look at every photo in a labelled set.
+*Archive:* none — 2026-10-02, PROGRESS.md
 
 ## 6 · Metered APIs (eBay)
 

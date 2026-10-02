@@ -1,5 +1,40 @@
 # CardHunt — Progress Log
 
+## 2026-10-02 (later) — T1 the stamp check is a gate; T2 the general photo check measured
+
+**T1 — automatic.** `stampcheck.gate` in `judgeListings`, after the text
+gates, before the outlier check. Found refuses (counted in sources.ebay and
+`stampGate`), not-visible / unreadable keep. Verdicts by eBay item id, 7
+days in memory; one worker pool (STAMP_WORKERS=1); checks run after the
+response, the view is re-judged as they land (noFetch), the page re-reads
+with `?poll=1` (now cache-only). "Check photo" button removed; `/api/stamp`
+goes through the same `checkItem`.
+- Render, measured BEFORE (old endpoint, 12 presses on Lugia): 4.2-5.9 s a
+  photo; 8 concurrent all hit the 20 s timeout and the timeout was cached as
+  "unreadable" — that was a bug, fixed.
+- Matcher: lo 28 / 10 steps / largest first / stop at 0.70. 689 vs 2,179 ms
+  a photo (same load), same totals on 906 photos, card back no longer flags.
+- Local, costmeter, Lugia's 82 real photos: open 954 ms (82 pending), all
+  checked at 41.7 s, 68 refused / 14 kept; cached re-open 342 ms, view cache
+  78 ms. eBay: 2 searches + 1 token; stamp 0 (82 CDN fetches). Browser: rows
+  fall away top-first, note says how many refused / still checking, polling
+  stops; no console errors.
+- **The 906-photo re-run (owed since it died at 800): done.** 879/906 agree
+  with OpenCV; labelled 0/16 originals flagged, 68/69 reprints; card back
+  o81 falsely "found" at the shipped settings (0.709), not at the new ones.
+  The 22 flags in Base Charizard / Rayquaza-EX listings: all stamped, by eye.
+- **Not yet on Render.** Render is ~4x slower per photo: a cold Lugia will
+  take ~3 minutes to clear there. Measure after deploying.
+
+**T2 — measured, not built** (CLAUDE.md "IS THIS PHOTO THIS CARD AT ALL?").
+pHash 4/24, art-box 8/24, set-symbol 8/24 at zero false flags; SIFT inliers
+21/24 at zero of 100 correct, ~0.2% (2/881) over every right-card photo,
+but blind to same-art-other-set (1/40) and to printed counterfeits. Not
+clean enough on this sample to hide listings automatically.
+- Found on the way: Base Charizard Raw page 1 showed 20 wrong cards
+  unflagged among 84 (gold metal replicas, modern Charizards, JP, FR, a lot);
+  the headline cheapest $35.99 was a metal replica.
+
 ## 2026-10-02 — TASK T1 stamp detection; T2 the run's loose ends
 
 **T1 — the reprint stamp, measured then built** (CLAUDE.md "REPRINT vs ORIGINAL").

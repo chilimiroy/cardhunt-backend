@@ -160,13 +160,24 @@ function nccMax(img, t, stride, region) {
 // in the photo is compared at 20px. Chosen on ten labelled photos against
 // the OpenCV measurement (2026-10-02, this machine): 32/18 steps 4.3 s a
 // photo, 24/14 1.9 s, 20/14 1.2 s — scores within ~0.03 of OpenCV's at each.
-const MAX_TW = 20, STEPS = 14;
+const MAX_TW = 20, STEPS = 14, LO_TW = 14;
+// What judge() runs with (TASK T1, 2026-10-02 — re-measured on all 906
+// photos, PROGRESS.md). Real stamps in an s-l500 photo are 36-88 px wide
+// (OpenCV, 368 found; 2 under 30), so scales start at 28 px rather than 14:
+// the small scales cost the most (they run at full resolution) and found
+// almost nothing but the originals' highest false scores — the card back
+// o81 scored 0.709 at the old settings. Largest scale first, stopping at the
+// first score over the threshold, so a reprint ends early; an original
+// still sweeps every scale. ~4.7x faster on this machine.
+const MATCH = { lo: 28, steps: 10, desc: true, stopAt: THRESHOLD };
 function bestScore(photo, template, opts) {
-  const o = Object.assign({ maxTw: MAX_TW, steps: STEPS, stride: 2 }, opts || {});
-  const lo = 14, hi = Math.max(lo + 2, photo.w * 0.32);
+  const o = Object.assign({ maxTw: MAX_TW, steps: STEPS, stride: 2, lo: LO_TW, stopAt: Infinity }, opts || {});
+  const lo = o.lo, hi = Math.max(lo + 2, photo.w * 0.32);
   let best = { score: -1 };
   const shrunk = new Map();
-  for (let i = 0; i < o.steps; i++) {
+  for (let n = 0; n < o.steps; n++) {
+    if (best.score >= o.stopAt) break;
+    const i = o.desc ? o.steps - 1 - n : n;
     const tw = lo * Math.pow(hi / lo, i / (o.steps - 1));
     const f = Math.max(1, tw / o.maxTw);
     const key = Math.round(f * 4) / 4;            // share shrunk photos between nearby scales
@@ -197,7 +208,8 @@ function templateImage(entry) {
 
 // The verdict for one decoded photo against every reprint of the card.
 // reprints: [{ cardId: 'en-30th-c-029', family: {label} }] (cardmatch.reprintCardsOf)
-function judge(photo, reprints) {
+function judge(photo, reprints, opts) {
+  opts = opts || MATCH;
   const T = templates().templates || {};
   if (!photo || photo.w < MIN_SIDE || photo.h < MIN_SIDE)
     return { state: 'unreadable', says: 'The photo is too small to show the stamp.', scores: [] };
@@ -205,12 +217,12 @@ function judge(photo, reprints) {
   for (const rc of reprints) {
     const e = T[rc.cardId];
     if (!e) { scores.push({ reprint: rc.cardId, label: rc.family && rc.family.label, checked: false, why: 'no stamp template built for this reprint' }); continue; }
-    let b = bestScore(photo, templateImage(e));
+    let b = bestScore(photo, templateImage(e), opts);
     // A sideways-printed card is photographed either way up: its stamp is
     // also tried a quarter turn round (the template is stored upright).
     if (e.sideways) {
       if (!e._rot) e._rot = rotate90(templateImage(e));
-      const r = bestScore(photo, e._rot);
+      const r = bestScore(photo, e._rot, opts);
       if (r.score > b.score) b = r;
     }
     scores.push({ reprint: rc.cardId, label: e.label || (rc.family && rc.family.label), checked: true,
@@ -235,43 +247,179 @@ function photoUrl(imageUrl) {
   return u.toString();
 }
 
-// 15 minutes, in memory, keyed by eBay item id — the cert rule.
-const TTL_MS = 15 * 60 * 1000;
+// ── The verdict, kept by eBay item id (TASK T1, 2026-10-02) ──
+// A listing's photo does not change under the same URL, so the first viewer
+// of a card pays for the check and everyone after reads the answer. Keyed
+// on the ITEM (a listing under several searches is checked once), and the
+// photo URL is held beside it: a seller who changes the photo changes the
+// URL, and the item is checked again. In memory only — the verdict is ours,
+// a few bytes; the photo itself is never kept. A Render restart forgets it.
+// A failure worth retrying (the CDN did not answer, the check timed out) is
+// held 2 minutes, so a view says "unreadable" instead of waiting forever,
+// and the next view after that asks again.
+const TTL_MS = 7 * 24 * 3600 * 1000;
+const RETRY_MS = 2 * 60 * 1000;
+const CACHE_MAX = 20000;
 const _cache = new Map();
-function cacheGet(itemId) {
+function cacheGet(itemId, url) {
   const e = _cache.get(itemId);
   if (!e) return null;
-  if (Date.now() - e.at > TTL_MS) { _cache.delete(itemId); return null; }
+  if (url && e.url && e.url !== url) { _cache.delete(itemId); return null; }
+  if (Date.now() - e.at > (e.verdict.retryable ? RETRY_MS : TTL_MS)) { _cache.delete(itemId); return null; }
   return e;
 }
-function cacheSet(itemId, verdict) {
-  if (_cache.size > 2000) _cache.delete(_cache.keys().next().value);
-  _cache.set(itemId, { at: Date.now(), verdict });
+function cacheSet(itemId, verdict, url) {
+  _cache.delete(itemId);
+  if (_cache.size >= CACHE_MAX) _cache.delete(_cache.keys().next().value);
+  _cache.set(itemId, { at: Date.now(), url: url || null, verdict });
 }
 
-// The match is ~1 s of CPU. On the server it runs in a worker thread, so one
-// person pressing "Check photo" never stalls every other request.
-function judgeInWorker(jpegBuf, reprints, timeoutMs) {
+// ── One pool of long-lived workers, a queue in front (TASK T1) ──
+// Measured on Render 2026-10-02: one check took 4.2-5.9 s there (~1.2 s
+// here), and eight at once, one worker each, ALL ran past 20 s and were
+// stopped. Render's CPU is a fraction of a core: parallel workers only share
+// it. So STAMP_WORKERS workers (default 1), started once, fed one photo at a
+// time, and every caller of one item waits on the same job.
+const POOL_SIZE = Math.max(1, parseInt(process.env.STAMP_WORKERS, 10) || 1);
+const JOB_TIMEOUT_MS = 30000;
+const FETCH_TIMEOUT_MS = 8000;
+const _queue = [];               // { itemId, url, reprints, resolve }
+const _inflight = new Map();     // itemId -> Promise<verdict>
+const _workers = [];             // { w, job, timer }
+let _fetch = (...a) => fetch(...a);
+const _stats = { checked: 0, failed: 0, msTotal: 0, cacheHits: 0 };
+
+function spawnWorker() {
   const { Worker } = require('worker_threads');
-  return new Promise(resolve => {
-    // execArgv: []: a worker needs no preload (under costmeter, an inherited
-    // -r preload overwrote the meter from every worker).
-    const w = new Worker(__filename, { workerData: { jpeg: jpegBuf, reprints }, execArgv: [] });
-    const done = v => { clearTimeout(t); w.terminate().catch(() => {}); resolve(v); };
-    const t = setTimeout(() => done({ state: 'unreadable', says: 'The photo check took too long and was stopped.', scores: [] }), timeoutMs || 20000);
-    w.once('message', done);
-    w.once('error', e => done({ state: 'unreadable', says: 'The photo could not be read: ' + String(e && e.message || e).slice(0, 80), scores: [] }));
+  // execArgv: []: a worker needs no preload (under costmeter, an inherited
+  // -r preload overwrote the meter from every worker).
+  const slot = { w: new Worker(__filename, { workerData: { pool: true }, execArgv: [] }), job: null, timer: null };
+  slot.w.on('message', m => finish(slot, m.verdict));
+  slot.w.on('error', e => finish(slot, { state: 'unreadable', retryable: true, scores: [],
+    says: 'The photo check failed: ' + String(e && e.message || e).slice(0, 80) }, true));
+  slot.w.on('exit', () => {
+    const i = _workers.indexOf(slot); if (i >= 0) _workers.splice(i, 1);
+    if (slot.job) finish(slot, { state: 'unreadable', retryable: true, says: 'The photo check stopped.', scores: [] });
+  });
+  // After the listeners: attaching a message listener re-refs the port, and
+  // an idle pool must never keep a script (or a test) alive.
+  slot.w.unref();
+  _workers.push(slot);
+  return slot;
+}
+function finish(slot, verdict, kill) {
+  const job = slot.job;
+  clearTimeout(slot.timer); slot.timer = null; slot.job = null;
+  if (kill) { const i = _workers.indexOf(slot); if (i >= 0) _workers.splice(i, 1); slot.w.terminate().catch(() => {}); }
+  if (job) {
+    const v = Object.assign({}, verdict, { tookMs: Date.now() - job.t0 });
+    if (v.retryable) _stats.failed++; else { _stats.checked++; _stats.msTotal += v.tookMs; }
+    cacheSet(job.itemId, v, job.url);
+    _inflight.delete(job.itemId);
+    job.resolve(v);
+  }
+  pump();
+}
+async function runJob(slot, job) {
+  job.t0 = Date.now();
+  let r = null;
+  try { r = await _fetch(job.url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }); } catch (e) { r = null; }
+  const type = (r && r.headers && r.headers.get('content-type')) || '';
+  if (!r || !r.ok) return finish(slot, { state: 'unreadable', retryable: true, scores: [],
+    says: 'eBay’s image server did not return the photo' + (r ? ' (HTTP ' + r.status + ')' : '') + '.' });
+  if (!/jpe?g/i.test(type)) return finish(slot, { state: 'unreadable', scores: [], says: 'The photo is not a JPEG (' + type.slice(0, 30) + ').' });
+  const buf = Buffer.from(await r.arrayBuffer());
+  slot.timer = setTimeout(() => finish(slot, { state: 'unreadable', retryable: true, scores: [],
+    says: 'The photo check took too long and was stopped.' }, true), JOB_TIMEOUT_MS);
+  slot.w.postMessage({ jpeg: buf, reprints: job.reprints });
+}
+function pump() {
+  while (_queue.length) {
+    let slot = _workers.find(s => !s.job);
+    if (!slot && _workers.length < POOL_SIZE) slot = spawnWorker();
+    if (!slot) return;
+    const job = _queue.shift();
+    slot.job = job;
+    runJob(slot, job).catch(e => finish(slot, { state: 'unreadable', retryable: true, scores: [],
+      says: 'The photo check failed: ' + String(e && e.message || e).slice(0, 80) }));
+  }
+}
+
+// The one way to check an item: the cache, else the job already running,
+// else a new job at the back of the queue. Never rejects; zero eBay calls.
+function checkItem(itemId, imageUrl, reprints) {
+  const url = photoUrl(imageUrl);
+  if (!url) return Promise.resolve({ state: 'unreadable', says: 'The listing has no eBay photo to check.', scores: [] });
+  const hit = cacheGet(itemId, url);
+  if (hit) { _stats.cacheHits++; return Promise.resolve(Object.assign({}, hit.verdict, { cached: true })); }
+  if (_inflight.has(itemId)) return _inflight.get(itemId);
+  const p = new Promise(resolve => _queue.push({ itemId, url, reprints, resolve }));
+  _inflight.set(itemId, p);
+  pump();
+  return p;
+}
+function poolState() {
+  return { workers: POOL_SIZE, running: _workers.filter(s => s.job).length, queued: _queue.length,
+           cachedItems: _cache.size, checked: _stats.checked, failed: _stats.failed, cacheHits: _stats.cacheHits,
+           meanMs: _stats.checked ? Math.round(_stats.msTotal / _stats.checked) : null };
+}
+
+// ── The gate: after the text gates, before display (TASK T1) ──
+// rows: listings that passed cardmatch. Only eBay rows are photographed.
+// A stamp FOUND refuses the row, counted and named like any other refusal.
+// NOT VISIBLE and UNREADABLE keep it: absence of a stamp is weak evidence
+// (cropped, angled, glared; 2 of 86 Aquapolis photos showed no stamp area).
+// An item not yet checked is kept and marked pending, and handed back so
+// the caller can check it. Nothing here waits.
+function gate(rows, reprints) {
+  const T = templates().templates || {};
+  const usable = (reprints || []).filter(r => T[r.cardId]);
+  const report = { applied: false, ebayCalls: 0, checked: 0, refused: 0, notVisible: 0, unreadable: 0,
+    pending: 0, refusedSample: [], threshold: THRESHOLD,
+    reprints: (reprints || []).map(r => ({ cardId: r.cardId, template: !!T[r.cardId],
+      label: (T[r.cardId] && T[r.cardId].label) || (r.family && r.family.label) || r.cardId })) };
+  if (!usable.length) {
+    report.reason = reprints && reprints.length ? 'no stamp template built for this card’s reprint' : 'no known reprint';
+    return { listings: rows, report, pending: [] };
+  }
+  report.applied = true;
+  const out = [], pending = [];
+  for (const row of rows) {
+    if (!row || row.source !== 'ebay' || !row.itemId) { out.push(row); continue; }
+    const url = photoUrl(row.imageUrl);
+    if (!url) { report.unreadable++; out.push(Object.assign({}, row, { stamp: { state: 'unreadable', says: 'No eBay photo to check.' } })); continue; }
+    const hit = cacheGet(row.itemId, url);
+    if (!hit) { report.pending++; pending.push(row); out.push(Object.assign({}, row, { stamp: { state: 'pending' } })); continue; }
+    const v = hit.verdict;
+    if (v.state === 'found') {
+      report.checked++; report.refused++;
+      if (report.refusedSample.length < 12) report.refusedSample.push({ title: row.title, itemId: row.itemId,
+        price: row.price, url: row.url, imageUrl: row.imageUrl, reprint: v.reprint, label: v.label,
+        reason: 'photo shows the ' + (v.label || 'reprint') + ' stamp' });
+      continue;
+    }
+    if (v.state === 'not-visible') { report.checked++; report.notVisible++; }
+    else report.unreadable++;
+    out.push(Object.assign({}, row, { stamp: { state: v.state, says: v.says, retryable: !!v.retryable } }));
+  }
+  report.summary = report.refused + ' refused (the seller’s photo shows a reprint’s stamp), '
+    + report.notVisible + ' no stamp visible, ' + report.unreadable + ' unreadable'
+    + (report.pending ? ', ' + report.pending + ' still being checked' : '');
+  return { listings: out, report, pending };
+}
+
+// Worker side: long-lived, one photo per message.
+const wt = (() => { try { return require('worker_threads'); } catch (e) { return {}; } })();
+if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
+  wt.parentPort.on('message', m => {
+    let v;
+    try { v = judge(decodeJpeg(Buffer.from(m.jpeg)), m.reprints); }
+    catch (e) { v = { state: 'unreadable', says: 'The photo could not be decoded: ' + String(e && e.message || e).slice(0, 80), scores: [] }; }
+    wt.parentPort.postMessage({ verdict: v });
   });
 }
 
-const wt = (() => { try { return require('worker_threads'); } catch (e) { return {}; } })();
-if (!wt.isMainThread && wt.workerData && wt.workerData.jpeg) {
-  let v;
-  try { v = judge(decodeJpeg(Buffer.from(wt.workerData.jpeg)), wt.workerData.reprints); }
-  catch (e) { v = { state: 'unreadable', says: 'The photo could not be decoded: ' + String(e && e.message || e).slice(0, 80), scores: [] }; }
-  wt.parentPort.postMessage(v);
-}
-
-module.exports = { THRESHOLD, PHOTO_SIZE, MIN_SIDE, decodeJpeg, crop, resize, rotate90, nccMax, bestScore,
-                   judge, judgeInWorker, photoUrl, templates, cacheGet, cacheSet, TTL_MS,
-                   _setTemplates: t => { _templates = t; } };
+module.exports = { THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, crop, resize, rotate90, nccMax, bestScore,
+                   judge, checkItem, gate, poolState, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
+                   _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; },
+                   _clearCache: () => _cache.clear() };

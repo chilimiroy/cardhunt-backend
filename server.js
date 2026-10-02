@@ -37,6 +37,7 @@ app.use(express.json());
 // and outlier pass inside this request records into it; the JSON response
 // gains a `timings` key. Without the flag nothing is recorded.
 const timing = require('./timing');
+const stampcheck = require('./stampcheck');
 timing.instrumentFetch();
 app.use((req, res, next) => {
   if (req.query.debug !== '1') return next();
@@ -2760,7 +2761,7 @@ async function gatherListings(card, grade, limit, opts) {
   const memo = {};
   const j = await judgeListings(card, grade, listings, opts, memo);
   const out = { listings: j.listings, sources, tookMs: Date.now() - t0, liveCount: j.liveCount,
-                outliers: j.outliers, ebayState, otherRows, judgeMemo: memo };
+                outliers: j.outliers, stamp: j.stamp, stampPending: j.stampPending, ebayState, otherRows, judgeMemo: memo };
   if (Object.keys(dryRuns).length) out.dryRun = dryRuns;
   return out;
 }
@@ -2770,6 +2771,22 @@ async function gatherListings(card, grade, limit, opts) {
 // arriving on page 9 is judged against the same peers as one from page 1.
 async function judgeListings(card, grade, listings, opts, memo) {
   opts = opts || {}; memo = memo || {};
+  // ── The reprint stamp in the seller's photo (TASK T1, 2026-10-02) ──
+  // After the text gates, before anything is judged or shown. Only on a card
+  // a known reprint copies, only eBay rows. A stamp FOUND is a refusal like
+  // any other — the row is not shown and is counted in sources.ebay. No
+  // stamp visible, or an unreadable photo, keeps the row: weak evidence
+  // never refuses. Verdicts are cached by eBay item id; an item not yet
+  // checked is kept, marked pending, and checked after this answer is sent
+  // (stampFollowUp) — the page re-reads and the row goes when its verdict
+  // lands. Ahead of the outlier check, so a page full of reprints cannot
+  // set the median the original is judged by. Zero eBay calls.
+  let stampReport = null, stampPending = [];
+  const stampReprints = opts.noReprintCheck ? [] : cm.reprintCardsOf(card);
+  if (stampReprints.length) {
+    const sg = timing.timeSync('stamp-gate', () => stampcheck.gate(listings, stampReprints));
+    listings = sg.listings; stampReport = sg.report; stampPending = sg.pending;
+  }
   // ── After the gate, before the sort ───────────────────────────
   // Every listing here has passed cardmatch: right card, right number,
   // right set, right grade. Giratina V #186 still came back spanning
@@ -2812,6 +2829,9 @@ async function judgeListings(card, grade, listings, opts, memo) {
           const rcard = prices ? null : await resolveListingCard(rc.cardId);
           if (prices) { /* memoised */ }
           else if (!rcard) why = 'reprint card not in catalogue';
+          // A photo-check update re-judges a view nobody pressed anything on:
+          // it may never spend. Without the reprint's rows the band says so.
+          else if (opts.noFetch) why = 'reprint listings not fetched during a photo-check update';
           // noReprintCheck: a reprint has no reprint of its own today, but
           // the recursion must not be able to start if REPRINT_OF grows one.
           else rows = (await gatherListings(rcard, grade, 50,
@@ -2845,7 +2865,8 @@ async function judgeListings(card, grade, listings, opts, memo) {
   listings.sort((a, b) =>
     (outlier.suspectRank(a) - outlier.suspectRank(b)) ||
     (Number(b.live) - Number(a.live)) || (a.landed - b.landed) || (a.price - b.price));
-  return { listings, liveCount: listings.filter(l => l.live).length, outliers: judged.stats };
+  return { listings, liveCount: listings.filter(l => l.live).length, outliers: judged.stats,
+           stamp: stampReport, stampPending };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2854,6 +2875,56 @@ async function judgeListings(card, grade, listings, opts, memo) {
 
 // The payload for one state of a view. Every row, never a slice: `count`
 // and `listings.length` are the same number (they were 58 and 25).
+// The stamp gate's refusals are eBay refusals: counted in sources.ebay
+// beside the text gate's, with their reason in droppedSample, so "82 kept"
+// never stands for rows the page is not showing. A copy — the view's own
+// sources are re-used by every rebuild and must not accumulate.
+function pendingStampRows(payload) {
+  return ((payload && payload.listings) || []).filter(l => l && l.stamp && l.stamp.state === 'pending');
+}
+function withStampRefusals(sources, stamp) {
+  if (!stamp || !stamp.applied || !sources || !sources.ebay || sources.ebay.status !== 'ok') return sources;
+  const e = Object.assign({}, sources.ebay);
+  const n = stamp.refused;
+  e.stampRefused = n;
+  e.stampPending = stamp.pending;
+  if (n) {
+    e.count = Math.max(0, (e.count || 0) - n);
+    e.rejected = (e.rejected || 0) + n;
+    e.droppedSample = stamp.refusedSample.map(r => ({ title: r.title, itemId: r.itemId, reason: r.reason }))
+      .concat(e.droppedSample || []).slice(0, 12);
+  }
+  e.summary = `${e.count} kept, ${e.rejected || 0} rejected` + (e.scanned ? ` of ${e.scanned} scanned` : '')
+    + ` (${n} by the photo stamp check` + (stamp.pending ? `, ${stamp.pending} photos still being checked` : '') + ')';
+  return Object.assign({}, sources, { ebay: e });
+}
+
+// Check the photos a view left pending, then re-judge the view so the next
+// read (the page re-reads while stampGate.pending > 0) no longer holds the
+// rows found to be reprints. Throttled to one rebuild per 1.5 s while
+// verdicts land, and one at the end. Zero eBay calls: the reprint band is
+// re-judged with noFetch, and the photos come from eBay's image CDN.
+// Pending rows are checked in display order, so the top of the list — the
+// cheapest rows, the ones a buyer acts on — clears first.
+const STAMP_REBUILD_MS = 1500;
+function stampFollowUp(card, requestedId, grade, printing, edition, pendingRows) {
+  if (!pendingRows || !pendingRows.length) return;
+  const reprints = cm.reprintCardsOf(card);
+  const vkey = listingKey(card.api_card_id, viewCacheGrade(grade, printing, edition));
+  let timer = null, last = 0;
+  const rebuild = async () => {
+    timer = null; last = Date.now();
+    const vs = viewStateGet(vkey);
+    if (!vs || !vs.gathered.ebayState) return;     // the view expired: nothing to update
+    try { await rebuildView(card, requestedId, grade, printing, edition, vs, { noFetch: true, stamp: true }); }
+    catch (e) { console.warn('[stamp] rebuild failed:', e.message); }
+  };
+  const soon = () => { if (!timer) timer = setTimeout(rebuild, Math.max(0, STAMP_REBUILD_MS - (Date.now() - last))); };
+  Promise.all(pendingRows.map(r => stampcheck.checkItem(r.itemId, r.imageUrl, reprints).then(soon)))
+    .then(() => { clearTimeout(timer); return rebuild(); })
+    .catch(e => console.warn('[stamp] follow-up failed:', e.message));
+}
+
 function buildListingsPayload(card, requestedId, grade, printing, j, sources, tookMs, progress, edition) {
   // The headline figures skip anything the outlier check flagged. This is
   // the number a buyer acts on, and "$2.08" for a card that trades at
@@ -2861,6 +2932,7 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
   // The flagged rows are still returned, last, with their reason.
   const listings = j.listings;
   const trusted = listings.filter(outlier.trustworthy);
+  sources = withStampRefusals(sources, j.stamp);
   return {
     cardId: card.api_card_id,
     requestedId,
@@ -2893,10 +2965,9 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
     // run. "Not applied: median $0.99 is below $15" is a different fact
     // from "applied, nothing flagged".
     outliers: j.outliers,
-    // Can a row's photo be checked for a reprint's stamp (/api/stamp)? Only
-    // on a card a known reprint copies, and only where a template was built
-    // from that reprint's scan. Zero eBay calls; offered per row, on demand.
-    stampCheck: stampCheckFor(card),
+    // What the photo stamp gate did on THIS answer: refused, kept, and how
+    // many photos are still being checked (the page re-reads while > 0).
+    stampGate: j.stamp ? Object.assign({}, j.stamp, { pool: stampcheck.poolState() }) : null,
     // What this grade is worth, measured from the listings that passed the
     // gate. Computed, not stored: this is a read endpoint.
     gradePrice: gp.aggregate(listings, { grade }),
@@ -3057,11 +3128,15 @@ function transientFailure(sources) {
 // Rebuild a view's payload from its state: every row re-judged together
 // (a flag is a judgement on the set), then cached under the FIRST fetch's
 // timestamp so no row is served as fresher than the oldest beside it.
-async function rebuildView(card, requestedId, grade, printing, edition, vs) {
+// ropts.noFetch / ropts.stamp: a photo-check update (stampFollowUp) — it
+// spends nothing and starts no further checks of its own.
+async function rebuildView(card, requestedId, grade, printing, edition, vs, ropts) {
+  ropts = ropts || {};
   const { gathered, ts, t0 } = vs;
   const st = gathered.ebayState;
   const rows = gathered.otherRows.concat(st.listings);
-  const j = await judgeListings(card, grade, rows, {}, gathered.judgeMemo || (gathered.judgeMemo = {}));
+  const j = await judgeListings(card, grade, rows, { noFetch: !!ropts.noFetch },
+                                gathered.judgeMemo || (gathered.judgeMemo = {}));
   const sources = Object.assign({}, gathered.sources);
   const r = ebayStateResult(st);
   sources.ebay = Object.assign({}, sources.ebay, {
@@ -3080,6 +3155,7 @@ async function rebuildView(card, requestedId, grade, printing, edition, vs) {
     Date.now() - t0, progress, edition);
   payload.fetchedAt = new Date(ts).toISOString();
   listingCacheSet(card.api_card_id, viewCacheGrade(grade, printing, edition), payload, ts);
+  if (!ropts.stamp) stampFollowUp(card, requestedId, grade, printing, edition, pendingStampRows(payload));
   return payload;
 }
 
@@ -3132,6 +3208,11 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
       return hit;
     }
   }
+  // ?poll=1 — the page re-reading a view whose photos are still being
+  // checked (stampGate.pending). A re-read, never a search: when the view
+  // has left the cache it says so, and the page stops asking. Zero calls.
+  if (opts.poll && !wantSites && !wantMore) return { cardId: key, requestedId, grade, poll: true, notFetched: true,
+    count: 0, listings: [], note: 'not fetched — a re-read returns only the 15-minute view; open the card to search' };
 
   const t0 = Date.now();
   // A browser request is a live user waiting: foreground, which may spend
@@ -3141,7 +3222,7 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   const st = gathered.ebayState;
   const progress = withSourceFailures(listingsProgress(st, gathered.listings.length), gathered.sources);
   let payload = buildListingsPayload(card, requestedId, grade, printing,
-    { listings: gathered.listings, liveCount: gathered.liveCount, outliers: gathered.outliers },
+    { listings: gathered.listings, liveCount: gathered.liveCount, outliers: gathered.outliers, stamp: gathered.stamp },
     gathered.sources, gathered.tookMs, progress, edition);
   if (gathered.dryRun) {
     payload.dryRun = gathered.dryRun;
@@ -3155,6 +3236,9 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   if (transientFailure(payload.sources)) payload.retryable = true;
   else listingCacheSet(key, cacheGrade, payload, ts);
   logListingView(viewRecord(key, grade, printing, st, payload, t0, st ? st.calls : 0, action));
+  // Only with view state to rebuild from (eBay answered): the photos are
+  // checked after this answer goes, and the view is re-judged as they land.
+  if (st) stampFollowUp(card, requestedId, grade, printing, edition, pendingStampRows(payload));
   return payload;
 }
 
@@ -4564,31 +4648,19 @@ app.get('/api/photos/:cardId', async (req, res) => {
   } catch (e) { res.status(500).json(Object.assign(base, { error: e.message })); }
 });
 
-// ── Does ONE listing's photo show a reprint's stamp? When a person asks (TASK T1) ──
+// ── Does ONE listing's photo show a reprint's stamp? (TASK T1) ──
 //
 //   GET /api/stamp/:cardId?item=v1|167236883977|0
 //
-// ZERO eBay API calls: the photo is the row's own image, already in the
-// listing this server served in the last 15 minutes, fetched from eBay's
-// image CDN (i.ebayimg.com, which is not the API and not the quota) at
-// s-l500. Only on a card a known reprint copies (cardmatch.REPRINT_OF), and
-// only when someone presses the button. stampcheck.js holds the rules.
-//
-// Three answers, deliberately unequal: a stamp FOUND is strong evidence this
-// is the reprint; NOT VISIBLE is weak (cropped, angled, glared, small) and
-// never "verified original"; UNREADABLE is neither. The verdict lives 15
-// minutes in memory, keyed by the eBay item, and nothing is stored.
+// The listing gate checks every eBay row of the 55 reprinted originals by
+// itself (stampcheck.gate, in judgeListings). This is the same check for ONE
+// row, by hand — a diagnosis tool: the same queue, worker pool and item-id
+// cache, so a row the gate already checked answers at once with its scores.
+// ZERO eBay API calls: the photo is the row's own image, from a listing this
+// server served in the last 15 minutes, fetched from eBay's image CDN
+// (i.ebayimg.com — not the API, not the quota) at s-l500. A row the gate
+// refused is no longer in the view and answers 404.
 // Takes a catalogue card id and an eBay item id — never a URL (SSRF).
-const stampcheck = require('./stampcheck');
-// What the page may offer on this card's rows: null when nothing can be checked.
-function stampCheckFor(card) {
-  const reprints = card ? cm.reprintCardsOf(card) : [];
-  if (!reprints.length) return null;
-  const T = stampcheck.templates().templates || {};
-  const ok = reprints.filter(r => T[r.cardId]);
-  return { available: ok.length > 0, reprints: reprints.map(r => ({ cardId: r.cardId,
-    label: r.family ? r.family.label : r.cardId, template: !!T[r.cardId] })), ebayCalls: 0 };
-}
 function cachedListingRow(cardIds, itemId) {
   for (const [k, e] of listingCache) {
     if (!cardIds.some(id => k.startsWith(id + '|'))) continue;
@@ -4608,30 +4680,14 @@ app.get('/api/stamp/:cardId', async (req, res) => {
     if (!card) return res.status(404).json(Object.assign(base, { error: 'card not in catalogue' }));
     const reprints = cm.reprintCardsOf(card);
     if (!reprints.length) return res.status(400).json(Object.assign(base, { error: 'no known reprint of this card carries a stamp — there is nothing to look for' }));
-    const hit = stampcheck.cacheGet(itemId);
-    if (hit) return res.json(Object.assign(base, hit.verdict, { cached: true, ageSec: Math.round((Date.now() - hit.at) / 1000) }));
     const row = cachedListingRow([cardId, card.api_card_id].filter(Boolean), itemId);
     if (!row) return res.status(404).json(Object.assign(base, { error: 'this listing is no longer in the 15-minute view — reopen the card and press again' }));
-    const url = stampcheck.photoUrl(row.imageUrl);
-    const t0 = Date.now();
-    let verdict;
-    if (!url) verdict = { state: 'unreadable', says: 'The listing has no eBay photo to check.', scores: [] };
-    else {
-      let r = null;
-      try { r = await fetch(url, { signal: AbortSignal.timeout(8000) }); } catch (e) { r = null; }
-      const type = r && r.headers.get('content-type') || '';
-      if (!r || !r.ok) {
-        // Not cached: a failed fetch is worth pressing again.
-        return res.json(Object.assign(base, { state: 'unreadable', says: 'eBay\'s image server did not return the photo' + (r ? ' (HTTP ' + r.status + ')' : '') + '. Press again to retry.', retryable: true }));
-      }
-      if (!/jpe?g/i.test(type)) verdict = { state: 'unreadable', says: 'The photo is not a JPEG (' + type.slice(0, 30) + ').', scores: [] };
-      else verdict = await stampcheck.judgeInWorker(Buffer.from(await r.arrayBuffer()), reprints, 20000);
-    }
-    verdict = Object.assign({}, verdict, { photo: url, photoSize: stampcheck.PHOTO_SIZE, threshold: stampcheck.THRESHOLD,
-      tookMs: Date.now() - t0, keptFor: '15 minutes, in memory only',
-      attribution: 'Checked against the seller’s own eBay photo; the photo is not stored' });
-    stampcheck.cacheSet(itemId, verdict);
-    res.json(Object.assign(base, verdict, { cached: false }));
+    // The same queue, worker pool and item-id cache the listing gate uses:
+    // one definition, and a row the gate already checked costs nothing here.
+    const verdict = await stampcheck.checkItem(itemId, row.imageUrl, reprints);
+    res.json(Object.assign(base, verdict, { photo: stampcheck.photoUrl(row.imageUrl), photoSize: stampcheck.PHOTO_SIZE,
+      threshold: stampcheck.THRESHOLD, cached: !!verdict.cached, keptFor: 'by eBay item id, in memory only',
+      attribution: 'Checked against the seller’s own eBay photo; the photo is not stored' }));
   } catch (e) { res.status(500).json(Object.assign(base, { error: e.message })); }
 });
 

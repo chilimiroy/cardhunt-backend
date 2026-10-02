@@ -1,5 +1,29 @@
 # CardHunt — Progress Log
 
+## 2026-10-02 (night, 3) — T3 carried items; T4 sold-price options
+
+**T3.**
+- Lugia (en-neo1-9) 1st Edition: held, $164.80 `tcgdex_tcgplayer_1st-edition-holofoil`
+  from the 09-29 harvest, kept out of the headline (Unlimited $531.39). The
+  3 October nightly has not run (today is 10-02): its write is unconfirmed.
+  Older `tcgplayer_market` rows alternate 826.60 / 164.80 — the two editions
+  under one label before the T3 edition fix.
+- Aquapolis a/b pairs: recorded as settled. McDonald's 78: decided, blank.
+- EX-era ghost `normal` headlines: NOT corrected by the nightly (93 found, all
+  written before af2f2c0; due-tier timing). Harvested 8 sets by hand (863
+  rows, 0 eBay) → 7 left, 5 of them with an empty printings list the rule
+  does not judge (my first count wrongly included them); real remainder 2
+  (Rayquaza ☆ July import, hgss2-26). Last nightly (10-02 03:00) exit 2 —
+  setyield naming empty sets, as before.
+
+**T4** (CLAUDE.md "Sold data"). eBay Marketplace Insights: docs now behind
+sign-in ("marketplace-insights-private"); third-party: 90 days, Limited
+Release, not open to new users. PSA: API is cert lookup only (PSA's own
+docs); APR is web-only; submission T&C make PSA exclusive owner of grading
+data; site "compiled form" terms not found from PSA's links. PriceCharting:
+Cloudflare challenge to curl and browser; secondary: Legendary ~$49/mo,
+public use needs written permission, API = current values not sales.
+
 ## 2026-10-02 (night, 2) — T1 which prices are not current, and saying so
 
 **Measured** (read-only, every visible card, the readers' headline rule):

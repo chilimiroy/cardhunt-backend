@@ -254,11 +254,15 @@ Their rarity is positional inference. Yuyu-tei can supply it; still open.
   fetched first; `ccfill-backup-2026-10-02123815.json`), plus 5 sm3.5/sm7.5
   cards the old letter-folding match had refused. The 8 left are Aquapolis
   50a/50b-style pairs: pokemontcg.io has one #50 for two cards, so none.
+  **SETTLED — do not retry**: one image for two cards is the fold-merge
+  lesson (LESSONS §5); blank is correct until a host serves each separately.
   **McDonald's 2014/2015/2017/2018 (48 cards) and 2023/2024 (30, no logo
   either) have no host**: TCGdex `image: null`, pokemontcg.io 404s (and
-  has no 2023/2024 set). TCGplayer's CDN carries them — whether to use a
-  marketplace's product images is Roy's call, not taken. Links: queries
-  fixed `cc20e41`.
+  has no 2023/2024 set). TCGplayer's CDN carries them. **DECIDED 2026-10-02
+  (Roy): leave them blank** — that is a marketplace's product photography,
+  its API is closed to new access, and 78 cards is not worth a terms
+  question we would have to guess the answer to. Do not fill from
+  TCGplayer's CDN. Links: queries fixed `cc20e41`.
 
 - **2026-10-01, data changes (each with a backup in the project root):**
   the four duplicate Trainer Gallery sets `swsh9.5tg`…`swsh12.5tg` deleted
@@ -691,8 +695,15 @@ TCGplayer figure the same day. **88 disagree by >1.4x.** Grouped:
   Raikou ex took a lone $2,300 ask (the ghost had no market). 92 headlines
   catalogue-wide, 83 of them this era. **Fixed `af2f2c0`**: a block is used
   only for a printing the card's own variants list. On the same blocks 81
-  EX-era cards move normal->holofoil, none loses its price. The rows
-  correct themselves as the nightly refresh reaches them.
+  EX-era cards move normal->holofoil, none loses its price. **The nightly
+  had not reached them** (2026-10-02: 93 ghost headlines, every one written
+  before the fix; the refresh re-prices a card only when its tier is due —
+  up to 30 days). Harvested by hand that evening (`tcgdexharvest.js en
+  --set=` ex6 ex7 ex8 ex9 col1 np hgss2 swshp; 863 rows, 0 disagreements
+  >40%): **93 -> 7**, and 5 of those 7 have an EMPTY printings list (np
+  ×4, SWSH296), which the rule deliberately does not judge — the first
+  count included them. Real remainder 2: Rayquaza ☆ (the July import, not
+  this) and hgss2-26. Kingdra ex7-12 $5.00 -> $52.79.
 - **32: POP Series / Nintendo promos with two genuine printings**, normal
   stored as the base — the convention, not a defect.
 - **3: holofoil, moved within the day** (thin cards: Regice ☆ $1,250 ->
@@ -1028,11 +1039,39 @@ price unless the shop published one.
 ## Sold data — NO SOURCE, and the page says so
 Since T8 (2026-09-29) nothing supplies realised sale prices: the eBay
 sold-page scrape is gone and must not return in any form, server or ingest.
-Legitimate routes, none built:
-- **eBay Marketplace Insights API** — sold items, but a RESTRICTED API
-  needing a business application to eBay. Probe/read the terms first.
-- **PriceCharting** — paid; `search-products` answers JSON from Render
-  (see WHICH SOURCES ANSWER), carries graded sale history.
+Legitimate routes, none built. **Read 2026-10-02 (T4)** — what each would
+give, what it costs, and what we could NOT read:
+- **eBay Marketplace Insights API** (`item_sales/search`). Its own docs are
+  now private: `developer.ebay.com/api-docs/buy/marketplace-insights/…`
+  redirects to sign-in at `/api-docs/marketplace-insights-private/…`
+  (read in a browser 2026-10-02; nothing entered). Third-party summaries,
+  not verified: sold items, last **90 days**, by keyword/GTIN/epid/
+  category; "Limited Release", approval by eBay business units, and
+  "restricted and not open to new users at this time"; developers in
+  eBay's forum report refusals outside major partners. **Cost: free if
+  granted; the cost is the application.** Next step is Roy's: sign in to
+  the developer account Render's keys belong to and read the private page
+  and the application route. Even granted, 90 days does not reach a Gold
+  Star that last sold a year ago.
+- **PSA Auction Prices Realized.** PSA's own API documentation (read
+  2026-10-02): "We currently offer access to data from Cert Verification
+  for single item searches by cert number." **APR is not in the API** —
+  only on psacard.com/auctionprices, where reading it by machine is
+  scraping. The submission T&C (§23, linked from the APR page) make PSA
+  "the exclusive owner of all Submission Content" (the grading Data and
+  images) with the right to publish it; the site terms with the "compiled
+  form" clause Roy cites were not found from PSA's own links (psacard.com/
+  terms 404s) — not read, so not quoted. **Display would need PSA's
+  written permission**; enrollment does not obviously grant it. Ask PSA
+  directly, in writing, before any build.
+- **PriceCharting.** Its pages (api-documentation, pricecharting-pro)
+  answer a Cloudflare challenge to us now, curl AND a real browser (not
+  attempted further — no bot-check bypass). Secondary sources only: API
+  is in the **"Legendary" subscription, ~$49/month**; public-facing use
+  needs that plus **express written permission**; and the API returns
+  **current values by condition/grade, not historic sales** — which, if
+  true, contradicts "carries graded sale history" written here before. Roy
+  should read the two pages in his own browser before paying.
 Whatever it is: one function, a stated source on every row, and the Last
 sold box stays "no licensed sold source" until it exists.
 

@@ -99,9 +99,30 @@ function firstPrice(obj, fields) {
  * and `keys` lists every printing key seen (so an unrecognised printing
  * is reported rather than silently dropped).
  */
-function splitTcgplayer(tcgplayer) {
-  const out = { base: null, reverse: null, keys: [], unknown: [] };
+// ── A block for a printing the card does not have (T2, 2026-10-02) ──
+// TCGdex hands back a `normal` block on cards its OWN variants list as
+// holo only: Emerald Rayquaza ex9-9 carried normal $49.99 beside holofoil
+// $431.32, one product id — a TCGplayer SKU a seller listed a holo under.
+// `normal` is first in BASE_PRINTINGS, so it became the headline. Measured
+// on every EX-era English card (2,418 comparable): 53 of the 88 that
+// disagreed with TCGdex's holofoil figure by >1.4x were this, 13 of them
+// a lone ask (mid/low) because the ghost SKU had no market at all
+// (Rocket's Raikou ex: $2,300 against $284.99). 92 across the catalogue.
+// So a block is used only for a printing the card is known to exist in.
+// `printings` is printingsFromTcgdex(card).printings (or its keys); when
+// it is unknown or empty nothing is skipped — absence is not evidence.
+const PRINTING_OF_KEY = k => /(^|-)normal$/.test(k) ? 'normal' : /(^|-)holofoil$/.test(k) && !/reverse/.test(k) ? 'holo' : null;
+function printingSkipper(printings) {
+  const keys = new Set((Array.isArray(printings) ? printings : [])
+    .map(p => (p && typeof p === 'object' ? p.key : p)).filter(Boolean).map(String));
+  const known = keys.has('normal') || keys.has('holo');
+  return k => { const t = PRINTING_OF_KEY(k); return !!(known && t && !keys.has(t)); };
+}
+
+function splitTcgplayer(tcgplayer, printings) {
+  const out = { base: null, reverse: null, keys: [], unknown: [], skipped: [] };
   if (!tcgplayer || typeof tcgplayer !== 'object') return out;
+  const skip = printingSkipper(printings);
 
   for (const [k, v] of Object.entries(tcgplayer)) {
     if (k === 'unit' || k === 'updated') continue;
@@ -112,6 +133,7 @@ function splitTcgplayer(tcgplayer) {
     for (const n of names) {
       const blk = tcgplayer[n];
       if (!blk || typeof blk !== 'object') continue;
+      if (skip(n)) { out.skipped.push(n); continue; }
       // marketPrice is the headline number; fall back down the ladder
       // rather than returning nothing for a card that has a low/mid.
       const price = firstPrice(blk, ['marketPrice', 'midPrice', 'lowPrice']);
@@ -185,12 +207,13 @@ function readCardmarket(cm) {
  */
 const UNLIMITED_KEYS = BASE_PRINTINGS.filter(k => !k.startsWith('1st-edition'));
 const FIRST_EDITION_KEYS = BASE_PRINTINGS.filter(k => k.startsWith('1st-edition'));
-function tcgplayerByEdition(tcgplayer) {
+function tcgplayerByEdition(tcgplayer, printings) {
+  const skip = printingSkipper(printings);
   const pick = names => {
     if (!tcgplayer || typeof tcgplayer !== 'object') return null;
     for (const n of names) {
       const blk = tcgplayer[n];
-      if (!blk || typeof blk !== 'object') continue;
+      if (!blk || typeof blk !== 'object' || skip(n)) continue;
       const price = firstPrice(blk, ['marketPrice', 'midPrice', 'lowPrice']);
       if (price !== null) return { printing: n, price, productId: blk.productId ?? null };
     }
@@ -204,12 +227,13 @@ function parsePricing(card) {
   if (!p || typeof p !== 'object') {
     return { cardmarket: null, tcgplayerBase: null, tcgplayerReverse: null, unknownPrintings: [] };
   }
-  const tp = splitTcgplayer(p.tcgplayer);
+  const tp = splitTcgplayer(p.tcgplayer, printingsFromTcgdex(card).printings);
   return {
     cardmarket: readCardmarket(p.cardmarket),
     tcgplayerBase: tp.base,
     tcgplayerReverse: tp.reverse,
     unknownPrintings: tp.unknown,
+    skippedPrintings: tp.skipped,
     tcgplayerUpdated: (p.tcgplayer && p.tcgplayer.updated) || null
   };
 }

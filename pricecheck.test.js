@@ -65,7 +65,7 @@ function slice(src, start) {
       };
       const f = new Function('db', 'tdxp', 'hostDelay', 'DELAY_TCGDEX', 'TCGDEX', 'fetch', 'sleep', 'console',
         'let _tdxConflicts = null, _tdxWarned = false;\n' + src + '\nreturn tcgdexPriceFor;')(
-        null, { parsePricing: tdxp.parsePricing, tcgplayerByEdition: tdxp.tcgplayerByEdition, loadProductConflicts: async () => conflicts || { ready: true, tcgplayer: new Set() } },
+        null, { parsePricing: tdxp.parsePricing, tcgplayerByEdition: tdxp.tcgplayerByEdition, printingsFromTcgdex: tdxp.printingsFromTcgdex, loadProductConflicts: async () => conflicts || { ready: true, tcgplayer: new Set() } },
         async () => {}, 0, 'https://tcgdex.test', fakeFetch, async () => {}, { log() {} });
       // A bare null (the old function) must count as failures, not crash.
       try { return (await f({ api_card_id: 'en-neo1-9', set_api_id: 'neo1', number: '9' })) || { bare: null }; }

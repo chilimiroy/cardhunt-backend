@@ -707,7 +707,7 @@ async function tcgdexPriceFor(card) {
   // never as the headline, which baseEditionSql keeps Unlimited.
   let firstEdition = null;
   if (!String(b.printing).startsWith('1st-edition')) {
-    const fe = tdxp.tcgplayerByEdition(d.pricing && d.pricing.tcgplayer).firstEdition;
+    const fe = tdxp.tcgplayerByEdition(d.pricing && d.pricing.tcgplayer, tdxp.printingsFromTcgdex(d).printings).firstEdition;
     if (fe && fe.price > 0 && !_tdxConflicts.tcgplayer.has(String(fe.productId))) firstEdition = fe;
   }
   return {
@@ -4028,7 +4028,7 @@ async function priceCheck(lang, setId) {
       else if (r.ok) d = await r.json();
       else none = 'unreachable (HTTP ' + r.status + ')';
     } catch (e) { none = 'unreachable (' + e.message + ')'; }
-    const ed = d ? tdxp.tcgplayerByEdition(d.pricing && d.pricing.tcgplayer) : { unlimited: null, firstEdition: null };
+    const ed = d ? tdxp.tcgplayerByEdition(d.pricing && d.pricing.tcgplayer, tdxp.printingsFromTcgdex(d).printings) : { unlimited: null, firstEdition: null };
     if (d && !ed.unlimited && !ed.firstEdition) none = 'no-tcgplayer';
 
     if (ed.unlimited || ed.firstEdition) {

@@ -275,6 +275,52 @@ ok(/idProduct|Japanese/i.test(T.pricingAllowedFor('zh-tw').reason),
 eq(T.pricingAllowedFor('en').reason, null, 'an allowed language carries no reason');
 
 // ══════════════════════════════════════════════════════════════
+// A block for a printing the card does not have (T2, 2026-10-02).
+// Real TCGdex blocks, fetched 2026-10-02. ex9-9 and ex8-108 are holo only
+// by TCGdex's own variants, and carry a `normal` block anyway.
+const ghost = (tcg, detailed) => ({ pricing: { tcgplayer: tcg }, variants_detailed: detailed });
+const HOLO = [{ type: 'holo', size: 'standard' }, { type: 'reverse', size: 'standard' }];
+const ex9_9 = ghost({ normal: { marketPrice: 49.99, lowPrice: 400, midPrice: 408.77, productId: 88626 },
+  holofoil: { marketPrice: 431.32, lowPrice: 345.09, midPrice: 449.99, productId: 88626 },
+  'reverse-holofoil': { marketPrice: 799.99, productId: 88626 } }, HOLO);
+const ex8_108 = ghost({ normal: { marketPrice: null, lowPrice: 2300, midPrice: 2300, productId: 88785 },
+  holofoil: { marketPrice: 284.99, lowPrice: 227.97, midPrice: 472.5, productId: 88785 } }, [{ type: 'holo', size: 'standard' }]);
+// pop4-13 Pikachu: TCGdex lists normal AND holo — the normal block is real.
+const pop4_13 = ghost({ normal: { marketPrice: 37.54, productId: 88083 }, holofoil: { marketPrice: 369.63, productId: 88083 } },
+  [{ type: 'normal', size: 'standard' }, { type: 'holo', size: 'standard' }]);
+{
+  let b = T.parsePricing(ex9_9).tcgplayerBase;
+  ok(b && b.printing === 'holofoil' && b.price === 431.32, 'SKIP: Emerald Rayquaza (holo only) is priced from holofoil, not the $49.99 normal SKU', JSON.stringify(b));
+  ok((T.parsePricing(ex9_9).skippedPrintings || []).includes('normal'), 'the skipped block is reported, not dropped silently');
+  b = T.parsePricing(ex8_108).tcgplayerBase;
+  ok(b && b.price === 284.99, 'SKIP: Rocket\'s Raikou ex — the $2,300 lone ask on a ghost normal SKU is not the headline', JSON.stringify(b));
+  // ALLOW: the same `normal` block where the card has a normal printing.
+  b = T.parsePricing(pop4_13).tcgplayerBase;
+  ok(b && b.printing === 'normal' && b.price === 37.54, 'KEEP: POP 4 Pikachu has a normal printing — its normal price stands', JSON.stringify(b));
+  // ALLOW: printings unknown — absence of a list is not evidence.
+  b = T.parsePricing({ pricing: ex9_9.pricing }).tcgplayerBase;
+  ok(b && b.printing === 'normal', 'KEEP: no variants on the response — nothing is skipped (old behaviour)', JSON.stringify(b));
+  // ALLOW: a reverse-only list does not know about normal/holo — skip nothing.
+  b = T.splitTcgplayer(ex9_9.pricing.tcgplayer, ['reverse']).base;
+  ok(b && b.printing === 'normal', 'KEEP: a printing list naming neither normal nor holo skips nothing', JSON.stringify(b));
+  // The reverse block is untouched by the rule.
+  eq(T.parsePricing(ex9_9).tcgplayerReverse.price, 799.99, 'the reverse block is read as before');
+  // A normal-only card with a holofoil block: the same rule, the other way.
+  b = T.splitTcgplayer({ normal: { marketPrice: 2 }, holofoil: { marketPrice: 90 } }, ['normal']).base;
+  ok(b && b.price === 2, 'SKIP the other way: a holofoil block on a normal-only card', JSON.stringify(b));
+  // Only a ghost block: no base price at all, rather than the ghost's.
+  eq(T.splitTcgplayer({ normal: { marketPrice: 5 } }, ['holo']).base, null, 'only a ghost block: no price (a wrong price is worse than none)');
+  // By edition: the same rule (pricecheck and the 1st Edition write read this).
+  const ed = T.tcgplayerByEdition(ex9_9.pricing.tcgplayer, T.printingsFromTcgdex(ex9_9).printings);
+  ok(ed.unlimited && ed.unlimited.price === 431.32, 'tcgplayerByEdition applies the same rule', JSON.stringify(ed));
+  // WOTC keys: unlimited-holofoil / 1st-edition-holofoil on a holo card are kept.
+  const lugia = T.tcgplayerByEdition({ '1st-edition-holofoil': { marketPrice: 1134.85 }, 'unlimited-holofoil': { marketPrice: 531.39 } },
+    [{ key: 'holo' }]);
+  ok(lugia.unlimited && lugia.unlimited.price === 531.39 && lugia.firstEdition && lugia.firstEdition.price === 1134.85,
+     'KEEP: Neo Genesis Lugia, both editions of its holo printing', JSON.stringify(lugia));
+}
+
+// ══════════════════════════════════════════════════════════════
 
 console.log('');
 console.log(`  tcgdexprice.test.js — ${pass} passed, ${fail} failed`);

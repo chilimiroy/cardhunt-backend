@@ -1122,6 +1122,19 @@ function totalFits(titleTotal, card) {
   return true;   // mixed set: the subset's total is not held
 }
 
+// What a set is ASKED as, where our catalogue name is a word sellers never
+// write. "McDonald's Collection 2014" is TCGdex's name; sellers and
+// TCGplayer write "McDonald's 2014" / "McDonald's Promos 2014", and eBay
+// needs every word: Pikachu 5/12 returned one listing (2026-10-02). The
+// gate still checks the catalogue name — only the question changes.
+function askedSetName(setName) {
+  const s = String(setName || '');
+  const m = s.match(/^McDonald['’]s Collection (\d{4})$/i);
+  return m ? "McDonald's " + m[1] : s;
+}
+// Sets whose cards print three-digit numbers on both halves.
+const QUERY_PAD3 = new Set(['2023sv', '2024sv']);
+
 function asPrinted(card) {
   const rp = reprintOf(card);
   if (!rp) return card;
@@ -1495,12 +1508,21 @@ function buildQuery(card, grade, opts) {
   } else if (card.number) {
     const num = String(card.number);
     const tot = printedTotal(card);   // "TG30" on a Trainer Gallery; none for Generations RC5
-    if (tot) {
+    if (tot && QUERY_PAD3.has(setIdOf(card)) && /^\d+$/.test(num) && /^\d+$/.test(tot)) {
+      // Scarlet & Violet-era McDonald's cards print "001/015"; "1/15" asked
+      // nothing (Sprigatito, 2026-10-02 linkaudit: eBay returned 0).
+      bits.push(num.padStart(3, '0') + '/' + tot.padStart(3, '0'));
+    } else if (tot) {
       // Sellers pad both halves alike: "074/073", never "074/73"
       const nd = num.replace(/[^0-9]/g, '');
       const td = tot.replace(/[^0-9]/g, '');
       const padded = nd.length > td.length ? tot.padStart(nd.length, '0') : tot;
       bits.push(num + '/' + padded);
+    } else if (numberPrefix(card) && /^[A-Za-z]+0\d/.test(num)) {
+      // A zero-padded prefixed number in a MIXED set (Aquapolis / Skyridge
+      // H01-H09): sellers write "H9/H32" and "H09/H32" both, and eBay
+      // matches tokens — "Gengar H09 Skyridge" returned nothing. Not asked;
+      // the gate reads both forms (normNum) and still checks the number.
     } else {
       bits.push(num);
     }
@@ -1518,7 +1540,7 @@ function buildQuery(card, grade, opts) {
   // regardless — this only affects what is ASKED.
   // Omit a CJK set name specifically — not merely one lacking Latin letters,
   // which would also drop "151", a perfectly searchable English set name.
-  if (card.setName && !promo && !CJK.test(String(card.setName))) bits.push(card.setName);
+  if (card.setName && !promo && !CJK.test(String(card.setName))) bits.push(askedSetName(card.setName));
 
   const g = parseGrade(grade);
   if (g.kind === 'graded') {

@@ -55,6 +55,32 @@ keep(ch, 'Charizard 4/102 Base Set Holo');
 drop(ch, 'Charizard 4/130 Base Set 2', /set size|Base Set 2/);
 keep(gir, 'Giratina V 186/196 Lost Origin Alt Art');
 drop(gir, 'Giratina V 186/195 Silver Tempest', /set size/);
+// ── T3, 2026-10-02: e-Card H01-H09 and McDonald's, from live linkaudit ──
+// "Gengar H09 Skyridge" returned NOTHING (A) — sellers write H9/H32 as well
+// as H09/H32 and eBay matches tokens. A zero-padded prefixed number in a
+// mixed set is not asked; the gate still checks it, in both spellings.
+const sk9 = C('en-ecard3-H09', 'Gengar', 'H09', 'Skyridge', 144);
+const aq1 = C('en-ecard2-H01', 'Ampharos', 'H01', 'Aquapolis', 147);
+ok(q(sk9) === 'Gengar Skyridge pokemon', 'Skyridge H09 asked without the padded number: ' + q(sk9));
+ok(!/H0?1\b/.test(q(aq1)), 'Aquapolis H01 asked without the padded number: ' + q(aq1));
+ok(/ H12 /.test(q(aq)), 'H12 (no padding) still asked by number: ' + q(aq));
+keep(sk9, 'Pokemon Gengar H9/H32 Skyridge Holo Rare');
+keep(sk9, 'Gengar H09/H32 Skyridge Holo');
+keep(aq1, 'Ampharos H01/H32 Holo Rare Aquapolis Pokemon');
+drop(sk9, 'Gengar H19/H32 Skyridge', /number/);
+drop(sk9, 'Pokemon Skyridge Gengar Holo', /number/);          // the broader query must not let a numberless title in
+// McDonald's: "Collection" is TCGdex's word, not a seller's; SV-era prints 001/015.
+const mc14 = C('en-2014xy-5', 'Pikachu', '5', "McDonald's Collection 2014", 12);
+const mc23 = C('en-2023sv-1', 'Sprigatito', '1', "McDonald's Collection 2023", 15);
+ok(q(mc14) === "Pikachu 5/12 McDonald's 2014 pokemon", "McDonald's asked without 'Collection': " + q(mc14));
+ok(q(mc23) === "Sprigatito 001/015 McDonald's 2023 pokemon", 'SV-era McDonald\'s asked 001/015: ' + q(mc23));
+keep(mc14, 'Pikachu 5/12 McDonalds 2014 Holo');
+keep(mc23, 'Pokemon Sprigatito 001/015 McDonalds 2023 Match Battle');
+keep(mc23, "Sprigatito 1/15 McDonald's 2023 promo");
+drop(mc23, 'Sprigatito 002/015 McDonalds', /number/);
+// Nothing else's query moved.
+ok(q(C('en-sv03.5-6', 'Charizard ex', '6', '151', 165)) === 'Charizard ex 6/165 151 pokemon', 'a main-set query is unchanged');
+
 try {
   const src = require('child_process').execSync('git show 2292a9e:cardmatch.js',
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });

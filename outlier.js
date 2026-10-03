@@ -47,6 +47,21 @@ function priceOf(l) {
   return isFinite(n) && n > 0 ? n : null;
 }
 
+// ── A median the fakes set themselves (2026-10-04) ────────────
+// Shining Charizard 107/105, Raw NM, all eight eBay sites: 144 rows past the
+// gate, ~116 of them gold/black metal replicas (labelled by eye). Their
+// median, $420.97, became the yardstick, so a $72.49 replica sat at 0.17x
+// and was not flagged — while every genuine copy asked $944 or more and the
+// catalogue's own number-matched price was $1,700.99. When most of the feed
+// is wrong, the feed cannot judge itself.
+//
+// opts.reference: { price, source, recordedAt } — the stored, number-matched,
+// base-printing raw price, passed ONLY when it is real and current (the
+// caller checks pricequality: not old, not thin, not unsettled). It is used
+// when it sits ABOVE the feed's median; it never lowers the bar. Measured on
+// the 1,010 labelled rows over 12 cards: at the same 10% ratio, 0 of 864
+// right rows flagged (as before), different illustrations 10 -> 15 of 24,
+// metal/recolour 5 -> 8 of 38. Still FLAGS, never removes.
 function flagOutliers(listings, opts) {
   opts = opts || {};
   const ratio       = opts.suspectRatio     || SUSPECT_RATIO;
@@ -61,35 +76,49 @@ function flagOutliers(listings, opts) {
     count: out.length, priced: prices.length,
     median: median(prices), low: prices.length ? Math.min(...prices) : null,
     high: prices.length ? Math.max(...prices) : null,
-    applied: false, reason: null, flagged: 0
+    applied: false, reason: null, flagged: 0,
+    basis: 'listings', basisPrice: null, reference: null
   };
+
+  const ref = opts.reference;
+  const refPrice = ref && isFinite(Number(ref.price)) && Number(ref.price) > 0 ? Number(ref.price) : null;
+  if (refPrice) stats.reference = { price: refPrice, source: ref.source || null,
+                                    recordedAt: ref.recordedAt || null, used: false };
 
   if (prices.length < minSample) {
     stats.reason = `only ${prices.length} priced listings — too few to judge an outlier`;
     return { listings: out, stats };
   }
-  if (stats.median < minMedian) {
+  const useRef = refPrice != null && refPrice > stats.median;
+  const basis = useRef ? refPrice : stats.median;
+  if (basis < minMedian) {
     stats.reason = `median $${stats.median.toFixed(2)} is below $${minMedian} — ` +
                    'cheap cards spread widely for honest reasons';
     return { listings: out, stats };
   }
 
   stats.applied = true;
+  stats.basis = useRef ? 'catalogue' : 'listings';
+  stats.basisPrice = basis;
+  if (useRef) stats.reference.used = true;
   stats.spread = stats.high && stats.low ? +(stats.high / stats.low).toFixed(1) : null;
+  const against = useRef
+    ? `this card's $${basis.toFixed(2)} catalogue price (the listings' own median, ` +
+      `$${stats.median.toFixed(2)}, sits below it)`
+    : `the $${basis.toFixed(2)} median for this card`;
 
   for (const l of out) {
     const p = priceOf(l);
     if (p === null) continue;
-    const r = p / stats.median;
+    const r = p / basis;
     if (r <= hardRatio) {
       l.suspect = 'implausible';
-      l.suspectReason = `$${p.toFixed(2)} is ${Math.round(1 / r)}x below the ` +
-        `$${stats.median.toFixed(2)} median for this card — almost certainly not the real card`;
+      l.suspectReason = `$${p.toFixed(2)} is ${Math.round(1 / r)}x below ${against} — ` +
+        'almost certainly not the real card';
       stats.flagged++;
     } else if (r <= ratio) {
       l.suspect = 'unusually-cheap';
-      l.suspectReason = `$${p.toFixed(2)} against a $${stats.median.toFixed(2)} median ` +
-        `for this card — check the listing carefully`;
+      l.suspectReason = `$${p.toFixed(2)} against ${against} — check the listing carefully`;
       stats.flagged++;
     }
   }

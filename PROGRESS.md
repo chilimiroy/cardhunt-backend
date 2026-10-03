@@ -1,5 +1,40 @@
 # CardHunt — Progress Log
 
+## 2026-10-04 — T1 the $72 Shining Charizards: the gate ran, the median was the fakes'
+
+`node linkaudit.js en-neo4-107 --live --kept` (Raw NM, eBay US; 1 call +
+token, tooling) and the same view with `sites=all` (7 more).
+1. **They reach the gate and pass it.** US: 87 kept of 163 scanned (76
+   rejected — the source block carries the count; the gate ran). All sites:
+   144 kept of 579 scanned, 292 rejected. The $72.49 row ("Black Pokemon
+   Shining Charizard … 1st Ed") is US; the Canadian one was C$100 that run
+   (landed $70.23, "Rare 1st Edition Gold Shining Charizard") — the C$85
+   listing was not in it.
+2. **`outliers.applied` true.** 3. n/a.
+4. **Median $350.00 of 87 (US) / $420.97 of 144 (all sites) — set by the
+   fakes.** Every photo labelled by eye (sheets in the session scratchpad):
+   ~116 gold/black metal replicas, 24 genuine English, 2 genuine foreign
+   (DE, IT), 2 unclear (a $29.58 printed copy, a 3-card photo). Cheapest
+   genuine $944.21; median of the genuine ~$2,500. $72.49 / $420.97 = 0.17x,
+   above the 0.10 line. Stored number-matched price $1,700.99
+   (tcgdex_tcgplayer_unlimited-holofoil, 2026-10-02, current).
+5. Rejection counts present: the documented tell did not fire.
+
+**Fix — the free check** (`outlier.js`, `judgeListings`): judge against the
+stored raw price when it is real, current (pricequality, no flag) and above
+the feed median; raw grades only; reported as `outliers.basis`,
+`basisPrice`, `reference{used, why}`, and the page's price-check line
+names the yardstick. Same 10% ratio — not tuned. Measured on the 1,010
+labelled rows (12 cards, T4): right 0/864 flagged either way; D 10 -> 15/24,
+R 5 -> 8/38, P 0 -> 1, X 0 -> 1. At 15%: R 14/38, still 0 right; 25%: 4
+right — left at 10%. Base Charizard's feed median was $309 vs $944.53
+stored: the same poisoning. Local server against Supabase: Shining Charizard
+and Base Charizard references read as current; ja-SV8a-002's Yuyu-tei
+reference refused ("stored price is old"); PSA 10 refused ("graded view").
+eBay rows not exercised locally (no keys here). Not done: the tooling copy
+of the outlier test in the `/api/ebay/marketprobe` tooling route
+(server.js ~4925) still uses the feed median only.
+
 ## 2026-10-03 (night) — T1 artwork template measured (not built); T2 stamp verdicts kept, unchecked rows hidden
 
 **T1** (CLAUDE.md "THE STAMP MATCHER ON THE ARTWORK"). The shipping

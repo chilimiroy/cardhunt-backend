@@ -3867,9 +3867,16 @@ function liveOutlierNote(d){
       + 'Price check not applied &mdash; ' + liveEsc(o.reason || 'not enough to compare')
       + '</div>';
   }
+  // When most of the feed is wrong its median is the fakes' (Shining
+  // Charizard, 2026-10-04): the server then judges against the card's own
+  // stored price, and the note says which yardstick was used.
+  var basis = o.basis === 'catalogue' && o.basisPrice
+    ? 'Price check: against this card’s catalogue price ' + fmtCurrency(Number(o.basisPrice))
+      + ' (the ' + o.priced + ' listings’ own median, ' + fmtCurrency(Number(o.median))
+      + ', sits below it)'
+    : 'Price check: median ' + fmtCurrency(Number(o.median)) + ' across ' + o.priced + ' listings';
   return '<div style="font-size:10px;color:var(--fa);margin-top:6px">'
-    + 'Price check: median ' + fmtCurrency(Number(o.median)) + ' across '
-    + o.priced + ' listings'
+    + basis
     + (o.flagged
         ? ' · <span style="color:#B45309">' + o.flagged
           + ' flagged as too cheap to be this card</span>. They are shown, ranked last.'
@@ -6299,6 +6306,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261002-cb25585-pricequality &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261004-4cd4cef-outlierref &middot; click to hide</div>
 </body>
 </html>

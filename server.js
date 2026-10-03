@@ -1403,10 +1403,10 @@ async function numberMatchedPrice(cardId) {
   if (!db || !cardId) return null;
   const r = await db.query(`
     SELECT c.api_card_id, c.name, c.number, c.set_name, lp.price_usd,
-           lp.source AS price_source, lp.recorded_at
+           lp.source AS price_source, lp.recorded_at, lp.source_meta AS price_meta
     FROM cards c
     LEFT JOIN LATERAL (
-      SELECT price_usd, source, recorded_at
+      SELECT price_usd, source, recorded_at, source_meta
       FROM price_history ph
       WHERE ph.card_api_id = c.api_card_id
         AND ph.grade IS NULL
@@ -1422,7 +1422,7 @@ async function numberMatchedPrice(cardId) {
   const isEstimate = !c.price_source || /^estimate/.test(c.price_source);
   return { cardId: c.api_card_id, name: c.name, number: c.number,
            setName: c.set_name, price, source: c.price_source || 'estimate',
-           isReal: !isEstimate && price > 0, recordedAt: c.recorded_at };
+           isReal: !isEstimate && price > 0, recordedAt: c.recorded_at, meta: c.price_meta || null };
 }
 
 // ── Attribution ───────────────────────────────────────────────
@@ -2847,7 +2847,30 @@ async function judgeListings(card, grade, listings, opts, memo) {
   // genuine bargain exists, and this project has twice destroyed good
   // data with a filter written against bad data. The row stays, carries
   // its reason, and sorts last.
-  const judged = timing.timeSync('outlier', () => outlier.flagOutliers(listings));
+  // The catalogue's own number-matched price is the second yardstick
+  // (2026-10-04): where the feed is mostly fakes its median is theirs. Raw
+  // grades only (the stored price is ungraded), real and current only — an
+  // old, thin or unsettled headline judges nothing. One query per view.
+  if (!('marketPrice' in memo)) {
+    const mp = await numberMatchedPrice(card.api_card_id).catch(() => null);
+    memo.marketPrice = mp && mp.isReal ? mp.price : null;
+    memo.marketRef = null;
+    if (mp && mp.isReal) {
+      const q = await pricequality.annotate(db, [{ id: mp.cardId, price: mp.price, source: mp.source,
+        recordedAt: mp.recordedAt, meta: mp.meta }]).catch(() => null);
+      const pq = q && q.get(mp.cardId);
+      memo.marketRef = { price: mp.price, source: mp.source, recordedAt: mp.recordedAt,
+                         current: !!(pq && pq.kind === 'measured' && !pq.flags.length),
+                         quality: pq ? pq.label : 'unknown' };
+    }
+  }
+  const ref = memo.marketRef && memo.marketRef.current && jpf.isRawGrade(grade) ? memo.marketRef : null;
+  const judged = timing.timeSync('outlier', () => outlier.flagOutliers(listings, { reference: ref }));
+  if (!judged.stats.reference && memo.marketRef)
+    judged.stats.reference = { price: memo.marketRef.price, source: memo.marketRef.source,
+      recordedAt: memo.marketRef.recordedAt, used: false,
+      why: !jpf.isRawGrade(grade) ? 'graded view — the stored price is raw'
+         : 'stored price is ' + memo.marketRef.quality };
   listings = judged.listings;
 
   // ── Priced at a known reprint's level ─────────────────────────
@@ -2861,11 +2884,7 @@ async function judgeListings(card, grade, listings, opts, memo) {
     judged.stats.reprints = [];
     // The catalogue's own number-matched price: the second, independent
     // path to "this card prices apart from its reprint". Real prices only.
-    if (!('marketPrice' in memo)) {
-      const mp = await numberMatchedPrice(card.api_card_id).catch(() => null);
-      memo.marketPrice = mp && mp.isReal ? mp.price : null;
-    }
-    const marketPrice = memo.marketPrice;
+    const marketPrice = memo.marketPrice;   // read above, before the outlier check
     for (const rc of reprintCards) {
       let prices = null, why = null;
       try {

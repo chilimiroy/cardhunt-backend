@@ -395,7 +395,7 @@ and `cardmarketSearch` name-only fallbacks, jpfilter's second English gate.
 | **grade + grader** | exact grade, qualifiers, one grader; eBay's aspect fields cross-checked | `verify` §2 + `ebayGradeFilter` | raw only — says so | `jpTitleHasGrade` | raw only | raw only | grade string | E `gradeFilter{}` |
 | **raw vs slab** | a raw search refuses slabs | `SLAB_WORDS` + `conditionSaysGraded` | shop singles | `jpTitleIsSingleRaw` ← `SLAB_WORDS` (**T9**) | n/a | same (**T9**) | title (+ eBay `condition`) | E/H |
 | **raw condition** | NM/LP/MP/HP (M/DMG seller-stated) | eBay aspect filter | page groups: unstated | page groups: unstated | NM only | — | selection | page: "N stated otherwise", UNSTATED group |
-| **outliers** | an order of magnitude below the card's own median — **flags, never removes** | `flagOutliers` in `gatherListings` | same | same | — | IQR + `YAHOO_MAX_SPREAD` refusal | ≥5 priced, ≥$15 median | `outliers{}` |
+| **outliers** | an order of magnitude below the card's own median — or below the stored raw price when that is current and HIGHER (a feed of fakes sets its own median; 2026-10-04) — **flags, never removes** | `flagOutliers` in `gatherListings` | same | same | — | IQR + `YAHOO_MAX_SPREAD` refusal | ≥5 priced, ≥$15 median | `outliers{}` |
 | **reprint-priced** | a row at the known reprint's price level | `flagReprintPriced` where `REPRINT_OF` | same | same | — | — | the reprint's own listings | `outliers.reprints[]` |
 | **printing** (T10) | normal / holo / reverse / reverse-pokeball / reverse-masterball … — a STATED other printing is refused, silence kept as *unstated* | `verify(opts.printing)`; `buildQuery` asks for it | the asked mirror's own entries, else `pickVariants` | `printingRefusal` | base printing only — `printsql.basePrintingSql` on every headline reader | — | `cards.variants` (manifest) — **must be SELECTed** | `sources.<id>.printing{asked, keptStated, keptUnstated, refused}` |
 
@@ -1316,8 +1316,8 @@ node gradeprice.test.js      # 27
 node jptest.js               # 88   39 of them assert the filter KEEPS; English cases run cardmatch.verify
 node listingparse.test.js    # 26
 node matchparity.test.js     # 102  /api/listings and /api/search cannot disagree
-node outlier.test.js         # 12   the price test, on the real Giratina #186 spread
-node outlierwire.test.js     # 33   ...and that it is actually REACHED: both payloads
+node outlier.test.js         # 22   the price test, on the real Giratina #186 spread; Shining Charizard's fake-set median (6 fail on the old code)
+node outlierwire.test.js     # 34   ...and that it is actually REACHED: both payloads; the catalogue reference only raw + current
 node printinggate.test.js    # 116   reprint/language/year, BOTH marketplaces (CRLF-tolerant)
 node reprint.test.js         # 126  reprints by SET ID, both directions, real titles
 node printrun.test.js        # 39   1st Edition / Shadowless / Unlimited, only where they existed
@@ -1514,6 +1514,19 @@ priced, ≥$15 median); headlines skip flagged rows. A price band is evidence
 only where the card prices apart from its reprint — check the stored price
 before calling a flag wrong.
 *Archive:* "The price is evidence about the title when the title carries none", "A price band is evidence only where the card prices apart (2026-09-27)"
+
+**A median computed from mostly-fake listings is not a baseline.** Shining
+Charizard Raw NM, all sites, 2026-10-04: ~116 of 144 rows past the gate were
+gold/black metal replicas (labelled by eye); their median, $420.97, let a
+$72.49 replica through at 0.17x while every genuine copy asked $944+ and the
+stored price was $1,700.99. The check now judges against the stored,
+number-matched raw price when it is current (pricequality: no flag) and
+ABOVE the feed's median — never to lower the bar; graded views keep the feed.
+On the 1,010 labelled rows: 0/864 right flagged before and after; different
+illustrations 10 -> 15 of 24, metal 5 -> 8 of 38. Shining Charizard: 27 -> 53
+of 116 replicas, 0 of 26 genuine. It still leaves replicas priced at genuine
+levels ($177-$1,600) — those are the title and photo checks' job.
+*Archive:* none — 2026-10-04, PROGRESS.md
 
 **Japanese listings are full of lots.** まとめ/セット/一括/引退/BOX/未開封/
 PSA/BGS/鑑定 and any 枚/点 quantity: `jpTitleIsSingleRaw()` is the one

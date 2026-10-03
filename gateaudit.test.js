@@ -88,7 +88,7 @@ ok('sourceYuyutei runs printingConflict', /cm\.printingConflict\(/.test(slice(se
 ok('sourceEbay runs cm.verify', /cm\.verify\(/.test(slice(server, 'sourceEbay')));
 // T1: judging moved to judgeListings, shared by the first answer and every
 // continuation page — both must reach it with EVERY row.
-ok('judgeListings flags outliers on the rows it is given', /outlier\.flagOutliers\(listings\)/.test(slice(server, 'judgeListings')));
+ok('judgeListings flags outliers on the rows it is given', /outlier\.flagOutliers\(listings[,)]/.test(slice(server, 'judgeListings')));
 ok('gatherListings judges every source\'s rows', /await judgeListings\(card, grade, listings, opts, memo\)/.test(slice(server, 'gatherListings')));
 ok('an expansion (more sites, more pages) re-judges every row, not only the new page',
    /gathered\.otherRows\.concat\(st\.listings\)/.test(slice(server, 'rebuildView')) &&

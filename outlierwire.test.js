@@ -38,10 +38,14 @@ console.log('\nSERVER — after the gate, before the sort\n');
 
 chk('server.js requires ./outlier', /require\(['"]\.\/outlier['"]\)/.test(server));
 
-const flagAt = server.indexOf('outlier.flagOutliers(listings)');
+const flagAt = server.indexOf('outlier.flagOutliers(listings, { reference: ref })');
 const sortAt = server.indexOf('listings.sort((a, b) =>');
 chk('flagOutliers is called on the gathered listings', flagAt > -1);
 chk('it runs BEFORE the sort, not after', flagAt > -1 && sortAt > flagAt);
+// 2026-10-04: the catalogue reference reaches it — raw grades, current prices only.
+chk('the reference is the stored price, only when current and only on a raw grade',
+    server.includes('const ref = memo.marketRef && memo.marketRef.current && jpf.isRawGrade(grade) ? memo.marketRef : null;') &&
+    server.includes("current: !!(pq && pq.kind === 'measured' && !pq.flags.length)"));
 chk('the sort ranks suspects first of all',
     /suspectRank\(a\) - outlier\.suspectRank\(b\)\) \|\|/.test(server));
 

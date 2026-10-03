@@ -31,7 +31,9 @@
 //   unreadable   no usable photo (fetch failed, not a JPEG, too small).
 //
 // The photo is eBay's: fetched from eBay's image CDN for one request, never
-// stored, and the verdict is held 15 minutes in memory like a cert read.
+// stored. The VERDICT is ours and permanent (TASK T2, 2026-10-03): kept in
+// memory and in the database, keyed on a hash of the eBay item id — see
+// "Verdicts in the database" below.
 // The URL is never taken from the caller (SSRF): the server reads it from
 // the listing it already served, and only from i.ebayimg.com.
 // ══════════════════════════════════════════════════════════════
@@ -252,8 +254,9 @@ function photoUrl(imageUrl) {
 // of a card pays for the check and everyone after reads the answer. Keyed
 // on the ITEM (a listing under several searches is checked once), and the
 // photo URL is held beside it: a seller who changes the photo changes the
-// URL, and the item is checked again. In memory only — the verdict is ours,
-// a few bytes; the photo itself is never kept. A Render restart forgets it.
+// URL, and the item is checked again. In memory here, and in the database
+// (setStore, below) so a Render restart forgets nothing; the photo itself
+// is never kept.
 // A failure worth retrying (the CDN did not answer, the check timed out) is
 // held 2 minutes, so a view says "unreadable" instead of waiting forever,
 // and the next view after that asks again.
@@ -315,6 +318,7 @@ function finish(slot, verdict, kill) {
     const v = Object.assign({}, verdict, { tookMs: Date.now() - job.t0 });
     if (v.retryable) _stats.failed++; else { _stats.checked++; _stats.msTotal += v.tookMs; }
     cacheSet(job.itemId, v, job.url);
+    if (!v.retryable) saveVerdict(job.itemId, job.url, v, job.cardId);
     _inflight.delete(job.itemId);
     job.resolve(v);
   }
@@ -347,21 +351,91 @@ function pump() {
 
 // The one way to check an item: the cache, else the job already running,
 // else a new job at the back of the queue. Never rejects; zero eBay calls.
-function checkItem(itemId, imageUrl, reprints) {
+function checkItem(itemId, imageUrl, reprints, cardId) {
   const url = photoUrl(imageUrl);
   if (!url) return Promise.resolve({ state: 'unreadable', says: 'The listing has no eBay photo to check.', scores: [] });
   const hit = cacheGet(itemId, url);
   if (hit) { _stats.cacheHits++; return Promise.resolve(Object.assign({}, hit.verdict, { cached: true })); }
   if (_inflight.has(itemId)) return _inflight.get(itemId);
-  const p = new Promise(resolve => _queue.push({ itemId, url, reprints, resolve }));
+  const p = new Promise(resolve => _queue.push({ itemId, url, reprints, cardId: cardId || null, resolve }));
   _inflight.set(itemId, p);
   pump();
   return p;
 }
 function poolState() {
-  return { workers: POOL_SIZE, running: _workers.filter(s => s.job).length, queued: _queue.length,
+  return { store: _store ? Object.assign({ version: VERDICT_VERSION }, _storeStats) : null, workers: POOL_SIZE, running: _workers.filter(s => s.job).length, queued: _queue.length,
            cachedItems: _cache.size, checked: _stats.checked, failed: _stats.failed, cacheHits: _stats.cacheHits,
            meanMs: _stats.checked ? Math.round(_stats.msTotal / _stats.checked) : null };
+}
+
+// ── Verdicts in the database (TASK T2, 2026-10-03) ──
+// A listing's photo does not change under its URL, so a verdict is a
+// permanent fact — and in memory alone every deploy forgot all of them: the
+// first viewer after a restart saw rows appear and then vanish. The server
+// hands in a store (setStore); every definite verdict (found, not visible,
+// unreadable for a reason that will not change) is written once, and a view
+// reads the verdicts it lacks in ONE query before the gate runs. A
+// retryable failure is never written.
+// What is stored is ours: a sha256 of the eBay item id and of the photo URL
+// (a changed photo is a new key, checked again), our card id, our verdict.
+// No title, price, URL or photo — no eBay data (the eBay caching lesson).
+// VERDICT_VERSION names the matcher that produced a verdict. Change it when
+// a template, the threshold or MATCH changes: older rows are then ignored
+// and those photos are checked again.
+const VERDICT_VERSION = 'stamp-1';
+const MISS_MS = 60 * 1000;          // an item the store lacks is not asked about again for a minute
+const LOAD_TIMEOUT_MS = 2500;
+const _missed = new Map();          // itemId -> when the store last answered "none"
+let _store = null;                  // { load(itemKeys, version) -> [{itemKey, photoKey, state, ...}], save(row) }
+const _hash = (s, n) => require('crypto').createHash('sha256').update(String(s)).digest('hex').slice(0, n);
+const itemKey = itemId => _hash(itemId, 32);
+const photoKey = url => _hash(url, 16);
+const _storeStats = { loaded: 0, saved: 0, saveFailed: 0, loadFailed: 0 };
+function setStore(s) { _store = s || null; _missed.clear(); }
+function saveVerdict(itemId, url, v, cardId) {
+  if (!_store) return;
+  const scored = (v.scores || []).filter(x => x.checked).map(x => x.score);
+  Promise.resolve().then(() => _store.save({ itemKey: itemKey(itemId), photoKey: photoKey(url), version: VERDICT_VERSION,
+    cardId: cardId || null, state: v.state, reprint: v.reprint || null, label: v.label || null, says: v.says || null,
+    score: scored.length ? Math.max(...scored) : null }))
+    .then(() => { _storeStats.saved++; },
+          e => { _storeStats.saveFailed++; console.warn('[stamp] verdict not stored: ' + (e && e.message)); });
+}
+// Before the gate: fill the memory cache from the store for every eBay row
+// it lacks, in one query. Bounded: a slow database leaves those rows
+// unchecked (hidden, then checked again) rather than holding the answer.
+async function loadVerdicts(rows) {
+  if (!_store) return { asked: 0, found: 0 };
+  const now = Date.now(), want = new Map();
+  for (const r of rows || []) {
+    if (!r || r.source !== 'ebay' || !r.itemId) continue;
+    const url = photoUrl(r.imageUrl);
+    if (!url || cacheGet(r.itemId, url)) continue;
+    const m = _missed.get(r.itemId); if (m && now - m < MISS_MS) continue;
+    want.set(itemKey(r.itemId), { itemId: r.itemId, url });
+  }
+  if (!want.size) return { asked: 0, found: 0 };
+  const asked = want.size;
+  let got, timer;
+  try {
+    got = await Promise.race([_store.load([...want.keys()], VERDICT_VERSION),
+      new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timed out')), LOAD_TIMEOUT_MS); })]);
+  } catch (e) {
+    _storeStats.loadFailed++; console.warn('[stamp] verdicts not read: ' + (e && e.message));
+    return { asked, found: 0, error: true };
+  } finally { clearTimeout(timer); }
+  let found = 0;
+  for (const g of got || []) {
+    const w = want.get(g.itemKey);
+    if (!w || g.photoKey !== photoKey(w.url)) continue;       // a different photo: check it again
+    cacheSet(w.itemId, { state: g.state, reprint: g.reprint || undefined, label: g.label || undefined,
+      says: g.says || '', scores: [], stored: true }, w.url);
+    want.delete(g.itemKey); found++;
+  }
+  for (const w of want.values()) _missed.set(w.itemId, now);
+  while (_missed.size > CACHE_MAX) _missed.delete(_missed.keys().next().value);
+  _storeStats.loaded += found;
+  return { asked, found };
 }
 
 // ── The gate: after the text gates, before display (TASK T1) ──
@@ -369,8 +443,10 @@ function poolState() {
 // A stamp FOUND refuses the row, counted and named like any other refusal.
 // NOT VISIBLE and UNREADABLE keep it: absence of a stamp is weak evidence
 // (cropped, angled, glared; 2 of 86 Aquapolis photos showed no stamp area).
-// An item not yet checked is kept and marked pending, and handed back so
-// the caller can check it. Nothing here waits.
+// An item not yet checked is HIDDEN (TASK T2, 2026-10-03): counted in
+// report.pending and handed back so the caller can check it — it appears
+// when its verdict lands, instead of appearing and then vanishing. Nothing
+// here waits. Hidden is temporary; only "found" ever refuses.
 function gate(rows, reprints) {
   const T = templates().templates || {};
   const usable = (reprints || []).filter(r => T[r.cardId]);
@@ -389,7 +465,7 @@ function gate(rows, reprints) {
     const url = photoUrl(row.imageUrl);
     if (!url) { report.unreadable++; out.push(Object.assign({}, row, { stamp: { state: 'unreadable', says: 'No eBay photo to check.' } })); continue; }
     const hit = cacheGet(row.itemId, url);
-    if (!hit) { report.pending++; pending.push(row); out.push(Object.assign({}, row, { stamp: { state: 'pending' } })); continue; }
+    if (!hit) { report.pending++; pending.push(row); continue; }
     const v = hit.verdict;
     if (v.state === 'found') {
       report.checked++; report.refused++;
@@ -404,7 +480,7 @@ function gate(rows, reprints) {
   }
   report.summary = report.refused + ' refused (the seller’s photo shows a reprint’s stamp), '
     + report.notVisible + ' no stamp visible, ' + report.unreadable + ' unreadable'
-    + (report.pending ? ', ' + report.pending + ' still being checked' : '');
+    + (report.pending ? ', ' + report.pending + ' hidden until checked' : '');
   return { listings: out, report, pending };
 }
 
@@ -420,6 +496,6 @@ if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
 }
 
 module.exports = { THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, crop, resize, rotate90, nccMax, bestScore,
-                   judge, checkItem, gate, poolState, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
+                   judge, checkItem, gate, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
                    _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; },
-                   _clearCache: () => _cache.clear() };
+                   _clearCache: () => { _cache.clear(); _missed.clear(); } };

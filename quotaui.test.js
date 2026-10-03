@@ -63,7 +63,7 @@ ok('not refused — indicator not forced', ctx.quotaRefusedIn({ sources: { ebay:
 console.log('\nWIRING\n');
 const rl = slice('renderLiveListings');
 ok('renderLiveListings puts the pause message in the panel head', /head \+= pause/.test(rl));
-ok('  and drops "No listing matched" when eBay was not asked', /\(pause \? '' :/.test(rl));
+ok('  and drops "No listing matched" when eBay was not asked', /\(pause( \|\| stampWaiting)? \? '' :/.test(rl));
 ok('fetchListings refreshes the indicator from every answer',
    /refreshQuota\(quotaRefusedIn\(d\)\)/.test(slice('fetchListings')));
 ok('the source note names a quota refusal', /v\.status === 'quota'/.test(slice('liveSourceNote')));

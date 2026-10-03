@@ -3769,13 +3769,15 @@ function certLine(l){
 // On a card a known reprint copies, the server checks every eBay row's photo
 // for the reprint's commemorative stamp, after the text gates. A stamp FOUND
 // is a refusal: the row never reaches this page and is counted in
-// stampGate / sources.ebay. What reaches a row is the weak or unfinished
-// answer: not visible (never "verified original"), unreadable, or still
-// being checked — the panel re-reads the view while any are pending, and a
-// row found to be the reprint disappears when its verdict lands.
+// stampGate / sources.ebay. A row whose photo is not yet checked never
+// reaches this page either (TASK T2, 2026-10-03): it is hidden and counted
+// (stampGate.pending), the panel re-reads while any are, and the row
+// APPEARS when its verdict lands — nothing is shown and then taken away.
+// What reaches a row is the weak answer: not visible (never "verified
+// original") or unreadable. Verdicts are kept in the server's database, so
+// a deploy forgets none of them.
 // ZERO eBay calls: the photos come from eBay's image CDN.
 var STAMP_CHIP = {
-  'pending':     'Photo being checked for the reprint stamp',
   'not-visible': 'No stamp visible — not proof',
   'unreadable':  'Photo unreadable'
 };
@@ -3783,10 +3785,11 @@ function stampLine(l){
   var st = l && l.stamp;
   if (!st || !STAMP_CHIP[st.state]) return '';
   return '<span class="stampslot"><span class="certchip stamp-' + st.state + '">' + STAMP_CHIP[st.state] + '</span>'
-    + (st.state === 'pending' ? '' : '<span class="certsays">' + liveEsc(st.says || '') + '</span>')
+    + '<span class="certsays">' + liveEsc(st.says || '') + '</span>'
     + '</span>';
 }
 // What the stamp gate refused and what it is still doing, in words.
+function liveCountNoun(n){ n = n || 0; return n + ' listing' + (n === 1 ? '' : 's'); }
 function liveStampNote(d){
   var g = d && d.stampGate;
   if (!g || !g.applied) return '';
@@ -3795,8 +3798,8 @@ function liveStampNote(d){
   return '<div id="cd-stamp-note" style="font-size:11px;color:var(--fa);margin-top:4px">'
     + (g.refused ? g.refused + ' listing' + (g.refused === 1 ? '' : 's') + ' refused &mdash; the seller&rsquo;s photo shows the '
         + liveEsc(names) + ' reprint stamp. ' : '')
-    + (g.pending ? g.pending + ' photo' + (g.pending === 1 ? ' is' : 's are') + ' still being checked for it; '
-        + 'a row found to be the reprint will disappear.'
+    + (g.pending ? liveCountNoun(d.count) + ' shown, ' + g.pending + ' still being checked for the stamp &mdash; '
+        + (g.pending === 1 ? 'it appears' : 'they appear') + ' here once the photo is checked.'
       : 'Every photo was checked for the ' + liveEsc(names) + ' stamp' + (g.refused ? '' : ' and none showed it')
         + '. No stamp visible is not proof of the original.')
     + '</div>';
@@ -4210,11 +4213,13 @@ async function renderLiveListings(card, grade, opts){
       + '</div>';
   }
 
+  var stampWaiting = !!(d && d.stampGate && d.stampGate.pending > 0);
   if (!rows.length) {
     host.innerHTML = head
       // "No listing matched" is FALSE when eBay was never asked — the pause
       // message above has already said what happened.
-      + (pause ? '' : (onlyUsNote(d) || ('<div style="font-size:11px;color:var(--mu);line-height:1.6">'
+      // Every row still hidden behind its photo check (T2): not "no listing".
+      + (pause || stampWaiting ? '' : (onlyUsNote(d) || ('<div style="font-size:11px;color:var(--mu);line-height:1.6">'
       + (condFilter
           ? ('No listing of this card is marked <strong>' + liveEsc(condFilter) + '</strong> '
              + 'in eBay&rsquo;s Card Condition field right now, and no shop title states it.')

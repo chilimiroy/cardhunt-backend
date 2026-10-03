@@ -110,7 +110,8 @@ ok('stamp FOUND -> the row is refused (not in the list)', !byId(1));
 ok('...counted, with its reason and the reprint named', g.report.refused === 1 && g.report.refusedSample[0].itemId === 'v1|1|0' && /30th Celebration/.test(g.report.refusedSample[0].reason));
 ok('no stamp visible -> KEPT, marked not-visible', byId(2) && byId(2).stamp.state === 'not-visible');
 ok('unreadable -> KEPT, marked unreadable', byId(3) && byId(3).stamp.state === 'unreadable');
-ok('not yet checked -> KEPT, marked pending, handed back to check', byId(4) && byId(4).stamp.state === 'pending' && g.pending.length === 1 && g.pending[0].itemId === 'v1|4|0');
+ok('not yet checked -> HIDDEN (T2: never shown, then taken away), handed back to check', !byId(4) && g.pending.length === 1 && g.pending[0].itemId === 'v1|4|0');
+ok('...and no row anywhere is marked pending', !g.listings.some(l => l.stamp && l.stamp.state === 'pending'));
 ok('no photo -> KEPT, unreadable (never pending forever)', byId(5) && byId(5).stamp.state === 'unreadable');
 ok('a non-eBay row passes untouched', g.listings.some(l => l.source === 'yuyutei' && !l.stamp));
 ok('counts add up: 1 refused, 1 not visible, 2 unreadable, 1 pending', g.report.refused === 1 && g.report.notVisible === 1 && g.report.unreadable === 2 && g.report.pending === 1, JSON.stringify(g.report));
@@ -156,8 +157,59 @@ ok('...but only RETRY_MS: after that the item is asked again', sc.cacheGet('v1|9
     const ps = sc.poolState();
     ok('the pool is bounded (STAMP_WORKERS, default 1) and reports itself', ps.workers >= 1 && ps.checked >= 2 && ps.queued === 0, JSON.stringify(ps));
   }
+  await storeTests();
   rest();
 })();
+
+// T2 (2026-10-03): a verdict is permanent — it must survive a restart.
+async function storeTests() {
+  console.log('\n5d. THE STORE — verdicts survive a restart, keyed on hashes');
+  if (typeof sc.setStore !== 'function' || typeof sc.loadVerdicts !== 'function') { ok('stampcheck has a verdict store (setStore, loadVerdicts)', false); return; }
+  const db = new Map(), saved = [], loads = [];
+  let slow = false;
+  const store = {
+    async load(keys, version) { loads.push({ keys, version }); if (slow) await new Promise(r => setTimeout(r, 4000));
+      return keys.map(k => db.get(k + '|' + version)).filter(Boolean); },
+    async save(v) { saved.push(v); db.set(v.itemKey + '|' + v.version, v); }
+  };
+  sc.setStore(store); sc._clearCache();
+  if (FXS['en-30th-c-029']) {
+    const r = await sc.checkItem('v1|81|0', U('r81'), LUG, 'en-ecard2-149');
+    await new Promise(r2 => setTimeout(r2, 20));
+    ok('a definite verdict is written once it lands', saved.length === 1 && saved[0].state === r.state && r.state === 'found', JSON.stringify(saved));
+    ok('...keyed on hashes: no eBay item id or photo URL in the row', saved.length && !JSON.stringify(saved[0]).includes('v1|') && !/ebayimg|http/.test(JSON.stringify(saved[0])) && /^[0-9a-f]{32}$/.test(saved[0].itemKey));
+    ok('...with our card id and the matcher version', saved.length && saved[0].cardId === 'en-ecard2-149' && saved[0].version === sc.VERDICT_VERSION);
+    const nd = saved.length;
+    await sc.checkItem('v1|82|0', 'https://i.ebayimg.com/images/g/down/s-l225.jpg', LUG);
+    await new Promise(r2 => setTimeout(r2, 20));
+    ok('a retryable failure is NEVER written (it is not a verdict)', saved.length === nd);
+  } else ok('stamp.fixture.json has the reprint scan', false);
+  // The restart: memory empty, the database holds what was checked before.
+  sc._clearCache();
+  const put = (id, photo, v, ver) => db.set(sc.itemKey('v1|' + id + '|0') + '|' + (ver || sc.VERDICT_VERSION),
+    Object.assign({ itemKey: sc.itemKey('v1|' + id + '|0'), photoKey: sc.photoKey(sc.photoUrl(U(photo))) }, v));
+  put(91, 'p91', { state: 'found', reprint: 'en-30th-c-029', label: '30th Celebration (2026)', says: 'x' });
+  put(92, 'p92', { state: 'not-visible', says: 'not proof' });
+  put(93, 'OLDPHOTO', { state: 'not-visible', says: 'x' });
+  put(94, 'p94', { state: 'found', says: 'x' }, 'stamp-0');
+  const after = [row(91), row(92), row(93), row(94), row(95)];
+  const L0 = loads.length, lr = await sc.loadVerdicts(after);
+  ok('after a restart ONE query asks for every eBay row the memory lacks', loads.length === L0 + 1 && loads[L0].keys.length === 5 && lr.found === 2, JSON.stringify(lr));
+  const ga = sc.gate(after, LUG), has = id => ga.listings.some(l => l.itemId === 'v1|' + id + '|0');
+  ok('a stored "found" refuses at once — the reprint is never shown', !has(91) && ga.report.refused === 1);
+  ok('a stored "not visible" is shown at once (no pending)', has(92));
+  ok('a stored verdict for a DIFFERENT photo is not used: hidden, checked again', !has(93) && ga.pending.some(p => p.itemId === 'v1|93|0'));
+  ok('a verdict from an older matcher version is not used', !has(94) && ga.pending.some(p => p.itemId === 'v1|94|0'));
+  ok('an item never checked is hidden and handed back', !has(95) && ga.report.pending === 3, JSON.stringify(ga.report));
+  const L1 = loads.length; await sc.loadVerdicts(after);
+  ok('items the store lacks are not asked about again at once (each rebuild would)', loads.length === L1);
+  sc._clearCache(); slow = true;
+  const t0 = Date.now(), ls = await sc.loadVerdicts([row(96)]);
+  ok('a slow database is bounded: the view does not wait on it', ls.error === true && Date.now() - t0 < 3500, (Date.now() - t0) + ' ms');
+  ok('...and its rows stay hidden, never shown unchecked', sc.gate([row(96)], LUG).listings.length === 0);
+  slow = false; sc.setStore(null); sc._clearCache();
+  ok('no store: loadVerdicts is a no-op and the gate still works', (await sc.loadVerdicts([row(97)])).asked === 0 && sc.gate([row(97)], LUG).report.pending === 1);
+}
 
 function rest() {
 console.log('\n6. THE SERVER — wired after the text gates, before display');
@@ -172,20 +224,24 @@ ok('a photo-check update never fetches the reprint\'s listings (noFetch)', /else
 const wsr = new Function('return ' + fnS('function withStampRefusals(').replace(/^function withStampRefusals/, 'function'))();
 const srcs = { ebay: { status: 'ok', count: 82, rejected: 118, scanned: 200, droppedSample: [{ reason: 'not a single card' }] } };
 const out = wsr(srcs, { applied: true, refused: 5, pending: 3, refusedSample: [{ title: 't', itemId: 'v1|1|0', reason: 'photo shows the 30th Celebration (2026) stamp' }] });
-ok('stamp refusals are eBay rejections: kept 82 -> 77, rejected 118 -> 123', out.ebay.count === 77 && out.ebay.rejected === 123, JSON.stringify(out.ebay));
-ok('...named in droppedSample and the summary', out.ebay.droppedSample[0].reason.includes('stamp') && /5 by the photo stamp check, 3 photos still being checked/.test(out.ebay.summary), out.ebay.summary);
+ok('stamp refusals are eBay rejections, hidden rows are not counted as kept: 82 -> 74, rejected 118 -> 123', out.ebay.count === 74 && out.ebay.rejected === 123, JSON.stringify(out.ebay));
+ok('...named in droppedSample and the summary, the hidden ones said', out.ebay.droppedSample[0].reason.includes('stamp') && /5 by the photo stamp check; 3 more hidden until their photos are checked/.test(out.ebay.summary), out.ebay.summary);
 ok('...on a COPY (a view\'s sources are re-used by every rebuild)', srcs.ebay.count === 82 && srcs.ebay.rejected === 118);
 ok('the payload carries stampGate', /stampGate: j\.stamp \?/.test(fnS('function buildListingsPayload(')));
 const lf = fnS('async function listingsFor(');
 ok('a re-read (?poll=1) never searches: cache or "not fetched"', /if \(opts\.poll && !wantSites && !wantMore\) return \{[^}]*notFetched: true/.test(lf));
-ok('opening a card starts the photo checks after the answer', /stampFollowUp\(card, requestedId, grade, printing, edition, pendingStampRows\(payload\)\)/.test(lf));
+ok('opening a card starts the photo checks after the answer (the hidden rows)', /stampFollowUp\(card, requestedId, grade, printing, edition, gathered\.stampPending\)/.test(lf));
+ok('a rebuild checks ITS hidden rows (j.stampPending), not rows on the payload', /stampFollowUp\(card, requestedId, grade, printing, edition, j\.stampPending\)/.test(fnS('async function rebuildView(')));
+ok('judgeListings reads stored verdicts BEFORE the gate', jl.indexOf('await stampcheck.loadVerdicts(listings)') > 0 && jl.indexOf('await stampcheck.loadVerdicts(listings)') < jl.indexOf('stampcheck.gate('));
+ok('the server hands stampcheck a store, keyed on hashes, on its own table', /stampcheck\.setStore\(\{/.test(S) && /CREATE TABLE IF NOT EXISTS listing_photo_verdicts/.test(S) && /item_key = ANY\(\$1\)/.test(S));
+ok('the store holds no title, price, URL or photo column', !/\b(title|price|url|image|photo_url)\b/.test(S.slice(S.indexOf('const PHOTO_VERDICTS_SQL'), S.indexOf('PRIMARY KEY (item_key', S.indexOf('const PHOTO_VERDICTS_SQL')))));
 const fu = fnS('function stampFollowUp(');
 ok('the follow-up re-judges with noFetch and starts nothing further', /rebuildView\([^)]*\{ noFetch: true, stamp: true \}\)/.test(fu) && /if \(!ropts\.stamp\) stampFollowUp/.test(fnS('async function rebuildView(')));
 ok('the follow-up makes no eBay call', !/fetchEbay|sourceEbay|gatherListings|ebayLoadMore/.test(fu));
 const a = S.indexOf("app.get('/api/stamp/:cardId'"), b = S.indexOf('\napp.', a + 10);
 const route = a >= 0 ? S.slice(a, b > a ? b : undefined) : '';
 ok('/api/stamp: an eBay item id, validated; never a URL from the request', /certcheck\.ITEM_ID\.test\(itemId\)/.test(route) && !/req\.query\.(url|image|img|photo|src)/.test(route));
-ok('/api/stamp: the row this server already served, through the SAME checkItem', /cachedListingRow\(/.test(route) && /stampcheck\.checkItem\(itemId, row\.imageUrl, reprints\)/.test(route));
+ok('/api/stamp: the row this server already served, through the SAME checkItem', /cachedListingRow\(/.test(route) && /stampcheck\.checkItem\(itemId, row\.imageUrl, reprints, card\.api_card_id\)/.test(route));
 ok('/api/stamp: no eBay API call, ebayCalls: 0', !/fetchEbay|ebayItemOnDemand|getEbayToken|api\.ebay\.com/.test(route) && /ebayCalls: 0/.test(route));
 const C = fs.readFileSync(__dirname + '/stampcheck.js', 'utf8');
 ok('stampcheck.js never touches the database', !/db\.query|require\('pg'\)|INSERT|DATABASE_URL/.test(C));
@@ -195,9 +251,11 @@ const H = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
 const fn = name => { const i = H.indexOf('function ' + name + '('); return i < 0 ? '' : H.slice(i, H.indexOf('\n}', i) + 2); };
 ok('no "Check photo" button and no /api/stamp call from the page', !/Check photo for reprint stamp/.test(H) && !/\/api\/stamp\//.test(H));
 ok('a row shows the server\'s stamp state (l.stamp)', /var st = l && l\.stamp;/.test(fn('stampLine')));
-ok('chips: pending / not visible / unreadable — and no "found" (found rows are refused)', /'pending':/.test(H) && /'not-visible':\s*'No stamp visible — not proof'/.test(H) && /'unreadable':/.test(H) && !/STAMP_CHIP = \{[^}]*'found'/.test(H));
+ok('chips: not visible / unreadable — no "found" (refused) and no "pending" (hidden, T2)', !/STAMP_CHIP = \{[^}]*'pending'/.test(H) && /'not-visible':\s*'No stamp visible — not proof'/.test(H) && /'unreadable':/.test(H) && !/STAMP_CHIP = \{[^}]*'found'/.test(H));
 ok('nothing on the page calls a stamp result "verified" or "original"', !/STAMP_CHIP[\s\S]{0,400}(verified|genuine original)/i.test(H));
 ok('the panel says how many the stamp check refused', /liveStampNote\(d\)/.test(fn('excludedNote')) && /refused &mdash; the seller&rsquo;s photo shows the/.test(fn('liveStampNote')));
+ok('the panel says how many are shown and how many still being checked', /still being checked for the stamp/.test(fn('liveStampNote')));
+ok('every row hidden behind its check is not called "No listing matched"', /pause \|\| stampWaiting \? ''/.test(H) && /var stampWaiting = !!\(d && d\.stampGate && d\.stampGate\.pending > 0\)/.test(H));
 ok('the panel re-reads while photos are pending, with ?poll=1', /stampGate\.pending > 0/.test(fn('scheduleStampPoll')) && /poll: true/.test(fn('scheduleStampPoll')) && /scheduleStampPoll\(card, grade, d\)/.test(H));
 ok('the stamp line sits inside the row\'s own line (one writer)', /\+ stampLine\(l\)/.test(fn('certLine')));
 live();

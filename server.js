@@ -87,6 +87,40 @@ const db = process.env.DATABASE_URL ? new Pool({
 }) : null;
 timing.instrumentPool(db);
 
+// ── Photo verdicts, kept (TASK T2, 2026-10-03) ────────────────
+// The stamp gate's verdicts outlive a restart: a photo never changes under
+// its URL, so the answer is permanent. Hashed keys and our verdict only —
+// no eBay data (stampcheck.js, "Verdicts in the database"). The table is
+// created here on first use, as listing_views is;
+// migration-photo-verdicts.sql records the same statement.
+const PHOTO_VERDICTS_SQL = `CREATE TABLE IF NOT EXISTS listing_photo_verdicts (
+  item_key text NOT NULL, check_kind text NOT NULL, version text NOT NULL,
+  photo_key text NOT NULL, card_id text, state text NOT NULL,
+  reprint text, label text, says text, score real,
+  checked_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (item_key, check_kind, version))`;
+let photoVerdictsReady = null;
+const photoVerdictsTable = () => photoVerdictsReady || (photoVerdictsReady =
+  db.query(PHOTO_VERDICTS_SQL).catch(e => { photoVerdictsReady = null; throw e; }));
+if (db) stampcheck.setStore({
+  async load(keys, version) {
+    await photoVerdictsTable();
+    const r = await db.query(`SELECT item_key, photo_key, state, reprint, label, says FROM listing_photo_verdicts
+      WHERE check_kind = 'stamp' AND version = $2 AND item_key = ANY($1)`, [keys, version]);
+    return r.rows.map(x => ({ itemKey: x.item_key, photoKey: x.photo_key, state: x.state,
+      reprint: x.reprint, label: x.label, says: x.says }));
+  },
+  async save(v) {
+    await photoVerdictsTable();
+    await db.query(`INSERT INTO listing_photo_verdicts (item_key, check_kind, version, photo_key, card_id, state,
+      reprint, label, says, score) VALUES ($1,'stamp',$2,$3,$4,$5,$6,$7,$8,$9)
+      ON CONFLICT (item_key, check_kind, version) DO UPDATE SET photo_key = EXCLUDED.photo_key,
+      card_id = EXCLUDED.card_id, state = EXCLUDED.state, reprint = EXCLUDED.reprint, label = EXCLUDED.label,
+      says = EXCLUDED.says, score = EXCLUDED.score, checked_at = now()`,
+      [v.itemKey, v.version, v.photoKey, v.cardId, v.state, v.reprint, v.label, v.says, v.score]);
+  }
+});
+
 // ── DATA SOURCES ──────────────────────────────────────────────
 const TCG_KEY = process.env.POKEMONTCG_KEY || '4c777c95-8a61-407e-b16e-48bd2f827478';
 const TCG_API = 'https://api.pokemontcg.io/v2';
@@ -2788,14 +2822,17 @@ async function judgeListings(card, grade, listings, opts, memo) {
   // a known reprint copies, only eBay rows. A stamp FOUND is a refusal like
   // any other — the row is not shown and is counted in sources.ebay. No
   // stamp visible, or an unreadable photo, keeps the row: weak evidence
-  // never refuses. Verdicts are cached by eBay item id; an item not yet
-  // checked is kept, marked pending, and checked after this answer is sent
-  // (stampFollowUp) — the page re-reads and the row goes when its verdict
-  // lands. Ahead of the outlier check, so a page full of reprints cannot
-  // set the median the original is judged by. Zero eBay calls.
+  // never refuses. Verdicts are kept by eBay item id, in memory and in the
+  // database (T2, 2026-10-03), read here in one query before the gate. An
+  // item still unchecked is HIDDEN, counted, and checked after this answer
+  // is sent (stampFollowUp) — the page re-reads and the row appears when
+  // its verdict lands; a stamped reprint is never shown, even for a moment.
+  // Ahead of the outlier check, so a page full of reprints cannot set the
+  // median the original is judged by. Zero eBay calls.
   let stampReport = null, stampPending = [];
   const stampReprints = opts.noReprintCheck ? [] : cm.reprintCardsOf(card);
   if (stampReprints.length) {
+    await stampcheck.loadVerdicts(listings);
     const sg = timing.timeSync('stamp-gate', () => stampcheck.gate(listings, stampReprints));
     listings = sg.listings; stampReport = sg.report; stampPending = sg.pending;
   }
@@ -2891,15 +2928,15 @@ async function judgeListings(card, grade, listings, opts, memo) {
 // beside the text gate's, with their reason in droppedSample, so "82 kept"
 // never stands for rows the page is not showing. A copy — the view's own
 // sources are re-used by every rebuild and must not accumulate.
-function pendingStampRows(payload) {
-  return ((payload && payload.listings) || []).filter(l => l && l.stamp && l.stamp.state === 'pending');
-}
+// Rows still being checked are not in `count` either: they are hidden until
+// their verdict lands, and said to be (stampPending, the summary).
 function withStampRefusals(sources, stamp) {
   if (!stamp || !stamp.applied || !sources || !sources.ebay || sources.ebay.status !== 'ok') return sources;
   const e = Object.assign({}, sources.ebay);
   const n = stamp.refused;
   e.stampRefused = n;
   e.stampPending = stamp.pending;
+  if (stamp.pending) e.count = Math.max(0, (e.count || 0) - stamp.pending);
   if (n) {
     e.count = Math.max(0, (e.count || 0) - n);
     e.rejected = (e.rejected || 0) + n;
@@ -2907,7 +2944,7 @@ function withStampRefusals(sources, stamp) {
       .concat(e.droppedSample || []).slice(0, 12);
   }
   e.summary = `${e.count} kept, ${e.rejected || 0} rejected` + (e.scanned ? ` of ${e.scanned} scanned` : '')
-    + ` (${n} by the photo stamp check` + (stamp.pending ? `, ${stamp.pending} photos still being checked` : '') + ')';
+    + ` (${n} by the photo stamp check` + (stamp.pending ? `; ${stamp.pending} more hidden until their photos are checked` : '') + ')';
   return Object.assign({}, sources, { ebay: e });
 }
 
@@ -2932,7 +2969,7 @@ function stampFollowUp(card, requestedId, grade, printing, edition, pendingRows)
     catch (e) { console.warn('[stamp] rebuild failed:', e.message); }
   };
   const soon = () => { if (!timer) timer = setTimeout(rebuild, Math.max(0, STAMP_REBUILD_MS - (Date.now() - last))); };
-  Promise.all(pendingRows.map(r => stampcheck.checkItem(r.itemId, r.imageUrl, reprints).then(soon)))
+  Promise.all(pendingRows.map(r => stampcheck.checkItem(r.itemId, r.imageUrl, reprints, card.api_card_id).then(soon)))
     .then(() => { clearTimeout(timer); return rebuild(); })
     .catch(e => console.warn('[stamp] follow-up failed:', e.message));
 }
@@ -3167,7 +3204,7 @@ async function rebuildView(card, requestedId, grade, printing, edition, vs, ropt
     Date.now() - t0, progress, edition);
   payload.fetchedAt = new Date(ts).toISOString();
   listingCacheSet(card.api_card_id, viewCacheGrade(grade, printing, edition), payload, ts);
-  if (!ropts.stamp) stampFollowUp(card, requestedId, grade, printing, edition, pendingStampRows(payload));
+  if (!ropts.stamp) stampFollowUp(card, requestedId, grade, printing, edition, j.stampPending);
   return payload;
 }
 
@@ -3250,7 +3287,7 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   logListingView(viewRecord(key, grade, printing, st, payload, t0, st ? st.calls : 0, action));
   // Only with view state to rebuild from (eBay answered): the photos are
   // checked after this answer goes, and the view is re-judged as they land.
-  if (st) stampFollowUp(card, requestedId, grade, printing, edition, pendingStampRows(payload));
+  if (st) stampFollowUp(card, requestedId, grade, printing, edition, gathered.stampPending);
   return payload;
 }
 
@@ -4696,9 +4733,9 @@ app.get('/api/stamp/:cardId', async (req, res) => {
     if (!row) return res.status(404).json(Object.assign(base, { error: 'this listing is no longer in the 15-minute view — reopen the card and press again' }));
     // The same queue, worker pool and item-id cache the listing gate uses:
     // one definition, and a row the gate already checked costs nothing here.
-    const verdict = await stampcheck.checkItem(itemId, row.imageUrl, reprints);
+    const verdict = await stampcheck.checkItem(itemId, row.imageUrl, reprints, card.api_card_id);
     res.json(Object.assign(base, verdict, { photo: stampcheck.photoUrl(row.imageUrl), photoSize: stampcheck.PHOTO_SIZE,
-      threshold: stampcheck.THRESHOLD, cached: !!verdict.cached, keptFor: 'by eBay item id, in memory only',
+      threshold: stampcheck.THRESHOLD, cached: !!verdict.cached, keptFor: 'by a hash of the eBay item id, in memory and the database (our verdict only, never the photo)',
       attribution: 'Checked against the seller’s own eBay photo; the photo is not stored' }));
   } catch (e) { res.status(500).json(Object.assign(base, { error: e.message })); }
 });

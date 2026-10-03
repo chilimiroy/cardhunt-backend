@@ -1,5 +1,33 @@
 # CardHunt — Progress Log
 
+## 2026-10-04 — T2 the card back: measured by eye (matcher scores not yet read)
+
+210 listings, every photo via /api/photos (210 getItem, tooling; 767 photos,
+CDN s-l500), labelled by eye (sheets in the session scratchpad, sc/bks*.jpg).
+**Share of listings showing a back: 164 of 190 (86%)** — genuine Shining
+Charizard 23/26, its metal replicas 50/64, right raw rows of the T4 cards
+37/40, wrong T4 rows 17/20, PSA 10 Umbreon VMAX slabs 37/40 (through the
+case). Not 20%: sellers post the back.
+- **The "POKÉMON twice, inverted" tell is wrong.** The genuine back prints the
+  wordmark upright at the top and inverted at the bottom, by design (every
+  genuine back photo here). The replicas copy that layout; what differs is
+  colour and material — gold, black or silver metal on all 50 replica backs.
+- **One template does NOT cover the catalogue.** Modern Japanese cards
+  (and Korean/Chinese prints) carry a different back (rainbow swirl with
+  orbs); pre-2001 Japanese cards a "Pocket Monsters" back. European-language
+  copies share the English back.
+- **So the back answers the kind "never a photo's job":** English Mew ex
+  151/165 rows that were the Japanese SV2a print — 14 of 15 sampled show the
+  Asian back. It cannot separate D (a different genuine card: genuine back),
+  nor a European-language copy.
+- Also seen: a "PSA 10" Umbreon VMAX row (i150) with a silver metal back; an
+  Umbreon VMAX row with a pink/green fake back.
+- Matcher: whole-back NCC template (cut from a genuine back photo), colour
+  and grey, 22-95% of photo width, upright and sideways — run started, ~1.5 s
+  a photo; scores in sc/backscores.json, NOT yet read. Next: per listing, max
+  colour score vs grey score; genuine 60+ backs vs 50 metal backs vs the
+  Asian backs, both directions; then a back present-but-not-genuine rule.
+
 ## 2026-10-04 — T1 the $72 Shining Charizards: the gate ran, the median was the fakes'
 
 `node linkaudit.js en-neo4-107 --live --kept` (Raw NM, eBay US; 1 call +

@@ -637,6 +637,11 @@ const NOT_A_SINGLE_CARD_TERMS = [
   // hit only wrong cards (0 of 896 right ones). NOT bare "metal" (the type)
   // nor "gold foil" / "textured" (genuine gold and full-art cards).
   'gold metal', 'black metal', 'novelty', 'magnet', 'fridge magnet', 'wall art',
+  // 2026-10-04, Shining Charizard 107/105 (144 rows, labelled by eye) and the
+  // same 1,010 rows: each hit only metal replicas, 0 of 890 right titles.
+  // "Collectors Edition Not Real", "Plastic Art", "Fan Gold Foil", "Metal Gold".
+  // NOT bare "plastic" (a genuine single ships in a plastic sleeve).
+  'not real', 'plastic art', 'fan gold', 'metal gold', 'metal foil', 'metal dorado',
   // fan-made. "Giratina V 186/196 Shiny Holo Lost Origin *Fan Art*" was kept
   // at $8.50 against a card worth $800-1000.
   //
@@ -1761,6 +1766,28 @@ function printingEvidence(card) {
            unchecked };
 }
 
+// ── "Gold" on a card printed before any gold card existed ──────
+// Bare "gold" cannot be a term (LESSONS §1): Gold Stars, gold secret and
+// hyper rares are genuine, and a gold Dragonite ex sells as "Gold Foil" at
+// its own price. But no card printed before the first Gold Star (EX Team
+// Rocket Returns, November 2004) was ever gold, so on a set from before
+// 2004 the word describes the object, not the card: Shining Charizard
+// 107/105 (2026-10-04), 50 of 116 metal replicas say gold/oro/dorado and 0
+// of 26 genuine copies do; over the 1,010 labelled rows (Base Set, Neo
+// Genesis) 0 of 864 right titles. Kept: "Gold & Silver" (the games Neo is
+// named after), HeartGold, "gold stamp" (WOTC promo stamps). Reads the set
+// year; without one it does not run (printingEvidence says so).
+const GOLD_WORD = /\b(?:gold|golden|oro|dorad[oa]s?)\b/i;
+const GOLD_KEPT = /\bgold\s*(?:&|and|\/|y|e|und|et)\s*silver\b|\bheart\s*gold\b|\bgold(?:en)?\s*stamp(?:ed)?\b/gi;
+const FIRST_GOLD_YEAR = 2004;
+function goldBeforeGold(title, card) {
+  const y = card && Number(card.setYear);
+  if (!y || y >= FIRST_GOLD_YEAR) return null;
+  const t = String(title || '').replace(GOLD_KEPT, ' ~ ');
+  const m = t.match(GOLD_WORD);
+  return m ? `title says "${m[0]}" — this set is from ${y}, before any gold card was printed (a metal replica)` : null;
+}
+
 // ── Verification ──────────────────────────────────────────────
 // Returns { ok, reason, confidence, matched:{}, evidence:{} }
 //
@@ -1825,6 +1852,10 @@ function verifyCore(title, card, grade, opts) {
   //     query builder and the title gate each drifted in this project.
   const printing = printingConflict(t, card, opts);
   if (printing) return { ok: false, reason: printing };
+  // After the printing reasons: a reprint or a language, where stated, is
+  // the more specific answer ("Cristal Dorado Lugia … 30ª Celebración").
+  const gold = goldBeforeGold(tForLot, card);
+  if (gold) return { ok: false, reason: gold };
 
   // From here on the card is compared as PRINTED: a 30th Classic Collection
   // Lugia is "149/147" on the card and in every title, not our "029".
@@ -2110,7 +2141,7 @@ function filterListings(listings, card, grade) {
 }
 
 const API = {
-  buildQuery, verify, filterListings,
+  buildQuery, verify, filterListings, goldBeforeGold,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
   qualifiersIn, sellerCondition, stripHitPoints,
   EBAY_CARD_CONDITION, EBAY_CONDITION_CODES, ebayConditionFilter, EBAY_SITE_ASPECTS, siteAspects,

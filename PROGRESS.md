@@ -35,6 +35,26 @@ eBay rows not exercised locally (no keys here). Not done: the tooling copy
 of the outlier test in the `/api/ebay/marketprobe` tooling route
 (server.js ~4925) still uses the feed median only.
 
+**Title words** (`cardmatch.js`). Read on the 144 Shining Charizard titles
+by label: replicas say gold/oro/dorado (50 of 116), "Not Real", "Plastic
+Art", "Fan Gold Foil", "Metal Gold/Foil/Dorado"; genuine copies none of it.
+Added: those phrases as terms, and `goldBeforeGold` — "gold" on a set from
+before 2004 (no card was gold before the first Gold Star), after the
+printing reasons. Old vs new gate on all 1,154 labelled titles (1,010 + 144):
+53 replicas + 1 unclear newly refused, 0 right, 0 newly kept. The one test
+title it broke ("Charizard 4/102 Base Set Gold Holo Rare Englisch", kept in
+printinggate as an English DE title): the same seller's live DE listing,
+"…Gold Foil Englisch…" €65, photo via /api/photos (1 getItem + 2 for the DE
+probe) — a gold metal replica. Test title changed, noted.
+Shining Charizard after both free checks: 82 of 116 replicas refused or
+flagged, 0 of 26 genuine. Left: 34 replicas at $200-$22,000 whose titles say
+nothing a genuine title does not. **Measured, not built:** judging a row
+that states "1st Edition" against the stored 1st Edition price ($8,250):
++5 replicas on this card, 0 of 8 genuine claims; only 2 of the 13 labelled
+cards hold an edition price and Neo Lugia's (~4925) still uses the feed median only.
+64.80) is below its
+Unlimited one — one card's sample.
+
 ## 2026-10-03 (night) — T1 artwork template measured (not built); T2 stamp verdicts kept, unchecked rows hidden
 
 **T1** (CLAUDE.md "THE STAMP MATCHER ON THE ARTWORK"). The shipping

@@ -420,7 +420,10 @@ console.log('\n6. EUROPEAN SITES — a marketplace is where a card is sold, a la
   }
   // The words for ENGLISH are the right answer, in every language.
   const keep = [
-    'Pokémon TCG Charizard 4/102 Base Set Gold Holo Rare Englisch 120 KP 1999',
+    // Was "… Base Set Gold Holo Rare Englisch …" — the same seller's live
+    // listing, looked at 2026-10-04 (getItem photo), is a gold METAL replica
+    // at €65; goldBeforeGold refuses it now. The language words are the test.
+    'Pokémon TCG Charizard 4/102 Base Set Holo Rare Englisch 120 KP 1999',
     'Charizard 4/102 Base Set Holo Rare Pokémon TCG 120 PS Englisch 1999',
     'Pokemon Charizard 4/102 Set Base Holo Raro Inglese Wizards',
     'Charizard 4/102 Set Base Holo Raro Inglés WOTC 1999',

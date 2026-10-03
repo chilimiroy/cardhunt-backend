@@ -1356,7 +1356,7 @@ node pricecheck.test.js      # 34   editions compared like for like; the interna
 node setyield.test.js        # 42   a set (or 200+ cards in a row) that priced nothing is NAMED and exits 2; scattered gaps are not; the due-clock reads the headline row
 node priceage.test.js        # 11   the card page says when its headline was recorded, and when it is old
 node pricequality.test.js    # 36   old / thin / unsettled both ways; the page's REAL priceMarksHtml; every headline screen wired; 30 days one definition (--db: +3)
-node fakewords.test.js       # 26   T4: what the wrong cards said (merch phrases, CN, Portugese, a JA set code on an EN card, a bare V) and the genuine phrasings kept
+node fakewords.test.js       # 48   T4: what the wrong cards said (merch phrases, CN, Portugese, a JA set code on an EN card, a bare V) and the genuine phrasings kept; 2026-10-04 gold before 2004 + Shining Charizard phrases (13 fail on the old gate)
 node stampcheck.test.js      # 107  the stamp GATE: found refuses, weak keeps, unchecked HIDDEN; verdicts survive a restart (store, hashed keys, version, photo change); one job per item; poll never searches; both directions on our scans (--live: +8)
 ```
 
@@ -1489,6 +1489,13 @@ and a kana fold must recompose with NFC); "Classic Collection" is a set, not a
 bundle; "gold card" refused genuine gold rares — the outlier check, not a
 word, settles fakes. Strip replaced text to `~`, not a space, or `\d+\s*cards?`
 spans the gap.
+**A word that is genuine in one era can be evidence in another.** "Gold" is
+not a term — but no card was gold before the first Gold Star (2004), so on a
+set from before 2004 it names the object: `goldBeforeGold` reads the set
+year (2026-10-04; 50 of 116 Shining Charizard replicas, 0 of 890 right
+titles; "Gold & Silver", HeartGold, "gold stamp" kept). A test that KEPT
+"Base Set Gold Holo Rare Englisch" was keeping a gold metal replica — looked
+at, not assumed.
 *Archive:* "The original measurement, still true of the coarse field", "`art` is in the name of every expensive card", "Rarity is the card's; printing is the copy's (T10, 2026-09-29)", "\"PSA10\" unspaced — read for unambiguous graders only (`7c3f856`)"
 
 **A hoped-for grade is not a grade.** "(PSA 10 Contender)" on an $8,000 raw

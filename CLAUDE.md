@@ -685,6 +685,71 @@ of a plain card. 43 wrong newly refused, 0 right. Still in: bare "metal",
 Raw searches also kept 4 slabs of the right card (a "GRADE 6.5", a PGC 10,
 two PSA) — the raw/slab gate's misses, not this section's.
 
+## SIFT ON RENDER — probed 2026-10-03 (T1): no opencv.js build carries it
+
+Every prebuilt opencv.js loaded in node and asked for `new cv.SIFT()`:
+docs.opencv.org 4.5.5 and 4.9.0 (4.10 is 404), `@techstark/opencv-js`
+4.12.0 and 5.0.0. **None has SIFT** ("cv.SIFT is not a constructor");
+4.x builds carry ORB, KAZE, AKAZE, BRISK, BFMatcher, findHomography (5.0
+only ORB). Load: ~1 s, 43-66 MB RSS. Stopped there, as TASK said: the
+thresholds (whole < 25 AND illustration < 8) belong to SIFT, and another
+detector would need its own measurement. The remaining routes are each a
+decision, not a fix: **(a)** build opencv.js ourselves with SIFT added to
+the JS whitelist (emsdk, a WASM binary we then maintain), **(b)** native
+OpenCV on Render (Docker image or a build step; build-time and image
+size unmeasured), **(c)** re-measure with a detector the builds do ship.
+Also: listing photos are s-l500 (≤500 px), so "resize to 800 first" is a
+no-op here — the native run used the photo as fetched and the scan at
+360 px wide; a port must do the same.
+
+## CAN THE STAMP MATCHER TELL A JAPANESE COPY? — measured 2026-10-03 (T3), NOT built
+
+Roy's question: if a template finds a stamp, why not the language?
+Reading text is OCR. But SV/SWSH Japanese and English cards share their
+layout and differ in FIXED text in fixed places, so the stamp matcher
+(`stampcheck.nccMax`, unchanged; wider scales, since these marks are half
+the card wide) was tried on three regions cut from OUR scans of four cards
+held in both languages (Mew ex SV2a/151, Charizard ex SV2a 201/151 199,
+Lugia V S12 110/SIT 186, Giratina V S11 111/LOR 186). Each photo is
+scored against the JA cut and the EN cut; **d = JA − EN**. Photos: 374
+s-l500 rows of the six cards those cuts apply to — 108 Japanese (31 Mew
+ex copies + Lugia V + 76 genuine JA Charizard ex), 249 English right,
+3 Korean, 1 Chinese. Labels by eye (sheet + zoom), not by title.
+
+| rule (template width 90 px) | JA caught | EN flagged | KR |
+|---|---|---|---|
+| rule box (exルール / Vルール vs "Pokémon ex rule"), d > 0.15 | 87/108 | 2/249 | 1/3 |
+| rule box, d > 0.20 | 36/108 | **0/249** | 0/3 |
+| name plate (stage tag + name), d > 0.10 | 64/108 | **0/204** | 0/3 |
+| **rule d > 0.20 OR name d > 0.10** | **80/108 (74%)** | **0/249** | 0/3 |
+| attack text block, d > 0.05 | 37/108 | 1/204 | — |
+| same OR rule, **template width 60 px** | 31/108 | 1/249 | — |
+
+The 2 English flagged at 0.15 are genuine English cards (looked at; small
+in frame / toploader). The 28 JA misses are small, angled or slabbed.
+Mew ex: 28 of its 31 Japanese copies. The rule box is the real "fixed
+furniture" (one line under a big tab in JA, text beside the tab in EN —
+identical on every ex/V card of a language); the name plate is per card.
+
+**Why it is NOT built:**
+- **Cost.** It works only at ~90 px templates: **10.5 s a photo** here
+  (rule + name), ~25 s on Render by the stamp check's 2.5x. At 60 px (3.4
+  s here) the glyphs blur and the catch falls 80 → 31. The stamp check is
+  ~0.5 s. Not "nearly free".
+- **Coverage.** It needs a rule box (ex / V / VMAX… — no plain Pokémon,
+  nothing WOTC) and, for the name plate, OUR Japanese scan of the same
+  card, i.e. a cross-language pairing we do not store. The rule box alone
+  is the generic part, and alone it is 36/108 at 0 false.
+- **Yield on what nothing else catches.** Of the 34 Japanese copies in the
+  1,010 rows, the title gate already refuses 31 ("SV2a"). The 3 it misses:
+  Lugia V (caught here, name d 0.106 — just over) and two Base Set copies
+  (no JA scan held, no rule box) — **1 row** in 1,010.
+- Korean prints follow the Japanese layout: the rule box reads Korean as
+  Japanese (KR 3/3 at d > 0.10). Fine on an English card, useless for
+  telling a Korean copy on a JA card.
+Revisit only if title-silent foreign copies are measured to be common;
+then the rule box (generic, no pairing) is the piece to cost first.
+
 # EX-ERA PRICES — diagnosed 2026-10-02 (T2)
 
 Every 2003-2007 English card (2,745; 2,418 comparable) against TCGdex's

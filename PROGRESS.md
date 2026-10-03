@@ -1,5 +1,20 @@
 # CardHunt — Progress Log
 
+## 2026-10-03 — T3 Japanese layout by template (measured, not built); T1 SIFT probe (blocked)
+
+**T3** (CLAUDE.md "CAN THE STAMP MATCHER TELL A JAPANESE COPY?"). Rule box
++ name plate cut from JA and EN scans of four cards held in both languages;
+`stampcheck.nccMax` on 374 labelled photos. rule d > 0.20 OR name d > 0.10:
+80/108 Japanese, 0/249 English, at 90 px templates and 10.5 s a photo; at
+60 px 31/108. Of 34 Japanese copies in the 1,010 rows the title gate
+already refuses 31; of the 3 it misses, this catches 1. Not built.
+Scripts: session scratchpad `measure.js`, `an3.js`, `an60.js`.
+
+**T1** (CLAUDE.md "SIFT ON RENDER"). No prebuilt opencv.js has SIFT
+(docs 4.5.5/4.9.0, techstark 4.12/5.0). Stopped; T2 (the filter) not
+started — it depends on T1. Decision needed: custom WASM build, native
+OpenCV on Render, or a re-measurement with a shipped detector.
+
 ## 2026-10-02 (night, 3) — T3 carried items; T4 sold-price options
 
 **T3.**

@@ -18,8 +18,12 @@ view before the gate; unchecked rows hidden and counted; the page says
 13 fail on the old code. Store round-trip run against Supabase locally
 (dummy row, deleted). Render, Aquapolis Lugia, first open after the
 deploy: 0 eBay rows shown, 79 hidden; shown count rose 0/10/13/14 as
-verdicts landed, 65 refused, ~50 s; 79 rows written. Restart check:
-below. eBay spent: 3 calls (1 open: Lugia + 30th reprint + token).
+verdicts landed, 65 refused, ~50 s; 79 rows written. **Restart check**
+(the docs push redeployed; opened the moment the new process answered):
+78 verdicts read from the table, 64 refused at once, 14 shown, 2 hidden
+(listings new since the first pass) — no stamped reprint shown; 4.1 s
+cold, 299 ms re-open; the 2 cleared within ~20 s, both reprints, refused.
+eBay spent: ~6 calls (2 opens, each Lugia + 30th reprint + token).
 
 ## 2026-10-03 — T3 Japanese layout by template (measured, not built); T1 SIFT probe (blocked)
 

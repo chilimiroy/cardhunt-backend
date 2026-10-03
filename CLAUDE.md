@@ -539,8 +539,9 @@ BREAK/LEGEND print sideways and are matched a quarter turn round too.
 - **Measured on Render after T2, 2026-10-03** (Aquapolis Lugia, Raw): the
   first open after the deploy, empty table — **0 eBay rows shown, 79
   hidden**, 3.8 s; polled every 15 s: shown 0 -> 10 -> 13 -> 14 (only ever
-  rising), 65 refused, cleared in ~50 s; 79 verdicts written. RESTART
-  line: see PROGRESS.md 2026-10-03.
+  rising), 65 refused, cleared in ~50 s; 79 verdicts written. **After the next deploy**:
+  78 verdicts read from the table on the first open, 64 refused at once, 14
+  shown, 2 new listings hidden then refused — no reprint shown; 299 ms re-open.
 
 **The full re-run — done 2026-10-02**, all 906 s-l500 photos, shipped JS
 vs the OpenCV measurement: same verdict on 879 (97%); labelled Aquapolis

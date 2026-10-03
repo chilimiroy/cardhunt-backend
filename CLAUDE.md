@@ -66,7 +66,7 @@ has drifted apart eventually, and each drift is a lesson below.
 | `sourceprobe.js` | does this source answer RENDER, or only a home IP? |
 | `digital.js` | is this set digital-only (Pokémon TCG Pocket)? — by SERIES, hidden at every read |
 | `certcheck.js` | what cert number did the seller enter on this eBay slab, and what photos did they post? — on demand, ONE shared getItem per listing (Verify + Photos), 15 min; PSA answer permanent (PSA half NOT built) |
-| `stampcheck.js` | does this listing's PHOTO show a reprint's commemorative stamp? — **a gate on every eBay row of the 55 originals** (found refuses; pool + item-id cache), **0 eBay calls** (eBay's image CDN), per-card templates in `stamps.json` (built by `stampbuild.js` from OUR scans); found / not visible / unreadable, never "verified original" |
+| `stampcheck.js` | does this listing's PHOTO show a reprint's commemorative stamp? — **a gate on every eBay row of the 55 originals** (found refuses; unchecked rows HIDDEN; verdicts kept in `listing_photo_verdicts`, hashed keys), **0 eBay calls** (eBay's image CDN), per-card templates in `stamps.json` (built by `stampbuild.js` from OUR scans); found / not visible / unreadable, never "verified original" |
 | `setyield.js` | did a refresh price NOTHING for a whole set, or for 200+ cards in a row? — names it, exits 2 |
 | `pricequality.js` | is a headline CURRENT and MEASURED? — estimate / old (>30 d) / thin (Yahoo N≤2, 0 listings) / unsettled (≥1.5x twice in 60 d); one batched query per payload, drawn by the page's `priceMarksHtml` on every tile |
 
@@ -84,6 +84,7 @@ stampcheck.js  stamps.json  stampbuild.js  stamp.fixture.json  setyield.js
 pricequality.js
 checkout-disabled.js  login-disabled.js   (preserved, never loaded or served)
 migration-grade-dimension.sql  migration-image-source.sql  migration-variants.sql
+migration-photo-verdicts.sql
 printsql.js  variants.fixture.json  variants.pricing.fixture.json
 package.json  .gitignore  CLAUDE.md  CLAUDE_ARCHIVE.md
 ```
@@ -238,6 +239,9 @@ tcgplayer_holofoil           2,503      yahoojp_4                  448
 `price_history` holds 102,636 rows, 75,596 of them real prices.
 **Zero carry an eBay source or marketplace** — verified by query, and that is a
 terms-of-service requirement, not an accident. See the eBay caching lesson.
+`listing_photo_verdicts` (T2, 2026-10-03) holds OUR stamp verdicts keyed on a
+sha256 of the eBay item id and of the photo URL — no title, price, URL or
+photo; `stampcheck.test.js` asserts the row carries neither.
 
 **Chinese is parked** and shows 0% priced. Rarity is 19-31% accurate with no
 source, Chinese cards barely trade anywhere reachable, and TCGdex's apparent
@@ -490,18 +494,26 @@ a caller's URL. 54 of 55 templates built; `30th-c-020` (bottom half of
 Darkrai & Cresselia LEGEND) has no stamp on our scan (`notBuilt`).
 BREAK/LEGEND print sideways and are matched a quarter turn round too.
 
-- **Verdicts cached by eBay item id, 7 days, in memory** (photo URL held
-  beside it — a changed photo is checked again). A retryable failure (CDN
-  down, timeout) is held 2 minutes, so a view is never left pending. A
-  Render restart forgets everything: the first viewer after a cold start
-  pays again.
+- **Verdicts are permanent and kept in the database** (TASK T2,
+  2026-10-03): `listing_photo_verdicts`, keyed on sha256(item id) +
+  sha256(photo URL) + `VERDICT_VERSION` (bump it when a template, the
+  threshold or MATCH changes — older rows are then ignored). Each view
+  reads the verdicts it lacks in ONE query before the gate (bounded 2.5 s;
+  a miss is not re-asked for a minute); each definite verdict is written
+  once; a retryable failure (CDN down, timeout) is never written, held 2
+  minutes in memory. Memory stays the fast path (7 days). Until 2026-10-03
+  a restart forgot every verdict.
 - **One persistent worker pool** (`STAMP_WORKERS`, default 1), a queue, one
   job per item however many views ask. Measured on Render before this: one
   check 4.2-5.9 s there vs ~1.2 s here, and **8 parallel workers all ran
   past 20 s** — then the 20 s timeout was CACHED as "unreadable" (fixed:
   retryable, never a verdict).
-- **The answer never waits.** An unchecked row is shown marked "Photo
-  being checked", the checks run after the response (`stampFollowUp`,
+- **The answer never waits, and never shows an unchecked row.** An
+  unchecked row is HIDDEN (T2, 2026-10-03 — it used to be shown "Photo
+  being checked" and then vanish), counted in `stampGate.pending` and the
+  eBay summary, and the panel says "N listings shown, P still being
+  checked"; rows APPEAR as verdicts land. The checks run after the
+  response (`stampFollowUp`,
   display order — the cheapest rows first), the view is re-judged as
   verdicts land (`rebuildView` with `noFetch`: it can never spend), and the
   page re-reads with `?poll=1` while `stampGate.pending > 0`. `poll=1` is
@@ -521,10 +533,14 @@ BREAK/LEGEND print sideways and are matched a quarter turn round too.
   photos **219 s**; ~1.2-1.3 s a photo (`poolState().meanMs` 1,274 over
   399) — ~2.5x this machine, not 4x. **The top five rows were resolved by
   ~12 s on both**: ordering does its job, the headline settles long before
-  the tail. Re-open with verdicts held **98-125 ms**. A restart (every
-  deploy) forgets every verdict, so each of the 55 originals pays its full
-  photo count again on its next open — CDN fetches and CPU, no eBay calls.
-  Raise STAMP_WORKERS only if the instance has the cores.
+  the tail. Re-open with verdicts held **98-125 ms**. (A restart then
+  forgot every verdict — fixed by T2, below.) Raise STAMP_WORKERS only if
+  the instance has the cores.
+- **Measured on Render after T2, 2026-10-03** (Aquapolis Lugia, Raw): the
+  first open after the deploy, empty table — **0 eBay rows shown, 79
+  hidden**, 3.8 s; polled every 15 s: shown 0 -> 10 -> 13 -> 14 (only ever
+  rising), 65 refused, cleared in ~50 s; 79 verdicts written. RESTART
+  line: see PROGRESS.md 2026-10-03.
 
 **The full re-run — done 2026-10-02**, all 906 s-l500 photos, shipped JS
 vs the OpenCV measurement: same verdict on 879 (97%); labelled Aquapolis
@@ -537,6 +553,45 @@ channels and called four original SCANS reprints — `stampcheck.test.js`
 fires on that.
 
 Open: the metal Charizards (a different product the gate keeps on CC002).
+
+# THE STAMP MATCHER ON THE ARTWORK — measured 2026-10-03 (T1), NOT built
+
+The question: the art-box score (8/24) mixed kinds — does the SHIPPING
+matcher (`stampcheck.nccMax`/`resize`, no OpenCV) separate a **different
+illustration** (D) from the right card, at 0 false flags on the 864 right
+rows? Template cut from OUR scan, scale sweep 25-95% of the photo width,
+coarse-then-refine, template shrunk to 24 or 32 px wide; 1,141 photos (the
+1,010 labelled rows + Roy's 131), ~1.7 s a photo for all six variants.
+Regions (fractions of the card): **illustration** x .06-.94 y .10-.52;
+**artwork only**, away from name plate and text box, x .12-.88 y .14-.47;
+**core** x .22-.78 y .18-.42.
+
+| rule (flag below) | right flagged | D | R (metal/recolour) | L |
+|---|---|---|---|---|
+| illustration NCC < 0.233 (lowest right) | 0/864 | **0/24** | 0/38 | 0/43 |
+| illustration NCC < 0.308 | 4/864 | 8/24 | 0/38 | 1/43 |
+| artwork-only NCC < 0.293 (lowest right) | 0/864 | **0/24** | 0/38 | 0/43 |
+| artwork-only NCC < 0.364 (lowest right but a binder shot) | 1/864 | 5/24 | — | — |
+| artwork-only NCC < 0.397 | 4/864 | 9/24 | 4/38 | 0/43 |
+| core NCC < 0.373 (lowest right) | 0/864 | 5/24 | 2/38 | 0/43 |
+| colour (52-bin and hue-only) at the LOCATED artwork, any region | 0/864 | 0/24 | 0/38 | 0/43 |
+| colour, only where the art was located (NCC ≥ 0.6), ~1% false | ~8/806 | — | 1/20 | 0/41 |
+
+Medians: right 0.83, D 0.44, R 0.63, L 0.84 (artwork-only, 24 px). The
+separation is real on average and useless at the floor: the lowest right
+rows are genuine cards under glare, tilted, slabbed, close-cropped or tiny
+in frame (looked at, `low-art24.jpg` in the session scratchpad), scoring
+0.36-0.45 — exactly where different illustrations sit (0.31-0.59).
+**Colour does not separate gold from red once the background is gone**:
+right rows' artwork colour reaches near-0 similarity (white balance, holo
+glare), so Roy's 72 gold/black Shining Charizards are caught 0 of 72 at
+any zero- or 1%-false threshold (Shining right 0.52-0.77, replicas median
+0.44 — overlapping even on one card). Held out, the 30th Mew under bubble
+Mew scores 0.32 artwork-only: below every D median, above the zero-false
+floor. **Not built. By TASK's rule SIFT's three options (CLAUDE.md "SIFT ON
+RENDER") are now the photo route, and TASK T3 (what the 10 title-silent
+wrong rows on Base Charizard share) is the cheaper one.** Scripts: session
+scratchpad `art.js`, `an.js`, `an2.js`, `look.js`.
 
 # IS THIS PHOTO THIS CARD AT ALL? — measured 2026-10-02, NOT built (TASK T2)
 
@@ -1301,7 +1356,7 @@ node setyield.test.js        # 42   a set (or 200+ cards in a row) that priced n
 node priceage.test.js        # 11   the card page says when its headline was recorded, and when it is old
 node pricequality.test.js    # 36   old / thin / unsettled both ways; the page's REAL priceMarksHtml; every headline screen wired; 30 days one definition (--db: +3)
 node fakewords.test.js       # 26   T4: what the wrong cards said (merch phrases, CN, Portugese, a JA set code on an EN card, a bare V) and the genuine phrasings kept
-node stampcheck.test.js      # 86   the stamp GATE: found refuses, weak keeps, pending never waits; item-id cache; one job per item; poll never searches; both directions on our scans (--live: +8)
+node stampcheck.test.js      # 107  the stamp GATE: found refuses, weak keeps, unchecked HIDDEN; verdicts survive a restart (store, hashed keys, version, photo change); one job per item; poll never searches; both directions on our scans (--live: +8)
 ```
 
 Run them all:
@@ -1821,6 +1876,22 @@ job per item; a failure is retryable and held briefly, never kept as an
 answer. A check that cannot finish inside the response runs after it, and
 the page says what is still being checked.
 *Archive:* none — 2026-10-02, PROGRESS.md
+
+**A verdict that cannot change is stored, not cached — and an unchecked
+row is hidden, not shown.** The stamp verdicts lived in memory: every
+deploy forgot them and the first viewer watched stamped reprints appear
+and then vanish. A photo never changes under its URL, so its verdict is a
+fact: in the database, keyed on a hash, with the matcher's version so a
+new template re-checks. Strong evidence refuses; unchecked waits out of
+sight, counted; weak evidence stays.
+*Archive:* none — 2026-10-03, PROGRESS.md
+
+**A zero-false threshold is set by the hardest genuine photo.** The
+artwork template separates different illustrations on average (median
+0.44 vs 0.83) and catches none at zero false: glare, tilt, slabs and
+close crops put genuine cards at 0.36. Look at the bottom of the right
+distribution before reading the medians.
+*Archive:* none — 2026-10-03, PROGRESS.md
 
 **One card's sample is not a rate.** SIFT's "0 of 100 correct flagged"
 on four cards became 33 of 896 on twelve. A technique measured on one

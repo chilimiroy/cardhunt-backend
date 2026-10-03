@@ -1,5 +1,26 @@
 # CardHunt — Progress Log
 
+## 2026-10-03 (night) — T1 artwork template measured (not built); T2 stamp verdicts kept, unchecked rows hidden
+
+**T1** (CLAUDE.md "THE STAMP MATCHER ON THE ARTWORK"). The shipping
+`stampcheck.nccMax` with a template cut from our scan — illustration,
+artwork-only and core regions, 24/32 px — on 1,141 labelled photos, plus
+colour at the located artwork. At 0/864 right flagged: illustration 0/24
+different illustrations, artwork-only 0/24 (5/24 dropping one binder
+shot), core 5/24; colour 0/24 and 0/72 of Roy's gold Shining Charizards.
+The lowest right rows are genuine (glare, tilt, slab, crop), looked at.
+Not built; stopped as TASK said. No eBay calls (photos already held).
+
+**T2** (`2126277`). Verdicts in `listing_photo_verdicts` (hashed item id
+and photo URL, card id, verdict, matcher version); one bounded read per
+view before the gate; unchecked rows hidden and counted; the page says
+"N listings shown, P still being checked". stampcheck.test.js 86 -> 107,
+13 fail on the old code. Store round-trip run against Supabase locally
+(dummy row, deleted). Render, Aquapolis Lugia, first open after the
+deploy: 0 eBay rows shown, 79 hidden; shown count rose 0/10/13/14 as
+verdicts landed, 65 refused, ~50 s; 79 rows written. Restart check:
+below. eBay spent: 3 calls (1 open: Lugia + 30th reprint + token).
+
 ## 2026-10-03 — T3 Japanese layout by template (measured, not built); T1 SIFT probe (blocked)
 
 **T3** (CLAUDE.md "CAN THE STAMP MATCHER TELL A JAPANESE COPY?"). Rule box

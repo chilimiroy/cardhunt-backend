@@ -4272,8 +4272,20 @@ async function buildManifest(lang, arg1, arg2) {
     let setChanged = 0, setFailed = 0, setVariants = 0;
     const rarityCounts = {};
 
+    // TCGdex's own localId for each of our numbers (2026-10-04). Sets
+    // ingested from Limitless store "1" where TCGdex lists "001", and asking
+    // TCGdex for "S8-1" answers nothing: on S8, S8b, SM6, SM7, SM8 exactly
+    // cards #1-99 were "not found", and every card of SM1M, SM6b, S7D… —
+    // so those sets never got manifest's rarity. Fold leading zeros on
+    // both sides, ask with TCGdex's form; one listing request a set.
+    const foldNo = x => String(x).replace(/^0+(?=\d)/, '');
+    const listing = await get(`${TCGDEX}/${lang}/sets/${encodeURIComponent(setId)}`);
+    await sleep(DELAY_TCGDEX);
+    const localIdOf = new Map(((listing && listing.cards) || []).map(x => [foldNo(x.localId), String(x.localId)]));
+
     for (const c of cards.rows) {
-      const d = await get(`${TCGDEX}/${lang}/cards/${setId}-${encodeURIComponent(c.number)}`);
+      const asked = localIdOf.get(foldNo(c.number)) || c.number;
+      const d = await get(`${TCGDEX}/${lang}/cards/${setId}-${encodeURIComponent(asked)}`);
       await sleep(DELAY_TCGDEX);
       checked++;
 

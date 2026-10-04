@@ -83,7 +83,7 @@ jpfilter.js  linkaudit.js  listingparse.js  outlier.js  setaudit.js
 sourceprobe.js  tcgdexprice.js  yuyutei.js  digital.js  trending.js
 searchaudit.js  certcheck.js  sitecheck.js  costmeter.js
 stampcheck.js  stamps.json  stampbuild.js  stamp.fixture.json  setyield.js
-pricequality.js  backcheck.js
+pricequality.js  backcheck.js  querygap.js
 checkout-disabled.js  login-disabled.js   (preserved, never loaded or served)
 migration-grade-dimension.sql  migration-image-source.sql  migration-variants.sql
 migration-photo-verdicts.sql
@@ -429,6 +429,18 @@ Still open: a RAW title with the pair and no set name ("Mew ex - 100/110
 HOLO - English") is accepted by the gate but never fetched — raw asks the
 set name. Not measured.
 
+**Every set asked at once** (T2, 2026-10-04, `querygap.js`): 201 English
+sets, one card each, three where it failed. 185 answer. Fixed by cause:
+the lot test read the card's OWN set/card name (all of Forbidden Light;
+236 of 21,152 cards — now masked, `maskOwnIdentity`); `δ` empties an eBay
+search (191 cards — not asked); a lettered number ("24a", "50a") was read
+as its digits, both ways (31 cards — `verifyLetterNumber`); xya asks "24a
+Alternate Art" and takes the original set's total (`LETTER_TOTAL_NOT_HELD`);
+Futsal asks "002/005" and no set name. Open: Unown `%3F` (stored encoded),
+Ancient Mew (no printed number); ex5.5 and mfb have no listings at all.
+Re-run `node querygap.js en` after any change to `buildQuery` or a set's
+vocabulary — ~200 tooling calls.
+
 **Reporting.** Every registered listing source now returns `kept`,
 `rejected`, `dropped[]` (reasons), `gate` (what the gate had) — Yahoo did not
 until T9 (`jpItemRejectReason`). Stored-price paths report to the console
@@ -688,8 +700,12 @@ under #117 (0.266) — **two of Roy's own examples** — plus a Giratina V 130
 under 186 at $2.08 (0.315, price-flagged anyway) and a 185 under 186 at
 $300 (0.320). Candidate, NOT built: margin ≥ 0.20 AND the row's price
 log-nearer the sibling's stored price than ours caught 10 of 11 with 0
-genuine on this sample — but it was read off this sample; measure it on a
-fresh one first. **Siblings only**: a fan card, another set's card or a
+genuine on this sample — but it was read off this sample. **Measured on a
+fresh one 2026-10-04: 2 of 14 swaps, 0 genuine — NOT built** (six new
+groups, 1,357 photos; nine gold Mew ex #205 listed as #193 price like
+#193). Lowest genuine margin over both samples: 0.307. A different
+illustration that is not a sibling (Alakazam #125's $24 Doctor Strange fan
+card, 0.13x the price) is caught by nothing. **Siblings only**: a fan card, another set's card or a
 foreign copy matches neither scan and stays. Same art in another foil
 (rainbow/gold of one illustration) is a near-tie by construction: kept.
 
@@ -1179,6 +1195,8 @@ re-measurement).
 | `/api/ebay/marketprobe` | default sites | **11 per card** (8 sites + NOCAT/NOSET variants) — the 12-card run was ~132 |
 | `/api/ebay/marketprobe` | `?mp=EBAY_US&shape=pair\|bare\|or` | **1 per site** — how the number is asked (T0); `extraPhotos` says whether search rows carry the seller's other photos (they do not: 0 of 63) |
 | `/api/ebay/marketprobe` | `?mp=EBAY_DE` | **2** |
+| `/api/ebay/marketprobe` | `?mp=EBAY_US_NOSET&shape=bare&titles=1` | **2** — `titles=1` returns every title each site returned, kept and refused with the reason, at no extra call |
+| `node querygap.js en` | every visible set, 1 card (3 where it failed) | **~230** (201 sets, 2026-10-04); `--dry` **0**; `--resume` continues a stopped run |
 | `/api/ebay/aspects` | `?mp=EBAY_DE` | **1** |
 | `/api/ebay/setprobe` | `?single=N&verify=1` | **1 + N (+2)** — 20 sampled = 23 |
 | `/api/ebay/quota?probe=1` · `node ebayratecheck.js` | | **1** rate_limit (+1 token cold; ratecheck always exchanges its own: **2**) |
@@ -1261,8 +1279,17 @@ Each listing row:
 source, sourceLabel, title, price, currency, priceOriginal, currencyOriginal,
 shipping, shippingKnown, landed, condition, seller, url, imageUrl, endsAt,
 bids, listingType, live, country, attribution, priceKind, edition, variant,
-parsedRarity, parsedYear, matchConfidence
+parsedRarity, parsedYear, matchConfidence, saleType, currentBid
 ```
+
+**Buy It Now and Auctions** (T5, 2026-10-04): `saleType` is `auction` only
+where the number is a current bid (`priceKind: 'current-bid'`; a live Yahoo
+auction too); an auction with a Buy It Now price is `buy-it-now`, its bid in
+`currentBid`. The payload's `saleTypes {buyItNow, auction}` counts live
+rows; `cheapest` is Buy It Now only (outlier.trustworthy). The page's bar is
+"Buy It Now (n) · Auctions (n)" — one request, one gate, the split applied
+before the condition/printing/edition filters; auctions ending soonest
+first, never a cheapest.
 
 Each source block reports `status, count, scanned, kept, rejected, gate,
 summary, droppedSample, query`. **A set of listings carrying no rejection count
@@ -1428,6 +1455,19 @@ user; it is not set machine-wide. `--hours=4` caps the run from inside node —
 see the lesson on why the scheduler's own limit does not bind it.
 `task-watch.ps1` logs task state hourly to `task-watch.log`.
 
+## Biggest movers and best deals — DIAGNOSED 2026-10-04, decisions open
+- **The home tiles never call `/api/trending`**: they say "needs
+  /api/movers, which the API does not serve" (stale). Search uses it.
+- **Movers**: 24h is clean (TCGdex-path rows). 7d/30d are 100% the
+  TCGplayer internal search — the pre-09-29 every-card rows against the
+  fallback cards' new ones, so they rank method changes and product swaps
+  (Staff prerelease, Torchic ☆ 1200/4500). TCGdex-path 7d pairs begin
+  ~2026-10-06. Proposed: pair TCGdex-path sources only (or one productId
+  at both ends), exclude pricequality flags at either end. Roy's call.
+- **Best deals**: no endpoint and no rule. "Below this card's price" is the
+  outlier signal; and eBay rows live 15 minutes, so a shelf could draw only
+  from recently opened views, or spend calls. Decide the rule first.
+
 ## Near you (local card shops) — PLANNED, needs a real data source
 The card page keeps a "Near you" tab. Until 2026-09-28 it listed three
 invented shops with invented distances, hours and prices (price x .95 / 1.02
@@ -1437,6 +1477,16 @@ first (rule 1): Google Places (free tier, real card shops near a location),
 TCGplayer's store locator if reachable, or manual curation starting with one
 city. Whatever it is: one function, a stated source on every row, and no
 price unless the shop published one.
+
+## PSA cert lookups — the limit is not settled (T1, 2026-10-04)
+Keyed `GetByCertNumber` from Render AND from the home IP: **429**, "maximum
+admitted 100 per Day", the same reset (~06:29 UTC). Keyless and a corrupted
+key get the identical 429 — the limiter answers before it reads the key, so
+the 429 says nothing about the key's own pool. Per-IP with a shared home IP,
+or a wider bucket: open. The deciding test is the first call after 06:29
+UTC from home, keyed, then a corrupted key. If per-IP, the design is
+Yahoo's (fetch locally, store, serve from Render) — deletion routine first.
+Nothing calls PSA; certcheck steps 2-4 stay NOT BUILT.
 
 ## Sold data — NO SOURCE, and the page says so
 Since T8 (2026-09-29) nothing supplies realised sale prices: the eBay
@@ -1508,6 +1558,7 @@ node ingest.js verifyset <lang> <set>      # sample 20 rarities against TCGdex
 node ingest.js manifest <lang> [set|all|--recent]   # authoritative rarity
 node ingest.js setmeta <lang> [--force]             # logos, series, release dates
 node ingest.js setgap <lang> [--fix]                # sets missing vs TCGdex
+node ingest.js cardgap <lang> [--fix] [--set=X]     # cards missing INSIDE held sets; insert-only
 node ingest.js lmingest <lang> [set]                # sets TCGdex lacks, via Limitless
 node ingest.js names <lang>                         # English card names  <- T2 gap
 node ingest.js pokedex                              # JP/CN -> EN dictionary
@@ -1564,6 +1615,9 @@ node setaudit.js all --limit=40
 node linkaudit.js sv10 --live --limit=8    # why a card has no links: A/B/C
 node linkaudit.js swsh11 --name=Giratina --kept
 node linkaudit.js en-sv10-1 --grade="PSA 10"
+# which SETS does eBay answer nothing for? one card a set, ~230 tooling calls
+node querygap.js en --dry                  # the query each set asks, free
+node querygap.js en [--resume] [--set=a,b] # live; --report re-prints querygap.json
 # can /api/search find every card by its own name? ~27k queries, ~1h+
 CARDHUNT_API=http://localhost:3001 node searchaudit.js en --json=sa.json --concurrency=4
 node searchaudit.js en --json=sa.json --resume   # continue a killed run
@@ -1644,6 +1698,9 @@ node auction.test.js         # 10   T0: auctions asked for; a current bid labell
 node lookalike.test.js       # 17   T1: bubble Mew ↔ 30th Mew both directions on our scans; verdict keyed on item + our card; the page says "matches … better", never "stamp"
 node refused.test.js         # 24   T4: refused rows carried with price, link and reason; never counted; drawn collapsed at the end (22 fail on the old code)
 node sibling.test.js         # 25   T1 2026-10-04: a same-name card's photo under our number refused at 0.40; unchecked hidden only below 55% of a current price; nothing hidden without one (20 fail on the old code)
+node ownname.test.js         # 27   T2: the card's own name/set name is never lot vocabulary; "partial set" is; δ not asked (--db: every English card, 0 refused on its own identity)
+node lettered.test.js        # 17   T2: a lettered number is its own card, both ways; xya / Futsal asked as sellers write them (7 fail on the old gate)
+node saletype.test.js        # 22   T5: Buy It Now / Auctions — saleType, a bid never cheapest, the two tabs (19 fail on the old code)
 node backcheck.test.js       # 25   T3: English/Japanese backs both ways; other-language back refuses, own back labels, nothing claims nothing; never "verified"; the structure-not-colour LIMIT pinned; shared getItem, background, stored hashed
 ```
 
@@ -1785,6 +1842,22 @@ titles; "Gold & Silver", HeartGold, "gold stamp" kept). A test that KEPT
 at, not assumed.
 *Archive:* "The original measurement, still true of the coarse field", "`art` is in the name of every expensive card", "Rarity is the card's; printing is the copy's (T10, 2026-09-29)", "\"PSA10\" unspaced — read for unambiguous graders only (`7c3f856`)"
 
+**A word list must never read the card's own identity.** "light" (the
+lamp) refused every listing of Forbidden Light — 168 cards that had never
+shown one — and the lot list refused 236 of 21,152 English cards on their
+own name or set (Gym Badge, Tool Box, Iron Bundle, Poké Card Creator Pack…).
+SET_NAME_PHRASES protected six sets by hand; the card being asked about is
+now masked every time (`maskOwnIdentity`). Test a vocabulary change by
+running every catalogue card's own "name number/total set" through it
+(`ownname.test.js --db`), not only by the titles at hand.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A filter measured at "0 wrong" may only have been measured one way.** The
+lot words' "0 of 896" counted right titles refused; a 100-card "Partial
+Set" passed because nobody counted the misses. Say which direction a
+number is.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
 **A hoped-for grade is not a grade.** "(PSA 10 Contender)" on an $8,000 raw
 card; `stripSpeculative()` runs on raw searches too. A seller's filled grade
 aspects plus a speculative title kept a $6,100 raw card as a PSA 10 until
@@ -1845,6 +1918,23 @@ new set whose name contains another set's marker word ("30th Celebration"
 matching `/celebrat/`) silently disabled the gate both ways. A new reprint set
 needs a family entry and, if it reuses numbering, a `REPRINT_OF` table.
 *Archive:* "The master-ball mirror, found for the third time", "A reprint reuses the original numbering", "Ingesting a set can disable a gate that names it", "Superseded 2026-09-26: reprints are keyed by SET ID, both directions", "A collector number does not identify one card"
+
+**A lettered number is its own card.** normNum folds "24a" to "24" and
+"24a/119" was not read as a pair, so the alt-art M Manectric-EX took the
+regular card's listings and the reverse (31 English cards, Aquapolis 50a/
+50b among them). A fold that helps matching must not cross into another
+card's identity — the fold-merge lesson in the gate (`verifyLetterNumber`).
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A set ingested once is never re-read — compare card by card.** setgap
+asked which SETS were missing; the progress file marked each set done after
+its first pass; TCGdex later added cards. 104 English and 440 Japanese
+cards (the secret-rare tails — the valuable ones) were missing for weeks.
+`cardgap` compares per card, insert-only. And a number form that differs
+between two sources fails silently per card: manifest asked TCGdex for
+"S8-1" (TCGdex: "001") and 37 Limitless-ingested Japanese sets, 3,432 cards,
+never got its rarity. Ask a source by ITS id, read off its own listing.
+*Archive:* none — 2026-10-04, PROGRESS.md
 
 **`set_total` is our catalogue's count, not what the card prints.** Promos
 print no total (swshp's 307 is a count — "SWSH202/307" returned nothing);
@@ -1982,6 +2072,22 @@ query returns zero; English sellers write the set NAME, never its code
 (apostrophes deleted, not spaced); a deep link has no gate, so every link goes
 through `cardmatch.buildQuery` and sits under UNFILTERED SEARCHES.
 *Archive:* "Ask a question the marketplace can answer", "English listings name the set; they never state its code", "A deep link is not a result, and must not be dressed as one"; restored from `CLAUDE.md.bak-20260803`: "English marketplaces can't match Japanese names"
+
+**Measure the question across the catalogue, not the instance.** Four
+query mismatches were found one at a time by accident; asking every set
+once (`querygap.js`, ~200 calls) found the rest in an evening — including
+a gate failure no query fix would ever have reached (Forbidden Light). One
+character can empty a search: eBay answers nothing for any query carrying
+"δ" (191 cards), while ☆, ◇, ♂/♀ and [G] are ignored. Measure each symbol
+before and after on the same cards.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A status code that answers before authentication says nothing about
+the key.** PSA's 429 came back identical for our key, no key and a
+corrupted key, with one reset time from two networks. "429 = the key's pool
+is spent" was the test's premise; send a wrong key beside the right one
+before reading a refusal as being about you.
+*Archive:* none — 2026-10-04, PROGRESS.md
 
 **Ask in the form most titles copy — for a slab, that is PSA's label.**
 "2002 POKEMON EXPEDITION #28 TYPHLOSION-HOLO PSA 1" prints no set total and
@@ -2247,7 +2353,18 @@ is made ("matches a genuine card", never "verified"), and pin it in a test
 so a change to it is noticed.
 *Archive:* none — 2026-10-04, PROGRESS.md
 
-**One card's sample is not a rate.** SIFT's "0 of 100 correct flagged"
+**A source label two paths write is not "the same source".** Trending
+pairs prices "from the same source" — and `tcgplayer_market` was written
+by the old every-card internal search until 09-29 and by the fallback-only
+search after: 59 of the top 60 seven-day movers were a method change
+(Oranguru SM13 → its Staff prerelease product, $20.72 → $79.99). Label the
+path on the row (`source_meta.via`, productId) and pair on it.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**One card's sample is not a rate.** The sibling "margin ≥ 0.20 AND price
+nearer the sibling" rule caught 10 of 11 on the sample it was read from
+and 2 of 14 on a fresh one (2026-10-04): siblings priced alike (Mew ex
+#193/#205) and swaps priced as our card defeat the price half. SIFT's "0 of 100 correct flagged"
 on four cards became 33 of 896 on twelve. A technique measured on one
 card's wrong listings and four cards' right ones has measured those
 cards. Widen before quoting a rate, and look at where the misses cluster.

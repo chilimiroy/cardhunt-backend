@@ -1,5 +1,120 @@
 # CardHunt — Progress Log
 
+## 2026-10-04/05 (night) — T1 PSA, T2 the catalogue query audit, T3 missing cards, T4, T5 sale type, T6 diagnosed
+
+**T1 — PSA: the 429 does not read the key.** From the home IP, 20:02 UTC:
+keyed `GetByCertNumber/170514194` → **429** "maximum admitted 100 per Day",
+`Retry-After: 37631` (reset ~06:29 UTC — the window Render got). Keyless and
+a deliberately corrupted key: **the identical 429 and Retry-After.** So the
+limiter answers before authentication, and "429 means the key's pool is
+spent" does not follow. Either PSA counts per IP and this home IP is shared
+too (carrier NAT), or the bucket is shared wider. **Not decided; nothing
+built.** The test that decides it is still the first call after the reset
+from home: keyed first, then a corrupted key.
+
+**T2 — every set's query, measured** (`querygap.js`, `6add397`; tooling
+allowance raised to 2,000 for the day, Roy). One card per set (dearest
+$2-150, not a reprint original), two more where it failed; 201 visible
+English sets. **185 answered; 10 failed on every card; 6 partly.** By cause:
+
+| cause | sets / cards | fix | after |
+|---|---|---|---|
+| the card's OWN set name or card name is lot vocabulary | **sm6 Forbidden Light (all 168)**, ex5.5, + 67 cards by name (Gym Badge, Mystery Garden, Tool Box, Iron Bundle, Booster Energy Capsule, Energy Coin, Hop's Bag, Reset Stamp, Custom Catcher, Jumbo Ice Cream, Suspicious Food Tin, Puzzle of Time, Team Yell Towel, Light Toxtricity…) — **236 of 21,152** | the lot test masks the card's own name + set name (`243fb77`) | 0 of 21,152; Forbidden Light Lucario GX 23 kept of 28 |
+| `δ` in the name — eBay answers NOTHING with it | **191 cards** (ex13, ex15, ex16, pop5…) | δ not asked (`dfe1eea`) | Kingdra ex δ 0→19 kept, Raichu δ 0→42, Mew δ 0→14, Charizard ☆ δ 0→4 |
+| a lettered number read as its digits | **31 cards** (ecard2 50a/50b…, XY alt arts 24a, 55a…) — both directions | verifyLetterNumber (`9b88cfc`) | lettered.test.js |
+| set written differently + the original set's total | xya Yellow A Alternate ("24a/119 … Alternate Art Promos") | ask "24a Alternate Art", any total | 0 of 105 → 36 of 135 kept |
+| number padded, set name not written | fut2020 ("Eevee on the Ball 002/005 Promo") | QUERY_PAD3, no set name | 0 → 7 kept |
+| a set listed as one item | — | "partial set", "complete set", "full set", "set lot" (T4) | 0 of 896 right titles carry them |
+| no market | ex5.5 Poké Card Creator Pack, mfb My First Battle — not one copy even asked bare | none | — |
+| not fixed | exu `Unown %3F/28` (stored URL-encoded; 1 card); miscp Ancient Mew (no number printed) | open | — |
+
+☆, ◇, ♂/♀, [G], "+", "_" and "#" in names each returned rows — measured
+before/after on the same 16 cards, only δ cards moved. The 6 partial sets
+were correct refusals (30th binder inserts, energy "choose your card"
+listings, Alph Lithograph ONE/TWO printed as words, a δ card). Measured on
+the 1,010 labelled rows: no verdict changed by any gate edit tonight.
+Seen, not fixed: Dragon Frontiers Flygon ex keeps a "World Championships"
+deck copy (a different product).
+**Data question for Roy:** Yellow A Alternate's 6 cards are ALSO held in
+their parent sets (xy4-24a, xy3-55a, xy10-54a, g1-28a, xy9-107a, xy6-92a) —
+the swsh9.5tg duplicate case. Not deleted.
+
+**T3 — cards missing INSIDE held sets.** `setgap` only ever asked which
+SETS were missing, and the progress file marks a set done after its first
+ingest — cards TCGdex added later were never asked for. `node ingest.js
+cardgap <lang> [--fix]` (`f12d72d`), insert-only. Measured: **English 6
+sets / 104 cards** (tk-hs-g 1→30, tk-hs-r 1→30, mep 60→89, tk-sm-r 19→30,
+swshp SWSH299-305, ecard2 128) — all inserted, rarity from manifest, **104
+of 104 priced** (tcgdexprices). **Japanese 36 sets / 440 cards**, nearly
+all the secret-rare tails (SV8 107-138, S8b 278-285, every SM GX tail) —
+inserted, rarity from manifest, prices: estimates until the refresh / Yuyu-
+tei reaches them. Logs `cardgap-en-20261004.log`, `cardgap-ja-20261004.log`
+(every inserted id; they are the backup — delete by id to undo).
+**Found doing it: manifest had never rated 37 Japanese sets (3,432 cards).**
+Limitless-ingested sets store "1" where TCGdex lists "001"; manifest asked
+`S8-1` and got nothing — exactly #1-99 "not found" on S8/S8b/SM6/SM7/SM8,
+every card on SM1M/SM6b/S7D… Fixed (`40e374b`: ask by TCGdex's own
+localId); re-run on all 37: 0 not found, 3-19 rarities corrected a set.
+
+**T4.** The $24 cheapest on Alakazam #125 is a Doctor Strange fan card
+titled "The Pokémon Company Alakazam EX 125/124 Fates Collide Secret Rare
+Holo EN 160 HP": a perfect title, a different illustration (kind D, which
+nothing catches — CLAUDE.md). It sits at 0.13x the current price ($181.89),
+inside the outlier floor (0.10x). A softer price rule is the T6 "cheap vs
+wrong" question — Roy's. **The "Partial Set" lot** passed because no lot
+term covered a set sold as one listing; the earlier "0" was a false-POSITIVE
+count. Fixed (`243fb77`). **The 10-of-11 rule, fresh sample** (sibling
+groups never measured before: Mew ex 151/193/205, Charizard ex 054/234,
+Lugia V 138/185/186, Pikachu VMAX 44/188, Rayquaza VMAX 111/217/218, Mew
+VMAX 114/268/269; 1,357 photos, the shipping matcher, every row with margin
+≥ 0.20 looked at): 17 rows — **14 swaps**, 2 genuine (Rayquaza #111 at
+0.218, 0.216), 1 unclear. Shipped ≥0.40: 1 of 14, 0 genuine. **"≥0.20 AND
+price nearer the sibling": 2 of 14** — fails: nine are gold Mew #205 listed
+as #193 (205/165 read on the photo) and the two are priced alike ($26.88 vs
+$29.46); Lugia #138 under #186 at $425 and Pikachu #44 under #188 at $117
+are priced as OUR card. **Not shipped.** Across both samples the lowest
+genuine margin is 0.307 (Charizard ex 183) — margin ≥0.31 would catch 3 of
+14 here.
+
+**T5 — Buy It Now and Auctions** (`bba69f3`). Rows carry `saleType` (an
+auction with a Buy It Now price is Buy It Now, its bid in `currentBid`),
+the payload `saleTypes`; a live Yahoo auction's yen is now a current bid.
+`cheapest` was already Buy It Now only (outlier.trustworthy). Page: the bar
+reads "Buy It Now (n) · Auctions (n)"; auctions ending soonest first, bid,
+bids, time left, no cheapest; condition/printing/edition filters apply to
+both. Live: Mew δ POP 5 — a $90 auction below the $136.83 cheapest, which
+stays $136.83; Umbreon VMAX 215 — two auctions, 2d and 5d, 24 bids.
+Rows still behind a photo check appear when checked (tab counts follow).
+
+**T6 — diagnosed, not rebuilt.**
+- *The home tiles never call `/api/trending`.* They draw "Top gainers is not
+  live yet — needs /api/movers, which the API does not serve" (written when
+  that was true). The Search screen's sort uses `/api/trending`.
+- *Movers today* (`gain-pct`): 24h 326 pairs, 40 ranked, 8 moved ≥10% — all
+  TCGdex-path rows, clean. **7d: 1,196 pairs, every one `tcgplayer_market`
+  — the TCGplayer internal search;** 30d the same. Until 2026-09-29 the
+  nightly priced EVERY English card through the internal search (unlabelled
+  `tcgplayer_market`, ~2,500/day); since 09-30 TCGdex comes first
+  (`tcgdex_*` sources) and the internal search runs only for the ~2,000
+  fallback cards, labelled. So the 7d/30d lists compare the old every-card
+  search with the fallback cards' new rows: promos, staff variants
+  (Oranguru SM13 $20.72 → $79.99 = "Oranguru - SM13 (Prerelease) [Staff]"),
+  Torchic ☆ 1200/4500. Quality flags are attached (5 of the top 60
+  unsettled/thin) but not excluded. TCGdex-path 7d pairs cannot exist until
+  ~2026-10-06 (the 19,052-card harvest was 09-29; the window wants 7-11 days).
+- *Proposed movers rule, for Roy:* TCGdex-path sources only (or the same
+  internal-search productId at both ends), quality flags excluded at either
+  end, the existing floors kept.
+- *Best deals:* no endpoint, no rule. "Below this card's price" IS what
+  outlier.js flags as suspect (the fan card above sits at 0.13x). A deals
+  shelf also needs listings for many cards, and eBay rows may not be stored
+  past 15 minutes: it could only draw from views someone opened in the last
+  15 minutes, or spend calls. Both are Roy's to decide before a build.
+
+Calls tonight (tooling): querygap ~230, re-measurements ~60, marketprobe
+~30, sibling sample 16. Commits: 6add397 243fb77 f12d72d 8b7901d dfe1eea
+431b523 bba69f3 40e374b 9b88cfc.
+
 ## 2026-10-04 (evening) — T1 siblings, T2 filter first, T3 the back verdicts read
 
 **T1 — Alakazam EX, Fates Collide.** linkaudit `--live --kept` on xy10-125,

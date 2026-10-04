@@ -2138,7 +2138,8 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // marketprobe only (EBAY_US_NOSET): ask without the set name; the gate
   // still has it. Tests whether the words ASKED are why US misses listings.
   const q = cm.buildQuery(opts.noSetInQuery ? Object.assign({}, matchCard, { setName: null }) : matchCard,
-                          grade, (printing || opts.edition) ? { printing, edition: opts.edition || null } : undefined);
+                          grade, (printing || opts.edition || opts.numberForm)
+                            ? { printing, edition: opts.edition || null, numberForm: opts.numberForm || null } : undefined);
   // A raw sub-condition is asked of eBay's own "Card Condition" aspect,
   // which search can filter on. Measured: the filtered rows agreed with each
   // item's descriptor 36 of 36 times. Same one call as before — each raw
@@ -4882,7 +4883,10 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
   const bad = asked.filter(m => !MARKETPROBE_SITES.includes(m));
   if (bad.length) return res.status(400).json({ error: 'unknown marketplace', bad, allowed: MARKETPROBE_SITES });
   const sites = ['EBAY_US'].concat(asked.filter(m => m !== 'EBAY_US'));
-  const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1']);
+  // ?shape=bare|or (T0, 2026-10-04): how the collector number is ASKED —
+  // measuring whether "N/M" in the query hides PSA-label titles ("#28").
+  const shape = ['bare', 'or'].includes(String(req.query.shape)) ? String(req.query.shape) : null;
+  const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1', shape]);
   const hit = marketProbeCache.get(key);
   if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') return res.json(hit.body);
   try {
@@ -4893,7 +4897,7 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
     for (const mp of sites) {
       try {
         const r = await sourceEbay(card, grade, 25, { marketplace: mp.replace(/_NO(CAT|SET)$/, ''),
-          noCategory: /_NOCAT$/.test(mp), noSetInQuery: /_NOSET$/.test(mp),
+          noCategory: /_NOCAT$/.test(mp), noSetInQuery: /_NOSET$/.test(mp), numberForm: shape,
           background: true, allDropped: true });
         const reasons = {};
         for (const d of r.dropped) {

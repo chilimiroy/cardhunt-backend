@@ -1538,7 +1538,11 @@ function buildQuery(card, grade, opts) {
       const nd = num.replace(/[^0-9]/g, '');
       const td = tot.replace(/[^0-9]/g, '');
       const padded = nd.length > td.length ? tot.padStart(nd.length, '0') : tot;
-      bits.push(num + '/' + padded);
+      // opts.numberForm (marketprobe ?shape=, measuring only): 'bare' asks
+      // the number alone, 'or' asks eBay's OR of the pair and "#N".
+      if (opts.numberForm === 'bare') bits.push(num);
+      else if (opts.numberForm === 'or') bits.push('(' + num + '/' + padded + ',#' + num + ')');
+      else bits.push(num + '/' + padded);
     } else if (numberPrefix(card) && /^[A-Za-z]+0\d/.test(num)) {
       // A zero-padded prefixed number in a MIXED set (Aquapolis / Skyridge
       // H01-H09): sellers write "H9/H32" and "H09/H32" both, and eBay

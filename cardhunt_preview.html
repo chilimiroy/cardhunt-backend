@@ -3335,6 +3335,18 @@ var LF = { grade: 'Raw NM', card: null };
 // 2026 set whose sellers write "1st edition" — renders one list, exactly
 // as before. Nothing is dropped: rows that state no print run get their own
 // group, named as a mixture, because on Base Set that is what it is.
+// The panel's rows, split BEFORE any grouping: buyable and unflagged (the
+// only rows a print run, its median or its "from" may see), buyable but
+// flagged by the price check (drawn after the groups, counted nowhere), and
+// ended. Every row lands in exactly one part.
+function partitionLive(rows) {
+  var out = { live: [], liveFlagged: [], ended: [] };
+  (rows || []).forEach(function (l) {
+    (!l.live ? out.ended : l.suspect ? out.liveFlagged : out.live).push(l);
+  });
+  return out;
+}
+
 function livePrintRuns(rows) {
   var GP = window.GradePrice, CM = window.CardMatch, card = LF.card || {};
   var cid = card.id || card.cardId || '';
@@ -4288,8 +4300,13 @@ async function renderLiveListings(card, grade, opts){
     return;
   }
 
-  var live = rows.filter(function(l){ return l.live; });
-  var ended = rows.filter(function(l){ return !l.live; });
+  // Filter first, group after (T2, 2026-10-04). Rows the price check flagged
+  // never enter a print-run group: on Base Set Charizard "Print run not
+  // stated \u2014 from $35.99, median $228.69" was built from gold replicas and
+  // modern Charizard ex the check had already flagged, while the headline
+  // above skipped them. They are drawn once, together, after the groups.
+  var parts = partitionLive(rows);
+  var live = parts.live, liveFlagged = parts.liveFlagged, ended = parts.ended;
   var flagged = rows.filter(function(l){ return l.suspect; });
   var html = head;
   if (d.cheapestLive != null) {
@@ -4307,6 +4324,15 @@ async function renderLiveListings(card, grade, opts){
       + '</div>';
   }
   if (live.length) html += livePrintRuns(live);
+  if (liveFlagged.length) {
+    html += '<div class="lflagged" style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--bd)">'
+      + '<div style="font-size:10px;font-weight:700;color:#B45309;text-transform:uppercase;'
+      + 'letter-spacing:.06em;margin-bottom:4px">Flagged &mdash; too cheap to be this card &mdash; '
+      + liveFlagged.length + '</div>'
+      + '<div style="font-size:11px;color:var(--mu);line-height:1.6;margin-bottom:8px">'
+      + 'Shown, not counted: no print run, median or cheapest above includes them.</div>'
+      + liveFlagged.map(liveRow).join('') + '</div>';
+  }
   if (ended.length) {
     html += '<div style="font-size:10px;font-weight:700;color:var(--fa);margin:12px 0 4px;'
       + 'text-transform:uppercase;letter-spacing:.4px">Recently ended &mdash; comparables, not offers</div>'
@@ -6357,6 +6383,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261004-bf81c0b-cardback &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261004-6f8e5fe-filterfirst &middot; click to hide</div>
 </body>
 </html>

@@ -100,5 +100,49 @@ console.log('\n4. THE PAGE USES IT\n');
      !/'neo4'/.test(html.slice(start, start + 4000)));
 }
 
+console.log('\n5. FILTER FIRST, GROUP AFTER (T2, 2026-10-04)\n');
+// Base Set Charizard Raw, eBay US, 2026-10-04, as served: the price check
+// (reference $944.53) had flagged the gold replicas and the modern Charizard
+// ex titled "4/102 Base Set", and the page still grouped them — "Print run
+// not stated — median $228.69, from $35.99", while the headline skipped them.
+{
+  const html = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
+  const vm = require('vm');
+  const fnSrc = name => { const s = html.indexOf('function ' + name + '('); return s < 0 ? '' : html.slice(s, html.indexOf('\nfunction ', s + 10)); };
+  const ctx = {}; vm.createContext(ctx);
+  vm.runInContext(fnSrc('partitionLive'), ctx);
+  ok('partitionLive exists in the page', typeof ctx.partitionLive === 'function');
+  const R = (t, p, suspect, edition, live) => ({ title: t, price: p, landed: p, live: live !== false, suspect: suspect || null, edition: edition || null });
+  const rows = [
+    R('Pokémon TCG Charizard 4/102 Base Set Holo Rare 120HP ENG Mitsuhiro Arita', 4.97, 'implausible'),
+    R('The Pokémon Company Charizard Base Set 4/102 Holo Rare Stage 2 EN Arita', 25.5, 'implausible'),
+    R('Pokémon TCG Charizard Base Set 4/102 Holo Rare English Stage 2 120 HP Arita', 35.99, 'unusually-cheap'),
+    R('The Pokémon Company Charizard 4/102 Base Set Holo Rare English Arita', 39.99, 'unusually-cheap'),
+    R('Nintendo Charizard 4/102 Base Set 1999 Metal Holo Rare English Pokemon TCG', 47, 'unusually-cheap'),
+    R('Charizard 4/102 Base Set Holo Rare Pokémon TCG Card 120 HP English', 105),
+    R('Charizard 4/102 Base Set 120HP', 150),
+    R('Pokemon TCG Charizard 4/102 Base Set Holo Rare English 120 HP', 200),
+    R('1999 Pokemon Base Set Unlimited Charizard 4/102 MP PKL', 385, null, 'Unlimited'),
+    R('Shadowless Base Set Charizard Holo 4/102 English 1999', 2000, null, 'Shadowless'),
+    R('Charizard 4/102 Base Set ended', 300, null, null, false),
+  ];
+  const p = ctx.partitionLive ? ctx.partitionLive(rows) : { live: [], liveFlagged: [], ended: [] };
+  ok('every row lands in exactly one part', p.live.length + p.liveFlagged.length + p.ended.length === rows.length);
+  ok('no flagged row reaches the rows that are grouped', p.live.every(l => !l.suspect), p.live.filter(l => l.suspect).map(l => l.price).join(','));
+  ok('the five flagged rows are drawn apart', p.liveFlagged.length === 5);
+  const g = gp.byPrintRun(p.live, 'base1', 'en');
+  const ns = g.find(x => x.unstated);
+  ok('"Print run not stated" starts at the first unflagged row ($105), not a replica ($35.99)', ns.low === 105, 'low ' + ns.low);
+  ok('…and its median is of unflagged rows only ($150)', ns.median === 150, 'median ' + ns.median);
+  // The old page: every live row went in. Shown so the test is known to fire.
+  const old = gp.byPrintRun(rows.filter(l => l.live), 'base1', 'en').find(x => x.unstated);
+  ok('(the old arrangement put a $35.99 replica at the head of the group)', old.low === 35.99, 'low ' + old.low);
+  const rl = fnSrc('renderLiveListings');
+  ok('renderLiveListings partitions before it groups', /partitionLive\(rows\)/.test(rl)
+     && rl.indexOf('partitionLive(rows)') < rl.indexOf('livePrintRuns(live)'));
+  ok('flagged rows get their own block after the groups', /liveFlagged\.map\(liveRow\)/.test(rl)
+     && rl.indexOf('livePrintRuns(live)') < rl.indexOf('liveFlagged.map(liveRow)'));
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

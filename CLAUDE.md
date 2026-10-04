@@ -651,7 +651,7 @@ wrong row, sorted by eye (sheets in the session scratchpad):
 |---|---|---|
 | **D** different illustration (Charizard ex 228 under Base Charizard, regular Giratina/Lugia/Umbreon under the alt arts, Ivysaur, EX-era Lugia) | 24 | yes |
 | **R** the right line-art in the wrong material/colour (gold/black/silver metal, recoloured foil) | 38 | yes — that is Roy's gold Shining Charizard |
-| **L** same art, other language (Mew ex SV2a ×33, JP/FR/DE/PT/CN/KR copies) | 43 | **no** — title gates only |
+| **L** same art, other language (Mew ex SV2a ×33, JP/FR/DE/PT/CN/KR copies) | 43 | not from the FRONT — the back separates Asian prints (THE CARD BACK) |
 | **S** same art, set mark differs (Base Set 2 titled as Base Set) | 6 | the mark, not the art (T2b below) |
 | P stamped reprint · M magnet · X lot/card back · U unclear | 12 · 2 · 3 · 18 | |
 
@@ -805,6 +805,64 @@ identical on every ex/V card of a language); the name plate is per card.
   telling a Korean copy on a JA card.
 Revisit only if title-silent foreign copies are measured to be common;
 then the rule box (generic, no pairing) is the piece to cost first.
+
+# THE CARD BACK — measured 2026-10-04 (T2), NOT built
+
+The question: every genuine card shares a back, so does one template judge
+the whole catalogue? 210 eBay listings, every photo fetched by getItem
+(/api/photos, 210 tooling calls; 767 photos at s-l500), every listing
+labelled by eye: Shining Charizard 107/105 (26 genuine, 64 metal replicas),
+60 rows of the 12 T4 cards, 40 PSA 10 Umbreon VMAX slabs, 20 other-language
+rows (15 Japanese Mew ex SV2a on the English card).
+
+- **Sellers post the back: 88%** (184 of 210; 167 of the first 190). Raw
+  genuine 23/26 and 37/40, replicas 50/64, slabs 37/40 (through the case).
+- **The doubled wordmark is the GENUINE design.** "POKÉMON" upright at the
+  top and inverted at the bottom is on every real back; replicas copy it.
+  What differs is the material (all 50 replica backs gold/black/silver).
+- **One back per language family, not per catalogue.** English and every
+  European language share one; modern Japanese/Korean/Chinese print another
+  (rainbow swirl, orbs); pre-2001 Japanese a "Pocket Monsters" one.
+
+Matcher: `stampcheck.nccMax`/`resize` (shipping, no OpenCV), template the
+INSIDE of the back (border removed) cut from listing photos, shrunk to 24 px,
+22-95% of the photo width, upright and a quarter turn. Best photo per
+listing:
+
+| check | genuine EN back | metal back | JA back | no back shown |
+|---|---|---|---|---|
+| English back, NCC ≥ 0.44 | 106/107 | 0/58 | 0/17 | 0/26 |
+| English back, NCC ≥ 0.50 | **104/107** | 0/58 | 0/17 | 0/26 |
+| Japanese back, NCC ≥ 0.60 | 0/107 | 0/58 | 16/17 | 0/26 |
+| Japanese back, NCC ≥ 0.65 | 0/107 | 0/58 | **13/17** | 0/26 |
+| metal back template | ~0.75 on every kind — useless | | | |
+
+Medians: English template on genuine 0.77, metal 0.29, JA 0.35, none 0.30;
+the closest wrong row is a JA back at 0.43. Japanese template on JA 0.83,
+everything else ≤ 0.59. The JA miss is the pre-2001 back (another design).
+**Shining Charizard: a genuine back found on 25 of 26 genuine listings and 0
+of 63 replicas.** Japanese Mew ex SV2a on the English card: 14 of 15 show
+the Japanese back — the "other language" kind, recorded below as never a
+photo's job, IS the back's job when the back is posted.
+
+**What it cannot do.** A metal back and no back both read "no genuine back
+found": absence is weak evidence (26 listings posted none), never a refusal.
+A different GENUINE card (kind D) has a genuine back. A European-language
+copy has the English back. A printed counterfeit with a printed back is not
+measured.
+
+**Cost and the rule it suggests.** 1 getItem per listing — the same call
+Verify and Photos make, shared 15-minute cache — plus ~0.7 s a photo a
+template here (~4 photos a listing; ~2.5x on Render). Worth it on suspect
+rows, not across the board: e.g. rows the outlier check flags or the 55
+reprint-sensitive and most-faked cards, on demand. Strong evidence: a
+JAPANESE back on an English card (refuse, like the stamp) and a GENUINE back
+(the row may say "back photo matches a genuine card", never "verified").
+Not built: thresholds read off this sample (the genuine template came from
+one of its photos, i2), 107 genuine listings over 13 cards and replicas from
+mostly one card. Next: hold out a fresh 100 listings, then decide.
+Scripts: session scratchpad `sc/backscore.js`, `backscore2.js`, `an2.js`,
+labels `lab.js`, sheets `bks*.jpg`.
 
 # EX-ERA PRICES — diagnosed 2026-10-02 (T2)
 

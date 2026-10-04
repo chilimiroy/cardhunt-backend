@@ -1,6 +1,6 @@
 # CardHunt — Progress Log
 
-## 2026-10-04 — T2 the card back: measured by eye (matcher scores not yet read)
+## 2026-10-04 — T2 the card back: measured (CLAUDE.md "THE CARD BACK"), not built
 
 210 listings, every photo via /api/photos (210 getItem, tooling; 767 photos,
 CDN s-l500), labelled by eye (sheets in the session scratchpad, sc/bks*.jpg).
@@ -22,11 +22,14 @@ case). Not 20%: sellers post the back.
   nor a European-language copy.
 - Also seen: a "PSA 10" Umbreon VMAX row (i150) with a silver metal back; an
   Umbreon VMAX row with a pink/green fake back.
-- Matcher: whole-back NCC template (cut from a genuine back photo), colour
-  and grey, 22-95% of photo width, upright and sideways — run started, ~1.5 s
-  a photo; scores in sc/backscores.json, NOT yet read. Next: per listing, max
-  colour score vs grey score; genuine 60+ backs vs 50 metal backs vs the
-  Asian backs, both directions; then a back present-but-not-genuine rule.
+- Matcher (scores read after the limit reset): the inside of the back, colour
+  NCC, best photo per listing. English back ≥0.50: genuine 104/107, metal
+  0/58, JA 0/17, no back 0/26. Japanese back ≥0.65: 13/17, 0 elsewhere. A
+  metal-back template scores ~0.75 on everything — useless. Shining
+  Charizard: genuine back found on 25/26 genuine, 0/63 replicas.
+- Labels corrected where the score disagreed: i16, i23, i141 posted a
+  genuine back in photos past the 12 the sheet showed; i149 is a Japanese
+  card (Japanese back). L2's pre-2001 Japanese back is a third design.
 
 ## 2026-10-04 — T1 the $72 Shining Charizards: the gate ran, the median was the fakes'
 

@@ -2831,9 +2831,11 @@ async function judgeListings(card, grade, listings, opts, memo) {
   // Ahead of the outlier check, so a page full of reprints cannot set the
   // median the original is judged by. Zero eBay calls.
   let stampReport = null, stampPending = [];
-  const stampReprints = opts.noReprintCheck ? [] : cm.reprintCardsOf(card);
+  // The photo checks: reprints' stamps, and lookalikes compared (T1,
+  // 2026-10-04 — cardmatch.photoChecksOf). One gate, one queue.
+  const stampReprints = opts.noReprintCheck ? [] : cm.photoChecksOf(card);
   if (stampReprints.length) {
-    await stampcheck.loadVerdicts(listings);
+    await stampcheck.loadVerdicts(listings, stampReprints);
     const sg = timing.timeSync('stamp-gate', () => stampcheck.gate(listings, stampReprints));
     listings = sg.listings; stampReport = sg.report; stampPending = sg.pending;
   }
@@ -2978,7 +2980,7 @@ function withStampRefusals(sources, stamp) {
 const STAMP_REBUILD_MS = 1500;
 function stampFollowUp(card, requestedId, grade, printing, edition, pendingRows) {
   if (!pendingRows || !pendingRows.length) return;
-  const reprints = cm.reprintCardsOf(card);
+  const reprints = cm.photoChecksOf(card);
   const vkey = listingKey(card.api_card_id, viewCacheGrade(grade, printing, edition));
   let timer = null, last = 0;
   const rebuild = async () => {
@@ -4747,8 +4749,8 @@ app.get('/api/stamp/:cardId', async (req, res) => {
   try {
     const card = await resolveListingCard(cardId);
     if (!card) return res.status(404).json(Object.assign(base, { error: 'card not in catalogue' }));
-    const reprints = cm.reprintCardsOf(card);
-    if (!reprints.length) return res.status(400).json(Object.assign(base, { error: 'no known reprint of this card carries a stamp — there is nothing to look for' }));
+    const reprints = cm.photoChecksOf(card);
+    if (!reprints.length) return res.status(400).json(Object.assign(base, { error: 'no known reprint or lookalike of this card — there is nothing to look for' }));
     const row = cachedListingRow([cardId, card.api_card_id].filter(Boolean), itemId);
     if (!row) return res.status(404).json(Object.assign(base, { error: 'this listing is no longer in the 15-minute view — reopen the card and press again' }));
     // The same queue, worker pool and item-id cache the listing gate uses:

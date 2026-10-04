@@ -208,14 +208,60 @@ function templateImage(entry) {
   return entry._img;
 }
 
-// The verdict for one decoded photo against every reprint of the card.
-// reprints: [{ cardId: 'en-30th-c-029', family: {label} }] (cardmatch.reprintCardsOf)
-function judge(photo, reprints, opts) {
+// ── Lookalikes: which of TWO cards does the photo match better? ──
+// (T1, 2026-10-04; cardmatch.LOOKALIKES.) Every earlier photo measurement
+// asked "does this match card X?" against one absolute threshold and failed
+// at the floor: a glared genuine card scored 0.36, a wrong illustration
+// 0.31. Where we hold both cards' scans, ask which side wins instead — a
+// badly shot genuine card scores low against both, but higher against its
+// own. The whole card, swept over 30-98% of the photo width, compared at a
+// 24 px template (the measurement's settings, art.js). The other card wins
+// only by LOOKALIKE_MARGIN; anything closer is undecided and keeps the row.
+// Measured, bubble Mew vs 30th Mew, 457 photos labelled by eye: the hardest
+// genuine photo (a glared raw card) sat at -0.254; at 0.30, 0 of 276 genuine
+// refused, 163 of 178 of the other card refused.
+const LOOKALIKE_MARGIN = 0.30;
+const WHOLE = { maxTw: 24, steps: 8, lo: 0.3, hi: 0.98 };
+function wholeScore(photo, t) {
+  let best = -1;
+  for (let i = 0; i < WHOLE.steps; i++) {
+    const tw = photo.w * WHOLE.lo * Math.pow(WHOLE.hi / WHOLE.lo, i / (WHOLE.steps - 1));
+    const f = Math.max(1, tw / WHOLE.maxTw);
+    const im = f === 1 ? photo : resize(photo, photo.w / f, photo.h / f);
+    const tt = resize(t, tw / f, (tw / f) * t.h / t.w);
+    if (tt.w >= im.w || tt.h >= im.h || tt.h < 6) continue;
+    let r = nccMax(im, tt, 2);
+    r = nccMax(im, tt, 1, { x0: r.x - 2, x1: r.x + 2, y0: r.y - 2, y1: r.y + 2 });
+    if (r.score > best) best = r.score;
+  }
+  return best;
+}
+function wholeImage(id) {
+  const e = (templates().wholes || {})[id];
+  return e ? templateImage(e) : null;
+}
+const isLookalike = c => c && c.kind === 'lookalike';
+const lookalikeReady = c => isLookalike(c) && !!wholeImage(c.cardId) && !!wholeImage(c.ours);
+
+// The verdict for one decoded photo against every photo check of the card.
+// checks: [{ cardId: 'en-30th-c-029', family: {label} }] (cardmatch.reprintCardsOf)
+//   and   [{ cardId, kind: 'lookalike', ours, label }]   (cardmatch.lookalikesOf)
+function judge(photo, checks, opts) {
   opts = opts || MATCH;
   const T = templates().templates || {};
   if (!photo || photo.w < MIN_SIDE || photo.h < MIN_SIDE)
-    return { state: 'unreadable', says: 'The photo is too small to show the stamp.', scores: [] };
+    return { state: 'unreadable', says: 'The photo is too small to judge.', scores: [] };
+  const reprints = (checks || []).filter(c => !isLookalike(c));
   const scores = [];
+  // Comparative first: a lookalike found is as strong as a stamp found.
+  for (const lc of (checks || []).filter(isLookalike)) {
+    if (!lookalikeReady(lc)) { scores.push({ lookalike: lc.cardId, checked: false, why: 'no whole-card template for this pair' }); continue; }
+    const ours = wholeScore(photo, wholeImage(lc.ours)), other = wholeScore(photo, wholeImage(lc.cardId));
+    const margin = +(other - ours).toFixed(3);
+    scores.push({ lookalike: lc.cardId, label: lc.label, checked: true, ours: +ours.toFixed(3), other: +other.toFixed(3), margin });
+    if (margin >= LOOKALIKE_MARGIN) return { state: 'found', kind: 'lookalike', reprint: lc.cardId, label: lc.label,
+      says: `The seller's photo matches ${lc.label} better than this card — a different card listed under this one.`, scores };
+  }
   for (const rc of reprints) {
     const e = T[rc.cardId];
     if (!e) { scores.push({ reprint: rc.cardId, label: rc.family && rc.family.label, checked: false, why: 'no stamp template built for this reprint' }); continue; }
@@ -230,13 +276,18 @@ function judge(photo, reprints, opts) {
     scores.push({ reprint: rc.cardId, label: e.label || (rc.family && rc.family.label), checked: true,
                   score: +b.score.toFixed(3), at: b.score > 0 ? { x: b.x, y: b.y, w: b.tw } : null });
   }
-  const checked = scores.filter(s => s.checked);
-  if (!checked.length) return { state: 'unchecked', says: 'No stamp template exists for this card\'s reprint yet.', scores };
+  const checked = scores.filter(s => s.checked && s.reprint);
+  const compared = scores.some(s => s.checked && s.lookalike);
+  if (!checked.length && !compared) return { state: 'unchecked', says: 'No stamp template exists for this card\'s reprint yet.', scores };
   const top = checked.slice().sort((a, b) => b.score - a.score)[0];
-  if (top.score >= THRESHOLD) return { state: 'found', reprint: top.reprint, label: top.label,
+  if (top && top.score >= THRESHOLD) return { state: 'found', reprint: top.reprint, label: top.label,
     says: `A ${top.label} commemorative stamp is visible in the seller's photo — this listing looks like the reprint, not this card.`, scores };
+  // Weak evidence either way: neither a stamp nor a clearer match to the
+  // other card. Never "verified".
   return { state: 'not-visible',
-    says: 'No reprint stamp visible in the seller\'s photo. That is not proof it is the original — the photo may be cropped, angled, glared or too small.', scores };
+    says: checked.length
+      ? 'No reprint stamp visible in the seller\'s photo. That is not proof it is the original — the photo may be cropped, angled, glared or too small.'
+      : 'The seller\'s photo does not clearly match the other card. That is not proof it is this one — the photo may be cropped, angled, glared or too small.', scores };
 }
 
 // eBay's image CDN only, at the measured size. Returns null for anything else.
@@ -351,9 +402,20 @@ function pump() {
 
 // The one way to check an item: the cache, else the job already running,
 // else a new job at the back of the queue. Never rejects; zero eBay calls.
+// A stamp verdict belongs to the PHOTO (a stamp is a stamp under any card's
+// search), so it is keyed on the item. A lookalike verdict belongs to the
+// photo AND the card viewed — the same 30th Mew photo is the wrong card
+// under Paldean Fates and the right one under 30th Celebration — so it is
+// keyed on both (T1, 2026-10-04). Stamp-only keys are unchanged, so every
+// stored stamp verdict still reads.
+function verdictKey(itemId, checks) {
+  const lc = (checks || []).find(isLookalike);
+  return lc ? itemId + '@' + lc.ours : itemId;
+}
 function checkItem(itemId, imageUrl, reprints, cardId) {
   const url = photoUrl(imageUrl);
   if (!url) return Promise.resolve({ state: 'unreadable', says: 'The listing has no eBay photo to check.', scores: [] });
+  itemId = verdictKey(itemId, reprints);
   const hit = cacheGet(itemId, url);
   if (hit) { _stats.cacheHits++; return Promise.resolve(Object.assign({}, hit.verdict, { cached: true })); }
   if (_inflight.has(itemId)) return _inflight.get(itemId);
@@ -404,15 +466,15 @@ function saveVerdict(itemId, url, v, cardId) {
 // Before the gate: fill the memory cache from the store for every eBay row
 // it lacks, in one query. Bounded: a slow database leaves those rows
 // unchecked (hidden, then checked again) rather than holding the answer.
-async function loadVerdicts(rows) {
+async function loadVerdicts(rows, checks) {
   if (!_store) return { asked: 0, found: 0 };
   const now = Date.now(), want = new Map();
   for (const r of rows || []) {
     if (!r || r.source !== 'ebay' || !r.itemId) continue;
-    const url = photoUrl(r.imageUrl);
-    if (!url || cacheGet(r.itemId, url)) continue;
-    const m = _missed.get(r.itemId); if (m && now - m < MISS_MS) continue;
-    want.set(itemKey(r.itemId), { itemId: r.itemId, url });
+    const url = photoUrl(r.imageUrl), key = verdictKey(r.itemId, checks);
+    if (!url || cacheGet(key, url)) continue;
+    const m = _missed.get(key); if (m && now - m < MISS_MS) continue;
+    want.set(itemKey(key), { itemId: key, url });
   }
   if (!want.size) return { asked: 0, found: 0 };
   const asked = want.size;
@@ -449,37 +511,42 @@ async function loadVerdicts(rows) {
 // here waits. Hidden is temporary; only "found" ever refuses.
 function gate(rows, reprints) {
   const T = templates().templates || {};
-  const usable = (reprints || []).filter(r => T[r.cardId]);
+  const usable = (reprints || []).filter(r => isLookalike(r) ? lookalikeReady(r) : T[r.cardId]);
   const report = { applied: false, ebayCalls: 0, checked: 0, refused: 0, notVisible: 0, unreadable: 0,
     pending: 0, refusedSample: [], threshold: THRESHOLD,
-    reprints: (reprints || []).map(r => ({ cardId: r.cardId, template: !!T[r.cardId],
-      label: (T[r.cardId] && T[r.cardId].label) || (r.family && r.family.label) || r.cardId })) };
+    reprints: (reprints || []).map(r => ({ cardId: r.cardId, kind: r.kind || 'reprint',
+      template: isLookalike(r) ? lookalikeReady(r) : !!T[r.cardId],
+      label: r.label || (T[r.cardId] && T[r.cardId].label) || (r.family && r.family.label) || r.cardId })) };
   if (!usable.length) {
-    report.reason = reprints && reprints.length ? 'no stamp template built for this card’s reprint' : 'no known reprint';
+    report.reason = reprints && reprints.length ? 'no photo template built for this card’s reprint or lookalike' : 'no known reprint';
     return { listings: rows, report, pending: [] };
   }
   report.applied = true;
+  const onlyLook = usable.every(isLookalike);
+  report.kind = onlyLook ? 'lookalike' : usable.some(isLookalike) ? 'both' : 'stamp';
   const out = [], pending = [];
   for (const row of rows) {
     if (!row || row.source !== 'ebay' || !row.itemId) { out.push(row); continue; }
     const url = photoUrl(row.imageUrl);
     if (!url) { report.unreadable++; out.push(Object.assign({}, row, { stamp: { state: 'unreadable', says: 'No eBay photo to check.' } })); continue; }
-    const hit = cacheGet(row.itemId, url);
+    const hit = cacheGet(verdictKey(row.itemId, reprints), url);
     if (!hit) { report.pending++; pending.push(row); continue; }
     const v = hit.verdict;
     if (v.state === 'found') {
       report.checked++; report.refused++;
       if (report.refusedSample.length < 12) report.refusedSample.push({ title: row.title, itemId: row.itemId,
         price: row.price, url: row.url, imageUrl: row.imageUrl, reprint: v.reprint, label: v.label,
-        reason: 'photo shows the ' + (v.label || 'reprint') + ' stamp' });
+        reason: v.kind === 'lookalike' ? 'photo matches ' + (v.label || 'another card') + ', not this card'
+                                       : 'photo shows the ' + (v.label || 'reprint') + ' stamp' });
       continue;
     }
     if (v.state === 'not-visible') { report.checked++; report.notVisible++; }
     else report.unreadable++;
-    out.push(Object.assign({}, row, { stamp: { state: v.state, says: v.says, retryable: !!v.retryable } }));
+    out.push(Object.assign({}, row, { stamp: { state: v.state, says: v.says, retryable: !!v.retryable, kind: report.kind } }));
   }
-  report.summary = report.refused + ' refused (the seller’s photo shows a reprint’s stamp), '
-    + report.notVisible + ' no stamp visible, ' + report.unreadable + ' unreadable'
+  report.summary = report.refused + (onlyLook ? ' refused (the seller’s photo matches another card better), '
+                                              : ' refused (the seller’s photo shows a reprint’s stamp or another card), ')
+    + report.notVisible + (onlyLook ? ' not clearly the other card, ' : ' no stamp visible, ') + report.unreadable + ' unreadable'
     + (report.pending ? ', ' + report.pending + ' hidden until checked' : '');
   return { listings: out, report, pending };
 }
@@ -496,6 +563,6 @@ if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
 }
 
 module.exports = { THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, crop, resize, rotate90, nccMax, bestScore,
-                   judge, checkItem, gate, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
+                   judge, checkItem, gate, verdictKey, wholeScore, LOOKALIKE_MARGIN, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
                    _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; },
                    _clearCache: () => { _cache.clear(); _missed.clear(); } };

@@ -994,6 +994,37 @@ function familyNamedBy(title, card) {
   ) || null;
 }
 
+// ── Lookalikes: a DIFFERENT card sellers title as this one (T1, 2026-10-04) ──
+// Not a reprint: another illustration of the same Pokémon, which sellers
+// list under our card's number. Paldean Fates Mew ex 232/091 ("bubble Mew")
+// showed two 30th Celebration Mew ex 152/128 at $180/$190, titled
+// "Mew ex 232/091 Paldean Fates" — the 30th card is a new illustration
+// (Kuroimori, 160 HP) of a new card, so no reprint table can hold it and its
+// stamp is not this card's reprint. We hold both scans, so the photo is
+// asked COMPARATIVELY: does it match our card better, or the other card?
+// (stampcheck.judge, "lookalike"). Measured on 457 photos labelled by eye:
+// whole card, margin 0.30 — 0 of 276 genuine bubble Mews refused, 163 of 178
+// 30th Mews refused; on the 30th card's own search, 0 of 178 refused.
+// A pair goes here only after that measurement for the pair. Both directions.
+const LOOKALIKES = [
+  { a: 'en-sv04.5-232', b: 'en-30th-152',
+    labels: { 'en-sv04.5-232': 'Paldean Fates Mew ex 232/091', 'en-30th-152': '30th Celebration Mew ex 152/128' } }
+];
+function lookalikesOf(card) {
+  const id = String((card && (card.cardId || card.api_card_id || card.id)) || '');
+  const out = [];
+  for (const p of LOOKALIKES) {
+    const other = id === p.a ? p.b : id === p.b ? p.a : null;
+    if (other) out.push({ cardId: other, kind: 'lookalike', ours: id, label: p.labels[other] });
+  }
+  return out;
+}
+// Every photo check a card's eBay rows get: its reprints' stamps, then its
+// lookalikes. Empty for nearly every card.
+function photoChecksOf(card) {
+  return reprintCardsOf(card).concat(lookalikesOf(card));
+}
+
 // The original a Classic Collection card reprints, and the number printed on
 // it. null for every other card — which is nearly all of them.
 function reprintOf(card) {
@@ -2201,6 +2232,7 @@ const API = {
   SLAB_WORDS, NOT_A_SINGLE_CARD, NOT_A_SINGLE_CARD_TERMS,
   SET_NAME_PHRASES, GENUINE_ART_PHRASES, boundedTerm,
   REPRINT_FAMILIES, REPRINT_OF, setIdOf, familyOfSet, familyNamedBy, familiesReprinting, reprintCardsOf,
+  LOOKALIKES, lookalikesOf, photoChecksOf, SET_WRITTEN_AS,
   reprintOf, asPrinted,
   PROMO_SETS, promoOf, promoNumberIn, SUBSET_SETS, printedTotal, totalFits,
   PRINTINGS, printingLabel, printingClaim, printingRefusal, parsePrintingParam,

@@ -118,7 +118,7 @@ ok('counts add up: 1 refused, 1 not visible, 2 unreadable, 1 pending', g.report.
 ok('the input rows are not mutated (a view re-judges its raw rows)', JSON.stringify(rowsIn) === frozen);
 ok('the report says zero eBay calls', g.report.ebayCalls === 0);
 const g0 = sc.gate(rowsIn, [{ cardId: 'en-no-such-1', family: { label: 'x' } }]);
-ok('no template for the reprint -> not applied, says why, every row kept', !g0.report.applied && /no stamp template/.test(g0.report.reason) && g0.listings.length === rowsIn.length);
+ok('no template for the reprint -> not applied, says why, every row kept', !g0.report.applied && /no photo template/.test(g0.report.reason) && g0.listings.length === rowsIn.length);
 ok('no reprint at all -> not applied, every row kept', !sc.gate(rowsIn, []).report.applied && sc.gate(rowsIn, []).listings === rowsIn);
 
 console.log('\n5b. THE VERDICT CACHE — by eBay item id, the photo URL beside it');
@@ -218,7 +218,7 @@ const fnS = decl => { const i = S.indexOf('\n' + decl); return i < 0 ? '' : S.sl
 const jl = fnS('async function judgeListings(');
 ok('judgeListings runs stampcheck.gate', /stampcheck\.gate\(listings, stampReprints\)/.test(jl));
 ok('...BEFORE the outlier check (reprints cannot set the median)', jl.indexOf('stampcheck.gate(') > 0 && jl.indexOf('stampcheck.gate(') < jl.indexOf('outlier.flagOutliers('));
-ok('...never on a reprint\'s own listings (noReprintCheck)', /opts\.noReprintCheck \? \[\] : cm\.reprintCardsOf\(card\)/.test(jl));
+ok('...never on a reprint\'s own listings (noReprintCheck)', /opts\.noReprintCheck \? \[\] : cm\.photoChecksOf\(card\)/.test(jl));
 ok('a photo-check update never fetches the reprint\'s listings (noFetch)', /else if \(opts\.noFetch\) why =/.test(jl));
 // withStampRefusals, run for real.
 const wsr = new Function('return ' + fnS('function withStampRefusals(').replace(/^function withStampRefusals/, 'function'))();
@@ -232,7 +232,7 @@ const lf = fnS('async function listingsFor(');
 ok('a re-read (?poll=1) never searches: cache or "not fetched"', /if \(opts\.poll && !wantSites && !wantMore\) return \{[^}]*notFetched: true/.test(lf));
 ok('opening a card starts the photo checks after the answer (the hidden rows)', /stampFollowUp\(card, requestedId, grade, printing, edition, gathered\.stampPending\)/.test(lf));
 ok('a rebuild checks ITS hidden rows (j.stampPending), not rows on the payload', /stampFollowUp\(card, requestedId, grade, printing, edition, j\.stampPending\)/.test(fnS('async function rebuildView(')));
-ok('judgeListings reads stored verdicts BEFORE the gate', jl.indexOf('await stampcheck.loadVerdicts(listings)') > 0 && jl.indexOf('await stampcheck.loadVerdicts(listings)') < jl.indexOf('stampcheck.gate('));
+ok('judgeListings reads stored verdicts BEFORE the gate', jl.indexOf('await stampcheck.loadVerdicts(listings, stampReprints)') > 0 && jl.indexOf('await stampcheck.loadVerdicts(listings, stampReprints)') < jl.indexOf('stampcheck.gate('));
 ok('the server hands stampcheck a store, keyed on hashes, on its own table', /stampcheck\.setStore\(\{/.test(S) && /CREATE TABLE IF NOT EXISTS listing_photo_verdicts/.test(S) && /item_key = ANY\(\$1\)/.test(S));
 ok('the store holds no title, price, URL or photo column', !/\b(title|price|url|image|photo_url)\b/.test(S.slice(S.indexOf('const PHOTO_VERDICTS_SQL'), S.indexOf('PRIMARY KEY (item_key', S.indexOf('const PHOTO_VERDICTS_SQL')))));
 const fu = fnS('function stampFollowUp(');

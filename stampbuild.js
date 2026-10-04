@@ -25,6 +25,7 @@ const OUT = __dirname + '/stamps.json';
 let SEARCH_W = 200;
 const MIN_LOCATED = 0.93;   // 52 of 55 located 0.96-0.99; the three below were the sideways cards
 const STORE_W = 64;                // stored template width; the matcher uses <= 32
+const WHOLE_W = 96;                // whole-card template width; the comparison runs at 24
 const LOCATOR = { card: 'en-30th-c-029', box: { x: 9, y: 346, w: 160, h: 120 }, scanW: 654 };
 
 function decodeAny(buf) {
@@ -93,6 +94,23 @@ async function scanOf(cardId) {
   // --searchW: the scan width the emblem is searched at (default 200). 30th-c-009/019/020
   // (BREAK and LEGEND, the stamp at the card's edge) located badly at 200.
   SEARCH_W = parseInt((process.argv.find(a => a.startsWith('--searchW=')) || '').split('=')[1], 10) || 200;
+  // --wholes (T1, 2026-10-04): a WHOLE-card template of each card in
+  // cardmatch.LOOKALIKES, from our catalogue scan, for the comparative check
+  // (stampcheck.judge, "lookalike"). The stamps are left as they are.
+  if (process.argv.includes('--wholes')) {
+    const prev = JSON.parse(fs.readFileSync(OUT, 'utf8'));
+    prev.wholes = {};
+    for (const id of new Set(cm.LOOKALIKES.flatMap(p => [p.a, p.b]))) {
+      const s = await scanOf(id);
+      const tpl = sc.resize(s.img, WHOLE_W, WHOLE_W * s.img.h / s.img.w);
+      prev.wholes[id] = { name: s.name, scan: s.url, w: tpl.w, h: tpl.h, rgb: Buffer.from(tpl.data).toString('base64') };
+      console.log(`  ${id.padEnd(18)} ${String(s.name).padEnd(12)} whole card ${tpl.w}x${tpl.h} from ${s.img.w}x${s.img.h}`);
+    }
+    fs.writeFileSync(OUT, JSON.stringify(prev));
+    console.log(`
+  ${Object.keys(prev.wholes).length} whole-card templates -> stamps.json (${(fs.statSync(OUT).size / 1024).toFixed(0)} KB)`);
+    return;
+  }
   // The locator: the emblem as printed on the 30th Lugia scan.
   const L = await scanOf(LOCATOR.card);
   const f0 = L.img.w / LOCATOR.scanW, b0 = LOCATOR.box;
@@ -101,7 +119,8 @@ async function scanOf(cardId) {
   const prev = fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, 'utf8')) : { templates: {} };
   const out = { built: new Date().toISOString(), threshold: sc.THRESHOLD, storeWidth: STORE_W,
                 how: 'stampbuild.js: emblem located on our catalogue scan of each reprint, cut with its surrounding artwork',
-                templates: only ? prev.templates : {}, notBuilt: only ? (prev.notBuilt || {}) : {} };
+                templates: only ? prev.templates : {}, notBuilt: only ? (prev.notBuilt || {}) : {},
+                wholes: prev.wholes || {} };
   const sheet = [];
   for (const rset of Object.keys(cm.REPRINT_OF)) {
     const fam = cm.REPRINT_FAMILIES.find(f => f.sets.includes(rset));

@@ -1645,7 +1645,12 @@ function buildQuery(card, grade, opts) {
   card = asPrinted(card);
   if (rp) card = Object.assign({}, card, { setName: rp.family.ask });
   const bits = [];
-  const name = card.nameEn || card.name || '';
+  // δ (Delta Species, 191 English cards) is not asked (T2, 2026-10-04): eBay
+  // answered NOTHING for "Kingdra ex δ 94", even with no set name or total
+  // (marketprobe NOSET + bare), and 0 rows for all four δ cards probed —
+  // while ☆, ◇, ♂/♀, [G], "+", "_" and "#" each returned rows. The gate
+  // reads the name with or without it.
+  const name = String(card.nameEn || card.name || '').replace(/\s*δ\s*/g, ' ').replace(/\s+/g, ' ').trim();
   if (name) bits.push(name);
 
   const promo = promoOf(card);

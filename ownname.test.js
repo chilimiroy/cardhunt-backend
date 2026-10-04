@@ -77,6 +77,17 @@ for (const [c, t] of REFUSE) check('REFUSE ' + t, !!lotReason(t, c), 'kept');
   check('slab still refused on raw', !v.ok, v.reason);
 }
 
+// δ is never ASKED (eBay answers nothing with it); ☆ is, and the gate still
+// reads both (T2, 2026-10-04).
+{
+  const K = card('Kingdra ex δ', '94', 101, 'Dragon Frontiers', 'ex15', 2006);
+  const q = cm.buildQuery(K, 'Raw');
+  check('δ not in the query: ' + q, !/δ/.test(q) && /Kingdra ex 94\/101/.test(q));
+  check('☆ still asked', /☆/.test(cm.buildQuery(card('Flareon ☆', '100', 108, 'Power Keepers', 'ex16', 2007), 'Raw')));
+  check('title without δ kept', cm.verify('Kingdra ex 94/101 Dragon Frontiers Holo', K, 'Raw').ok);
+  check('title with δ kept', cm.verify('Kingdra ex δ 94/101 Dragon Frontiers', K, 'Raw').ok);
+}
+
 (async () => {
   if (process.argv.includes('--db')) {
     const { Pool } = require('pg');

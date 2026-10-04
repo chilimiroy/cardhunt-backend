@@ -39,6 +39,7 @@ app.use(express.json());
 // gains a `timings` key. Without the flag nothing is recorded.
 const timing = require('./timing');
 const stampcheck = require('./stampcheck');
+const backcheck = require('./backcheck.js');   // TASK T3: the card back
 timing.instrumentFetch();
 app.use((req, res, next) => {
   if (req.query.debug !== '1') return next();
@@ -119,6 +120,106 @@ if (db) stampcheck.setStore({
       says = EXCLUDED.says, score = EXCLUDED.score, checked_at = now()`,
       [v.itemKey, v.version, v.photoKey, v.cardId, v.state, v.reprint, v.label, v.says, v.score]);
   }
+});
+
+// ── The card back (TASK T3, 2026-10-04; backcheck.js) ─────────
+// One listing's photos, from the SAME getItem Verify and Photos use (one
+// call serves all three, 15-minute cache), each back photo scored in the
+// stamp worker pool, the listing judged: another language's back refuses,
+// this card's own back labels, nothing found claims nothing. The verdict is
+// ours and permanent — stored beside the stamp verdicts as check_kind
+// 'back': a hash of the item id + our card id, the verdict, the version.
+const backVerdicts = new Map();          // itemId@cardId -> verdict
+const backMissed = new Map();            // the store had nothing: not asked again for a minute
+const backKey = (itemId, cardId) => itemId + '@' + cardId;
+async function loadBackVerdicts(card, rows) {
+  if (!db) return;
+  const cid = card.api_card_id, now = Date.now(), want = new Map();
+  for (const r of rows || []) {
+    if (!r || r.source !== 'ebay' || !r.itemId) continue;
+    const k = backKey(r.itemId, cid);
+    if (backVerdicts.has(k) || now - (backMissed.get(k) || 0) < 60000) continue;
+    want.set(stampcheck.itemKey(k), k);
+  }
+  if (!want.size) return;
+  let timer;
+  try {
+    await photoVerdictsTable();
+    const q = db.query(`SELECT item_key, state, label, says FROM listing_photo_verdicts
+      WHERE check_kind = 'back' AND version = $2 AND item_key = ANY($1)`, [[...want.keys()], backcheck.BACK_VERSION]);
+    const got = await Promise.race([q, new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timed out')), 2500); })]);
+    for (const x of got.rows) { const k = want.get(x.item_key); if (k) { backVerdicts.set(k, { state: x.state, family: x.label, says: x.says, stored: true }); want.delete(x.item_key); } }
+  } catch (e) { console.warn('[back] verdicts not read:', e.message); }
+  finally { clearTimeout(timer); }
+  for (const k of want.values()) backMissed.set(k, now);
+}
+async function backCheckItem(card, itemId, o) {
+  const cid = card.api_card_id, k = backKey(itemId, cid);
+  if (backVerdicts.has(k)) return Object.assign({}, backVerdicts.get(k), { calls: 0, cached: true });
+  const got = await ebayItemOnDemand(itemId, cid, 'back', o);
+  if (!got.hit) return { error: (got.body && got.body.error) || 'eBay getItem failed', status: got.status };
+  const images = (got.hit.images || []).map(x => (x && x.url) || x);
+  const scores = await Promise.all(images.map(u => stampcheck.checkBackPhoto(u)));
+  const v = Object.assign(backcheck.listingVerdict(scores, cid), { photos: images.length,
+    scores: scores.map(x => x && { en: x.en, ja: x.ja, seen: x.seen }) });
+  // A photo the CDN would not give is not a verdict: nothing stored, asked again later.
+  if (scores.some(x => x && x.retryable) && v.state === 'no-claim') return Object.assign(v, { calls: got.calls, retryable: true });
+  backVerdicts.set(k, { state: v.state, family: v.family || null, says: v.says });
+  if (db) photoVerdictsTable().then(() => db.query(`INSERT INTO listing_photo_verdicts (item_key, check_kind, version, photo_key,
+      card_id, state, label, says, score) VALUES ($1,'back',$2,$3,$4,$5,$6,$7,$8)
+      ON CONFLICT (item_key, check_kind, version) DO UPDATE SET photo_key = EXCLUDED.photo_key, state = EXCLUDED.state,
+      label = EXCLUDED.label, says = EXCLUDED.says, score = EXCLUDED.score, checked_at = now()`,
+    [stampcheck.itemKey(k), backcheck.BACK_VERSION, stampcheck.photoKey(images.join(' ')), cid, v.state,
+     v.family || null, v.says, Math.max(-1, ...scores.map(x => (x && Math.max(x.en || -1, x.ja || -1)) || -1))]))
+    .catch(e => console.warn('[back] verdict not stored:', e.message));
+  return Object.assign({}, v, { calls: got.calls });
+}
+// The rows a view checks without being asked (backcheck.autoRows: outlier-
+// flagged rows, and every row of the most-faked cards; at most 20 a view),
+// one after another, BACKGROUND, after the answer has gone. A row checked
+// once is never checked again. Then the view is re-judged with what landed.
+const backRunning = new Set();
+function backFollowUp(card, requestedId, grade, printing, edition, rows) {
+  const cid = card.api_card_id;
+  const todo = backcheck.autoRows(cid, rows, id => backVerdicts.has(backKey(id, cid)));
+  const vkey = listingKey(cid, viewCacheGrade(grade, printing, edition));
+  if (!todo.length || backRunning.has(vkey)) return;
+  backRunning.add(vkey);
+  (async () => {
+    let landed = 0;
+    for (const r of todo) {
+      const v = await backCheckItem(card, r.itemId, { background: true }).catch(e => ({ error: e.message }));
+      if (v && v.error && /quota|allowance|busy|soft|reserve|hour/i.test(String(v.error))) break;   // yield, as background work does
+      if (v && !v.error && !v.retryable) landed++;
+    }
+    const vs = viewStateGet(vkey);
+    if (landed && vs && vs.gathered.ebayState)
+      await rebuildView(card, requestedId, grade, printing, edition, vs, { noFetch: true, stamp: true, back: true });
+  })().catch(e => console.warn('[back] follow-up failed:', e.message))
+     .finally(() => backRunning.delete(vkey));
+}
+
+// ── What does ONE listing's card back show? (TASK T3) ──
+//   GET /api/back/:cardId?item=v1|167236883977|0
+// On demand: 1 getItem (0 when Verify or Photos already fetched it within 15
+// minutes, or the verdict is stored). Never a URL from the caller: the item
+// id is checked, the photos come from eBay's own getItem, and stampcheck
+// fetches only from i.ebayimg.com.
+app.get('/api/back/:cardId', async (req, res) => {
+  const cardId = req.params.cardId;
+  const itemId = String(req.query.item || '');
+  const base = { cardId, itemId, stored: false };
+  if (!certcheck.ITEM_ID.test(itemId)) return res.status(400).json(Object.assign(base, { error: 'item must be an eBay Browse item id, e.g. v1|167236883977|0' }));
+  try {
+    const card = await resolveListingCard(cardId);
+    if (!card) return res.status(404).json(Object.assign(base, { error: 'card not in catalogue' }));
+    if (!backcheck.familyOf(card.api_card_id)) return res.status(400).json(Object.assign(base, { error: 'no back template for this card’s language' }));
+    const v = await backCheckItem(card, itemId, { background: false });
+    if (v.error) return res.status(v.status || 502).json(Object.assign(base, { error: v.error }));
+    res.json(Object.assign(base, v, { version: backcheck.BACK_VERSION,
+      keptFor: 'our verdict, by a hash of the eBay item id, in the database; the photos are never stored',
+      attribution: 'Checked against the seller’s own eBay photos' }));
+  } catch (e) { res.status(500).json(Object.assign(base, { error: e.message })); }
 });
 
 // ── DATA SOURCES ──────────────────────────────────────────────
@@ -2823,7 +2924,7 @@ async function gatherListings(card, grade, limit, opts) {
   const memo = {};
   const j = await judgeListings(card, grade, listings, opts, memo);
   const out = { listings: j.listings, sources, tookMs: Date.now() - t0, liveCount: j.liveCount,
-                outliers: j.outliers, stamp: j.stamp, stampPending: j.stampPending, ebayState, otherRows, judgeMemo: memo };
+                outliers: j.outliers, stamp: j.stamp, stampPending: j.stampPending, back: j.back, ebayState, otherRows, judgeMemo: memo };
   if (Object.keys(dryRuns).length) out.dryRun = dryRuns;
   return out;
 }
@@ -2853,6 +2954,28 @@ async function judgeListings(card, grade, listings, opts, memo) {
     await stampcheck.loadVerdicts(listings, stampReprints);
     const sg = timing.timeSync('stamp-gate', () => stampcheck.gate(listings, stampReprints));
     listings = sg.listings; stampReport = sg.report; stampPending = sg.pending;
+  }
+  // The card back (T3): verdicts already known are applied — another
+  // language's back refuses the row, this card's own back labels it, nothing
+  // found changes nothing. Unchecked rows are shown: a back check is a paid
+  // call made on demand or for flagged rows, never a gate every row waits on.
+  let backReport = null;
+  if (backcheck.familyOf(card.api_card_id) && listings.some(l => l && l.source === 'ebay')) {
+    await loadBackVerdicts(card, listings);
+    backReport = { refused: 0, genuine: 0, refusedSample: [], version: backcheck.BACK_VERSION };
+    const kept = [];
+    for (const l of listings) {
+      const v = l && l.source === 'ebay' && l.itemId && backVerdicts.get(backKey(l.itemId, card.api_card_id));
+      if (v && v.state === 'other-back') {
+        backReport.refused++;
+        if (backReport.refusedSample.length < 12) backReport.refusedSample.push({ title: l.title, itemId: l.itemId,
+          reason: 'photo shows a ' + (v.family === 'ja' ? 'Japanese-language' : 'English') + ' card back — a different printing' });
+        continue;
+      }
+      if (v && v.state === 'genuine-back') backReport.genuine++;
+      kept.push(v ? Object.assign({}, l, { back: { state: v.state, says: v.says } }) : l);
+    }
+    listings = kept;
   }
   // ── After the gate, before the sort ───────────────────────────
   // Every listing here has passed cardmatch: right card, right number,
@@ -2952,7 +3075,7 @@ async function judgeListings(card, grade, listings, opts, memo) {
     (outlier.suspectRank(a) - outlier.suspectRank(b)) ||
     (Number(b.live) - Number(a.live)) || (a.landed - b.landed) || (a.price - b.price));
   return { listings, liveCount: listings.filter(l => l.live).length, outliers: judged.stats,
-           stamp: stampReport, stampPending };
+           stamp: stampReport, stampPending, back: backReport };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2982,6 +3105,19 @@ function withStampRefusals(sources, stamp) {
   }
   e.summary = `${e.count} kept, ${e.rejected || 0} rejected` + (e.scanned ? ` of ${e.scanned} scanned` : '')
     + ` (${n} by the photo stamp check` + (stamp.pending ? `; ${stamp.pending} more hidden until their photos are checked` : '') + ')';
+  return Object.assign({}, sources, { ebay: e });
+}
+
+// The back check's refusals are eBay refusals too, counted the same way.
+function withBackRefusals(sources, back) {
+  if (!back || !back.refused || !sources || !sources.ebay || sources.ebay.status !== 'ok') return sources;
+  const e = Object.assign({}, sources.ebay);
+  e.backRefused = back.refused;
+  e.count = Math.max(0, (e.count || 0) - back.refused);
+  e.rejected = (e.rejected || 0) + back.refused;
+  e.droppedSample = back.refusedSample.map(r => ({ title: r.title, itemId: r.itemId, reason: r.reason }))
+    .concat(e.droppedSample || []).slice(0, 12);
+  e.summary = (e.summary || '') + ` (${back.refused} by the card-back check)`;
   return Object.assign({}, sources, { ebay: e });
 }
 
@@ -3019,6 +3155,7 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
   const listings = j.listings;
   const trusted = listings.filter(outlier.trustworthy);
   sources = withStampRefusals(sources, j.stamp);
+  sources = withBackRefusals(sources, j.back);
   return {
     cardId: card.api_card_id,
     requestedId,
@@ -3054,6 +3191,7 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
     // What the photo stamp gate did on THIS answer: refused, kept, and how
     // many photos are still being checked (the page re-reads while > 0).
     stampGate: j.stamp ? Object.assign({}, j.stamp, { pool: stampcheck.poolState() }) : null,
+    backCheck: j.back || null,
     // What this grade is worth, measured from the listings that passed the
     // gate. Computed, not stored: this is a read endpoint.
     gradePrice: gp.aggregate(listings, { grade }),
@@ -3242,6 +3380,7 @@ async function rebuildView(card, requestedId, grade, printing, edition, vs, ropt
   payload.fetchedAt = new Date(ts).toISOString();
   listingCacheSet(card.api_card_id, viewCacheGrade(grade, printing, edition), payload, ts);
   if (!ropts.stamp) stampFollowUp(card, requestedId, grade, printing, edition, j.stampPending);
+  if (!ropts.back) backFollowUp(card, requestedId, grade, printing, edition, payload.listings);
   return payload;
 }
 
@@ -3308,7 +3447,7 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   const st = gathered.ebayState;
   const progress = withSourceFailures(listingsProgress(st, gathered.listings.length), gathered.sources);
   let payload = buildListingsPayload(card, requestedId, grade, printing,
-    { listings: gathered.listings, liveCount: gathered.liveCount, outliers: gathered.outliers, stamp: gathered.stamp },
+    { listings: gathered.listings, liveCount: gathered.liveCount, outliers: gathered.outliers, stamp: gathered.stamp, back: gathered.back },
     gathered.sources, gathered.tookMs, progress, edition);
   if (gathered.dryRun) {
     payload.dryRun = gathered.dryRun;
@@ -3325,6 +3464,7 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   // Only with view state to rebuild from (eBay answered): the photos are
   // checked after this answer goes, and the view is re-judged as they land.
   if (st) stampFollowUp(card, requestedId, grade, printing, edition, gathered.stampPending);
+  if (st) backFollowUp(card, requestedId, grade, printing, edition, payload.listings);
   return payload;
 }
 
@@ -4659,16 +4799,18 @@ const certcheck = require('./certcheck');
 // { hit, calls } or { status, body } on refusal. The cache entry holds both
 // the cert read and the image URLs, so whichever button is pressed first
 // pays the call and the other is free for the next 15 minutes.
-async function ebayItemOnDemand(itemId, cardId, purpose) {
+async function ebayItemOnDemand(itemId, cardId, purpose, o) {
   let hit = certcheck.ebayCacheGet(itemId);
   if (hit) return { hit, calls: 0 };
   if (!ebay.ebayEnabled()) return { status: 503, body: { error: 'EBAY_ENABLED=false' } };
-  // Foreground: a person is waiting on this one call.
-  const auth = await getEbayTokenDetailed({ background: false });
+  // Foreground when a person is waiting on this one call; the back check's
+  // automatic runs are background (they yield at the soft stop).
+  const background = !!(o && o.background);
+  const auth = await getEbayTokenDetailed({ background });
   if (!auth.token) return { status: 503, body: { error: auth.reason || auth.error || 'eBay token unavailable', status: auth.blocked || 'error' } };
   const call = await ebay.fetchEbay(db, {
     url: 'https://api.ebay.com/buy/browse/v1/item/' + encodeURIComponent(itemId),
-    token: auth.token, kind: 'item', background: false,
+    token: auth.token, kind: 'item', background,
     meta: { cardId, probe: purpose }, countFrom: () => 1 });
   if (call.blocked) return { status: 503, body: { error: call.reason, status: call.blocked } };
   if (!call.ok) return { status: 502, body: { error: call.reason || 'eBay getItem failed' } };

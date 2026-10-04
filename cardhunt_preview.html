@@ -3765,9 +3765,44 @@ function certLine(l){
     + '<button type="button" class="certbtn" onclick="viewListing(this)">Photos</button>'
     + (cert ? '<span class="certslot">' + (seen ? certResultHtml(seen.r)
             : '<button type="button" class="certbtn" onclick="certVerify(this)">Verify PSA cert</button>') + '</span>' : '')
+    + '<span class="backslot">' + (l.back ? backResultHtml(l.back)
+        : '<button type="button" class="certbtn" onclick="backCheck(this)">Check card back</button>') + '</span>'
     + (seen ? '' : '<span>' + (cert ? 'not checked · ' : '') + 'one eBay lookup, only if pressed</span>')
     + stampLine(l)
     + '</div>';
+}
+// ── The card back (TASK T3, 2026-10-04) ──
+// The server compares the seller's photos with each language family's
+// genuine back. Two positive answers, and silence: another language's back
+// refuses the row (the next read no longer shows it); this card's own back
+// labels it — never "verified"; nothing found claims nothing, because a
+// replica's back and no back photo look alike. Uses the same eBay lookup as
+// Photos and Verify.
+var BACK_CHIP = {
+  'genuine-back': 'Back photo matches a genuine card',
+  'other-back':   '⚠ Back is another language’s',
+  'no-claim':     'No genuine back found — claims nothing'
+};
+function backResultHtml(r){
+  if (!r || !BACK_CHIP[r.state]) return '<span class="certchip stamp-unreadable">' + liveEsc((r && r.error) || 'Could not check the back') + '</span>';
+  var cls = r.state === 'genuine-back' ? 'stamp-not-visible' : r.state === 'other-back' ? 'stamp-unreadable' : 'stamp-not-visible';
+  return '<span class="certchip ' + cls + '">' + BACK_CHIP[r.state] + '</span>'
+    + '<span class="certsays">' + liveEsc(r.says || '') + '</span>';
+}
+async function backCheck(btn){
+  var line = btn && btn.closest('.certline');
+  if (!line || !LF.card) return;
+  var slot = line.querySelector('.backslot');
+  var itemId = line.getAttribute('data-cert-item');
+  var cardId = LF.card.id || LF.card.api_card_id;
+  slot.innerHTML = '<span class="certchip stamp-pending">Checking the back…</span>';
+  var r;
+  try {
+    var resp = await fetch(BACKEND + '/api/back/' + encodeURIComponent(cardId) + '?item=' + encodeURIComponent(itemId));
+    r = await resp.json().catch(function () { return { error: 'HTTP ' + resp.status }; });
+    if (!resp.ok && !r.error) r.error = 'HTTP ' + resp.status;
+  } catch (e) { r = { error: 'network: ' + e.message }; }
+  slot.innerHTML = backResultHtml(r);
 }
 
 // ── Reprint stamp, checked by the server on every row (TASK T1, 2026-10-02) ──
@@ -6322,6 +6357,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261004-53024f6-auctions &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261004-bf81c0b-cardback &middot; click to hide</div>
 </body>
 </html>

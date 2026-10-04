@@ -97,6 +97,28 @@ async function scanOf(cardId) {
   // --wholes (T1, 2026-10-04): a WHOLE-card template of each card in
   // cardmatch.LOOKALIKES, from our catalogue scan, for the comparative check
   // (stampcheck.judge, "lookalike"). The stamps are left as they are.
+  // --backs (T3, 2026-10-04): each language family's card BACK, from a
+  // published scan (Bulbapedia's archive: "Cardback.jpg", credited to the
+  // Alternative Play Handbook; "TCG Card Back Japanese.jpg", the modern
+  // Japanese back). The inside only — the border removed, as measured.
+  if (process.argv.includes('--backs')) {
+    const prev = JSON.parse(fs.readFileSync(OUT, 'utf8'));
+    const SRC = { en: 'https://archives.bulbagarden.net/media/upload/1/17/Cardback.jpg',
+                  ja: 'https://archives.bulbagarden.net/media/upload/2/2a/TCG_Card_Back_Japanese.jpg' };
+    prev.backs = {};
+    for (const [fam, url] of Object.entries(SRC)) {
+      const r = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (CardHunt stampbuild)' } });
+      if (!r.ok) throw new Error(fam + ' back: HTTP ' + r.status);
+      const img = decodeAny(Buffer.from(await r.arrayBuffer()));
+      const x = Math.round(0.07 * img.w), y = Math.round(0.05 * img.h);
+      const inner = sc.crop(img, x, y, Math.round(0.93 * img.w) - x, Math.round(0.95 * img.h) - y);
+      const tpl = sc.resize(inner, WHOLE_W, WHOLE_W * inner.h / inner.w);
+      prev.backs[fam] = { scan: url, w: tpl.w, h: tpl.h, rgb: Buffer.from(tpl.data).toString('base64') };
+      console.log(`  ${fam} back ${tpl.w}x${tpl.h} from ${img.w}x${img.h}  ${url}`);
+    }
+    fs.writeFileSync(OUT, JSON.stringify(prev));
+    return;
+  }
   if (process.argv.includes('--wholes')) {
     const prev = JSON.parse(fs.readFileSync(OUT, 'utf8'));
     prev.wholes = {};
@@ -120,7 +142,7 @@ async function scanOf(cardId) {
   const out = { built: new Date().toISOString(), threshold: sc.THRESHOLD, storeWidth: STORE_W,
                 how: 'stampbuild.js: emblem located on our catalogue scan of each reprint, cut with its surrounding artwork',
                 templates: only ? prev.templates : {}, notBuilt: only ? (prev.notBuilt || {}) : {},
-                wholes: prev.wholes || {} };
+                wholes: prev.wholes || {}, backs: prev.backs || {} };
   const sheet = [];
   for (const rset of Object.keys(cm.REPRINT_OF)) {
     const fam = cm.REPRINT_FAMILIES.find(f => f.sets.includes(rset));

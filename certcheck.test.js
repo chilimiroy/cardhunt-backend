@@ -94,7 +94,7 @@ eq('/api/cert route found', certRoute.length > 200, true);
 eq('/api/photos route found', photoRoute.length > 200, true);
 eq('/api/cert and /api/photos write nothing to the database', /\b(INSERT|UPDATE)\b|db\.query/.test(route), false);
 eq('/api/cert refuses non-PSA grades', /PSA only/.test(certRoute), true);
-eq('the shared helper spends one foreground item call', /kind: 'item', background: false/.test(route), true);
+eq('the shared helper spends one item call, foreground unless a caller asks background', /const background = !!\(o && o\.background\)/.test(route) && /kind: 'item', background,/.test(route), true);
 eq('exactly ONE getItem fetch serves both routes', (route.match(/ebay\.fetchEbay\(/g) || []).length, 1);
 eq('both routes go through the shared helper',
   /ebayItemOnDemand\(/.test(certRoute) && /ebayItemOnDemand\(/.test(photoRoute), true);

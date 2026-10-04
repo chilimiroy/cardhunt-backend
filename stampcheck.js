@@ -369,7 +369,9 @@ function finish(slot, verdict, kill) {
     const v = Object.assign({}, verdict, { tookMs: Date.now() - job.t0 });
     if (v.retryable) _stats.failed++; else { _stats.checked++; _stats.msTotal += v.tookMs; }
     cacheSet(job.itemId, v, job.url);
-    if (!v.retryable) saveVerdict(job.itemId, job.url, v, job.cardId);
+    // A back photo's scores are an input to backcheck's LISTING verdict,
+    // which the server stores itself (check_kind 'back').
+    if (!v.retryable && !job.back) saveVerdict(job.itemId, job.url, v, job.cardId);
     _inflight.delete(job.itemId);
     job.resolve(v);
   }
@@ -386,7 +388,7 @@ async function runJob(slot, job) {
   const buf = Buffer.from(await r.arrayBuffer());
   slot.timer = setTimeout(() => finish(slot, { state: 'unreadable', retryable: true, scores: [],
     says: 'The photo check took too long and was stopped.' }, true), JOB_TIMEOUT_MS);
-  slot.w.postMessage({ jpeg: buf, reprints: job.reprints });
+  slot.w.postMessage({ jpeg: buf, reprints: job.reprints, back: !!job.back });
 }
 function pump() {
   while (_queue.length) {
@@ -421,6 +423,22 @@ function checkItem(itemId, imageUrl, reprints, cardId) {
   if (_inflight.has(itemId)) return _inflight.get(itemId);
   const p = new Promise(resolve => _queue.push({ itemId, url, reprints, cardId: cardId || null, resolve }));
   _inflight.set(itemId, p);
+  pump();
+  return p;
+}
+// One back photo, scored against each language family's back (backcheck.js,
+// TASK T3) — through the same queue and pool, so a busy card cannot start a
+// second set of workers. Keyed on the photo; zero eBay API calls (the URL
+// came from the listing's getItem, the photo from eBay's image CDN).
+function checkBackPhoto(imageUrl) {
+  const url = photoUrl(imageUrl);
+  if (!url) return Promise.resolve({ state: 'unreadable', en: null, ja: null, seen: null });
+  const key = 'back|' + url;
+  const hit = cacheGet(key, url);
+  if (hit) return Promise.resolve(hit.verdict);
+  if (_inflight.has(key)) return _inflight.get(key);
+  const p = new Promise(resolve => _queue.push({ itemId: key, url, reprints: [], back: true, resolve }));
+  _inflight.set(key, p);
   pump();
   return p;
 }
@@ -556,13 +574,14 @@ const wt = (() => { try { return require('worker_threads'); } catch (e) { return
 if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
   wt.parentPort.on('message', m => {
     let v;
-    try { v = judge(decodeJpeg(Buffer.from(m.jpeg)), m.reprints); }
+    try { v = m.back ? Object.assign({ state: 'scored' }, require('./backcheck.js').scorePhoto(decodeJpeg(Buffer.from(m.jpeg))))
+                     : judge(decodeJpeg(Buffer.from(m.jpeg)), m.reprints); }
     catch (e) { v = { state: 'unreadable', says: 'The photo could not be decoded: ' + String(e && e.message || e).slice(0, 80), scores: [] }; }
     wt.parentPort.postMessage({ verdict: v });
   });
 }
 
 module.exports = { THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, crop, resize, rotate90, nccMax, bestScore,
-                   judge, checkItem, gate, verdictKey, wholeScore, LOOKALIKE_MARGIN, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
+                   judge, checkItem, checkBackPhoto, gate, verdictKey, wholeScore, LOOKALIKE_MARGIN, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
                    _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; },
                    _clearCache: () => { _cache.clear(); _missed.clear(); } };

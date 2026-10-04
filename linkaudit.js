@@ -113,8 +113,11 @@ async function auditCard(cardId, cardName, cardNumber) {
       // A promo prints no total, so "no N/M" is its normal shape — ask the
       // gate's own promo reader instead (T2), or every genuine promo is "!!".
       const promo = cm.promoOf({ cardId, number: cardNumber });
+      // A PSA label prints "#28" and no total (T0, 2026-10-04): that IS the
+      // number, not its absence.
+      const hashNum = new RegExp('#\\s?0*' + want + '(?![0-9])').test(t);
       const numOk = promo ? (pair ? false : (cm.promoNumberIn(t, promo) || null))
-                          : (num ? num === want : null);
+                          : (num ? num === want : (hashNum || null));
       if (num) nums.add(pair[0]);
 
       const flags = [];

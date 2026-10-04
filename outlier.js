@@ -41,6 +41,11 @@ function median(nums) {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
+// An auction's CURRENT bid (T0, 2026-10-04) is not a price anyone can buy
+// at: a $1 opening bid with three days left would set the median and become
+// the card's cheapest. Shown, labelled, sorted by its bid — never a baseline,
+// never judged against one, never the headline.
+const isCurrentBid = l => !!l && l.priceKind === 'current-bid';
 function priceOf(l) {
   const p = l.landed != null ? l.landed : l.price;
   const n = parseFloat(p);
@@ -70,7 +75,7 @@ function flagOutliers(listings, opts) {
   const minMedian   = opts.minMedian        || MIN_MEDIAN;
 
   const out = listings.map(l => Object.assign({}, l));
-  const prices = out.map(priceOf).filter(p => p !== null);
+  const prices = out.filter(l => !isCurrentBid(l)).map(priceOf).filter(p => p !== null);
 
   const stats = {
     count: out.length, priced: prices.length,
@@ -109,7 +114,7 @@ function flagOutliers(listings, opts) {
 
   for (const l of out) {
     const p = priceOf(l);
-    if (p === null) continue;
+    if (p === null || isCurrentBid(l)) continue;
     const r = p / basis;
     if (r <= hardRatio) {
       l.suspect = 'implausible';
@@ -260,7 +265,7 @@ function suspectRank(l) {
 // people act on, so it skips anything flagged — the row is still shown,
 // ranked last and carrying its reason, but it does not get to be the
 // answer to "what does this card cost".
-function trustworthy(l) { return !l.suspect; }
+function trustworthy(l) { return !l.suspect && !isCurrentBid(l); }
 
 // Sort so flagged listings land last regardless of price, since the whole
 // point of a cheapest-first list is that the top row is trustworthy.
@@ -276,6 +281,6 @@ function sortWithSuspectsLast(listings) {
 }
 
 module.exports = { flagOutliers, flagReprintPriced, sortWithSuspectsLast, suspectRank, trustworthy,
-                   median, priceOf,
+                   median, priceOf, isCurrentBid,
                    REPRINT_BAND_PAD, REPRINT_SEPARATION, REPRINT_MIN_ABOVE,
                    SUSPECT_RATIO, IMPLAUSIBLE_RATIO, MIN_SAMPLE, MIN_MEDIAN };

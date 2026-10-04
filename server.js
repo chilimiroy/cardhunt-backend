@@ -2177,6 +2177,10 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   const pageUrl = offset => 'https://api.ebay.com/buy/browse/v1/item_summary/search'
     + '?q=' + encodeURIComponent(qAsk)
     + (opts.noCategory ? '' : '&category_ids=183454') + '&limit=' + pageSize + '&sort=price'
+    // Auctions too (T0, 2026-10-04). Browse search returns Buy It Now only
+    // unless asked: 0 auctions in 258 rows over four cards, while eBay's own
+    // site showed Giratina V 186 PSA 10 auctions we never listed. Same call.
+    + '&filter=' + encodeURIComponent('buyingOptions:{FIXED_PRICE|AUCTION}')
     + (offset ? '&offset=' + offset : '')
     + (aspectFilter ? '&aspect_filter=' + encodeURIComponent(aspectFilter) : '');
   const url = pageUrl(startOffset);
@@ -2320,7 +2324,10 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       continue;
     }
 
-    const priceNative = parseFloat(it.price && it.price.value) || 0;
+    // An auction with no Buy It Now carries its current bid, not a price.
+    const isAuction = (it.buyingOptions || []).includes('AUCTION');
+    const priceObj = (it.price && it.price.value != null) ? it.price : (isAuction ? it.currentBidPrice : null);
+    const priceNative = parseFloat(priceObj && priceObj.value) || 0;
     if (priceNative <= 0) { dropped.push({ title, reason: 'no usable price' }); continue; }
     const shipOpt = it.shippingOptions && it.shippingOptions[0];
     const shipNative = (shipOpt && shipOpt.shippingCost && shipOpt.shippingCost.value != null)
@@ -2329,7 +2336,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     // A GB row carried GBP straight into `landed` beside USD rows — only
     // harmless while US was the one site asked. fx refuses an unpinned
     // currency; such a row is DROPPED WITH ITS REASON, never shown as USD.
-    const cur = String((it.price && it.price.currency) || 'USD').toUpperCase();
+    const cur = String((priceObj && priceObj.currency) || 'USD').toUpperCase();
     let price = priceNative, shipping = shipNative, fxNote = null;
     if (cur !== 'USD') {
       let pc = null, sc2 = null;
@@ -2369,7 +2376,11 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       itemId: it.itemId || null,
       imageUrl: it.image && it.image.imageUrl,
       country: it.itemLocation && it.itemLocation.country,
-      listingType: (it.buyingOptions || []).includes('AUCTION') ? 'auction' : 'fixed',
+      listingType: isAuction ? 'auction' : 'fixed',
+      // An auction's number is its CURRENT bid — not what it will sell for.
+      priceKind: isAuction && !(it.price && it.price.value != null) ? 'current-bid' : null,
+      endsAt: it.itemEndDate || null,
+      bids: Number.isFinite(it.bidCount) ? it.bidCount : null,
       live: true,
       // ── Labels, never gates ──
       // 1st Edition, Shadowless and Unlimited Base Set Charizards all read

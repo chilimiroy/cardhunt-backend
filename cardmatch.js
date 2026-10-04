@@ -759,6 +759,10 @@ const SET_NAME_PHRASES = /\b(classic collection|trainer gallery|galarian gallery
 // title — the number, grade and set checks all read the original.
 const GENUINE_ART_PHRASES =
   /\b(?:alt(?:ernate)?\s*art|full\s*art|special\s+illustration|illustration\s+rare|character\s+(?:rare|art)|secret\s+art|art\s+rare|special\s+art)\b/gi;
+// A grade is not a quantity (T0, 2026-10-04): "1999 Pokemon Game # 2
+// Blastoise Holo PSA 8 Card NM-MINT Base Set" was refused as "not a single
+// card: 8 Card". The grader and its grade are masked for the lot test only.
+const GRADE_PHRASES = new RegExp('(?:' + GRADERS.map(graderToken).join('|') + ')' + GRADE_NUM, 'gi');
 
 // ── Reprint sets that reuse another set's numbering ───────────
 // The English form of the master-ball mirror problem, and it is worse than
@@ -1916,7 +1920,7 @@ function verifyCore(title, card, grade, opts) {
   //    stripped to spaces reads "186/196   Card" — which that pattern
   //    matches, rejecting a genuine alt art as a 196-card lot. A
   //    non-space, non-word character cannot be spanned by \s* or \b.
-  const tForLot = t.replace(SET_NAME_PHRASES, ' ~ ').replace(GENUINE_ART_PHRASES, ' ~ ');
+  const tForLot = t.replace(SET_NAME_PHRASES, ' ~ ').replace(GENUINE_ART_PHRASES, ' ~ ').replace(GRADE_PHRASES, ' ~ ');
   if (NOT_A_SINGLE_CARD.test(tForLot)) {
     return { ok: false, reason: 'not a single card: ' +
       (tForLot.match(NOT_A_SINGLE_CARD) || [])[0] };

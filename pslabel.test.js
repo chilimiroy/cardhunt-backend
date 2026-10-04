@@ -58,6 +58,14 @@ drop(TY, 'Typhlosion #28 PSA 9');                                       // numbe
 drop(DG, '2004 POKEMON EX TEAM ROCKET RETURNS #8 DARK GYARADOS PSA 9');  // "rocket", not the label
 drop(TY, '2002 POKEMON EXPEDITION #28 TYPHLOSION-HOLO PSA 1', 'Raw');
 
+console.log('\n  a grade is not a quantity ("PSA 8 Card")');
+const BL = card('base1', 'Blastoise', '2', 102, 'Base Set', 1999);
+keep(BL, '1999 Pokemon Game # 2 Blastoise Holo PSA 8 Card NM-MINT Base Set Trusted Seller!', 'PSA 8');
+keep(BL, 'Blastoise 2/102 Base Set PSA10 Card', 'PSA 10');
+drop(BL, 'Blastoise 2/102 Base Set PSA 8 lot of 3 cards', 'PSA 8');
+drop(BL, 'PSA 8 Blastoise 2/102 Base Set + 5 cards bundle', 'PSA 8');
+drop(BL, 'Blastoise 2/102 Base Set 10 card lot', 'Raw');
+
 console.log('\n  the query asks what the label says');
 ok('Expedition is asked as "Expedition", not "Expedition Base Set"',
    /Typhlosion \S+ Expedition PSA/.test(cm.buildQuery(TY, 'PSA 1')) && !/Base Set/.test(cm.buildQuery(TY, 'PSA 1')));

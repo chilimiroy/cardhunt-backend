@@ -87,7 +87,8 @@ try {
   const m = { exports: {} };
   new Function('module', 'exports', 'window', src)(m, m.exports, undefined);
   for (const c of [ch, gir]) for (const g of ['Raw NM', 'PSA 10'])
-    ok(m.exports.buildQuery(c, g) === cm.buildQuery(c, g), 'unprefixed query unchanged vs 2292a9e: ' + c.cardId + ' ' + g);
+    // A slab's number form changed deliberately in T0 (pslabel.test.js); compare in the old form.
+    ok(m.exports.buildQuery(c, g) === cm.buildQuery(c, g, { numberForm: 'pair' }), 'unprefixed query unchanged vs 2292a9e: ' + c.cardId + ' ' + g);
 } catch (e) { console.log('  SKIP pre-T2 comparison — ' + String(e.message).split('\n')[0]); }
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

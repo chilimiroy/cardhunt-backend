@@ -1571,10 +1571,20 @@ function buildQuery(card, grade, opts) {
       const nd = num.replace(/[^0-9]/g, '');
       const td = tot.replace(/[^0-9]/g, '');
       const padded = nd.length > td.length ? tot.padStart(nd.length, '0') : tot;
-      // opts.numberForm (marketprobe ?shape=, measuring only): 'bare' asks
-      // the number alone, 'or' asks eBay's OR of the pair and "#N".
-      if (opts.numberForm === 'bare') bits.push(num);
-      else if (opts.numberForm === 'or') bits.push('(' + num + '/' + padded + ',#' + num + ')');
+      // A SLAB is asked by the number alone (T0, 2026-10-04): PSA's label
+      // prints "#28", never "28/165", and most graded titles copy the label
+      // — so "28/165" in the query hid them. eBay's token "28" matches both
+      // "28/165" and "#28"; the gate still checks the number AND the set.
+      // Measured (/api/ebay/marketprobe ?shape=, US, kept pair -> bare):
+      // Typhlosion #28 PSA 1 0 -> 1, PSA * 1 -> 3; Umbreon #32 PSA * 4 ->
+      // 14; Base Charizard PSA 9 15 -> 45; Charizard ex 199 PSA * 163 ->
+      // 190; Umbreon VMAX 215 PSA 10 45 -> 61. NOT raw: bare on Base
+      // Charizard Raw returned 4,977 rows and kept 0 of the first 225.
+      // opts.numberForm ('pair' | 'bare' | 'or') overrides, for measuring.
+      const form = opts.numberForm ||
+        (parseGrade(grade).kind === 'graded' && /^\d+$/.test(num) ? 'bare' : 'pair');
+      if (form === 'bare') bits.push(num);
+      else if (form === 'or') bits.push('(' + num + '/' + padded + ',#' + num + ')');
       else bits.push(num + '/' + padded);
     } else if (numberPrefix(card) && /^[A-Za-z]+0\d/.test(num)) {
       // A zero-padded prefixed number in a MIXED set (Aquapolis / Skyridge

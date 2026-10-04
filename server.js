@@ -4885,7 +4885,7 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
   const sites = ['EBAY_US'].concat(asked.filter(m => m !== 'EBAY_US'));
   // ?shape=bare|or (T0, 2026-10-04): how the collector number is ASKED —
   // measuring whether "N/M" in the query hides PSA-label titles ("#28").
-  const shape = ['bare', 'or'].includes(String(req.query.shape)) ? String(req.query.shape) : null;
+  const shape = ['pair', 'bare', 'or'].includes(String(req.query.shape)) ? String(req.query.shape) : null;
   const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1', shape]);
   const hit = marketProbeCache.get(key);
   if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') return res.json(hit.body);

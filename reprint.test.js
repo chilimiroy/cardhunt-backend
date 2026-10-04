@@ -134,7 +134,7 @@ console.log('\n2. THE REPRINT IS ASKED FOR, AND MATCHED, BY ITS PRINTED NUMBER\n
   const q = cm.buildQuery(CARDS.lugia30c, 'Raw NM');
   ok('30th CC Lugia query carries 149/147, not our ordinal 029/030', /149\/147/.test(q) && !/029/.test(q), q);
   ok('...and the family name sellers write ("30th Celebration")', /30th Celebration/.test(q), q);
-  const q2 = cm.buildQuery(CARDS.zard21, 'PSA 10');
+  const q2 = cm.buildQuery(CARDS.zard21, 'Raw NM');
   ok('Celebrations CC Charizard query carries 4/102, not CC002/025', /\b4\/102\b/.test(q2) && !/CC002/.test(q2), q2);
   const q3 = cm.buildQuery(CARDS.aquapolis, 'Raw NM');
   ok('an ordinary card\'s query is unchanged', q3 === 'Lugia 149/147 Aquapolis pokemon', q3);

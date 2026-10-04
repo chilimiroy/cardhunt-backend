@@ -61,6 +61,13 @@ drop(TY, '2002 POKEMON EXPEDITION #28 TYPHLOSION-HOLO PSA 1', 'Raw');
 console.log('\n  the query asks what the label says');
 ok('Expedition is asked as "Expedition", not "Expedition Base Set"',
    /Typhlosion \S+ Expedition PSA/.test(cm.buildQuery(TY, 'PSA 1')) && !/Base Set/.test(cm.buildQuery(TY, 'PSA 1')));
+ok('a slab asks the bare number ("28"), which matches "#28" and "28/165" alike',
+   cm.buildQuery(TY, 'PSA 1') === 'Typhlosion 28 Expedition PSA 1 pokemon');
+ok('grader-wide asks the bare number too', cm.buildQuery(UM, 'PSA *') === 'Umbreon 32 Neo Discovery PSA pokemon');
+ok('a raw search still asks the pair (bare kept 0 of 225 on Base Charizard Raw)',
+   cm.buildQuery(CZ, 'Raw NM').includes('4/102') && cm.buildQuery(TY, 'Raw').includes('28/165'));
+ok('a prefixed number keeps its pair on a slab (TG16/TG30 not measured bare)',
+   /TG03\/TG30/.test(cm.buildQuery(card('swsh9tg', 'Charizard', 'TG03', 30, 'Brilliant Stars Trainer Gallery', 2022), 'PSA 10')));
 
 console.log(`\n  pslabel.test.js — ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

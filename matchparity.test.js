@@ -98,7 +98,8 @@ for (const g of ['Raw NM', 'PSA 10', 'BGS 9.5', 'CGC 10']) {
 // The query must actually CARRY the set size and set name — the whole bug.
 {
   const q = cm.buildQuery(serverMatchCard(CARDS[0].db), 'PSA 10');
-  chk('the query carries the N/M pair', /74\/73/.test(q), q);
+  // A slab asks the bare number (T0: PSA labels print "#74"); raw asks the pair.
+  chk('the query carries the N/M pair', /74\/73/.test(cm.buildQuery(serverMatchCard(CARDS[0].db), 'Raw NM')) && /\b0?74\b/.test(q), q);
   chk('the query carries the set name', /Champion's Path/.test(q), q);
   chk('the query carries the grade', /PSA 10/.test(q), q);
   chk('it is NOT the old bare-number query', q !== 'Charizard VMAX 74 PSA 10 pokemon card', q);
@@ -339,7 +340,7 @@ console.log('\n4d. A QUERY eBay CAN ACTUALLY ANSWER\n');
   const q = cm.buildQuery(jp, 'PSA 10');
   chk('a Japanese set name is left OUT of the query', !/[^ -~\s]/.test(q), q);
   chk('  the English card name is still sent', /Charizard ex/.test(q), q);
-  chk('  and the number pair survives', /201\/165/.test(q), q);
+  chk('  and the number survives', /\b201\b/.test(q) && /201\/165/.test(cm.buildQuery(jp, 'Raw NM')), q);
 
   // The GATE keeps the set name — this only changes what is ASKED.
   chk('  the gate still accepts the right card',

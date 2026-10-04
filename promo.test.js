@@ -51,7 +51,8 @@ try {
   if (m.exports.promoOf) console.log('  SKIP HEAD comparison — HEAD already has the promo rule');
   // Trainer Gallery deliberately changed in T3 (TG12/TG30) — subset.test.js.
   else for (const c of [ch]) for (const g of ['Raw NM', 'PSA 10'])
-    ok(m.exports.buildQuery(c, g) === cm.buildQuery(c, g), 'non-promo query unchanged vs HEAD: ' + c.cardId + ' ' + g);
+    // A slab's number form changed deliberately in T0 (pslabel.test.js); compare in the old form.
+    ok(m.exports.buildQuery(c, g) === cm.buildQuery(c, g, { numberForm: 'pair' }), 'non-promo query unchanged vs HEAD: ' + c.cardId + ' ' + g);
 } catch (e) { console.log('  SKIP HEAD comparison — ' + String(e.message).split('\n')[0]); }
 ok(/SWSH202/.test(cm.buildQuery(sy, 'PSA 10', { forLink: true })), 'deep link carries the promo number');
 ok(/PSA 10/.test(cm.buildQuery(sy, 'PSA 10')), 'grade still asked on a promo');

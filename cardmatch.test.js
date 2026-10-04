@@ -11,7 +11,9 @@ console.log('  ' + m.buildQuery(zard, 'PSA 10'));
 console.log('  ' + m.buildQuery({name:'Charizard VMAX',number:'074',setTotal:73,
                                  setName:"Champion's Path"}, 'PSA 10'));
 console.log('');
-chk('N/M pair padded to match', m.buildQuery(zard,'PSA 10').includes('004/102'));
+chk('N/M pair padded to match', m.buildQuery(zard,'Raw NM').includes('004/102'));
+// A slab asks the number alone: PSA's label prints "#4", never "4/102" (T0, pslabel.test.js)
+chk('a slab asks the bare number', / 004 /.test(m.buildQuery(zard,'PSA 10')) && !m.buildQuery(zard,'PSA 10').includes('/102'));
 chk('set name included', m.buildQuery(zard,'PSA 10').includes('Base Set'));
 chk('grade included', m.buildQuery(zard,'PSA 10').includes('PSA 10'));
 

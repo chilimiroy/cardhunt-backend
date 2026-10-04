@@ -238,6 +238,22 @@ async function upsertCards(cards) {
 }
 
 // ── INGEST ONE SET ────────────────────────────────────────────
+// TCGdex lists a set logo WITHOUT an extension. It usually serves .png, but
+// not always: sv01, xy10 and ecard1 answer 404 for .png and 200 for .webp
+// (measured 2026-10-04 — the three English logos that never drew). Store the
+// first that answers a GET (a HEAD-only probe has lied here before), or
+// nothing — never a URL nobody fetched.
+async function tcgdexLogo(base) {
+  if (!base) return null;
+  for (const ext of ['.png', '.webp']) {
+    try {
+      const r = await fetch(base + ext, { signal: AbortSignal.timeout(15000) });
+      if (r.ok && /^image\//.test(r.headers.get('content-type') || '')) return base + ext;
+    } catch (e) { /* next extension */ }
+  }
+  return null;
+}
+
 async function ingestSet(setId, lang, setName, printedTotal) {
   // 1. English prices + rarity from pokemontcg.io (indexed by number)
   const pIndex = {};
@@ -291,6 +307,7 @@ async function ingestSet(setId, lang, setName, printedTotal) {
 
   const printed = printedTotal ||
     (td.cardCount && (td.cardCount.official || td.cardCount.total)) || td.cards.length;
+  const setLogo = await tcgdexLogo(td.logo);
 
   const rows = td.cards.map(c => {
     const num = String(c.localId);
@@ -314,7 +331,7 @@ async function ingestSet(setId, lang, setName, printedTotal) {
       image_lang: c.image ? lang : (lang === 'en' && pi.images ? 'en' : null),
       set_api_id: setId, set_name: setName || td.name,
       set_name_en: enSetName, set_total: printed,
-      set_logo: td.logo ? td.logo + '.png' : null,
+      set_logo: setLogo,
       set_series: (td.serie && td.serie.name) || null,
       set_release: td.releaseDate || null,
       tcgplayer: pi.tcgplayer || null, cardmarket: pi.cardmarket || null,
@@ -3066,7 +3083,7 @@ async function backfillSetMeta(langArg, flag) {
       const td = await get(`${TCGDEX}/${lang}/sets/${setId}`);
       await sleep(DELAY_TCGDEX);
       if (td) {
-        if (td.logo) logo = td.logo + '.png';
+        if (td.logo) logo = await tcgdexLogo(td.logo);
         if (td.serie && td.serie.name) serie = td.serie.name;
         if (td.releaseDate) rel = td.releaseDate;
         src = 'set endpoint';
@@ -3075,7 +3092,7 @@ async function backfillSetMeta(langArg, flag) {
       // 2. Fall back to the set list entry
       const le = byId[setId] || byId[String(setId).toUpperCase()] || byId[String(setId).toLowerCase()];
       if (le) {
-        if (!logo && le.logo) { logo = le.logo + '.png'; src = src || 'set list'; }
+        if (!logo && le.logo) { logo = await tcgdexLogo(le.logo); if (logo) src = src || 'set list'; }
         if (!serie && le.serie && le.serie.name) { serie = le.serie.name; src = src || 'set list'; }
         if (!rel && le.releaseDate) { rel = le.releaseDate; src = src || 'set list'; }
         if (src === 'set list') fromList++;
@@ -4569,6 +4586,7 @@ async function limitlessIngest(lang, onlySet) {
     if (!res) { console.log('not on Limitless'); failed++; continue; }
 
     const printed = (s.cardCount && (s.cardCount.official || s.cardCount.total)) || res.cards.length;
+    const setLogo = await tcgdexLogo(s.logo);
     const rows = res.cards.map(c => ({
       api_card_id: `${lang}-${s.id}-${c.number}`,
       name: c.name || `#${c.number}`,
@@ -4583,7 +4601,7 @@ async function limitlessIngest(lang, onlySet) {
       set_name: s.name,
       set_name_en: null,
       set_total: printed,
-      set_logo: s.logo ? s.logo + '.png' : null,
+      set_logo: setLogo,
       set_series: (s.serie && s.serie.name) || null,
       set_release: s.releaseDate || null,
       tcgplayer: null, cardmarket: null,

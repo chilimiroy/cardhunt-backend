@@ -308,6 +308,16 @@ const fnSrc = name => {
       `matchedOn=${anon.matchedOn} marketValue=${anon.marketValue}`);
   }
 
+  // T5 (2026-10-04): sv01, xy10 and ecard1 drew no logo — ingest stored
+  // TCGdex's extensionless logo + '.png', which those three 404. The writer
+  // now stores the first extension that answers a GET.
+  {
+    const ing = fs.readFileSync(path.join(__dirname, 'ingest.js'), 'utf8');
+    ok('ingest never appends .png to a TCGdex logo unfetched', !/logo \+ '\.png'/.test(ing));
+    ok('every logo writer goes through tcgdexLogo()', (ing.match(/await tcgdexLogo\(/g) || []).length >= 4
+       && /async function tcgdexLogo\(base\)/.test(ing));
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   if (problems.length) {
     console.log('\nproblems seen:');

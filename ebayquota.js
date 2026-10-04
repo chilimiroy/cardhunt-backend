@@ -58,6 +58,11 @@ const SOFT_STOP     = 0.92;   // background jobs yield; user requests continue
 // average — simple, and every refusal can say exactly when it lifts.
 // Applies to EVERY origin, user included: a runaway looks like a user.
 const HOURLY_LIMIT  = 600;
+// One-day lift, keyed on the UTC day like TOOLING_OVERRIDES, so it lapses by itself.
+const HOURLY_OVERRIDES = { '2026-10-04': 5000 };
+function hourlyLimit(now) {
+  return HOURLY_OVERRIDES[(now || new Date()).toISOString().slice(0, 10)] || HOURLY_LIMIT;
+}
 
 // ── A separate allowance for tooling (TASK T2) ──
 // Probes, audits and rate checks spent ~950 calls on 2026-09-30 — a fifth
@@ -71,7 +76,11 @@ const TOOLING_DAILY = 300;
 // day so it lapses by itself at midnight — never a standing change.
 // 2026-10-04: 700, for the card-back re-measurement (TASK T3); raised to
 // 2000 the same evening by Roy, for the catalogue query audit (T2).
-const TOOLING_OVERRIDES = { '2026-10-04': 2000 };
+// 2026-10-04 22:55 UTC: Roy lifted the hourly ceiling and the tooling
+// allowance for the last hour of the day (3,100 calls unused) for the
+// counterfeit-gate measurement (TASK T1). The daily limit, the reserve and
+// the soft stop still bind.
+const TOOLING_OVERRIDES = { '2026-10-04': 5000 };
 function toolingAllowance(now) {
   return TOOLING_OVERRIDES[(now || new Date()).toISOString().slice(0, 10)] || TOOLING_DAILY;
 }
@@ -214,7 +223,7 @@ async function check(db, opts) {
     percentUsed: +(ratio * 100).toFixed(1),
     source: ebayRemaining !== null ? 'ebay-headers' : 'local-count',
     resetsInMin, resetsAt,
-    hour: { used: hourUsed, limit: HOURLY_LIMIT, remaining: HOURLY_LIMIT - hourUsed,
+    hour: { used: hourUsed, limit: hourlyLimit(now), remaining: hourlyLimit(now) - hourUsed,
             resetsInMin: hourResetsInMin, resetsAt: hourResetsAt },
     tooling: { used: toolUsed, allowance: toolingAllowance(now), remaining: toolingAllowance(now) - toolUsed },
     byOrigin: { user: num(s.user_calls), background: num(s.background_calls),
@@ -231,9 +240,9 @@ async function check(db, opts) {
       `Resets in ${resetsInMin} min.`, resetsInMin, resetsAt);
   }
 
-  if (hourUsed >= HOURLY_LIMIT) {
+  if (hourUsed >= hourlyLimit(now)) {
     return refuse('hourly',
-      `${hourUsed} eBay calls this hour — the hourly ceiling is ${HOURLY_LIMIT}, ` +
+      `${hourUsed} eBay calls this hour — the hourly ceiling is ${hourlyLimit(now)}, ` +
       `so a runaway cannot spend the whole day. Lifts in ${hourResetsInMin} min.`,
       hourResetsInMin, hourResetsAt);
   }
@@ -339,7 +348,7 @@ async function fetchRateLimits(db, token) {
 //   stopped  a USER request would be refused right now; `reason` says why
 //            and `liftsAt` says when listings return
 function levelOf(c) {
-  const worst = Math.max((c.percentUsed || 0) / 100, c.hour ? c.hour.used / HOURLY_LIMIT : 0);
+  const worst = Math.max((c.percentUsed || 0) / 100, c.hour ? c.hour.used / (c.hour.limit || HOURLY_LIMIT) : 0);
   return !c.allowed ? 'stopped'
     : worst >= WARN_AT ? 'warn'
     : worst >= VISIBLE_FROM ? 'notice' : 'quiet';
@@ -364,7 +373,7 @@ async function status(db) {
     reason: c.reason,
     policy: {
       dailyLimit: DAILY_LIMIT,
-      hourlyLimit: `${HOURLY_LIMIT} per UTC clock hour, every origin — a runaway spends one hour's worth, not the day`,
+      hourlyLimit: `${hourlyLimit()} per UTC clock hour, every origin — a runaway spends one hour's worth, not the day`,
       toolingAllowance: `${toolingAllowance()}/day today (normally ${TOOLING_DAILY}) for probes and audits — refused past it, never borrowed from the user budget`,
       reserve: `${RESERVE} calls held back — never spent`,
       backgroundStopsAt: `${SOFT_STOP * 100}% (background and tooling) so user requests keep working`,
@@ -378,6 +387,6 @@ async function status(db) {
 
 module.exports = {
   check, record, status, fetchRateLimits, normOrigin, levelOf,
-  DAILY_LIMIT, RESERVE, WARN_AT, SOFT_STOP, HOURLY_LIMIT, TOOLING_DAILY, toolingAllowance, TOOLING_OVERRIDES,
+  DAILY_LIMIT, RESERVE, WARN_AT, SOFT_STOP, HOURLY_LIMIT, HOURLY_OVERRIDES, hourlyLimit, TOOLING_DAILY, toolingAllowance, TOOLING_OVERRIDES,
   VISIBLE_FROM, ORIGINS, windowKey, msUntilReset, hourKey, msUntilHourReset
 };

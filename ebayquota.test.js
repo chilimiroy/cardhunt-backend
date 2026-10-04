@@ -10,6 +10,9 @@
 // ══════════════════════════════════════════════════════════════
 
 const q = require('./ebayquota');
+// One-day lifts (TOOLING_OVERRIDES, HOURLY_OVERRIDES) are keyed on the real
+// UTC day; the suite tests the standing limits, so clear them here.
+for (const o of [q.TOOLING_OVERRIDES, q.HOURLY_OVERRIDES]) for (const k in o || {}) delete o[k];
 let pass = 0, fail = 0;
 const chk = (l, c) => { c ? pass++ : fail++;
   console.log('  ' + (c ? 'PASS' : 'FAIL') + '  ' + l); };
@@ -175,7 +178,10 @@ const L = q.DAILY_LIMIT;
   s = await lv(1200, 0, { user_calls: 700, background_calls: 200, tooling_calls: 300 });
   chk('broken down by origin', s.byOrigin.user === 700 && s.byOrigin.background === 200 && s.byOrigin.tooling === 300);
   chk('  tooling spent shows as spent, while the user is still served', s.tooling.remaining === q.toolingAllowance() - 300 && s.allowed);
-chk('a one-day raise lapses by itself: 300 the day after', q.toolingAllowance(new Date('2026-10-05T00:00:01Z')) === 300 && q.toolingAllowance(new Date('2026-10-04T23:59:59Z')) === q.TOOLING_OVERRIDES['2026-10-04'] && q.TOOLING_OVERRIDES['2026-10-04'] > 300);
+q.TOOLING_OVERRIDES['2000-01-01'] = 700; q.HOURLY_OVERRIDES['2000-01-01'] = 5000;
+chk('a one-day raise lapses by itself: 300 the day after', q.toolingAllowance(new Date('2000-01-02T00:00:01Z')) === 300 && q.toolingAllowance(new Date('2000-01-01T23:59:59Z')) === 700);
+chk('a one-day hourly lift lapses by itself: 600 the day after', q.hourlyLimit(new Date('2000-01-02T00:00:01Z')) === 600 && q.hourlyLimit(new Date('2000-01-01T23:59:59Z')) === 5000);
+delete q.TOOLING_OVERRIDES['2000-01-01']; delete q.HOURLY_OVERRIDES['2000-01-01'];
   chk('  calls from before origins were counted show as unattributed, not as user', s.unattributed === 0);
   s = await lv(4900, 0, { user_calls: 10 });
   chk('  4,900 used, 10 tagged -> 4,890 unattributed', s.unattributed === 4890, s.unattributed);

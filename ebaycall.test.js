@@ -19,6 +19,9 @@
 
 const ebay = require('./ebaycall');
 const quota = require('./ebayquota');
+// One-day lifts (TOOLING_OVERRIDES, HOURLY_OVERRIDES) are keyed on the real
+// UTC day; the suite tests the standing limits, so clear them here.
+for (const o of [quota.TOOLING_OVERRIDES, quota.HOURLY_OVERRIDES]) for (const k in o || {}) delete o[k];
 
 let pass = 0, fail = 0;
 const failures = [];

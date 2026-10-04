@@ -1136,10 +1136,43 @@ function totalFits(titleTotal, card) {
 // TCGplayer write "McDonald's 2014" / "McDonald's Promos 2014", and eBay
 // needs every word: Pikachu 5/12 returned one listing (2026-10-02). The
 // gate still checks the catalogue name — only the question changes.
-function askedSetName(setName) {
+function askedSetName(setName, card) {
+  const w = card && SET_WRITTEN_AS[setIdOf(card)];
+  if (w && w.ask) return w.ask;
   const s = String(setName || '');
   const m = s.match(/^McDonald['’]s Collection (\d{4})$/i);
   return m ? "McDonald's " + m[1] : s;
+}
+
+// How a set is WRITTEN in titles where that differs from our set name
+// (T0, 2026-10-04). PSA's label is what most graded titles copy —
+// "2002 POKEMON EXPEDITION #28 TYPHLOSION-HOLO PSA 1" — and it prints no
+// set total and its own set name. Read off eBay US label-format titles
+// ("YEAR POKEMON <set> #N"), counted: GAME 16 (+ GAME SHADOWLESS / 1ST
+// EDITION), ROCKET 10, EXPEDITION 27 of 44, BASE 2 / GAME BASE II 8,
+// "MEW EN-151" for 151. Our "Expedition Base Set" is in no title at all,
+// and "151" is too short for the plain set-name check to read.
+//   ask:    what the query asks instead of our set name (every word must hit)
+//   titles: what counts as the title naming this set, beside our own name
+// Keyed by SET ID, like the reprint tables. Modern labels carry the full
+// set name ("SWORD & SHIELD LOST ORIGIN", "PAF EN-PALDEAN FATES"), so need
+// no entry.
+const SET_WRITTEN_AS = {
+  'ecard1': { ask: 'Expedition', titles: [/\bexpedition\b/i] },
+  // "POKEMON GAME BASE II" is Base Set 2's label; "GAME MOVIE" a promo.
+  'base1':  { titles: [/\bpok[eé]mon game\b(?!\s+(?:base|movie))/i] },
+  'base4':  { titles: [/\bbase 2\b/i, /\bgame base ii\b/i] },
+  'base5':  { titles: [/\bpok[eé]mon rocket\b/i] },
+  'sv03.5': { titles: [/\ben-151\b/i, /\bsv\s*151\b/i, /\bmew en 151\b/i] }
+};
+function titleNamesSetAlias(title, card) {
+  const w = SET_WRITTEN_AS[setIdOf(card)];
+  return !!(w && w.titles.some(re => re.test(title)));
+}
+// Accents removed before a set name is compared: "Pokémon GO" flattened to
+// "pokmon go" and could never be found in a title saying "Pokemon GO".
+function foldAccents(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 // Sets whose cards print three-digit numbers on both halves.
 const QUERY_PAD3 = new Set(['2023sv', '2024sv']);
@@ -1325,8 +1358,8 @@ function yearsIn(title) {
 // different set.
 function namesAConflictingSet(title, setName) {
   if (!setName) return null;
-  const flat = String(title).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ');
-  const want = String(setName).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const flat = foldAccents(title).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ');
+  const want = foldAccents(setName).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!want || want.length < 3) return null;
 
   const at = flat.indexOf(want);
@@ -1565,7 +1598,7 @@ function buildQuery(card, grade, opts) {
   // regardless — this only affects what is ASKED.
   // Omit a CJK set name specifically — not merely one lacking Latin letters,
   // which would also drop "151", a perfectly searchable English set name.
-  if (card.setName && !promo && !CJK.test(String(card.setName))) bits.push(askedSetName(card.setName));
+  if (card.setName && !promo && !CJK.test(String(card.setName))) bits.push(askedSetName(card.setName, card));
 
   const g = parseGrade(grade);
   if (g.kind === 'graded') {
@@ -2078,10 +2111,10 @@ function verifyCore(title, card, grade, opts) {
   // and read as #74 it passed for Charizard VMAX #74 (T9, 2026-09-29; 0 of
   // 516 kept production titles carry a currency sign before a number).
   const bareNum = new RegExp('(?:^|[^0-9/$€£¥])0*' + wantNum + '(?![0-9/])').test(t);
-  const setName = String(card.setName || '').toLowerCase()
+  const setName = foldAccents(card.setName).toLowerCase()
                     .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
-  const titleFlat = lower.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
-  const setNamed = setName.length > 3 && titleFlat.includes(setName);
+  const titleFlat = foldAccents(lower).replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
+  const setNamed = (setName.length > 3 && titleFlat.includes(setName)) || titleNamesSetAlias(t, card);
 
   if (bareNum && setNamed) {
     const conflict2 = namesAConflictingSet(t, card.setName);

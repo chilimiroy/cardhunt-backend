@@ -113,7 +113,7 @@ const fnOf = name => { const i = server.search(new RegExp('\\n(?:async\\s+)?func
 ok('resolveListingCard SELECTs variants (else printings are always null)', /set_release, image_small, variants/.test(fnOf('resolveListingCard')));
 ok('ebayMatchCard carries printings', /printings: printingsOf\(card\)/.test(fnOf('ebayMatchCard')));
 ok('filterCard carries printings (Yahoo, Yuyu-tei)', /printings: printingsOf\(card\)/.test(fnOf('filterCard')));
-ok('sourceEbay gates on the printing', /printing \? \{ printing \}/.test(fnOf('sourceEbay')) && /buildQuery\([^;]*matchCard[^;]*grade, \(printing \|\| opts\.edition\) \? \{ printing, edition/.test(fnOf('sourceEbay')));
+ok('sourceEbay gates on the printing', /printing \? \{ printing \}/.test(fnOf('sourceEbay')) && /buildQuery\([^;]*matchCard[^;]*grade, \(printing \|\| opts\.edition[^?]*\)\s*\? \{ printing, edition/.test(fnOf('sourceEbay')));
 ok('sourceYahoo gates on the printing', /cm\.printingRefusal\(pclaim, opts\.printing, fc\)/.test(fnOf('sourceYahoo')));
 ok('sourceYuyutei serves the asked mirror, else the base rule', /wantMirror/.test(fnOf('sourceYuyutei')) && /pickVariants/.test(fnOf('sourceYuyutei')));
 ok('every source reports printing', ['sourceEbay', 'sourceYahoo', 'sourceYuyutei'].every(f => /printingReport\(/.test(fnOf(f))));

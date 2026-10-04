@@ -614,6 +614,12 @@ const SLAB_WORDS = new RegExp('(?:' + [].concat(
 const NOT_A_SINGLE_CARD_TERMS = [
   // multiples
   'lot', 'lots', 'bundle', 'set of', 'collection of', 'joblot', 'job lot', 'mystery',
+  // a set sold as one listing (T4, 2026-10-04): "Fates Collide Partial Set |
+  // Alakazam EX 125/124" was a 100-card lot shown as #125's cheapest; "30th
+  // Celebration Partial Set | Mew ex 152/128 SIR + Binder" likewise. 0 of
+  // the 896 right titles carry any of these. NOT "master set": the Master
+  // Ball pattern is how sellers describe a genuine single's printing.
+  'partial set', 'complete set', 'full set', 'set lot',
   // sealed product
   'booster', 'box', 'boxes', 'pack', 'packs', 'tin', 'tins', 'etb', 'elite trainer',
   'sealed', 'case', 'cases', 'blister',
@@ -763,6 +769,58 @@ const GENUINE_ART_PHRASES =
 // Blastoise Holo PSA 8 Card NM-MINT Base Set" was refused as "not a single
 // card: 8 Card". The grader and its grade are masked for the lot test only.
 const GRADE_PHRASES = new RegExp('(?:' + GRADERS.map(graderToken).join('|') + ')' + GRADE_NUM, 'gi');
+
+// ── The card's OWN name and set name, protected the same way ──
+// (T2, 2026-10-04.) Every English card's own "name number/total set name"
+// was run through this test: 236 of 21,152 were refused as not a single
+// card on their own identity — all 168 of Forbidden Light ("light", the
+// lamp word), Light Toxtricity, Gym Badge, Mystery Garden, Tool Box, Box of
+// Disaster, Iron Bundle, Booster Energy Capsule, Energy Coin, Hop's Bag,
+// Reset Stamp, Custom Catcher, Jumbo Ice Cream, Suspicious Food Tin, Puzzle
+// of Time, Team Yell Towel, and the whole Poké Card Creator Pack set. Not
+// one listing of Forbidden Light had ever been shown. SET_NAME_PHRASES
+// covered six sets by hand; this covers the card being asked about, every
+// time, and leaves the words as strong as they were for everything else:
+// "Forbidden Light Booster Box" still carries "booster" and "box".
+//
+// Matched on a LENGTH-PRESERVING fold of the title (accents dropped per
+// character, ’ read as '), so the span removed from the original is exact
+// and the accented lot terms (fälschung, réplica) still read the original.
+function foldSameLength(s) {
+  let out = '';
+  for (const ch of String(s || '')) {
+    let b = ch.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+    if (b.length !== ch.length) b = ch;            // never change the length
+    out += b.toLowerCase().replace(/[’`]/g, "'");
+  }
+  return out;
+}
+function ownIdentityPattern(card) {
+  const parts = [];
+  for (const p of [card && card.name, card && card.nameEn, card && card.setName]) {
+    const f = foldSameLength(p).trim();
+    if (f.length < 3) continue;
+    const tokens = f.split(/[^a-z0-9'぀-ヿ一-鿿]+/).filter(Boolean)
+      .map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/'/g, "'?"));
+    if (tokens.length) parts.push(tokens.join("[\\s\\-:.'&]*"));
+  }
+  if (!parts.length) return null;
+  parts.sort((a, b) => b.length - a.length);         // longest first
+  return new RegExp('(?<![a-z0-9])(?:' + parts.join('|') + ')(?![a-z0-9])', 'g');
+}
+function maskOwnIdentity(t, card) {
+  const re = ownIdentityPattern(card);
+  if (!re) return t;
+  const folded = foldSameLength(t);
+  if (folded.length !== t.length) return t;           // cannot map spans back: mask nothing
+  let out = '', last = 0, m;
+  while ((m = re.exec(folded))) {
+    if (!m[0]) { re.lastIndex++; continue; }
+    out += t.slice(last, m.index) + ' ~ ';
+    last = m.index + m[0].length;
+  }
+  return out + t.slice(last);
+}
 
 // ── Reprint sets that reuse another set's numbering ───────────
 // The English form of the master-ball mirror problem, and it is worse than
@@ -1924,7 +1982,8 @@ function verifyCore(title, card, grade, opts) {
   //    stripped to spaces reads "186/196   Card" — which that pattern
   //    matches, rejecting a genuine alt art as a 196-card lot. A
   //    non-space, non-word character cannot be spanned by \s* or \b.
-  const tForLot = t.replace(SET_NAME_PHRASES, ' ~ ').replace(GENUINE_ART_PHRASES, ' ~ ').replace(GRADE_PHRASES, ' ~ ');
+  const tForLot = maskOwnIdentity(t, card)
+    .replace(SET_NAME_PHRASES, ' ~ ').replace(GENUINE_ART_PHRASES, ' ~ ').replace(GRADE_PHRASES, ' ~ ');
   if (NOT_A_SINGLE_CARD.test(tForLot)) {
     return { ok: false, reason: 'not a single card: ' +
       (tForLot.match(NOT_A_SINGLE_CARD) || [])[0] };

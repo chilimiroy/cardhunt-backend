@@ -5182,7 +5182,7 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
   // ?shape=bare|or (T0, 2026-10-04): how the collector number is ASKED —
   // measuring whether "N/M" in the query hides PSA-label titles ("#28").
   const shape = ['pair', 'bare', 'or'].includes(String(req.query.shape)) ? String(req.query.shape) : null;
-  const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1', shape]);
+  const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1', shape, req.query.titles === '1']);
   const hit = marketProbeCache.get(key);
   if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') return res.json(hit.body);
   try {
@@ -5288,7 +5288,13 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
           reason: d.reason, keptOn: keptBy[d.itemId] });
       }
     }
-    const body = { cardId, grade, sites, summary, crossRefused, union: allIds.size, usKept: usIds.size,
+    // ?titles=1 (T2, 2026-10-04): every title each site returned, kept and
+    // refused with the reason — how "what do sellers write for this set?"
+    // is read from eBay's own answer, at no extra call.
+    const titles = req.query.titles === '1' ? Object.fromEntries(sites.map(mp => [mp, {
+      kept: ((per[mp] && per[mp].keptRows) || []).map(k => ({ usd: k.usd, title: k.title })),
+      refused: ((per[mp] && per[mp].droppedRows) || []).map(d => ({ title: d.title, reason: d.reason })) }])) : undefined;
+    const body = { cardId, grade, sites, summary, crossRefused, titles, union: allIds.size, usKept: usIds.size,
                    usCapped, usMaxExaminedUsd: usMax, outliers: judged.stats,
                    quotaSpentSearch: calls, stored: false, at: new Date().toISOString() };
     marketProbeCache.set(key, { at: Date.now(), body });

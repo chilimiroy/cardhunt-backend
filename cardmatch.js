@@ -1209,7 +1209,12 @@ function numberPrefix(card) {
   const m = String((card && card.number) || '').match(/^([A-Za-z]{1,4})\d/);
   return m ? m[1].toUpperCase() : null;
 }
+// Sets whose letter-suffixed cards print ANOTHER set's total (T2,
+// 2026-10-04): Yellow A Alternate's 24a/119 is Phantom Forces' 119; our
+// set_total (6) is a count. Asked by the number alone; any total accepted.
+const LETTER_TOTAL_NOT_HELD = new Set(['xya']);
 function printedTotal(card) {
+  if (LETTER_TOTAL_NOT_HELD.has(setIdOf(card))) return null;
   const pre = numberPrefix(card);
   if (!pre || !card.setTotal) return card.setTotal ? String(card.setTotal) : null;
   return SUBSET_SETS[setIdOf(card)] === pre ? pre + String(card.setTotal) : null;
@@ -1232,7 +1237,7 @@ function totalFits(titleTotal, card) {
 function askedSetName(setName, card, grade) {
   const w = card && SET_WRITTEN_AS[setIdOf(card)];
   if (w && w.askGraded && grade && parseGrade(grade).kind === 'graded') return w.askGraded;
-  if (w && w.ask) return w.ask;
+  if (w && typeof w.ask === 'string') return w.ask;   // '' = not asked
   const s = String(setName || '');
   const m = s.match(/^McDonald['’]s Collection (\d{4})$/i);
   return m ? "McDonald's " + m[1] : s;
@@ -1260,7 +1265,17 @@ const SET_WRITTEN_AS = {
   'base1':  { askGraded: '(Base,Game)', titles: [/\bpok[eé]mon game\b(?!\s+(?:base|movie))/i] },
   'base4':  { titles: [/\bbase 2\b/i, /\bgame base ii\b/i] },
   'base5':  { askGraded: 'Rocket', titles: [/\bpok[eé]mon rocket\b/i] },
-  'sv03.5': { titles: [/\ben-151\b/i, /\bsv\s*151\b/i, /\bmew en 151\b/i] }
+  'sv03.5': { titles: [/\ben-151\b/i, /\bsv\s*151\b/i, /\bmew en 151\b/i] },
+  // T2, 2026-10-04 (querygap + marketprobe ?titles=1, eBay US):
+  // "Yellow A Alternate" is TCGdex's name; sellers write "M Manectric EX
+  // 24a/119 Holo Promo Alternate Art Promos" — the number with its letter,
+  // over the ORIGINAL set's total (Phantom Forces' 119), which we do not
+  // hold (LETTER_TOTAL_NOT_HELD). 105 rows returned, 0 kept, before.
+  'xya':    { ask: 'Alternate Art', titles: [/\balternate art\b/i] },
+  // Futsal prints "002/005" and sellers write the card's own name ("Eevee
+  // on the Ball 002/005 Promo"), not "Pokémon Futsal 2020": the set name
+  // is not asked (QUERY_PAD3 pads the number). The gate needs the pair.
+  'fut2020': { ask: '', titles: [/\bfutsal\b/i] }
 };
 function titleNamesSetAlias(title, card) {
   const w = SET_WRITTEN_AS[setIdOf(card)];
@@ -1272,7 +1287,7 @@ function foldAccents(s) {
   return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 // Sets whose cards print three-digit numbers on both halves.
-const QUERY_PAD3 = new Set(['2023sv', '2024sv']);
+const QUERY_PAD3 = new Set(['2023sv', '2024sv', 'fut2020']);
 
 function asPrinted(card) {
   const rp = reprintOf(card);
@@ -1710,7 +1725,10 @@ function buildQuery(card, grade, opts) {
   // regardless — this only affects what is ASKED.
   // Omit a CJK set name specifically — not merely one lacking Latin letters,
   // which would also drop "151", a perfectly searchable English set name.
-  if (card.setName && !promo && !CJK.test(String(card.setName))) bits.push(askedSetName(card.setName, opts.setAsk === false ? null : card, grade));
+  if (card.setName && !promo && !CJK.test(String(card.setName))) {
+    const asked = askedSetName(card.setName, opts.setAsk === false ? null : card, grade);
+    if (asked) bits.push(asked);
+  }
 
   const g = parseGrade(grade);
   if (g.kind === 'graded') {
@@ -1943,6 +1961,40 @@ function goldBeforeGold(title, card) {
 // `evidence` is attached here, at the single exit, rather than inside
 // verifyCore — which returns from fourteen different branches, and the one
 // that forgot would be the one that mattered.
+// ── A number with a LETTER is its own card (T2, 2026-10-04) ──
+// 31 English cards carry one: Aquapolis 50a/50b Golduck (two cards), the
+// XY alternate arts 24a M Manectric-EX, 55a M Lucario-EX… normNum folds
+// "24a" to "24" and "24a/119" is not read as a pair at all, so the gate
+// matched 24a against any "24" — the regular 24/119 Manectric for the alt
+// art, and the alt art's listings for the regular card. Both directions:
+//   our number has a letter -> the title must state that letter;
+//   ours has none           -> a title stating our number WITH a letter
+//                              over a total ("24a/119") is another card.
+// Returns null when no letter is involved (the ordinary checks run).
+function verifyLetterNumber(t, card, grade) {
+  const ours = String(card.number || '').trim().match(/^0*(\d{1,4})([a-z])$/i);
+  if (!ours) {
+    const plain = String(card.number || '').trim().match(/^0*(\d{1,4})$/);
+    if (!plain) return null;
+    const lettered = new RegExp('(?:^|[^0-9a-z])0*' + plain[1] + '([a-z])\\s*\\/\\s*\\d', 'i').exec(t);
+    return lettered ? { ok: false, reason: `title states ${plain[1]}${lettered[1]} — a lettered card, not #${plain[1]}` } : null;
+  }
+  const re = new RegExp('(?:^|[^0-9a-z])0*' + ours[1] + ours[2] + '(?![0-9a-z])(?:\\s*\\/\\s*0*(\\d{1,4}))?', 'i');
+  const m = re.exec(t);
+  if (!m) return { ok: false, reason: `title does not state ${card.number} — #${ours[1]} without the letter is another card` };
+  const ourSet = foldAccents(card.setName || '').toLowerCase().trim();
+  const setNamed = titleNamesSetAlias(t, card) || (ourSet.length > 3 && foldAccents(t).toLowerCase().includes(ourSet));
+  const tot = m[1];
+  if (tot && !LETTER_TOTAL_NOT_HELD.has(setIdOf(card))) {
+    if (card.setTotal && normNum(tot) !== normNum(card.setTotal)) {
+      return { ok: false, reason: `number ${card.number} matches but set size does not: title says ${ours[1]}${ours[2]}/${tot}, wanted ${card.number}/${card.setTotal}` };
+    }
+    return { ok: true, reason: null, confidence: 'number+total', matched: { number: card.number, grade } };
+  }
+  if (setNamed) return { ok: true, reason: null, confidence: 'number+setname', matched: { number: card.number, set: card.setName, grade } };
+  return { ok: false, reason: `title has ${card.number} but not the set (${card.setName})` };
+}
+
 function verify(title, card, grade, opts) {
   const r = verifyCore(title, card, grade, opts) || { ok: false, reason: 'no verdict' };
   r.evidence = printingEvidence(card);
@@ -2189,6 +2241,8 @@ function verifyCore(title, card, grade, opts) {
   }
   const wantNum = normNum(card.number);
   const wantTot = card.setTotal ? normNum(card.setTotal) : null;
+  const letterCheck = verifyLetterNumber(t, card, grade);
+  if (letterCheck) return letterCheck.ok ? accept(letterCheck) : letterCheck;
   const pairs = numberPairsIn(t);
 
   if (pairs.length) {

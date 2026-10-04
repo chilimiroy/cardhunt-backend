@@ -11,6 +11,11 @@
 //      the archive: a gate never reached, a duplicated definition, a silent
 //      fallback, an escape mangled on its way to disk.
 //
+//   4. CLAUDE.md stays under its BUDGET (60,000 characters). It was split on
+//      2026-10-01 and grew back from ~1,290 lines to 163k in three days,
+//      because nothing prevented regrowth. The budget and the rule saying
+//      what belongs there are written at the top of the file itself.
+//
 //   node claudesplit.test.js
 const fs = require('fs');
 let pass = 0, fail = 0;
@@ -66,6 +71,13 @@ for (const [what, re] of [
 ]) ok(re.test(lessons), 'LESSONS states: ' + what);
 ok(/node -e "for\(const f of \[/.test(cur.slice(cur.indexOf('# COMMANDS'), cur.indexOf('# LESSONS'))),
    'the 0x08 byte-check one-liner is in COMMANDS, not only inside a story');
+
+// ── 4. the budget ──
+const BUDGET = 60000;
+ok(cur.length <= BUDGET, 'CLAUDE.md is within its budget: ' + cur.length + ' of ' + BUDGET +
+   ' characters — move measurements to PROGRESS.md and narratives to the archive, one line and a pointer here');
+ok(/60,000-character budget/.test(cur.slice(0, 3000)) && /claudesplit.test.js/.test(cur.slice(0, 3000)),
+   'the budget is stated at the top of CLAUDE.md, naming this test');
 
 // ── the archive is a frozen record, not a working copy ──
 ok(arc.length > cur.length, 'the archive is the larger file');

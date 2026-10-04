@@ -2887,3 +2887,1130 @@ Keep `PROGRESS.md` current — it is the narrative record, dated, with what was
 measured. `TASK.md` holds the current piece of work only. When you learn
 something durable — a working source, a set-id mapping, a site that blocks you —
 **write it into CLAUDE.md and into the code**, not only into PROGRESS.md.
+
+
+---
+
+# MOVED FROM CLAUDE.md, 2026-10-05 (T0, the 60k budget)
+
+Verbatim, copied before CLAUDE.md was cut to its budget. Each block keeps its
+heading at level 2 (inner headings demoted) and CLAUDE.md cites it. Settled
+narratives and decisions with their history; the measurements went to
+PROGRESS.md under 2026-10-05.
+
+## Known blemishes, measured today
+
+- **2026-10-02, e-Card and McDonald's (T3):** Skyridge 182/182 artwork,
+  Aquapolis 177/185 — the 18 H01-H09 from pokemontcg.io's H1-H9 (each
+  fetched first; `ccfill-backup-2026-10-02123815.json`), plus 5 sm3.5/sm7.5
+  cards the old letter-folding match had refused. The 8 left are Aquapolis
+  50a/50b-style pairs: pokemontcg.io has one #50 for two cards, so none.
+  **SETTLED — do not retry**: one image for two cards is the fold-merge
+  lesson (LESSONS §5); blank is correct until a host serves each separately.
+  **McDonald's 2014/2015/2017/2018 (48 cards) and 2023/2024 (30, no logo
+  either) have no host**: TCGdex `image: null`, pokemontcg.io 404s (and
+  has no 2023/2024 set). TCGplayer's CDN carries them. **DECIDED 2026-10-02
+  (Roy): leave them blank** — that is a marketplace's product photography,
+  its API is closed to new access, and 78 cards is not worth a terms
+  question we would have to guess the answer to. Do not fill from
+  TCGplayer's CDN. Links: queries fixed `cc20e41`.
+
+- **2026-10-01, data changes (each with a backup in the project root):**
+  the four duplicate Trainer Gallery sets `swsh9.5tg`…`swsh12.5tg` deleted
+  (120 cards, 729 price rows; every twin held its own price, median ratio
+  1.000 — `dupsets-purged-20261001.json`); 26 Yahoo base rows on 23 SV2a/SV8a
+  cards deleted where `jpcheck ja --both` showed the stored base price EQUAL
+  to today's Master Ball mirror median (`yahoojp-mirror-purged-20261001.json`;
+  "48" was the whole MIRROR class across all sets, not this criterion);
+  8,359 Japanese thumbnails pointed at `_SM` (`jpthumbs-backup-20261001.json`);
+  508 artworks + 25 logos from pokemontcg.io (`ccfill-backup-*.json`).
+  Manifest's 125 "not found" were those 120 duplicates, 4 transient fetch
+  failures and Unown `exu-?` (stored `%3F`, URL built unencoded — fixed).
+
+- **English names are thin where they matter most.** Japanese cards carry
+  `name_en` on 5,097 of 14,023 (36%) and `set_name_en` on **653 (4.7%)**.
+  eBay is searched with the English name, so for ~64% of Japanese cards the
+  query falls back to the Japanese name and eBay US answers nothing. The
+  response correctly reports `0 kept, 0 rejected` — nothing is broken, the
+  question is simply unanswerable. `node ingest.js names ja` is the fix, and it
+  is the single highest-yield data job outstanding.
+- **Foreign ids: zero, and refused loudly** (2026-09-27, `9c7c04f`). The two
+  stray rows (`me2pt5-294`, `me55c-33`) are deleted (backup
+  `strayids-purged-20260927.json`) and alert 5 re-pointed to `en-30th-c-008`.
+  Writer: `/api/cards/:id`'s INSERT (`2fd8549`). **Producers, in the page:**
+  the Add Alert card picker searched pokemontcg.io directly, newest set first,
+  and took result one — "Pikachu & Zekrom-GX" → `me55c-33`, alert 5's fields
+  exactly; and the embedded `ME2PT5_PREMIUM` list carried `me2pt5-*` ids.
+  Also closed: the Search screen trending grid (pokemontcg tiles), the set
+  page's pokemontcg-direct fallback, TCGdex-direct ids without a language,
+  the `/api/cards?q=` proxy (410). `cardid.js` is the rule; `cardid.test.js`
+  asserts it both ways and counts cards/alerts/portfolio at zero.
+  **Not the producer:** `doSearchLegacy` fetched pokemontcg cards but could
+  never draw them — `renderResultsGrid` was never defined in any commit.
+  Deleted anyway. Check that a function RENDERS before blaming it.
+- **Pokémon TCG Pocket is hidden, not deleted.** 15 sets, 2,480 cards, all
+  English, `set_series = 'Pokémon TCG Pocket'` (TCGdex series `tcgp` lists the
+  same 15). Every read of `cards` carries `digital.visibleSql()`; English
+  browses 205 sets, Home 434. The rows stay; 33 of them carry
+  `tcgplayer_market` prices up to $498.88 matched against physical promos.
+  `manifest` skips them too since ingest 5.9.1 (`35b8ad9`), with the same
+  predicate, and prints the skip.
+
+---
+
+## Open, and a decision rather than a fix
+- **TCGplayer's internal search — KEPT as the last-resort fallback, decided
+  2026-10-01.** TCGdex is asked first for every English card (reprints
+  included); `tcgPlayerSearch` runs only where TCGdex answers no-tcgplayer,
+  not-on-tcgdex or shared (`TCGDEX_FALLBACK_OK`) — never when TCGdex is
+  unreachable. Measured that day: **2,025 visible English cards (9.6%) have
+  only ever been priced by it**, and TCGdex returns `tcgplayer: null` for
+  them — promos (svp 214, xyp 210, bwp 100, mep 60…), 30th (156), Shiny
+  Vaults (216), Galarian Gallery (69), the 55 Classic Collection reprints.
+  **Why kept, when the eBay sold scrape was deleted:** with eBay we held
+  credentials under its terms AND were scraping, so a sanctioned route
+  existed and we moved to it. TCGplayer has no route at all ("We are no
+  longer granting new API access at this time" — no form, no partner path),
+  so stopping it moves those cards to NO source, not a better one. It runs
+  from the home machine during ingest, never from Render on a page view.
+  Every row it writes carries `source_meta.via = 'tcgplayer-internal-search'`
+  and `tcgdexNone`, so the cards can be found and re-priced the day TCGdex
+  fills them or TCGplayer reopens access. Every other caller is gone:
+  pricecheck says NOT CHECKABLE for these cards, the `test` command shows
+  TCGdex, and the banned scrape path is deleted.
+  Where TCGdex has a Cardmarket price for one of these, it is stored as a
+  **second reading** (`source_meta.role = 'second-reading'`, converted by
+  fx.js) — EU retail at ~1.6x, a different market, never the headline:
+  `printsql.basePrintingSql` excludes it from every headline reader
+  (`pricecheck.test.js --db` proves a newer one does not take over).
+  The 9/29 set check had silently stopped svp/xyp/bwp/mep/sve/mee refreshing
+  (their TCGplayer set names were unmapped); probed and aliased 2026-10-01 in
+  `tcgsetname.js`. NOT dpp: its hit was "Jumbo Cards".
+  **Re-check TCGdex coverage around 2027-01**: promos, Shiny Vaults and
+  Galarian Gallery are the kind of gap that gets filled —
+  `SELECT count(*) FROM price_history WHERE source_meta->>'via' =
+  'tcgplayer-internal-search' AND recorded_at > now() - interval '30 days'`,
+  then `node tcgdexharvest.js en --dry` on those sets.
+- **`yahoojp_avg_N`** — Yahoo's own average, lots and slabs included, used
+  only when a search returns no items. Ungated by construction; 0 rows held.
+- **`node ingest.js scrape`** — DELETED 2026-10-01 (scrapeEbaySold, scrapeTcgPlayer,
+  scrapePrices). The command now refuses and exits 1.
+- ~~Variant is gated nowhere~~ — built in T10. ~~Stored Yahoo medians carry no printing~~ — T4 `28ea4be`: a title stating a reverse/mirror leaves the base median and gets its own `variant` row. **Existing** Yahoo base rows are NOT repaired: of 191 JP cards holding both, 143 Yahoo bases sit >5x the Yuyu-tei base, 54 >20x — `jpcheck` over them is the measurement still owed. ~~"Typical" ignores the printing selector~~ — `a9ba5e3`.
+
+---
+
+## REPRINT vs ORIGINAL — settled, and the stamp (2026-10-02)
+
+**Settled — do not explore a fourth time.** No eBay field separates a 30th
+Celebration / Celebrations reprint from its original. Three measurements,
+one answer: **Set** says "Celebrations" on 3 of 10 genuine 30th CC Lugias;
+**Year** is filled on 34-48%; **epid** (catalogue product) is seller-chosen
+and ~12% of 30th listings carry the Aquapolis one. All three are
+seller-entered signals, not gates. The title gate (`REPRINT_FAMILIES`,
+`printingConflict`) stays the answer; the photo is the second check.
+
+**The photo can tell them apart.** A note that "image matching cannot work
+because a reprint reproduces the artwork" was the wrong conclusion — it is
+not in this file or its git history today, but it is recorded here so it
+is not re-derived: we are not comparing artwork, we look for a mark present
+on one card and absent on the other. 30th Celebration reprints carry a
+Pikachu emblem with "3"/"0" cheeks beside the art; Celebrations Classic
+Collection the same emblem with "2"/"5". Measured on real listing photos
+(eBay CDN, 0 API calls; photos looked at, never kept):
+
+| question | answer |
+|---|---|
+| size | **s-l500** — legible when the card fills the frame at s-l225, gone on small/angled cards there (the row thumbnail is s-l225); s-l1600 rescued one glare photo |
+| framing | the stamp is visible to a person on ~97% of reprint photos (Aquapolis listings: 68 of 69 reprints at s-l500; the one: glare); slabs fine; 1 of 86 was a card back |
+| one template for all cards | **fails** — a Lugia-cut template caught 2/66 30th Pikachus, 0/57 Charizards, 0/77 Rayquazas; a bare masked emblem matched any yellow blob (Lugia originals median 0.69 vs reprints 0.81) |
+| a template per card, cut from OUR scan of the reprint with its surrounding art | **works.** At 0.70: 345 of 373 reprint photos (92.5%) across Lugia, Pikachu, Charizard, Rayquaza; **0 of 16 hand-labelled Aquapolis originals flagged**; every one of 22 flags inside the originals' own listings was a stamped reprint on inspection. 0.66 flags 3 Rayquaza originals |
+| Celebrations (CC002 Charizard) | 59 of 79 (75%) — but ~10 of the 20 misses are **metal** Charizards (a different product the gate keeps on the CC card) — ~86% of real CC photos |
+
+Labels are Claude's, by eye from the photos, with zooms where unsure — not
+Roy's. Re-label a sample before moving the threshold.
+
+**What it found that nothing else could.** Of the 86 Aquapolis Lugia rows
+on 2026-10-02, **69 were reprints**: 52 inside the reprint price band
+(flagged) and **18 outside it, unflagged**, $280-$2,100 — including the
+cheapest row on the page. Rayquaza-EX's reprint sells at the original's
+price ($25-30), so no price band can ever separate those two; 18 stamped
+reprints sat unflagged in its 162 rows.
+
+**Built, and AUTOMATIC since 2026-10-02 (TASK T1)** — a gate, not a
+button. `stampcheck.gate` runs in `judgeListings` after the text gates and
+BEFORE the outlier check, on every eBay row of the 55 originals. A stamp
+**found** is a refusal: the row is not shown and is counted in
+`sources.ebay.rejected` / `stampRefused` / `droppedSample` and in the
+payload's `stampGate`. **Not visible** and **unreadable** KEEP the row
+(weak evidence never refuses; 2 of 86 Aquapolis photos show no usable stamp
+area). 0 eBay calls; the row's own photo from `i.ebayimg.com` only, never
+a caller's URL. 54 of 55 templates built; `30th-c-020` (bottom half of
+Darkrai & Cresselia LEGEND) has no stamp on our scan (`notBuilt`).
+BREAK/LEGEND print sideways and are matched a quarter turn round too.
+
+- **Verdicts are permanent and kept in the database** (TASK T2,
+  2026-10-03): `listing_photo_verdicts`, keyed on sha256(item id) +
+  sha256(photo URL) + `VERDICT_VERSION` (bump it when a template, the
+  threshold or MATCH changes — older rows are then ignored). Each view
+  reads the verdicts it lacks in ONE query before the gate (bounded 2.5 s;
+  a miss is not re-asked for a minute); each definite verdict is written
+  once; a retryable failure (CDN down, timeout) is never written, held 2
+  minutes in memory. Memory stays the fast path (7 days). Until 2026-10-03
+  a restart forgot every verdict.
+- **One persistent worker pool** (`STAMP_WORKERS`, default 1), a queue, one
+  job per item however many views ask. Measured on Render before this: one
+  check 4.2-5.9 s there vs ~1.2 s here, and **8 parallel workers all ran
+  past 20 s** — then the 20 s timeout was CACHED as "unreadable" (fixed:
+  retryable, never a verdict).
+- **The answer never waits, and never shows an unchecked row.** An
+  unchecked row is HIDDEN (T2, 2026-10-03 — it used to be shown "Photo
+  being checked" and then vanish), counted in `stampGate.pending` and the
+  eBay summary, and the panel says "N listings shown, P still being
+  checked"; rows APPEAR as verdicts land. The checks run after the
+  response (`stampFollowUp`,
+  display order — the cheapest rows first), the view is re-judged as
+  verdicts land (`rebuildView` with `noFetch`: it can never spend), and the
+  page re-reads with `?poll=1` while `stampGate.pending > 0`. `poll=1` is
+  now cache-only: on a miss it says "not fetched", never searches.
+- **Faster matcher** (`stampcheck.MATCH`): scales from 28 px not 14 (real
+  stamps measure 36-88 px at s-l500; the small scales cost most and found
+  only false scores), largest first, stop at the threshold. 689 vs 2,179
+  ms a photo on the same loaded machine, same totals on 906 photos, and the
+  card back (o81, 0.709 "found" before) no longer flags.
+- **Measured, Lugia (82 real photos, local, costmeter):** cold open 954 ms
+  with 82 pending; all 82 checked **41.7 s** later (~490 ms each, 1
+  worker), 68 refused, 14 kept; re-open with verdicts cached **342 ms**, from
+  the view cache **78 ms**. eBay: 2 searches + 1 token for the open,
+  **0 for the stamp work** (82 CDN fetches, once each).
+- **Measured on Render, 2026-10-02** (cold, after a deploy restart, 1
+  worker): Base Set Venusaur 137 photos **166 s** to clear; Mew VMAX 177
+  photos **219 s**; ~1.2-1.3 s a photo (`poolState().meanMs` 1,274 over
+  399) — ~2.5x this machine, not 4x. **The top five rows were resolved by
+  ~12 s on both**: ordering does its job, the headline settles long before
+  the tail. Re-open with verdicts held **98-125 ms**. (A restart then
+  forgot every verdict — fixed by T2, below.) Raise STAMP_WORKERS only if
+  the instance has the cores.
+- **Measured on Render after T2, 2026-10-03** (Aquapolis Lugia, Raw): the
+  first open after the deploy, empty table — **0 eBay rows shown, 79
+  hidden**, 3.8 s; polled every 15 s: shown 0 -> 10 -> 13 -> 14 (only ever
+  rising), 65 refused, cleared in ~50 s; 79 verdicts written. **After the next deploy**:
+  78 verdicts read from the table on the first open, 64 refused at once, 14
+  shown, 2 new listings hidden then refused — no reprint shown; 299 ms re-open.
+
+**The full re-run — done 2026-10-02**, all 906 s-l500 photos, shipped JS
+vs the OpenCV measurement: same verdict on 879 (97%); labelled Aquapolis
+**0 of 16 originals flagged**, 68 of 69 reprints found; reprint listings
+288/304; the 22 flags inside the originals' own listings (3 Base Charizard,
+19 Rayquaza-EX) **all show the stamp, checked by eye**. The JS port is a
+little more lenient than OpenCV at the threshold (F156: JS found, OpenCV
+missed — a reprint). Its first version removed one mean across all three
+channels and called four original SCANS reprints — `stampcheck.test.js`
+fires on that.
+
+Open: the metal Charizards (a different product the gate keeps on CC002).
+
+## EX-ERA PRICES — diagnosed 2026-10-02 (T2)
+
+Every 2003-2007 English card (2,745; 2,418 comparable) against TCGdex's
+TCGplayer figure the same day. **88 disagree by >1.4x.** Grouped:
+- **53: a `normal` block on a holo-only card.** TCGdex returns one (same
+  product id — a TCGplayer SKU a holo was listed under) and `normal` was
+  first in BASE_PRINTINGS: Emerald Rayquaza $49.99 vs $431.32; Rocket's
+  Raikou ex took a lone $2,300 ask (the ghost had no market). 92 headlines
+  catalogue-wide, 83 of them this era. **Fixed `af2f2c0`**: a block is used
+  only for a printing the card's own variants list. On the same blocks 81
+  EX-era cards move normal->holofoil, none loses its price. **The nightly
+  had not reached them** (2026-10-02: 93 ghost headlines, every one written
+  before the fix; the refresh re-prices a card only when its tier is due —
+  up to 30 days). Harvested by hand that evening (`tcgdexharvest.js en
+  --set=` ex6 ex7 ex8 ex9 col1 np hgss2 swshp; 863 rows, 0 disagreements
+  >40%): **93 -> 7**, and 5 of those 7 have an EMPTY printings list (np
+  ×4, SWSH296), which the rule deliberately does not judge — the first
+  count included them. Real remainder 2: Rayquaza ☆ (the July import, not
+  this) and hgss2-26. Kingdra ex7-12 $5.00 -> $52.79.
+- **32: POP Series / Nintendo promos with two genuine printings**, normal
+  stored as the base — the convention, not a defect.
+- **3: holofoil, moved within the day** (thin cards: Regice ☆ $1,250 ->
+  $649.98).
+- Every disagreeing row was ≤7 days old: **age is not the cause there.**
+**Gold Stars (28) are not this.** 13 of 14 comparable agree with TCGdex to
+the cent; the problem is the market itself. TCGdex has no TCGplayer price
+for 14; for those the internal search finds Torchic ☆ and Latias ☆ at
+"market" $4,500 / $1,650 **on 0 listings** (a stale last sale), and
+Rayquaza ☆ / Mudkip ☆ with **no market at all** — so they keep a
+2026-07-27 pokemontcg.io row (`tcgplayer_normal` $2,500.99,
+`tcgplayer_holofoil_mid` $3,999.99) that nothing has re-priced. Roy's
+$23,600 / $9,513 / $6,199.99 come from no source we hold; a sold-price
+source (open, below) is the only fix. Since `0b0ddfb` internal-search rows
+record the product, number, set, listing count and low; since `8fdfcef`
+the page says a headline's age (12 cards of $20+ are >30 days old).
+Gold Star rarity is "Rare" because TCGdex says "Rare" (TCGplayer: "Ultra
+Rare"); it changes no match or estimate here — every Gold Star has a real
+price, and the internal search refuses Rayquaza ☆ either way.
+Torchic ☆ alternated $4,500 / $1,200 nightly from 9/16 to 10/01 under one
+label; the rows carry no product, so the second value is unexplained.
+
+## T2 · Listing finder — SHIPPED, with named gaps
+
+`GET /api/listings/:cardId?grade=PSA+10` returns live listings sorted by landed
+cost, gated, outlier-flagged, from every source that answers Render. Verified
+live today on `ja-SV8a-002`: Yuyu-tei ¥80 base printing at $0.51 beside three
+eBay rows at $1.19-1.23.
+
+Response envelope:
+
+```
+cardId, requestedId, card, grade, count, liveCount, cheapest, cheapestLive,
+outliers, gradePrice, listings[], refused[], refusedTotal, sources{}, tookMs,
+cached, cachedAgeSec, freshness, attribution, fetchedAt
+```
+
+**`refused[]` (T4, 2026-10-04)**: every row a gate refused in this view —
+`stage` (title / photo / back), `source`, `marketplace`, `title`, `price`,
+`currency`, `url`, `reason` — photo refusals first, one row per item, an
+item also in `listings` left out, capped at `REFUSED_MAX` (300) with
+`refusedTotal` saying how many exist. A SEPARATE list: it never enters
+`count`, `cheapest`, a median or a print run. The page draws it collapsed
+at the end ("N listings we believe are wrong", `liveRefusedBlock`) — the
+gate auditable from the page, not only from linkaudit.
+
+Each listing row:
+
+```
+source, sourceLabel, title, price, currency, priceOriginal, currencyOriginal,
+shipping, shippingKnown, landed, condition, seller, url, imageUrl, endsAt,
+bids, listingType, live, country, attribution, priceKind, edition, variant,
+parsedRarity, parsedYear, matchConfidence, saleType, currentBid
+```
+
+**Buy It Now and Auctions** (T5, 2026-10-04): `saleType` is `auction` only
+where the number is a current bid (`priceKind: 'current-bid'`; a live Yahoo
+auction too); an auction with a Buy It Now price is `buy-it-now`, its bid in
+`currentBid`. The payload's `saleTypes {buyItNow, auction}` counts live
+rows; `cheapest` is Buy It Now only (outlier.trustworthy). The page's bar is
+"Buy It Now (n) · Auctions (n)" — one request, one gate, the split applied
+before the condition/printing/edition filters; auctions ending soonest
+first, never a cheapest.
+
+Each source block reports `status, count, scanned, kept, rejected, gate,
+summary, droppedSample, query`. **A set of listings carrying no rejection count
+has not run the gate** — that is the tell, and it has caught a defect twice.
+
+`?dryRun=1` builds the request, sends nothing and spends no quota.
+
+#### On demand — US page 1, the rest when asked (T2, 2026-09-30)
+`/api/listings` and `/api/search` both answer through `listingsFor` — one
+payload builder, **every row returned** (it had sliced to 25 while
+`count` said 58).
+
+| action | request | eBay calls |
+|---|---|---|
+| open a card | default | **1** — `EBAY_US`, page 1, 200 rows. **2-3 on the 55 cards with a known reprint** (`REPRINT_OF`): the reprint check fetches each reprint's own listings, +1 per reprint — Base Set Charizard costs **3** (Celebrations + 30th), Blastoise 2. Measured, CALL COST |
+| "Search 7 more marketplaces" | `?sites=all` | one per site not yet answered |
+| "Load more listings" | `?more=1` | one page per searched site that has more |
+| home-page tiles | `?cachedOnly=1` | **0** — cache or "open the card to check listings" |
+
+Buttons extend the cached view (`VIEW_STATE`, 15 min) and re-judge every row
+together (`rebuildView`). Nothing runs by itself afterwards — T1's
+`continueListings` background crawl and the page's poller are deleted.
+`progress` says what is NOT shown: `searched`, `notSearched`, `morePages`
+(`notExamined` per site), and `actions` carrying each button's label and
+call cost — "128 listings from eBay US. 7 more marketplaces not searched
+(GB, AU, CA, DE, FR, IT, ES). 99 more results on eBay not yet examined".
+A refused site (busy, quota, 409) stays in `notSearched` and the next press
+asks it again; a busy/error answer is not cached, server or page
+(`retryable`). eBay's own ceiling (offset+limit ≤ 10,000) is STATED as
+incomplete. Also `?edition=` (T3).
+
+**Nothing expands by itself — not even when US finds nothing** (2026-10-01;
+`noautoexpand.test.js`). Then the empty panel says only eBay US was asked,
+names the seven sites not asked, and carries the Search button
+(`onlyUsNote`). It never says "No listing matched" until every site has been
+searched.
+
+- **Shipping is never a filter.** Rows carry `shippingTo` (whose buyer the
+  site quotes) and `shippingKnown`; every non-USD row goes through `fx.js`
+  with `priceOriginal`/`currencyOriginal`/`fx` on the row.
+- **One item, one row.** De-duplicated by item id; the copy from the site
+  EARLIER in `EBAY_SITES` wins whatever page lands first (IT re-returns US
+  listings under machine-translated titles).
+- **A refusal on an English-titled site (US/GB/AU/CA) is sticky
+  everywhere**; a refusal on a translated site (`originalTitles: false`)
+  drops only its own copy — see the lesson below.
+- **Calls per view are recorded**: `listing_views` (counts only, no eBay
+  item data) with `action` (open / all-sites / more; `open+auto` rows are
+  from before 2026-10-01) and
+  `origin` (render / local), summarised at `GET /api/listings-log`
+  (render only by default; `byAction`, `callsPerCardOpened`). Marked, not
+  deleted: 34 local test views `origin=local`, 538 T1-era views
+  `action=t1-every-site`, 40 threshold-measurement views `measure:*` —
+  reported under byAction, never averaged into browsing.
+- `node sitecheck.js [--grade=all] [--pages=N]` presses every button (all
+  sites, then Load more until nothing is owed) and reports rows per site
+  plus an INDEPENDENT language reader's suspects. Expensive by design —
+  run it after any change to `EBAY_SITES` or the gate's vocabulary.
+
+#### The registry
+
+`LISTING_SOURCES` in `server.js` — every source is one function returning the
+same normalised shape, through `cardmatch` and `outlier.js`, reporting
+kept/rejected/scanned:
+
+| id | applies to | note |
+|---|---|---|
+| `yahoo` | `ja-` cards | Japanese-language marketplace. **403 from Render** — local only |
+| `yuyutei` | `ja-` cards | shop ASKING prices, `priceKind: 'shop-ask'` |
+| `ebay` | anything with an English name | the only English source |
+
+`UNAVAILABLE` holds mercari / cardmarket / facebook / localshops with a stated
+reason each, so the response always explains every marketplace the UI offers
+rather than silently returning a short list.
+
+#### What remains
+
+1. **`node ingest.js names ja`** — 64% of Japanese cards cannot be asked about
+   on eBay. Biggest single win, no credentials, no new code.
+2. **PriceCharting** — already JSON, no parser to write, and it carries graded
+   price history, which is the weakest data we hold.
+3. **Troll and Toad / Card Kingdom** — English singles, a second and third
+   source beside eBay for a catalogue that currently has one. Each is an HTML
+   parser and each deserves its own verification pass.
+4. **Auctions from Render.** No API covers them: Yahoo Auctions 403s Render and
+   its Web API was withdrawn in January 2020. If auction listings are wanted in
+   production, the design is fetch locally → store in Supabase → serve from
+   Render, showing the fetch age so a stored listing is never presented as live.
+
+#### eBay — live, guarded, and its data is never stored
+
+The free tier is 5,000 calls/day, no approval, and it is **in production now**.
+`GET|POST /ebay/deletion` plus `GET /ebay/status?probe=1` for real readiness.
+Credentials are `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_VERIFICATION_TOKEN`
+on Render. Every call routes through `ebaycall.js` → `ebayquota.js`; see the
+quota lesson for the four properties that are not obvious.
+
+## Sold data — NO SOURCE, and the page says so
+Since T8 (2026-09-29) nothing supplies realised sale prices: the eBay
+sold-page scrape is gone and must not return in any form, server or ingest.
+Legitimate routes, none built. **Read 2026-10-02 (T4)** — what each would
+give, what it costs, and what we could NOT read:
+- **eBay Marketplace Insights API** (`item_sales/search`). Its own docs are
+  now private: `developer.ebay.com/api-docs/buy/marketplace-insights/…`
+  redirects to sign-in at `/api-docs/marketplace-insights-private/…`
+  (read in a browser 2026-10-02; nothing entered). Third-party summaries,
+  not verified: sold items, last **90 days**, by keyword/GTIN/epid/
+  category; "Limited Release", approval by eBay business units, and
+  "restricted and not open to new users at this time"; developers in
+  eBay's forum report refusals outside major partners. **Cost: free if
+  granted; the cost is the application.** Next step is Roy's: sign in to
+  the developer account Render's keys belong to and read the private page
+  and the application route. Even granted, 90 days does not reach a Gold
+  Star that last sold a year ago.
+- **PSA Auction Prices Realized.** PSA's own API documentation (read
+  2026-10-02): "We currently offer access to data from Cert Verification
+  for single item searches by cert number." **APR is not in the API** —
+  only on psacard.com/auctionprices, where reading it by machine is
+  scraping. The submission T&C (§23, linked from the APR page) make PSA
+  "the exclusive owner of all Submission Content" (the grading Data and
+  images) with the right to publish it; the site terms with the "compiled
+  form" clause Roy cites were not found from PSA's own links (psacard.com/
+  terms 404s) — not read, so not quoted. **Display would need PSA's
+  written permission**; enrollment does not obviously grant it. Ask PSA
+  directly, in writing, before any build.
+- **PriceCharting.** Its pages (api-documentation, pricecharting-pro)
+  answer a Cloudflare challenge to us now, curl AND a real browser (not
+  attempted further — no bot-check bypass). Secondary sources only: API
+  is in the **"Legendary" subscription, ~$49/month**; public-facing use
+  needs that plus **express written permission**; and the API returns
+  **current values by condition/grade, not historic sales** — which, if
+  true, contradicts "carries graded sale history" written here before. Roy
+  should read the two pages in his own browser before paying.
+Whatever it is: one function, a stated source on every row, and the Last
+sold box stays "no licensed sold source" until it exists.
+
+## LESSONS — the rule, why, and where the full story is
+
+(The archive calls this section "HARD-WON LESSONS".)
+
+Every lesson this project has paid for is here as a rule. The incident's
+measurements, tables and dates live in `CLAUDE_ARCHIVE.md` under the heading
+quoted after *Archive:* — read it when the rule alone does not settle a case.
+A bug's history may be archived; **its lesson may not.** If you fix something
+and learn a rule, the rule goes here; the narrative goes in PROGRESS.md.
+
+#### 1 · Gates and filters
+
+**A filter that rejects records needs a test proving what it KEEPS.** The most
+repeated failure in the project: `looksLikeJunk` ate ~80 valid prices per set
+(twenty commons at $0.15 is normal); `clean --delete` would have removed 46% of
+real prices; `NOT_A_SINGLE_CARD` ate Giratina ("tin") and all of Destined
+Rivals; bare `tag`/`ace` made every TAG TEAM and ACE SPEC card unsearchable
+raw; a probe classifier called a working source blocked. A gate tested only on
+refusals passes by refusing everything. Expect it again.
+*Archive:* "A guard against bad data can destroy good data", "Test what a gate ALLOWS, not only what it blocks", "A pattern rewritten for readability lost its boundaries", "Two lists of grading companies, and one of them was never updated"
+
+**Measure a filter change in both directions, against the OLD pattern read
+from `git show`, never retyped.** A hand-typed copy of the old pattern was
+wrong. Rebuilt from git: junk 30/30 still blocked, real names 15 -> 0 wrongly
+blocked. Word lists carry no boundaries; `boundedTerm()` applies them once.
+*Archive:* "A pattern rewritten for readability lost its boundaries"
+
+**A gate that is right and never reached is not a gate. A fix is not installed
+until every path that needs it HAS it — and a shared table must be reached by
+every path that needs it.** The year gate read `card.set_release`, which the
+one SELECT behind both listing routes never selected: dead for weeks, every
+test green. The language gate ran on eBay, not on Yahoo, where Korean prints
+actually appear. `REPRINT_OF` served listings for days and was never used by
+pricing, so Classic Collection Charizard sat at $0.71 (live $205). The base-
+printing rule was in server.js and missing from `trending.js` and alerts. When
+you add a rule, list every path that produces a listing or a stored price
+(THE GATES table) and check each one gets the inputs it needs.
+*Archive:* "A fix is not installed until every path that needs it HAS it", "Reprints were priced by catalogue number (2026-09-29, TASK T6)", "The base-price rule lives outside server.js too (T2, 2026-09-30)"
+
+**A guard that has never fired is indistinguishable from one that cannot.
+Make it fire before believing it — and "nothing happened" is not proof.** The
+quota trip, run without credentials, reported `unconfigured`: the credential
+check short-circuited before the gate. The source-rank gate "displaced 0" on a
+set where it had nothing to displace; only a direct test showed it refusing
+$19.11 against a correct $0.19. Revert the fix and watch the test fail.
+*Archive:* "A guard that has never fired is indistinguishable from one that cannot"; dropped in an earlier rewrite, restored from `CLAUDE.md.bak-20260901`: "Nothing happened" is not proof a guard works
+
+**A gate that skips must say what it skipped.** Rejecting on absent data is
+the `looksLikeJunk` mistake, so discriminators skip when a field is missing —
+but invisibly is how the year gate died. `verify()` returns `evidence` and
+`unchecked`; a missing language raises `gateWarning`.
+*Archive:* "A gate that skips says nothing; now it says what it skipped"
+
+**A guard that over-blocks fails invisibly — make an empty result report.**
+The 9/29 set-name check stopped six sets for two days and the run said
+"N refreshed, M without data". Now `setyield.js` names a set that priced
+nothing (exit 2), and a 200-card run of nothing; on its first real run it
+named dpp and basep, whose cause was not the alias but our set name in the
+QUERY ranking the card out of TCGplayer's results (fixed: ask again in
+TCGplayer's own name, on a miss only). Every silent `continue` in a fetch
+is an over-block nobody can see: count what the source answered.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**A row that is not the headline must not move the headline's clock.** The
+refresh judged "due" on the newest row of any kind, so a Cardmarket second
+reading written for a card that got NO price made it look freshly priced
+(mep 7/7). Read the headline row (`basePrintingSql`, ungraded) wherever
+freshness is judged. And a value dropped on the way out is a value frozen:
+TCGdex's 1st Edition price came in every refresh response and was
+discarded, so every 1st Edition price was what a harvest once left.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**A set of listings carrying no rejection count has not run the gate.** Every
+source reports `kept`, `rejected`, `scanned`, `dropped[]`, `gate`. Count what
+the gate EXAMINED ("1 kept of 482 scanned" read as a 99.8% rejection that
+never happened). A view that drops `droppedSample` makes "B: all rejected"
+undiagnosable (fixed 2026-10-01).
+*Archive:* "Count what the gate examined, not what the page held", "linkaudit.js"
+
+**Read the structured field the marketplace already gives.** eBay said
+`condition: Graded` on a raw-search slab no title word could catch (`PCG` is
+also "Pokémon Card Game"). One direction only: "graded" refuses a raw search;
+"ungraded" never refuses a slab title. eBay's Card Condition, Grader and Grade
+aspects are filters at no extra cost; seller-entered, so a title that
+DISAGREES with them is refused. Never send `{Not Specified}` — eBay ignores it
+and returns everything; aspect names are per site (an English name on DE is
+silently ignored); eBay ES has no condition or grade aspect at all, so no ES
+row may claim eBay stated a condition. eBay has no Mint and no Damaged —
+those are seller-stated, from the title.
+*Archive:* "The marketplace had already said it, and the gate never read it", "eBay DOES state raw condition — in a field we never read (2026-09-27)", "Slabs: measured 2026-09-27, NOT yet used", "Slabs: BUILT 2026-09-27 — filter narrows, disagreement is refused"
+
+**Words that are also card names, mechanics or set names need protecting
+before they are read as evidence.** "120 HP" is hit points (8 of 9 "HP"
+titles); "ex" is the mechanic (24 of 25); TAG TEAM / ACE SPEC need a grade
+number beside TAG/ACE; "Alt Art Card" is not a fan "art card"; "Master Ball"
+is a card name as well as a mirror pattern (remove the card's own name first,
+and a kana fold must recompose with NFC); "Classic Collection" is a set, not a
+bundle; "gold card" refused genuine gold rares — the outlier check, not a
+word, settles fakes. Strip replaced text to `~`, not a space, or `\d+\s*cards?`
+spans the gap.
+**A word that is genuine in one era can be evidence in another.** "Gold" is
+not a term — but no card was gold before the first Gold Star (2004), so on a
+set from before 2004 it names the object: `goldBeforeGold` reads the set
+year (2026-10-04; 50 of 116 Shining Charizard replicas, 0 of 890 right
+titles; "Gold & Silver", HeartGold, "gold stamp" kept). A test that KEPT
+"Base Set Gold Holo Rare Englisch" was keeping a gold metal replica — looked
+at, not assumed.
+*Archive:* "The original measurement, still true of the coarse field", "`art` is in the name of every expensive card", "Rarity is the card's; printing is the copy's (T10, 2026-09-29)", "\"PSA10\" unspaced — read for unambiguous graders only (`7c3f856`)"
+
+**A word list must never read the card's own identity.** "light" (the
+lamp) refused every listing of Forbidden Light — 168 cards that had never
+shown one — and the lot list refused 236 of 21,152 English cards on their
+own name or set (Gym Badge, Tool Box, Iron Bundle, Poké Card Creator Pack…).
+SET_NAME_PHRASES protected six sets by hand; the card being asked about is
+now masked every time (`maskOwnIdentity`). Test a vocabulary change by
+running every catalogue card's own "name number/total set" through it
+(`ownname.test.js --db`), not only by the titles at hand.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A filter measured at "0 wrong" may only have been measured one way.** The
+lot words' "0 of 896" counted right titles refused; a 100-card "Partial
+Set" passed because nobody counted the misses. Say which direction a
+number is.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A hoped-for grade is not a grade.** "(PSA 10 Contender)" on an $8,000 raw
+card; `stripSpeculative()` runs on raw searches too. A seller's filled grade
+aspects plus a speculative title kept a $6,100 raw card as a PSA 10 until
+speculation counted as disagreement — found only on the live run after
+deploying. **Measure after deploying, not only before.**
+*Archive:* "A hoped-for grade is not a grade", "Slabs: BUILT 2026-09-27 — filter narrows, disagreement is refused"
+
+**Every mode of a gate must still check the card.** Grader-wide "PSA *"
+returned ok on the grade before name/number/set ran.
+*Archive:* "Grader-wide mode never checked the card (fixed `9f07cf7`)"
+
+**A different language is a different card; a stated year ±1 off is a
+different printing** — on stated evidence only. CJK is ambiguous on a Japanese
+path (`cjkIsChinese:false`), and `\b` does not exist between CJK characters.
+*Archive:* "A different language is a different card", "A fix is not installed until every path that needs it HAS it"
+
+**When the title carries nothing to match, the price is evidence — flag, never
+remove.** Giratina V #186: $2.08 to $1,114.99 behind identical titles.
+`outlier.js` flags an order of magnitude below the card's own median (≥5
+priced, ≥$15 median); headlines skip flagged rows. A price band is evidence
+only where the card prices apart from its reprint — check the stored price
+before calling a flag wrong.
+*Archive:* "The price is evidence about the title when the title carries none", "A price band is evidence only where the card prices apart (2026-09-27)"
+
+**A median computed from mostly-fake listings is not a baseline.** Shining
+Charizard Raw NM, all sites, 2026-10-04: ~116 of 144 rows past the gate were
+gold/black metal replicas (labelled by eye); their median, $420.97, let a
+$72.49 replica through at 0.17x while every genuine copy asked $944+ and the
+stored price was $1,700.99. The check now judges against the stored,
+number-matched raw price when it is current (pricequality: no flag) and
+ABOVE the feed's median — never to lower the bar; graded views keep the feed.
+On the 1,010 labelled rows: 0/864 right flagged before and after; different
+illustrations 10 -> 15 of 24, metal 5 -> 8 of 38. Shining Charizard: 27 -> 53
+of 116 replicas, 0 of 26 genuine. It still leaves replicas priced at genuine
+levels ($177-$1,600) — those are the title and photo checks' job.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**Japanese listings are full of lots.** まとめ/セット/一括/引退/BOX/未開封/
+PSA/BGS/鑑定 and any 枚/点 quantity: `jpTitleIsSingleRaw()` is the one
+definition, used by Yahoo and Yuyu-tei.
+*Archive:* "Japanese listings are full of lots"
+
+#### 2 · What identifies a card
+
+**Build the authoritative card list first; match on collector number; refuse
+to guess.** Positional rarity was wrong for over half a set. Name-only
+TCGplayer matching swapped #109 and #130. Number, then rarity tiebreak, then
+NOTHING — a wrong price is worse than none. Inference is for absent data
+only (`mockP` re-inferred a stored rarity and priced a $1 Common at $46).
+*Archive:* "Build the authoritative card list first", "Match on collector number, and refuse to guess", "Don't let inference override known data"
+
+**A collector number does not identify one card.** Master-ball mirrors share
+the number (142 cards up to 119x wrong, found only by cross-checking two
+sources). Reprints reuse the original numbering AND set name (Celebrations
+Charizard is genuinely 4/102 "Base Set": 465x range in one search). Reprints
+are keyed by SET ID (`REPRINT_FAMILIES`, `REPRINT_OF`), never by set name: a
+new set whose name contains another set's marker word ("30th Celebration"
+matching `/celebrat/`) silently disabled the gate both ways. A new reprint set
+needs a family entry and, if it reuses numbering, a `REPRINT_OF` table.
+*Archive:* "The master-ball mirror, found for the third time", "A reprint reuses the original numbering", "Ingesting a set can disable a gate that names it", "Superseded 2026-09-26: reprints are keyed by SET ID, both directions", "A collector number does not identify one card"
+
+**A lettered number is its own card.** normNum folds "24a" to "24" and
+"24a/119" was not read as a pair, so the alt-art M Manectric-EX took the
+regular card's listings and the reverse (31 English cards, Aquapolis 50a/
+50b among them). A fold that helps matching must not cross into another
+card's identity — the fold-merge lesson in the gate (`verifyLetterNumber`).
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A set ingested once is never re-read — compare card by card.** setgap
+asked which SETS were missing; the progress file marked each set done after
+its first pass; TCGdex later added cards. 104 English and 440 Japanese
+cards (the secret-rare tails — the valuable ones) were missing for weeks.
+`cardgap` compares per card, insert-only. And a number form that differs
+between two sources fails silently per card: manifest asked TCGdex for
+"S8-1" (TCGdex: "001") and 37 Limitless-ingested Japanese sets, 3,432 cards,
+never got its rarity. Ask a source by ITS id, read off its own listing.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**`set_total` is our catalogue's count, not what the card prints.** Promos
+print no total (swshp's 307 is a count — "SWSH202/307" returned nothing);
+Trainer Gallery prints TG16/TG30; a prefixed card in a mixed set (Generations
+RC5) prints a subset total we do not hold. `PROMO_SETS`, `SUBSET_SETS`.
+*Archive:* "A promo prints no total; a subset's total carries its prefix (2026-10-01)"
+
+**Rarity is the card's; printing is the copy's; edition is a third axis.**
+Normal/holo/reverse/mirrors per copy (`cards.variants`); 1st Edition /
+Shadowless / Unlimited only on the ten sets TCGdex reports `firstEd` for. Every
+headline reader uses `printsql.basePrintingSql` (base printing, Unlimited) —
+241 cards once showed a reverse price as the card's price.
+*Archive:* "Rarity is the card's; printing is the copy's (T10, 2026-09-29)", "Edition is its own axis — and TCGdex names it differently on WOTC sets (T3)", "1st Edition is a market where it existed, and nowhere else"
+
+**A price for a printing the card does not have is not the card's price.**
+TCGdex returns a `normal` block on holo-only cards (one product id, a SKU a
+holo was listed under) and `normal` was read first: Emerald Rayquaza at
+$49.99 against $431.32, a lone $2,300 ask on Rocket's Raikou ex. 53 of the
+88 EX-era disagreements, 92 headlines in all. Read the card's own printing
+list before its price list; an unknown list skips nothing.
+*Archive:* none — 2026-10-02, PROGRESS.md ("EX-ERA PRICES" above)
+
+**A thin market's "market price" is a stale sale, not a valuation.**
+TCGplayer quotes Torchic ☆ at $4,500 on 0 listings and Rayquaza ☆ at
+nothing; Roy's sold figures were 2-9x higher. Record the listing count
+beside the price, and do not expect a better match to fix a market that
+is not there.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**A source's "no value" is not a value.** TCGdex rarity "None" mapped to
+Common overwrote real rarities; 0 and null in TCGdex pricing both mean no data.
+*Archive:* "\"None\" is not \"Common\" — manifest's rarity map (2026-09-28, TASK T5)", "TCGdex embeds pricing, and the docs are wrong about its shape"
+
+**A price can be right for the number and wrong for the SET.** TCGplayer's
+search accepted the number in any set: Expedition Alakazam took Base Set's
+price. A hit counts only in TCGplayer's own name for our set
+(`tcgsetname.js`); a product id given to two cards is trusted for neither.
+*Archive:* "The stored price was right 90% of the time — and wrong by SET, not by H-number (T1, 2026-09-29)"
+
+**Establish that data CAN exist before chasing it.** 2,100 cards at 0% were
+TCG Pocket (digital). Vintage changes the floor (set-age multipliers);
+a vintage Common can be ¥24,800 — read the source's own rarity label.
+Hidden is an answer: a set filtered out of one query fell through to a live
+fallback and came back as estimates, so hidden returns `hidden: {reason}`.
+*Archive:* "Not every gap is a bug", "Vintage changes the floor", "Vintage Commons can be genuinely valuable", "Hidden is an answer, not an absence (2026-09-27)"
+
+**A reprint is told apart by what is ON the card, not what sellers type.**
+Set, Year and epid are seller-entered (REPRINT vs ORIGINAL). The
+commemorative stamp is printed on every 30th / Celebrations reprint: a
+per-card template cut from our own scan finds it in 92.5% of photos with
+no false flags at 0.70. One template for every card does not work, and a
+port of a measured algorithm is not the algorithm until it is cross-checked
+against it on the same inputs (one channel mean vs three: 4 originals
+flagged). Absence of the stamp is weak evidence and is never shown as a pass.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**Every grading scale is read from the company, not assumed.** PSA has no
+9.5; TAG no 9.5; ACE whole grades only; AGS "Legendary" only beside a 10.
+*Archive:* "Every grading company's scale, read from the company (2026-09-27)"
+
+#### 3 · Sources
+
+**Probe before building; read the primary source, never a summary.** Four
+APIs were asserted from documentation and wrong. eBay's barrier was assumed
+and false (5,000/day, no approval); TCGplayer's application is assumed and
+absent ("no longer granting new API access"). PokéAPI's language codes are
+lowercase. TCGdex's pricing keys differ from its docs (`reverse-holofoil`,
+present-but-null providers).
+*Archive:* "Read the terms before writing a source off", "The TCGplayer API has no application to put in", "TCGdex embeds pricing, and the docs are wrong about its shape"; restored from `CLAUDE.md.bak-20260820`: "Never assume external API shapes — probe them"
+
+**Don't guess URLs — read them; verify the tool before trusting its output.**
+Four rounds of constructed image URLs returned 0% while working URLs sat
+unexamined. A HEAD-only probe reported every image missing. The set-list
+endpoint served guessed logo URLs (404) while the card endpoint said null —
+two paths disagreeing about one fact.
+*Archive:* "Don't guess URLs — read them", "…and the set-list endpoint is still doing it, measured 2026-09-22"; restored from `CLAUDE.md.bak-20260820`: "Verify the tool before trusting its output"
+
+**Scraping is not a production strategy, but "datacentre IP" is a per-source
+fact.** Yahoo Auctions 403s Render, Yuyu-tei serves it byte-identically. One
+module (`sourceprobe.js`) run from both ends tells IP from code. A probe must
+check for the expected markers BEFORE diagnosing — `/cloudflare/` in a CDN
+stylesheet link nearly killed Yuyu-tei. Never build bypasses for sources that
+refuse automation; deep-link them. No probe endpoint ever takes a URL (SSRF).
+Yahoo Auctions also rejects a category filter from a foreign IP — never add
+`auccat`; parse `__NEXT_DATA__`.
+*Archive:* "Scraping is not a production strategy", "…but \"datacentre IP\" is a per-source fact, not a law", "The probe's first run was wrong, and catching that is why it exists"; restored from `CLAUDE.md.bak-20260803`: "Yahoo Auctions rejects category filters from foreign IPs"
+
+**Before stopping a source, ask where its cards go.** Where a sanctioned
+route exists, take it: eBay's sold-page scrape was deleted because we hold
+Browse API credentials under eBay's terms. Where none exists, stopping moves
+the cards to NO source: TCGplayer grants no API access to anyone, and its
+internal search is the only TCGplayer price for 2,025 cards TCGdex cannot
+price — so it is kept as a labelled last resort, run from the home machine,
+never from Render (OPEN WORK). Measure the dependants first: "the reason to
+keep it has gone" was true of 90% of cards and false of the other 10%.
+A tightened check can also stop a source silently — the 9/29 set check left
+six promo/energy sets unrefreshed until probed and aliased.
+*Archive:* "The TCGplayer API has no application to put in", "Read the terms before writing a source off"
+
+**A status code means what the service says, not what it meant elsewhere.**
+Yahoo Shopping's 403 with a key is the KEY refused (keyless gets 401 from
+both IPs); a geo notice is checked before the credential branch. Length is
+not identity — compare a 12-hex sha256 fingerprint, never the secret.
+*Archive:* "Yahoo Shopping: what the 403 is NOT", "Length is not identity", "A 403 from an API you hold a key for is not the Yahoo Auctions 403"
+
+**Sources are not interchangeable — rank them.** A Yahoo median cannot
+separate printings that share a number; a Yuyu-tei price is a shop ASK
+(`priceKind: 'shop-ask'`, ticks at ¥30/¥50/¥80 are the shelf minimum, not a
+valuation); Cardmarket is EU retail (~1.6x). `sourcerank.js` gates every
+writing path: lower confidence never becomes the displayed price; an unknown
+source is MEDIUM. A refused price is not stored, because storing IS displaying.
+*Archive:* "Yuyu-tei quotes shop ticks, not valuations", "Two paths to one marketplace agreed, and that is the validation"; restored from `CLAUDE.md.bak-20260901`: "Sources are not interchangeable — rank them"
+
+**Never substitute across languages; a localised name is not localised data.**
+TCGdex serves the Japanese card's Cardmarket listing on zh-tw with a
+translated name; `pricingAllowedFor()` is en/ja only. Cross-language matching
+is for finding equivalents, never for display. A marketplace is where a card
+is sold, not what language it is: every non-English eBay site needed its own
+vocabulary (language words, reprint names, junk, slabs) and its own aspect
+NAMES — an English aspect name is silently ignored. A translated title's
+refusal must not cross sites. Measure a new site by TOTAL rows, not rows
+labelled with its name.
+*Archive:* "Never substitute across languages", "A localised name does not mean localised data", "A marketplace is where a card is sold; a language is what it is (T1, 2026-09-30)", "Another eBay site shows US listings with MACHINE-TRANSLATED titles (2026-09-30)"
+
+**The size of an apparent win is a reason to check it harder.** "TCGdex
+prices 56% of unpriced Chinese cards" was the Japanese price in disguise.
+*Archive:* "A localised name does not mean localised data"
+
+**Ask a question the marketplace can answer.** eBay matches tokens: "H09"
+does not find "H9/H32", "1/15" does not find "001/015", and one word no
+seller writes ("McDonald's *Collection* 2014") empties the result —
+linkaudit `A` on all three (2026-10-02). When sellers write a number two
+ways, leave it out and let the gate check it. A CJK set name in an eBay US
+query returns zero; English sellers write the set NAME, never its code
+(apostrophes deleted, not spaced); a deep link has no gate, so every link goes
+through `cardmatch.buildQuery` and sits under UNFILTERED SEARCHES.
+*Archive:* "Ask a question the marketplace can answer", "English listings name the set; they never state its code", "A deep link is not a result, and must not be dressed as one"; restored from `CLAUDE.md.bak-20260803`: "English marketplaces can't match Japanese names"
+
+**Measure the question across the catalogue, not the instance.** Four
+query mismatches were found one at a time by accident; asking every set
+once (`querygap.js`, ~200 calls) found the rest in an evening — including
+a gate failure no query fix would ever have reached (Forbidden Light). One
+character can empty a search: eBay answers nothing for any query carrying
+"δ" (191 cards), while ☆, ◇, ♂/♀ and [G] are ignored. Measure each symbol
+before and after on the same cards.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A status code that answers before authentication says nothing about
+the key.** PSA's 429 came back identical for our key, no key and a
+corrupted key, with one reset time from two networks. "429 = the key's pool
+is spent" was the test's premise; send a wrong key beside the right one
+before reading a refusal as being about you.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**Ask in the form most titles copy — for a slab, that is PSA's label.**
+"2002 POKEMON EXPEDITION #28 TYPHLOSION-HOLO PSA 1" prints no set total and
+its own set name, so a query asking "28/165 Expedition Base Set" never saw
+it, and the gate refused it when it did. Roy's PSA 1 and 9 of Umbreon #32's
+~14 PSA listings were that shape. A slab asks the bare number; the label's
+set names are read by set id (`SET_WRITTEN_AS`). Measure a query change in
+both conditions: the same bare number that quadrupled slab results kept 0
+of 225 on a raw search.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A search returns only what it was asked for, and a default is a
+filter.** eBay Browse returns Buy It Now only unless `buyingOptions` names
+auctions: 0 auctions in 258 rows over four cards, for as long as the
+listing finder has existed, while eBay's own site listed them. Compare a
+card's rows against the marketplace's own page and read every row it shows
+that you do not — "the gate never ran" and "the query never asked" look
+the same from inside.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A read endpoint must never write.** `/api/market` persisted a name-matched
+aggregate on every view and overwrote Mega Gengar's $1,056 with $3.14. eBay
+data is cached 15 minutes and never stored (terms); aggregates may be.
+*Archive:* "A read endpoint must never write", "eBay listings are cached, never stored"
+
+**Before inventing a source, check what the current query already
+computes** (the set list was selecting a sample image and discarding it).
+And before adding a third source, check why the second was never asked —
+setmeta's pokemontcg.io fallback covered 3 sets while 49 had no art. Filled
+2026-10-01 by `ccfill.js` pass 2 (explicit `ART_SETS` map read off
+pokemontcg.io's /v2/sets): 508 cards' art, 25 sets' logos
+(`set_logo_source`), every URL fetched before writing — which refused four
+McDonald's sets whose listed image URLs answer 404. Still artless: McDonald's
+2023/2024, mep, mfb, xya, ex5.5, miscp, the BW/DP/HS/SM/XY trainer kits
+(no pokemontcg.io set), and sm7.5 #60/60a-style ambiguous numbers.
+*Archive:* "The data was already there, fetched and discarded", "TCGdex has no art and no logo for 49 English sets (T3, 2026-10-01)"
+
+**A ratio is meaningless at the price floor; a constant that is never printed
+drifts.** Disagreements need ≥$0.25 as well as a large ratio. `* 1.09` EUR
+understated Cardmarket 6.6% for months; `fx.js` returns the rate with every
+amount. (Still open: `jpfilter.js` uses a hardcoded 157 JPY.)
+*Archive:* "A ratio is meaningless at the price floor", "The FX rate was hardcoded at two vintages and never printed"
+
+**Measured facts about sources, kept for reference:** cert numbers are only
+in getItem (~79% of slabs), PSA alone has an API (100/day keyless); eBay Set
+is a free filter aspect, Year is filled 34-48% (not a gate); TCGdex's asset
+host is throughput-bound (~2 images/s); trending has no view data.
+**eBay's catalogue product id (epid) is seller-chosen** (2026-10-01,
+`setprobe?epidSearch=`): Aquapolis Lugia (6043385009) and 30th Celebration
+Lugia (9100724204, 19100822444) DO get different ids, but searching by the
+Aquapolis epid returns 30th CC listings first, ~12% of 30th listings carrying
+an epid carry the Aquapolis one, and 26-32% carry none. Errors run reprint ->
+original (the dangerous way); none seen the other way. A signal like Set,
+not a gate; the only safe one-way use is "a REPRINT product's epid on an
+original's search". Not built.
+**Image weights** (2026-10-01): Japanese grid thumbnails now Limitless's own
+`_SM` (274x381, mean 58 KB; was the 736x1024 330 KB full art) — 8,359 of
+8,360, each fetched first, `image_large` unchanged; the card page paints the
+thumbnail then swaps in the full art when loaded (`showCardArt`). Chinese
+art (asia.pokemon-card.com) is already 299x418 — a heavy 257 KB PNG with no
+smaller file; the site's own pages use the same one. Only re-encoding on our
+host would shrink it.
+*Archive:* "Cert verification — measured 2026-09-28, NOT built", "eBay's Set and Year: where they live (T4, 2026-10-01, `/api/ebay/setprobe`)", "Images: TCGdex's asset host is throughput-bound (T1, 2026-10-01)", "Trending, measured 2026-09-24 — `/api/trending`, rules in `trending.js`", "Narrowing vs the 75-row cap — measured 2026-09-27 (`/api/ebay/gradecost`)", "The cap is paged now (`ceadfbc`, 2026-09-28)", "Raw M and DMG: back, seller-stated (`08a05d0`, `d60dc0e`, `b96f1e3`)", "Known, deliberately not built"
+
+#### 4 · The page
+
+**One definition per thing.** Two implementations always drift: estimators 9x
+apart (`estimator.js` is the one), two token caches, three copies of "what
+language is this card", `SLAB_WORDS` hand-copied from `GRADERS` (now derived),
+`renderSets()` declared twice 162KB apart — editing the first changed nothing.
+Documentation is not implementation: CLAUDE.md described an age multiplier
+that existed only in the page. `preserve.test.js` fails on any duplicate
+top-level function.
+*Archive:* "Two definitions of one function, 162KB apart", "Documentation is not implementation", "Read credentials at call time", "Two lists of grading companies, and one of them was never updated"
+
+**One element, one writer, one meaning — asserted structurally.** `#cd-listings`
+had an ungated second writer three times; a comment saying "one writer" did
+not stop it, a call-graph assertion did. Delete a dead path to a gated element
+(`renderRealListings`) rather than allow-list it; delete a dormant branch
+rather than zero its threshold (the auto-expansion, 2026-10-01). `sd-count`
+had two writers answering different questions ("295 of 217 cards").
+*Archive:* "The listings panel has had two writers TWICE", "The listings panel had two writers, one ungated", "Assert the STRUCTURE, not the intention", "One element, one MEANING"
+
+**A fallback must announce itself.** `CARD_CACHE` pinned an estimate over a
+real price; a missing source note fell off a chain into a bare `return`; the
+card page showed a name-matched aggregate badged "high confidence" for a $959
+card ($3.17). A number-matched price always wins, and anything else says so.
+Two lists of the same thing (176 pokemontcg.io set ids vs 214 ours) worked on
+every set anyone checked.
+*Archive:* "Two lists of the same thing, and only one of them resolves", "The silent substitutions that hid it", "And the one found while verifying the fix", "What would have caught it"; restored from `CLAUDE.md.bak-20260803`: "Set ids differ between sources"
+
+**No number on screen that a source did not produce.** `price × 0.74` as
+lowest listing, `Math.random()` last-sold, invented shops, holdings, graphs,
+badges from a hash of the id. `grep Math.random` and `price\s*\*` first;
+`nofabricated.test.js` pins it. A number that changes on reload is the
+cheapest test there is. A UI that writes only to itself loses quietly later:
+claim nothing before the server accepts it.
+*Archive:* "The page was still inventing numbers where nobody looked — found 2026-09-24", "Invented data, the fourth sweep (2026-09-28, TASK T7)", "A UI that writes only to itself"
+
+**A price says when it was measured.** The card page never showed a
+headline's date, so a July import nothing could re-price read as today's
+($2,500.99 Rayquaza ☆). Every displayed price carries its date; past 30
+days it says it is old (`priceAgeHtml`). An old price is a fallback, and a
+fallback announces itself.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**…on every screen, not the one that was fixed.** The card page said a
+price's age; the set tile, trending and alert tiles drew the same $4,500
+bare, and 130 cards over $100 were old or swinging. Quality is decided
+once (`pricequality.js`), attached to every payload that carries a
+headline, and drawn by one function — a tile that draws its own `est` is
+the second definition. While there: the Search screen's trending tiles
+still drew a % change and PSA badge from a hash of the card id; check
+every renderer of a number, not the ones already audited.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**Cache keys carry everything the value depends on.** A per-card cache served
+the PSA 10 median as Raw NM: 493x out, nothing on screen to suggest it.
+*Archive:* "A number cached per card is wrong when it depends on the grade"
+
+**Browser-only bug classes — arrangement, timing, collisions.** An async
+module captured at parse time is null half the time (read at call time); a
+promise that resolves immediately is a loop that froze the renderer; dead CSS
+with a colliding name capped a panel at 460px (delete, don't override); a wire
+format (`PSA *`) leaked into headings (display through `gradeText()`); code
+addressed modals not in the markup; three arrangement bugs passed every suite
+in one phase. Open the page.
+*Archive:* "An async module read once at parse time is null half the time", "A promise that resolves immediately is a loop", "Dead CSS is not inert when the name collides", "A wire format is not a label", "Code addressing markup that is not there", "Three defects in one phase that every test passed through", "Card page column: one spacing rule (`d082983`)"
+
+**Check the build stamp before debugging; a newer file is not a superset.**
+Three "fix didn't work" reports were a stale build; v36 added 25 functions and
+dropped 8. Diff before adopting.
+*Archive:* "Check the build stamp", "A newer file is not a superset"
+
+**The page can compete with itself, and every caller of a metered path
+counts.** A card view fired `/api/listings` twice plus `/api/market`; the
+home page opened 14 cards nobody clicked. `fetchListings()` is the one fetch;
+tiles read the cache only. Look for every caller, not the one you changed.
+*Archive:* "Where a card view's time went — measured on Render 2026-09-28 (TASK T1)", "Completeness plus a single lane is starvation (T1/T2, 2026-09-30)"
+
+**Verify unreleased server code in the browser** with `PORT=3001 node
+server.js` and `http://localhost:3001/app` (`?api=render` for eBay).
+*Archive:* "Verifying an unreleased endpoint"
+
+#### 5 · Code, tooling, tests
+
+**Escapes are mangled by every layer between you and the file.** `'\D'` in a
+JS string is `'D'`; a Python patch turned `\b` into a 0x08 byte; a quoted
+heredoc still corrupted one; the shell ate `\s`, `\'`, `$'`. Use the editor
+tool for anything with a backslash, then run the byte check (COMMANDS) —
+`grep -P` does not run here and its failure reads as "no matches".
+*Archive:* "`'\D'` is just `'D'` in a JS string", "An escape swallowed by the patching tool, not the code", "Verifying an unreleased endpoint"
+
+**Silent failures first.** An empty catch reported four sets written that
+were not; health said "connected" without a query; a search returning -1
+truncated `ingest.js` and node ran an empty program. RUN a file after editing
+it, not only `--check` it. When something looks like missing data, look for a
+swallowed error.
+*Archive:* restored from `CLAUDE.md.bak-20260803`: "Silent failures are the recurring theme"
+
+**`null` is not a diagnosis; presence is not readiness.** One `null` for four
+token failures sent the hunt to a healthy environment. A readiness check that
+cannot fail for the reason you care about is decoration. A refactor that
+merges error messages downgrades the diagnosis — test WHICH reason is
+reported. Read credentials at call time; `Date.now() < NaN` is false.
+*Archive:* "`null` is not a diagnosis", "Presence is not readiness", "Read credentials at call time", "A refactor can quietly downgrade a diagnosis"
+
+**Integration tests find what unit tests written against an earlier shape
+cannot.** A `const body` inside a retry loop shadowed the parameter and broke
+every POST; the suite predated POST and was not re-run.
+*Archive:* "Shadowing a parameter inside a retry loop"
+
+**A budget binds only where the work runs.** Task Scheduler killed cmd.exe;
+node, a grandchild, ran 33 hours. `refresh --hours=N` stops from inside node.
+*Archive:* "A time limit on the wrapper does not bind the work"; also "A killed task does not kill its grandchildren" (`CLAUDE.md.bak-20260901`)
+
+**Keep tests outside the file they test; versions do not catch reverts.**
+Downloads replaced `ingest.js` twice, losing `jpTitleIsSingleRaw`,
+`evaluateAlerts`, `estFix`; the version banner matched both times.
+*Archive:* "Reverts lose functions silently, and versions do not catch it"
+
+**An assertion that gets overridden is not an assertion.** Patch scripts that
+failed their anchor check were run anyway: 4,312 duplicate rows. If an anchor
+fails, stop.
+*Archive:* "An assertion that gets overridden is not an assertion"
+
+**A test that inspects source is one slip from asserting nothing.** A slicer
+that over-runs passes on the next function's text (false PASS); one test read
+the comment above the SQL instead of the SQL. Test the helper itself, revert
+the fix and watch the test fail, and read the WHOLE output — a red line was
+pushed because only the last four were read. A test that crashes cannot say
+how much is broken: make it null-safe.
+*Archive:* "A helper inside a test is not exempt from being tested", "A fix is not installed until every path that needs it HAS it", "A gate that skips says nothing; now it says what it skipped"
+
+**A tool that cannot check something must say so; a verification tool is a
+reader.** `jpcheck` reported correct prices "DROPPED" for want of a Yahoo
+comparable; `pricecheck` checked a number the page never shows, with a query
+the writer never makes, and asks the wrong edition.
+*Archive:* "A tool that cannot check something must say so", "The base-price rule lives outside server.js too (T2, 2026-09-30)"
+
+**Cross-check two paths that should agree — and compare only what both
+examine.** The highest-yield technique here: it found the mirror collision,
+the Raw NM bug (22 vs 0 listings), and the strongest positive evidence (Yuyu-
+tei and eBay 1% apart on a $450 card). `listingparse.compare` has no name
+check, so comparing names produced 40 false disagreements.
+*Archive:* "Cross-check two paths that should agree", "A cross-check must compare only what both sides examine", "Two paths to one marketplace agreed, and that is the validation"
+
+**Search must find a card by its own name.** The parser altered 209 of 4,512
+English names (set words, numbers, TAG/ACE in names) before SQL; guesses are
+scored under every reading, never used as filters; rank before the cap.
+Never compare timings while a bulk job is running (10x worse under load).
+*Archive:* "Search could not find cards we hold by their own name (2026-09-28)"
+
+**Measure a check's time where it runs, and a timeout is not a verdict.**
+The stamp check took ~1.2 s here and 4.2-5.9 s on Render; eight at once,
+one worker each, all ran past 20 s — and the timeout was cached as
+"unreadable" for 15 minutes. One pool sized to the instance, a queue, one
+job per item; a failure is retryable and held briefly, never kept as an
+answer. A check that cannot finish inside the response runs after it, and
+the page says what is still being checked.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**A verdict that cannot change is stored, not cached — and an unchecked
+row is hidden, not shown.** The stamp verdicts lived in memory: every
+deploy forgot them and the first viewer watched stamped reprints appear
+and then vanish. A photo never changes under its URL, so its verdict is a
+fact: in the database, keyed on a hash, with the matcher's version so a
+new template re-checks. Strong evidence refuses; unchecked waits out of
+sight, counted; weak evidence stays.
+*Archive:* none — 2026-10-03, PROGRESS.md
+
+
+**A zero-false threshold is set by the hardest genuine photo.** The
+artwork template separates different illustrations on average (median
+0.44 vs 0.83) and catches none at zero false: glare, tilt, slabs and
+close crops put genuine cards at 0.36. Look at the bottom of the right
+distribution before reading the medians.
+*Archive:* none — 2026-10-03, PROGRESS.md
+
+**Where both answers are held, ask which wins — not how high one scores.**
+Every photo measurement asked "does this match card X?" and died at the
+floor. Asked comparatively — our scan or the other card's? — the same
+matcher separated bubble Mew from 30th Mew at 0 of 276 genuine refused and
+162 of 178 caught: a glared genuine photo scores low against both, but
+higher against its own. Use a margin so a near-tie is undecided, and set it
+above the hardest genuine photo, not at it.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A title can state the right number over a photo of another card.**
+"Alakazam EX shows #117 listings" read as a number-gate failure; every one
+of 361 kept titles stated the right number, and the photos were siblings,
+other sets and fan art. Read the kept titles AND look at the photos of the
+cheapest rows before deciding which layer failed — the hypothesis in the
+task ("titles with no number") was wrong, and the fix it prescribed would
+have changed nothing.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**Know what a matcher cannot see.** Normalised cross-correlation reads
+structure, not colour: a recoloured print of the genuine card back scores
+0.73 and would be labelled genuine. Metal backs fail because embossing
+loses the swirl, not because they are gold. Say the limit where the claim
+is made ("matches a genuine card", never "verified"), and pin it in a test
+so a change to it is noticed.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A source label two paths write is not "the same source".** Trending
+pairs prices "from the same source" — and `tcgplayer_market` was written
+by the old every-card internal search until 09-29 and by the fallback-only
+search after: 59 of the top 60 seven-day movers were a method change
+(Oranguru SM13 → its Staff prerelease product, $20.72 → $79.99). Label the
+path on the row (`source_meta.via`, productId) and pair on it.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**One card's sample is not a rate.** The sibling "margin ≥ 0.20 AND price
+nearer the sibling" rule caught 10 of 11 on the sample it was read from
+and 2 of 14 on a fresh one (2026-10-04): siblings priced alike (Mew ex
+#193/#205) and swaps priced as our card defeat the price half. SIFT's "0 of 100 correct flagged"
+on four cards became 33 of 896 on twelve. A technique measured on one
+card's wrong listings and four cards' right ones has measured those
+cards. Widen before quoting a rate, and look at where the misses cluster.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**Split a mixed denominator by kind before judging a technique.** "35
+of 89 wrong caught" counted 43 other-language copies no photo can ever
+separate; on the 62 different-artwork rows alone the same SIFT caught 48.
+State what each kind of failure is, then measure each technique on the
+kind it could catch — and report false flags per kind.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**Where a technique and a label disagree, look again before blaming
+the technique.** The "rainbow foil defeats SIFT" cluster (18 false
+warnings on Pikachu VMAX) was mostly metal replicas labelled right;
+re-labelled, it is 4. 27 "right" rows across seven cards were wrong
+(5 more unclear).
+Labelling by eye at thumbnail size misses gold-on-rainbow — zoom.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**A fold that helps matching can merge two cards.** `normNum` folds
+"H01" to "H1" (needed) and "50a" to "50" (not): ccfill would have given
+Aquapolis Golduck 50a and 50b one image. Fold only what the comparison
+needs — padding — when a number identifies an artifact.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+**A "known correct" sample is labelled by eye, not by the gate that kept
+it.** 11 of 30 Base Charizard rows drawn as "correct" for T2 were metal
+replicas, modern Charizards and foreign copies the text gate had kept —
+measured against them, any technique would have scored as wrong what was
+right. Look at every photo in a labelled set.
+*Archive:* none — 2026-10-02, PROGRESS.md
+
+#### 6 · Metered APIs (eBay)
+
+**Guard a metered API before the first bulk call, count by THEIR count, and
+check at the moment of spending.** The count lives in Supabase (Render
+restarts); token exchanges count; the check runs under a lock including
+pending calls; background yields at the soft stop, foreground runs to the
+reserve; `EBAY_ENABLED` defaults on. One token exchange in flight, shared.
+*Archive:* "Guard a metered API before the first bulk call, not after"
+
+**A guard nobody can see is half a guard.** The daily quota went in twelve
+hours and every guard held — speaking only to a server log while the page said
+"No listing matched", which was false. Hourly ceiling, per-origin counts, a
+tooling allowance, and the number on the page.
+*Archive:* "The guard worked and nobody saw it (2026-09-30, TASK T1-T3)"
+
+**Fetch what was asked; completeness plus a single lane is starvation.** "Every
+site, every page" made a view 8-40 calls and a user waited 75s behind a crawl.
+Open = 1 call; everything else is a button stating its cost; the response says
+what was NOT fetched; nothing runs by itself (the auto-expansion is deleted).
+**State the calls per card view before shipping a change.**
+*Archive:* "Completeness plus a single lane is starvation (T1/T2, 2026-09-30)", "The auto-expand threshold, measured"
+

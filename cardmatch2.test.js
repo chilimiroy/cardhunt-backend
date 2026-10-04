@@ -59,7 +59,7 @@ chk('excludes lots and sealed', link.includes('-lot') && link.includes('-box'));
 chk('excludes merchandise', link.includes('-keychain') && link.includes('-coin'));
 chk('excludes other languages', link.includes('-japanese') && link.includes('-korean'));
 chk('excludes PSA 9', link.includes('-"PSA 9"'));
-chk('keeps the card identity', / 004 /.test(link) && link.includes('Base Set'));   // a slab asks the bare number (T0)
+chk('keeps the card identity', / 004 /.test(link) && link.includes('(Base,Game)'));   // a slab asks the bare number (T0)
 
 const rawLink = m.buildQuery(zard, 'Raw NM', { forLink: true });
 chk('raw link excludes slabs', rawLink.includes('-psa') && rawLink.includes('-graded'));

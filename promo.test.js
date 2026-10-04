@@ -52,7 +52,7 @@ try {
   // Trainer Gallery deliberately changed in T3 (TG12/TG30) — subset.test.js.
   else for (const c of [ch]) for (const g of ['Raw NM', 'PSA 10'])
     // A slab's number form changed deliberately in T0 (pslabel.test.js); compare in the old form.
-    ok(m.exports.buildQuery(c, g) === cm.buildQuery(c, g, { numberForm: 'pair' }), 'non-promo query unchanged vs HEAD: ' + c.cardId + ' ' + g);
+    ok(m.exports.buildQuery(c, g) === cm.buildQuery(c, g, { numberForm: 'pair', setAsk: false }), 'non-promo query unchanged vs HEAD: ' + c.cardId + ' ' + g);
 } catch (e) { console.log('  SKIP HEAD comparison — ' + String(e.message).split('\n')[0]); }
 ok(/SWSH202/.test(cm.buildQuery(sy, 'PSA 10', { forLink: true })), 'deep link carries the promo number');
 ok(/PSA 10/.test(cm.buildQuery(sy, 'PSA 10')), 'grade still asked on a promo');

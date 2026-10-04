@@ -2375,6 +2375,10 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       // eBay's own item id, so a row can be Verified on demand (certcheck.js).
       itemId: it.itemId || null,
       imageUrl: it.image && it.image.imageUrl,
+      // The seller's other photos, as the SEARCH returned them (T3,
+      // 2026-10-04) — the card back is usually one of them. eBay's, served
+      // for this view and never stored, like every listing field.
+      extraPhotos: (it.additionalImages || []).map(x => x && x.imageUrl).filter(Boolean),
       country: it.itemLocation && it.itemLocation.country,
       listingType: isAuction ? 'auction' : 'fixed',
       // An auction's number is its CURRENT bid — not what it will sell for.
@@ -4925,7 +4929,11 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
                       currency: l.currencyOriginal || 'USD', usd: l.price, fx: l.fx,
                       shippingUsd: l.shipping, country: l.country, title: l.title.slice(0, 140) });
         }
+        // T3: do search results carry the seller's other photos?
+        const photoCounts = r.listings.map(l => (l.extraPhotos || []).length);
         per[mp] = { scanned: r.scanned, kept: r.kept, rejected: r.rejected, pages: r.pages, scannedIds: r.scannedIds || [],
+                    extraPhotos: { rows: photoCounts.length, withAny: photoCounts.filter(n => n > 0).length,
+                                   total: photoCounts.reduce((a, b) => a + b, 0) },
                     rejectReasons: reasons, keptRows: kept,
                     droppedRows: r.dropped.map(d => ({ itemId: d.itemId, title: String(d.title || '').slice(0, 140), reason: d.reason })) };
       } catch (e) {
@@ -4962,7 +4970,7 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
       const cheapest = rows => rows.filter(k => k.usd && !suspect.has(k.itemId)).sort((a, b) => a.usd - b.usd)[0] || null;
       const clean = fresh.filter(k => !suspect.has(k.itemId));
       summary[mp] = {
-        ebayTotal: p.pages && p.pages.ebayTotal, scanned: p.scanned, kept: p.kept, rejected: p.rejected,
+        ebayTotal: p.pages && p.pages.ebayTotal, scanned: p.scanned, kept: p.kept, rejected: p.rejected, extraPhotos: p.extraPhotos,
         stoppedAtCap: p.pages && p.pages.stoppedAtCap, pagesFetched: p.pages && p.pages.fetched,
         notOnUs: fresh.length, newVsAllEarlier: freshAll.length,
         notOnUsUnflagged: clean.length,

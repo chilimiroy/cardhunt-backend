@@ -1171,8 +1171,9 @@ function totalFits(titleTotal, card) {
 // TCGplayer write "McDonald's 2014" / "McDonald's Promos 2014", and eBay
 // needs every word: Pikachu 5/12 returned one listing (2026-10-02). The
 // gate still checks the catalogue name — only the question changes.
-function askedSetName(setName, card) {
+function askedSetName(setName, card, grade) {
   const w = card && SET_WRITTEN_AS[setIdOf(card)];
+  if (w && w.askGraded && grade && parseGrade(grade).kind === 'graded') return w.askGraded;
   if (w && w.ask) return w.ask;
   const s = String(setName || '');
   const m = s.match(/^McDonald['’]s Collection (\d{4})$/i);
@@ -1188,6 +1189,9 @@ function askedSetName(setName, card) {
 // "MEW EN-151" for 151. Our "Expedition Base Set" is in no title at all,
 // and "151" is too short for the plain set-name check to read.
 //   ask:    what the query asks instead of our set name (every word must hit)
+//   askGraded: the same, for a slab only — PSA's label word OR'd with the
+//           seller's ("(Base,Game)" is eBay's OR). Raw titles say "Base Set",
+//           and an OR there would admit every "Card Game" title.
 //   titles: what counts as the title naming this set, beside our own name
 // Keyed by SET ID, like the reprint tables. Modern labels carry the full
 // set name ("SWORD & SHIELD LOST ORIGIN", "PAF EN-PALDEAN FATES"), so need
@@ -1195,9 +1199,9 @@ function askedSetName(setName, card) {
 const SET_WRITTEN_AS = {
   'ecard1': { ask: 'Expedition', titles: [/\bexpedition\b/i] },
   // "POKEMON GAME BASE II" is Base Set 2's label; "GAME MOVIE" a promo.
-  'base1':  { titles: [/\bpok[eé]mon game\b(?!\s+(?:base|movie))/i] },
+  'base1':  { askGraded: '(Base,Game)', titles: [/\bpok[eé]mon game\b(?!\s+(?:base|movie))/i] },
   'base4':  { titles: [/\bbase 2\b/i, /\bgame base ii\b/i] },
-  'base5':  { titles: [/\bpok[eé]mon rocket\b/i] },
+  'base5':  { askGraded: 'Rocket', titles: [/\bpok[eé]mon rocket\b/i] },
   'sv03.5': { titles: [/\ben-151\b/i, /\bsv\s*151\b/i, /\bmew en 151\b/i] }
 };
 function titleNamesSetAlias(title, card) {
@@ -1643,7 +1647,7 @@ function buildQuery(card, grade, opts) {
   // regardless — this only affects what is ASKED.
   // Omit a CJK set name specifically — not merely one lacking Latin letters,
   // which would also drop "151", a perfectly searchable English set name.
-  if (card.setName && !promo && !CJK.test(String(card.setName))) bits.push(askedSetName(card.setName, card));
+  if (card.setName && !promo && !CJK.test(String(card.setName))) bits.push(askedSetName(card.setName, opts.setAsk === false ? null : card, grade));
 
   const g = parseGrade(grade);
   if (g.kind === 'graded') {

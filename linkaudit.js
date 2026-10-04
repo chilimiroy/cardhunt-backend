@@ -78,9 +78,15 @@ function classify(d) {
     if (d.dryRun) return { code: 'd', why: 'dry run — query built, nothing fetched. Use --live to see results.' };
     return { code: '?', why: 'no scan count reported — the gate may not have run' };
   }
+  // Rows still waiting for their photo check are HIDDEN, not rejected (the
+  // stamp/lookalike gate) — "all rejected" was printed for 46 hidden rows on
+  // Base Charizard PSA 9 the first time they were seen (T0, 2026-10-04).
+  const pending = (d.stampGate && d.stampGate.pending) || 0;
+  const hidden = pending ? `, ${pending} hidden until their photo is checked (re-run shortly)` : '';
   if (scanned === 0)    return { code: 'A', why: 'eBay returned nothing for this query' };
+  if (kept === 0 && pending) return { code: 'p', why: `0 shown of ${scanned}${hidden}` };
   if (kept === 0)       return { code: 'B', why: `all ${scanned} scanned were rejected` };
-  return { code: 'ok', why: `${kept} kept of ${scanned}` };
+  return { code: 'ok', why: `${kept} kept of ${scanned}${hidden}` };
 }
 
 async function auditCard(cardId, cardName, cardNumber) {
@@ -228,6 +234,7 @@ async function auditCard(cardId, cardName, cardNumber) {
   console.log('\n  ' + '-'.repeat(80));
   console.log('  A = eBay returned nothing     B = gate rejected everything');
   console.log('  C = card or source failed     d = dry run, nothing fetched');
+  console.log('  p = rows hidden until their photo is checked — not refused; re-run shortly');
   console.log('  ? = no scan count on a live call — the gate may not have run\n');
   Object.entries(tally).sort().forEach(([k, v]) => console.log(`    ${k.padEnd(4)} ${v}`));
 

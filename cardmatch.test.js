@@ -14,7 +14,7 @@ console.log('');
 chk('N/M pair padded to match', m.buildQuery(zard,'Raw NM').includes('004/102'));
 // A slab asks the number alone: PSA's label prints "#4", never "4/102" (T0, pslabel.test.js)
 chk('a slab asks the bare number', / 004 /.test(m.buildQuery(zard,'PSA 10')) && !m.buildQuery(zard,'PSA 10').includes('/102'));
-chk('set name included', m.buildQuery(zard,'PSA 10').includes('Base Set'));
+chk('set name included', m.buildQuery(zard,'Raw NM').includes('Base Set') && m.buildQuery(zard,'PSA 10').includes('(Base,Game)'));   // a Base Set slab asks PSA's label word too (T0)
 chk('grade included', m.buildQuery(zard,'PSA 10').includes('PSA 10'));
 
 console.log('\nMUST ACCEPT — the right card, right grade\n');

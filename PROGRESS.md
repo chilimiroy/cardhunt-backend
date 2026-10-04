@@ -26,6 +26,38 @@ replicas; Charizard ex 228/197 and SVP 056 titled "4/102 Base Set").
 (`44c6394`). The back check covers every group: its 20-a-view budget is per
 VIEW (an edition request is its own view) and groups partition one view.
 
+**T4 — refused listings shown** (`270cbc7`): payload `refused[]`, page
+"N listings we believe are wrong", collapsed. Live: Alakazam #117 Raw shows
+3 (two CGC 9 slabs, an SGC). Live after T1: Alakazam #125 US page 1 — 55
+photos compared in ~2 min, 1 refused (a #25 at $150); the $24 Doctor
+Strange fan card is back as the cheapest once checked (not a sibling).
+
+**T5 — the set gaps, table first** (logo / art / links measured 2026-10-04;
+links = linkaudit --live, 2 cards a set):
+
+| set | logo | art | links | cause |
+|---|---|---|---|---|
+| sv01, xy10, ecard1 | 404 → **fixed** | full | ok | TCGdex serves .webp, not .png (`7136652`) |
+| svp | none | 192/226 | ok | TCGdex no logo; 34 cards no art anywhere held |
+| mep | none | 0/60 | ok | no host; TCGdex lists 89 cards, we hold 60 |
+| 2023sv, 2024sv | none | 0 | ok | no host (DECIDED 2026-10-02: leave blank) |
+| mee (8), sve (8 of 24 artless) | none | 0 / 16 | B | the only listings are "Choose your card" pickers, refused correctly. Real cards; keep |
+| mfb | none | 0/34 | A | no host; we hold 34 of 48; query asks "1/48 My First Battle" |
+| xya | none | 0/6 | A | **Yellow A Alternate** = alt-art XY Mega-EX (May 2017), printed 24a/**119**, 55a/**111** (the original set's total); we ask "24a/06". TCGplayer: "Alternate Art Promos" |
+| ex5.5 | none | 0/5 | A | **Poké Card Creator Pack** = 2004 Kids' WB! contest set, 5 cards, ~5,000 printed (Mudkip raw ~$533). Sellers write "Kids WB Poke Card Creator 1/5"; we ask "…Creator **Pack**" |
+| exu | none | 0/28 | A/B | Unown "M/28" — the letter, not a number |
+| miscp | none | 0/1 | A | "Ancient Mew 001 promo": no number is printed |
+| tk-xy-*, tk-bw-e, tk-sm-r | none | 0 | ok | no host |
+| tk-hs-g/-r, tk-dp-l | none | 0 | A | we hold 1 of 30 (hs-g, hs-r), 11 of 11 (dp-l); "HS trainer Kit (Gyarados)" is our name, not the sellers' |
+| tk-sm-r/-l | none | 0 | ok | we hold 19 / 18 of 30 |
+| sm6 Greninja GX (not on the list) | — | — | A | 0 rows on all three — found by the T1 spot-check, not investigated |
+
+Shared causes: (A) TCGdex .png 404 — fixed; (B) no image host at all —
+blank is correct; (C) the query asks our set name / catalogue total, not
+what the card prints or sellers write — xya, ex5.5, trainer kits, exu,
+miscp, mfb; (D) catalogue incomplete — mep, mfb, tk-hs-*, tk-sm-*. C and D
+not fixed: each query change needs measuring both ways (the T0 lesson).
+
 **T3 — the back verdicts on Base Charizard (53 rows shown, 152 hidden for
 the stamp check):** 40 genuine back, 10 no claim, 3 unchecked. The $289.99
 "Pokémon cards, Charizard Holo 4/102 Base Set 1999 … 120 HP Rare" (the

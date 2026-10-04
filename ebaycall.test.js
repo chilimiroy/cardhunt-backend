@@ -521,7 +521,7 @@ await quiet(async () => {
 ebay.resetBreaker(); ebay._resetPacing();
 await quiet(async () => {
   let calls = 0;
-  const db = splitDb({ calls_made: 500, tooling_calls: quota.TOOLING_DAILY });
+  const db = splitDb({ calls_made: 500, tooling_calls: quota.toolingAllowance() });
   const t = await ebay.fetchEbay(db, { url: URL_, token: 'T', origin: 'tooling',
     fetchImpl: async () => { calls++; return resp(200, {}); } });
   chk('tooling past its allowance — refused', t.blocked === 'quota' && t.limitHit === 'tooling', JSON.stringify(t));
@@ -533,7 +533,7 @@ await quiet(async () => {
 ebay.resetBreaker(); ebay._resetPacing();
 await quiet(async () => {
   // Request-scoped origin: a probe route's calls are tooling without saying so.
-  const db = splitDb({ calls_made: 500, tooling_calls: quota.TOOLING_DAILY });
+  const db = splitDb({ calls_made: 500, tooling_calls: quota.toolingAllowance() });
   let calls = 0;
   const r = await ebay.withOrigin('tooling', () => ebay.fetchEbay(db, { url: URL_, token: 'T',
     fetchImpl: async () => { calls++; return resp(200, {}); } }));
@@ -556,7 +556,7 @@ await quiet(async () => {
 ebay.resetBreaker(); ebay._resetPacing();
 await quiet(async () => {
   // Four tooling calls in flight at once, one under the allowance: only one goes.
-  const db = splitDb({ calls_made: 500, tooling_calls: quota.TOOLING_DAILY - 1 });
+  const db = splitDb({ calls_made: 500, tooling_calls: quota.toolingAllowance() - 1 });
   let calls = 0;
   const rs = await Promise.all([1, 2, 3, 4].map(() => ebay.fetchEbay(db, { url: URL_, token: 'T',
     origin: 'tooling', meta: { marketplace: 'EBAY_US' },

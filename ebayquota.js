@@ -67,6 +67,13 @@ const HOURLY_LIMIT  = 600;
 // yields at SOFT_STOP like background work. The marketplace probe would have
 // sampled 3 cards rather than 12 and answered the same question.
 const TOOLING_DAILY = 300;
+// A one-day raise, granted by Roy for a named measurement, keyed on the UTC
+// day so it lapses by itself at midnight — never a standing change.
+// 2026-10-04: 700, for the card-back re-measurement (TASK T3).
+const TOOLING_OVERRIDES = { '2026-10-04': 700 };
+function toolingAllowance(now) {
+  return TOOLING_OVERRIDES[(now || new Date()).toISOString().slice(0, 10)] || TOOLING_DAILY;
+}
 
 // Who is spending. Every call carries one; the count is kept per origin.
 //   user       — someone pressed something in the app
@@ -208,7 +215,7 @@ async function check(db, opts) {
     resetsInMin, resetsAt,
     hour: { used: hourUsed, limit: HOURLY_LIMIT, remaining: HOURLY_LIMIT - hourUsed,
             resetsInMin: hourResetsInMin, resetsAt: hourResetsAt },
-    tooling: { used: toolUsed, allowance: TOOLING_DAILY, remaining: TOOLING_DAILY - toolUsed },
+    tooling: { used: toolUsed, allowance: toolingAllowance(now), remaining: toolingAllowance(now) - toolUsed },
     byOrigin: { user: num(s.user_calls), background: num(s.background_calls),
                 tooling: num(s.tooling_calls) },
     tracked: true
@@ -230,9 +237,9 @@ async function check(db, opts) {
       hourResetsInMin, hourResetsAt);
   }
 
-  if (origin === 'tooling' && toolUsed >= TOOLING_DAILY) {
+  if (origin === 'tooling' && toolUsed >= toolingAllowance(now)) {
     return refuse('tooling',
-      `tooling allowance spent — ${toolUsed} of ${TOOLING_DAILY} calls today. ` +
+      `tooling allowance spent — ${toolUsed} of ${toolingAllowance(now)} calls today. ` +
       `Probes and audits stop here rather than borrow from the user budget. ` +
       `Resets in ${resetsInMin} min.`, resetsInMin, resetsAt);
   }
@@ -357,7 +364,7 @@ async function status(db) {
     policy: {
       dailyLimit: DAILY_LIMIT,
       hourlyLimit: `${HOURLY_LIMIT} per UTC clock hour, every origin — a runaway spends one hour's worth, not the day`,
-      toolingAllowance: `${TOOLING_DAILY}/day for probes and audits — refused past it, never borrowed from the user budget`,
+      toolingAllowance: `${toolingAllowance()}/day today (normally ${TOOLING_DAILY}) for probes and audits — refused past it, never borrowed from the user budget`,
       reserve: `${RESERVE} calls held back — never spent`,
       backgroundStopsAt: `${SOFT_STOP * 100}% (background and tooling) so user requests keep working`,
       warnsFrom: `${WARN_AT * 100}%`,
@@ -370,6 +377,6 @@ async function status(db) {
 
 module.exports = {
   check, record, status, fetchRateLimits, normOrigin, levelOf,
-  DAILY_LIMIT, RESERVE, WARN_AT, SOFT_STOP, HOURLY_LIMIT, TOOLING_DAILY,
+  DAILY_LIMIT, RESERVE, WARN_AT, SOFT_STOP, HOURLY_LIMIT, TOOLING_DAILY, toolingAllowance, TOOLING_OVERRIDES,
   VISIBLE_FROM, ORIGINS, windowKey, msUntilReset, hourKey, msUntilHourReset
 };

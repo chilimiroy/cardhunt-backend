@@ -332,7 +332,7 @@ await withEnv('id', 'secret', async () => {
     if (/CREATE TABLE|ALTER TABLE/i.test(sql)) return { rows: [] };
     if (/INSERT INTO ebay_quota_hour/i.test(sql) && /RETURNING/i.test(sql)) return { rows: [{ calls: 0 }] };
     if (/INSERT INTO ebay_quota\b/i.test(sql) && /RETURNING/i.test(sql))
-      return { rows: [Object.assign({}, QUOTA_ROW, { calls_made: 500, tooling_calls: realQuota.TOOLING_DAILY })] };
+      return { rows: [Object.assign({}, QUOTA_ROW, { calls_made: 500, tooling_calls: realQuota.toolingAllowance() })] };
     return { rows: [] };
   }};
   const c = { n: 0 };

@@ -69,6 +69,8 @@ has drifted apart eventually, and each drift is a lesson below.
 | `stampcheck.js` | does this listing's PHOTO show a reprint's commemorative stamp? — **a gate on every eBay row of the 55 originals** (found refuses; unchecked rows HIDDEN; verdicts kept in `listing_photo_verdicts`, hashed keys), **0 eBay calls** (eBay's image CDN), per-card templates in `stamps.json` (built by `stampbuild.js` from OUR scans); found / not visible / unreadable, never "verified original" |
 | `setyield.js` | did a refresh price NOTHING for a whole set, or for 200+ cards in a row? — names it, exits 2 |
 | `pricequality.js` | is a headline CURRENT and MEASURED? — estimate / old (>30 d) / thin (Yahoo N≤2, 0 listings) / unsettled (≥1.5x twice in 60 d); one batched query per payload, drawn by the page's `priceMarksHtml` on every tile |
+| `stampcheck.js` (lookalikes) | does this photo match OUR card better than a DIFFERENT card sellers list under it? — `cardmatch.LOOKALIKES` (one pair: bubble Mew ↔ 30th Mew), whole-card templates in `stamps.json` `wholes`, margin 0.30; rides on the stamp gate (hidden until checked); verdict keyed on item + our card |
+| `backcheck.js` | what does the card's BACK show? — another language family's back REFUSES, this card's own back LABELS ("matches a genuine card", never "verified"), nothing found claims nothing; templates in `stamps.json` `backs` from published scans; photos from the shared getItem; on demand + outlier-flagged rows + `MOST_FAKED` (≤20 a view, background); verdicts `check_kind 'back'` |
 
 ## What ships and what does not
 
@@ -81,7 +83,7 @@ jpfilter.js  linkaudit.js  listingparse.js  outlier.js  setaudit.js
 sourceprobe.js  tcgdexprice.js  yuyutei.js  digital.js  trending.js
 searchaudit.js  certcheck.js  sitecheck.js  costmeter.js
 stampcheck.js  stamps.json  stampbuild.js  stamp.fixture.json  setyield.js
-pricequality.js
+pricequality.js  backcheck.js
 checkout-disabled.js  login-disabled.js   (preserved, never loaded or served)
 migration-grade-dimension.sql  migration-image-source.sql  migration-variants.sql
 migration-photo-verdicts.sql
@@ -399,6 +401,34 @@ and `cardmarketSearch` name-only fallbacks, jpfilter's second English gate.
 | **reprint-priced** | a row at the known reprint's price level | `flagReprintPriced` where `REPRINT_OF` | same | same | — | — | the reprint's own listings | `outliers.reprints[]` |
 | **printing** (T10) | normal / holo / reverse / reverse-pokeball / reverse-masterball … — a STATED other printing is refused, silence kept as *unstated* | `verify(opts.printing)`; `buildQuery` asks for it | the asked mirror's own entries, else `pickVariants` | `printingRefusal` | base printing only — `printsql.basePrintingSql` on every headline reader | — | `cards.variants` (manifest) — **must be SELECTed** | `sources.<id>.printing{asked, keptStated, keptUnstated, refused}` |
 
+| **reprint stamp** | the photo shows a 30th / Celebrations stamp | `stampcheck.gate` on the 55 originals; unchecked HIDDEN | — | — | — | — | the row's own photo (CDN) | `stampGate`, `ebay.stampRefused` |
+| **lookalike** (2026-10-04) | the photo matches a DIFFERENT card sellers list under this one better, by 0.30 | same gate, `cardmatch.LOOKALIKES` (bubble Mew ↔ 30th Mew) | — | — | — | — | both whole-card scans | `stampGate.kind: 'lookalike'` |
+| **card back** (2026-10-04) | another language family's back refuses; own back labels | `backcheck` verdicts applied in `judgeListings`; unchecked SHOWN | — | — | — | — | the listing's getItem photos | `backCheck`, `ebay.backRefused` |
+
+**What the query ASKS decides what the gate can ever see** (T0, 2026-10-04).
+Four causes of listings never shown, each general, each fixed:
+- **A slab is asked by its bare number** (`28`, not `28/165`): most graded
+  titles copy PSA's label — "2002 POKEMON EXPEDITION #28 TYPHLOSION-HOLO
+  PSA 1" — which prints no total. Kept, pair -> bare (marketprobe `?shape=`):
+  Typhlosion PSA 1 0 -> 1, Umbreon #32 PSA * 4 -> 14, Base Charizard PSA 9
+  15 -> 45, Charizard ex 199 PSA * 163 -> 190. **Raw keeps the pair**: bare
+  on Base Charizard Raw returned 4,977 rows and kept 0 of the first 225.
+- **Set names as the label writes them** (`cardmatch.SET_WRITTEN_AS`, by set
+  id): GAME (Base Set), ROCKET, EXPEDITION, BASE 2, EN-151 are read as
+  naming the set; a slab asks `(Base,Game)` / `Rocket` / `Expedition`. Our
+  "Expedition Base Set" is in no title; "151" was too short to read.
+  Accents folded ("Pokémon GO" could never match). Modern labels carry the
+  full set name and need no entry.
+- **Auctions.** eBay Browse returns Buy It Now only unless asked: 0 auctions
+  in 258 rows over four cards. Now `buyingOptions:{FIXED_PRICE|AUCTION}`,
+  same call. A current bid is labelled and is never the cheapest or an
+  outlier baseline (`outlier.isCurrentBid`).
+- **"PSA 8 Card" is a grade, not an 8-card lot** (`GRADE_PHRASES` masked for
+  the lot test only).
+Still open: a RAW title with the pair and no set name ("Mew ex - 100/110
+HOLO - English") is accepted by the gate but never fetched — raw asks the
+set name. Not measured.
+
 **Reporting.** Every registered listing source now returns `kept`,
 `rejected`, `dropped[]` (reasons), `gate` (what the gate had) — Yahoo did not
 until T9 (`jpItemRejectReason`). Stored-price paths report to the console
@@ -555,6 +585,76 @@ fires on that.
 
 Open: the metal Charizards (a different product the gate keeps on CC002).
 
+# WHAT CATCHES A WRONG LISTING — coverage, per problem (2026-10-04)
+
+Read this before another photo session: what is covered, on which cards,
+and what is not.
+
+| problem | caught by | on which cards | measured |
+|---|---|---|---|
+| reprint with a stamp (30th / Celebrations) | stamp gate (photo) + `REPRINT_FAMILIES` title words + reprint price band | the 55 originals in `REPRINT_OF` (54 templates; `30th-c-020` has no stamp on our scan) | 92.5% of reprint photos, 0 of 16 originals |
+| a different card sellers list under ours, both scans held | lookalike comparison (photo) | ONE pair: bubble Mew ex 232/091 ↔ 30th Mew ex 152/128 | 162/178 refused, 0/276 genuine |
+| named replica ("gold metal", "proxy", gold before 2004…) | title words (`NOT_A_SINGLE_CARD`, `goldBeforeGold`) | all | 0 of 896 right titles refused |
+| implausible price | outlier check (flags, never removes) | all with ≥5 priced and ≥$15 median, or a current stored price | 0 of 864 right rows flagged |
+| other-language copy | title (language words, Japanese set codes on an English card) — and the **card back** when the back is posted | all / back: on demand, flagged rows, most-faked cards | back: 11 of 12 Japanese, 0 of 52 English |
+| metal replica, title silent | **partly**: outlier check when cheap; the back check finds NO genuine back on it (no claim — it never refuses), while genuine copies get the label | back: on demand, flagged rows, most-faked cards | 0 of 17 metal backs labelled genuine; 52/52 genuine labelled |
+| different illustration of the same Pokémon (kind D), outside lookalike pairs | **NOTHING** | — | see below |
+| a printed counterfeit of the real card, real back | **NOTHING** — the back check would LABEL it | — | not measured |
+
+**The different-illustration case outside a held pair stays unsolved.
+Measured twice** (THE STAMP MATCHER ON THE ARTWORK; IS THIS PHOTO THIS CARD
+AT ALL?): a genuine card under glare, tilt or a slab scores 0.36-0.45 on
+the artwork template; a different illustration 0.31-0.59 — the
+distributions overlap at the floor, so no absolute threshold separates
+them. SIFT would (0/916 false at the strict rule), and **no `opencv.js`
+build from 4.5.5 to 5.0 ships SIFT**. Do not spend another session on it
+without one of: building opencv.js with SIFT (emsdk), native OpenCV on
+Render (Docker), or re-measuring with ORB/AKAZE — each is infrastructure.
+What DID work is asking comparatively where both scans are held (next
+section) — so the cheap route for a recurring wrong card is a new
+`LOOKALIKES` pair, measured first.
+
+# COMPARATIVE MATCHING — BUILT 2026-10-04 (T1), for held pairs
+
+Every earlier photo measurement asked "does this photo match card X?" with
+one template and an absolute threshold, and failed at the floor. Where we
+hold BOTH scans, ask which side wins: a badly shot genuine card scores low
+against both, but higher against its own. Same matcher (`stampcheck.nccMax`
+sweep, 24 px), two comparisons, d = score(ours) − score(other).
+
+**Bubble Mew ex 232/091 vs 30th Celebration Mew ex 152/128** — Roy's two
+"$180/$190" rows were 30th Mews (stamp visible, 160 HP) titled "232/091".
+457 photos labelled by eye (276 bubble, 178 30th; the 30th card's own
+listings supplied most of them):
+
+| region | zero-false margin | 30th caught at it | genuine called 30th at margin 0 |
+|---|---|---|---|
+| whole card | 0.254 | 173/178 | 42/276 |
+| illustration (y .10-.52) | 0.222 | 147/178 | 31/276 |
+| artwork only | 0.104 | 163/178 | 19/276 |
+| core | 0.183 | 155/178 | 29/276 |
+
+Shipped: whole card, margin **0.30** (slack above the hardest genuine photo,
+a glared raw card at 0.254): **0 of 276 genuine refused, 162 of 178 30th
+refused** on the bubble Mew search, 0 of 178 on the 30th card's own search.
+Both of Roy's photos are refused (margins 0.37, 0.41). Live 2026-10-04 the
+gate ran on all 40 bubble Mew rows (0 refused — the two 30th rows had left
+eBay). The verdict is keyed on item + our card: the same photo is right
+under the other card.
+
+**On the Classic Collection pairs it adds nothing**: a reprint reproduces
+the artwork. Aquapolis Lugia vs 30th CC Lugia, illustration region, margin
+0.02: 0 of 16 originals called reprint, 56 of 69 reprints — the stamp gate
+already finds 68 of 69. Not wired there.
+
+**T2 settled 2026-10-04 — the bubble Mew rows were never a mapping gap.**
+30th #152 is a new card (Kuroimori, 160 HP, Teleportation Burst), not a
+reprint of Paldean Fates #232 (USGMEN, 180 HP). `REPRINT_OF` is complete:
+30 + 25, every original in the catalogue; no card of the 30th Celebration
+(158) or Celebrations (25) main sets shares illustrator AND attacks with an
+older card except a TCG Pocket promo (checked on TCGdex; Celebrations #5
+Pikachu is a new Arita illustration, looked at).
+
 # THE STAMP MATCHER ON THE ARTWORK — measured 2026-10-03 (T1), NOT built
 
 The question: the art-box score (8/24) mixed kinds — does the SHIPPING
@@ -705,8 +805,14 @@ cheapest row ($190) is the 30th Celebration Mew; 42 right.
   false elsewhere. A warning at best; the per-card gap above (genuine
   250+, replicas ≤155) suggests a rule relative to the card's own best
   matches — not measured.
-- **L, other language — never a photo's job.** 0 of 43 at the strict
-  rule, as predicted; the title gates refuse 33 of 34 Mew ex by "SV2a".
+- **L, other language — not the FRONT's job; the BACK's.** The front is
+  the same artwork: 0 of 43 at the strict rule. But Asian-language prints
+  carry another back, and sellers post it — 14 of 15 Japanese Mew ex SV2a
+  copies showed it; on 98 fresh listings the Japanese back was found on 11
+  of 12, 0 of 52 English. Built: `backcheck.js` refuses a Japanese-family
+  back on an English card (THE CARD BACK). A European-language copy shares
+  the English back, so it stays the title gates' job (they refuse 33 of 34
+  Mew ex by "SV2a").
 - **The rainbow-foil "blind spot" mostly was not one**: with the
   replicas re-labelled, Pikachu VMAX's right rows flagged at 47 fall from
   18 to 4.
@@ -806,7 +912,57 @@ identical on every ex/V card of a language); the name plate is per card.
 Revisit only if title-silent foreign copies are measured to be common;
 then the rule box (generic, no pairing) is the piece to cost first.
 
-# THE CARD BACK — measured 2026-10-04 (T2), NOT built
+# THE CARD BACK — BUILT 2026-10-04 (T3), `backcheck.js`
+
+**Re-measured as the first step of building, on 98 FRESH listings** (none
+of the 210 below; the tooling allowance stopped it short of 100), templates
+cut from PUBLISHED SCANS (Bulbapedia's archive: `Cardback.jpg` and `TCG Card
+Back Japanese.jpg` — never a listing photo), every listing labelled by eye
+(Shining Charizard 28, Base Charizard 18, Japanese Mew ex SV2a 14, Charizard
+ex 199 12, PSA 10 Umbreon VMAX 12, Pikachu VMAX 14). Per photo, a family's
+back is SEEN when its template scores ≥ 0.55 (English) / ≥ 0.65 (Japanese)
+AND beats the other family's by 0.10 — the comparison, not a bare threshold
+(Japanese photos reach 0.53 on the English template; English slab close-ups
+0.575 on the Japanese one):
+
+| listings | genuine-back label | other-back refusal | no claim |
+|---|---|---|---|
+| genuine English, back shown (52) | **52** | 0 | 0 |
+| metal / printed-fake back shown (17) | 0 | 0 | 17 |
+| replica, no back (8) · no back (7) | 0 | 0 | 15 |
+| genuine Japanese, back shown, on its own card (12) | 11 | 0 | 1 |
+| the same 12 as if on an English card | — | **11** | 1 |
+| English Mew ex listed under the Japanese card (1) | — | 1 | — |
+
+The shipped port reproduces the measurement (scores within 0.019 on 295
+photos). **Live on Render** (Shining Charizard Raw, first open): the first
+20 rows checked in ~75 s in the background, 9 labelled, 11 no claim, 0
+refused — 20 of 20 agree with the photos by eye (every "no claim" a gold
+metal replica, every label a genuine card).
+
+- **Two positive verdicts, two actions.** A back of ANOTHER language family
+  refuses the row (counted in `ebay.rejected`, `backRefused`, droppedSample);
+  this card's own family's back labels it "Back photo matches a genuine
+  card" — never "verified". **Nothing found claims nothing**: a metal back
+  and no back look alike here.
+- **A limit, pinned in `backcheck.test.js`**: the matcher reads STRUCTURE,
+  not colour — a recoloured print of the genuine back scores 0.73. Real
+  metal backs fail because embossing loses the swirl. A printed counterfeit
+  with an accurate back would be labelled.
+- **Where it runs.** On demand ("Check card back" on any eBay row,
+  `/api/back/:cardId?item=`), and automatically after the answer, BACKGROUND
+  (yields at the soft stop), at most 20 rows a view, on rows the outlier
+  check flagged and every row of `backcheck.MOST_FAKED` (Shining Charizard,
+  Base Charizard, Pikachu VMAX). Unchecked rows are SHOWN (unlike the stamp
+  gate): a paid optional check is not a gate every row waits on.
+- **Cost.** 1 getItem per row checked — the SAME call Verify and Photos
+  make (15-minute cache) — and 0 once its verdict is stored (`check_kind
+  'back'`, version `back-1`, hashed item id + our card id; no eBay data).
+  The calls take the origin of whoever opened the card (a user's view
+  counts as user). Photos scored in the stamp worker pool (~0.8 s each
+  here). See CALL COST.
+
+## The first measurement (T2, 2026-10-04), kept for the record
 
 The question: every genuine card shares a back, so does one template judge
 the whole catalogue? 210 eBay listings, every photo fetched by getItem
@@ -842,8 +998,8 @@ the closest wrong row is a JA back at 0.43. Japanese template on JA 0.83,
 everything else ≤ 0.59. The JA miss is the pre-2001 back (another design).
 **Shining Charizard: a genuine back found on 25 of 26 genuine listings and 0
 of 63 replicas.** Japanese Mew ex SV2a on the English card: 14 of 15 show
-the Japanese back — the "other language" kind, recorded below as never a
-photo's job, IS the back's job when the back is posted.
+the Japanese back — the "other language" kind IS the back's job when the
+back is posted (the lesson in SPLIT BY KIND is corrected to say so).
 
 **What it cannot do.** A metal back and no back both read "no genuine back
 found": absence is weak evidence (26 listings posted none), never a refusal.
@@ -858,11 +1014,9 @@ rows, not across the board: e.g. rows the outlier check flags or the 55
 reprint-sensitive and most-faked cards, on demand. Strong evidence: a
 JAPANESE back on an English card (refuse, like the stamp) and a GENUINE back
 (the row may say "back photo matches a genuine card", never "verified").
-Not built: thresholds read off this sample (the genuine template came from
-one of its photos, i2), 107 genuine listings over 13 cards and replicas from
-mostly one card. Next: hold out a fresh 100 listings, then decide.
-Scripts: session scratchpad `sc/backscore.js`, `backscore2.js`, `an2.js`,
-labels `lab.js`, sheets `bks*.jpg`.
+Thresholds then were read off this sample (the genuine template came from
+one of its photos, i2) — which is why the fresh re-measurement above came
+first, with scan templates.
 
 # EX-ERA PRICES — diagnosed 2026-10-02 (T2)
 
@@ -950,12 +1104,21 @@ is not handed to a waiter of another origin — it tries under its own. At a
 | Photos, same listing as Verify | `/api/photos` | **0** — shared 15-min getItem cache; another listing 1 |
 | Reprint stamp gate, on opening one of the 55 originals | automatic | **0** — measured 2026-10-02 under costmeter: Lugia open = 2 searches + 1 token, stamp work 82 `i.ebayimg.com` fetches (CDN, not the API), once per item; the page's ~30 `?poll=1` re-reads **0** |
 | `/api/stamp` (one row, by hand) | | **0** — same queue and cache as the gate |
+| Lookalike check (bubble Mew ↔ 30th Mew) | automatic, same gate | **0** — CDN photos only |
+| Auctions (2026-10-04) | part of every search | **0 extra** — `buyingOptions` is a filter on the same call |
+| **Back check, automatic** (2026-10-04) | after opening a most-faked card (Shining Charizard, Base Charizard, Pikachu VMAX), or rows the outlier check flagged | **+1 getItem per row not yet checked, at most 20 a view**, background (yields at the soft stop); **0** once a row's verdict is stored. Measured live: Shining Charizard Raw first open = 1 search + 20 getItem; its 52 rows clear over three opens, then 1 a view. Counted under the opener's origin |
+| "Check card back" (one row) | `/api/back` | **1** getItem — **0** if Verify or Photos fetched it in the last 15 min, or the verdict is stored |
 | Search, query resolving to one card | `/api/search?q=` | **1 per resolved card** (+ reprints: "Charizard 4/102 Base Set" = 3); graded query 1 |
 | Search, ambiguous name ("Pikachu") / nonsense / `listings=0` | same | **0** — listings only when the query resolves |
 | Trending · cards · history · sets · set page · market · alerts (list, triggered) · portfolio · quota read · listings-log · `dryRun=1` | | **0** each |
 | Alerts screen, 6 alerts | render from the loaded list | **0** |
 
 ## Tooling — counted against the 300/day allowance
+
+A one-day raise goes in `ebayquota.TOOLING_OVERRIDES`, keyed on the UTC day,
+so it lapses by itself (2026-10-04: 700, Roy, for the card-back
+re-measurement).
+
 | tool / route | typical invocation | eBay |
 |---|---|---|
 | `/api/ebay/conditions` | `?items=25` | **26** (1 search + 25 getItem) |
@@ -964,6 +1127,7 @@ is not handed to a waiter of another origin — it tries under its own. At a
 | `/api/ebay/certprobe` | `?grader=PSA&single=12` | **13** (1 + 12 getItem) |
 | `/api/ebay/gradecost` | `?grade=PSA%2010` | **2** on a light card; more pages on a busy one |
 | `/api/ebay/marketprobe` | default sites | **11 per card** (8 sites + NOCAT/NOSET variants) — the 12-card run was ~132 |
+| `/api/ebay/marketprobe` | `?mp=EBAY_US&shape=pair\|bare\|or` | **1 per site** — how the number is asked (T0); `extraPhotos` says whether search rows carry the seller's other photos (they do not: 0 of 63) |
 | `/api/ebay/marketprobe` | `?mp=EBAY_DE` | **2** |
 | `/api/ebay/aspects` | `?mp=EBAY_DE` | **1** |
 | `/api/ebay/setprobe` | `?single=N&verify=1` | **1 + N (+2)** — 20 sampled = 23 |
@@ -1416,6 +1580,10 @@ node priceage.test.js        # 11   the card page says when its headline was rec
 node pricequality.test.js    # 36   old / thin / unsettled both ways; the page's REAL priceMarksHtml; every headline screen wired; 30 days one definition (--db: +3)
 node fakewords.test.js       # 48   T4: what the wrong cards said (merch phrases, CN, Portugese, a JA set code on an EN card, a bare V) and the genuine phrasings kept; 2026-10-04 gold before 2004 + Shining Charizard phrases (13 fail on the old gate)
 node stampcheck.test.js      # 107  the stamp GATE: found refuses, weak keeps, unchecked HIDDEN; verdicts survive a restart (store, hashed keys, version, photo change); one job per item; poll never searches; both directions on our scans (--live: +8)
+node pslabel.test.js         # 29   T0: PSA-label titles ("#28", GAME/ROCKET/EXPEDITION/EN-151) kept, other cards' labels refused; a slab asks the bare number, raw the pair; "PSA 8 Card" is not a lot (12 fail on the old gate)
+node auction.test.js         # 10   T0: auctions asked for; a current bid labelled, never the cheapest or a baseline (6 fail on the old code)
+node lookalike.test.js       # 17   T1: bubble Mew ↔ 30th Mew both directions on our scans; verdict keyed on item + our card; the page says "matches … better", never "stamp"
+node backcheck.test.js       # 25   T3: English/Japanese backs both ways; other-language back refuses, own back labels, nothing claims nothing; never "verified"; the structure-not-colour LIMIT pinned; shared getItem, background, stored hashed
 ```
 
 Run them all:
@@ -1754,6 +1922,25 @@ query returns zero; English sellers write the set NAME, never its code
 through `cardmatch.buildQuery` and sits under UNFILTERED SEARCHES.
 *Archive:* "Ask a question the marketplace can answer", "English listings name the set; they never state its code", "A deep link is not a result, and must not be dressed as one"; restored from `CLAUDE.md.bak-20260803`: "English marketplaces can't match Japanese names"
 
+**Ask in the form most titles copy — for a slab, that is PSA's label.**
+"2002 POKEMON EXPEDITION #28 TYPHLOSION-HOLO PSA 1" prints no set total and
+its own set name, so a query asking "28/165 Expedition Base Set" never saw
+it, and the gate refused it when it did. Roy's PSA 1 and 9 of Umbreon #32's
+~14 PSA listings were that shape. A slab asks the bare number; the label's
+set names are read by set id (`SET_WRITTEN_AS`). Measure a query change in
+both conditions: the same bare number that quadrupled slab results kept 0
+of 225 on a raw search.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A search returns only what it was asked for, and a default is a
+filter.** eBay Browse returns Buy It Now only unless `buyingOptions` names
+auctions: 0 auctions in 258 rows over four cards, for as long as the
+listing finder has existed, while eBay's own site listed them. Compare a
+card's rows against the marketplace's own page and read every row it shows
+that you do not — "the gate never ran" and "the query never asked" look
+the same from inside.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
 **A read endpoint must never write.** `/api/market` persisted a name-matched
 aggregate on every view and overwrote Mega Gengar's $1,056 with $3.14. eBay
 data is cached 15 minutes and never stored (terms); aggregates may be.
@@ -1965,12 +2152,30 @@ new template re-checks. Strong evidence refuses; unchecked waits out of
 sight, counted; weak evidence stays.
 *Archive:* none — 2026-10-03, PROGRESS.md
 
+
 **A zero-false threshold is set by the hardest genuine photo.** The
 artwork template separates different illustrations on average (median
 0.44 vs 0.83) and catches none at zero false: glare, tilt, slabs and
 close crops put genuine cards at 0.36. Look at the bottom of the right
 distribution before reading the medians.
 *Archive:* none — 2026-10-03, PROGRESS.md
+
+**Where both answers are held, ask which wins — not how high one scores.**
+Every photo measurement asked "does this match card X?" and died at the
+floor. Asked comparatively — our scan or the other card's? — the same
+matcher separated bubble Mew from 30th Mew at 0 of 276 genuine refused and
+162 of 178 caught: a glared genuine photo scores low against both, but
+higher against its own. Use a margin so a near-tie is undecided, and set it
+above the hardest genuine photo, not at it.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**Know what a matcher cannot see.** Normalised cross-correlation reads
+structure, not colour: a recoloured print of the genuine card back scores
+0.73 and would be labelled genuine. Metal backs fail because embossing
+loses the swirl, not because they are gold. Say the limit where the claim
+is made ("matches a genuine card", never "verified"), and pin it in a test
+so a change to it is noticed.
+*Archive:* none — 2026-10-04, PROGRESS.md
 
 **One card's sample is not a rate.** SIFT's "0 of 100 correct flagged"
 on four cards became 33 of 896 on twelve. A technique measured on one
@@ -2060,6 +2265,9 @@ what was NOT fetched; nothing runs by itself (the auto-expansion is deleted).
 10. **Make a guard fire before believing it** — revert the fix, watch the test
     fail, read the whole output.
 11. **State an eBay change's calls per card view before shipping it.**
+12. **Compare a card's rows with the marketplace's own page, and read every
+    row it shows that you do not.** That is how the PSA-label titles and the
+    missing auctions were found (T0, 2026-10-04) — not from any count we kept.
 
 # LOGGING
 Keep `PROGRESS.md` current — it is the narrative record, dated, with what was

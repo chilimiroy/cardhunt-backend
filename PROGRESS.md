@@ -1,5 +1,59 @@
 # CardHunt — Progress Log
 
+## 2026-10-04 (later) — T0 missing listings, T1 comparative matching, T2 the Mew rows, T3 the card back BUILT
+
+**T0 — listings missing everywhere, four causes, all fixed** (CLAUDE.md, THE
+GATES "What the query ASKS").
+- linkaudit live: Typhlosion ecard1-28 PSA 1 = A (eBay returned nothing),
+  PSA * 1 kept of 1 (the reverse holo — kept because no printing was
+  chosen; not a printing-filter bug). Umbreon neo2-32 PSA * 5 kept of 7.
+  PSA 1 is in the grade list; nothing truncated; rejection counts present;
+  the grade aspect filter loses 0 (gradecost on four cards).
+- eBay's own site showed the missing rows: "2002 POKEMON EXPEDITION #28
+  TYPHLOSION-HOLO PSA 1" and nine "2001 POKEMON NEO DISCOVERY #32 UMBREON PSA
+  n" — PSA's label, no set total. Fixes, each measured on Render
+  (marketprobe `?shape=`): a slab asks the bare number (`1c52ce1`); label set
+  names read by set id + accents folded (`e7ed1de`); Base Set / Team Rocket
+  slabs ask `(Base,Game)` / `Rocket` (`7f1a559`).
+- The five-card spot-check against eBay's own results (Blastoise PSA 8, Dark
+  Charizard PSA 9, Holon Mew ex Raw, Giratina V alt PSA 10, Charizard ex 199
+  PSA 9) found the other two causes: **0 auctions in 258 rows** (Browse
+  returns Buy It Now unless asked) and "PSA 8 Card" refused as an 8-card lot
+  (`59f5a8a`). Left open: a raw title with the pair and no set name.
+- Before -> after, kept: Typhlosion PSA 1 0->1, PSA * 1->3; Umbreon PSA *
+  5->14; Base Charizard PSA 9 15->~50; Dark Charizard PSA 9 14->20;
+  Blastoise PSA 8 41->43; Charizard ex 199 PSA * 163->190.
+- A gotcha: right after a deploy linkaudit printed "B: all 112 rejected" on
+  Base Charizard PSA 9 — 46 rows were HIDDEN awaiting the stamp check. It now
+  prints `p` for hidden.
+
+**T2 — not a mapping gap.** The $180/$190 rows on Paldean Fates Mew ex 232
+were 30th Celebration Mew ex 152/128 (stamp visible, 160 HP), titled
+"232/091" — a different card. REPRINT_OF complete (55, all originals held);
+no 30th or Celebrations main-set card reprints an older one (TCGdex
+illustrator + attacks; Celebrations #5 Pikachu looked at — new art).
+
+**T1 — comparative matching built** (`53024f6`). 457 photos labelled by eye
+(30th Mew's own listings + bubble Mew's). Whole card, margin 0.30: 0/276
+genuine refused, 162/178 30th refused; shipped port = measurement 456/457.
+On Aquapolis Lugia vs its 30th CC reprint (same art) it adds nothing over
+the stamp. Live: gate ran on 40 bubble Mew rows, 0 refused (the 30th rows had
+left eBay); Roy's two photos refuse at 0.37/0.41.
+
+**T3 — card back built** (`0cbd390`). Re-measured first: 98 fresh listings
+(tooling ran out at 80; Roy raised it to 700 for the day, `bf81c0b`),
+templates from Bulbapedia's archive scans. EN 52/52 genuine, 0/17 metal, 0/12
+JA, 0/15 none; JA 11/12, 0/52 EN. Search results carry no extra photos (0 of
+63), so it is 1 getItem a row, shared with Verify/Photos. Live on Shining
+Charizard: 20 rows in ~75 s, 9 labelled, 11 no claim, 20/20 right by eye; the
+calls counted under the opener's origin. Limit found by the test: a
+recoloured print of the genuine back reads as genuine (structure, not colour).
+
+Also: escapes mangled by python heredocs three times today (a 0x08 in
+matchparity.test.js caught by the byte check; two patch runs stopped by the
+anchor asserts). Use the editor for anything with a backslash.
+
+
 ## 2026-10-04 — T2 the card back: measured (CLAUDE.md "THE CARD BACK"), not built
 
 210 listings, every photo via /api/photos (210 getItem, tooling; 767 photos,

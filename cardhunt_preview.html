@@ -3940,6 +3940,40 @@ async function certVerify(btn){
 // facts, and a panel that shows the same thing for both cannot explain
 // itself. Team Rocket's Grimer genuinely sits at $0.99 and must never be
 // flagged; this line is how a reader can see that was a decision.
+// ── What the gates refused, collapsed, at the end (T4, 2026-10-04) ──
+// Roy: see what was refused rather than have it vanish. The server sends a
+// separate list (d.refused) — never in listings, so never in the count,
+// the cheapest, a median or a print run. Collapsed by default, each row
+// with the reason the gate gave, its price and its link.
+var REFUSED_STAGE = { title: 'title', photo: 'photo', back: 'card back' };
+function liveRefusedBlock(d){
+  var rows = (d && d.refused) || [];
+  var total = Math.max((d && d.refusedTotal) || 0, rows.length);
+  if (!total) return '';
+  var more = total - rows.length;
+  return '<details class="lrefused" style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--bd)">'
+    + '<summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--mu);letter-spacing:.04em">'
+    + total + ' listing' + (total === 1 ? '' : 's') + ' we believe ' + (total === 1 ? 'is' : 'are') + ' wrong</summary>'
+    + '<div style="font-size:11px;color:var(--mu);line-height:1.6;margin:6px 0 8px">'
+    + 'Refused by our checks, with the reason each was refused. Not counted in anything above.'
+    + (more > 0 ? ' ' + more + ' more refused ' + (more === 1 ? 'is' : 'are') + ' not listed here.' : '')
+    + '</div>'
+    + rows.map(function (r) {
+        var price = r.price != null
+          ? (r.currency && r.currency !== 'USD' ? liveEsc(r.currency) + ' ' + Number(r.price).toFixed(2) : fmtCurrency(Number(r.price)))
+          : '';
+        var title = r.url
+          ? '<a href="' + liveEsc(r.url) + '" target="_blank" rel="noopener" style="color:var(--tx)">' + liveEsc(r.title) + '</a>'
+          : liveEsc(r.title);
+        return '<div class="lrefrow" style="padding:6px 0;border-bottom:1px solid var(--bd);font-size:12px">'
+          + '<div style="display:flex;justify-content:space-between;gap:10px"><span>' + title + '</span>'
+          + '<span style="white-space:nowrap;color:var(--mu)">' + price + '</span></div>'
+          + '<div style="font-size:11px;color:#B45309">' + liveEsc(REFUSED_STAGE[r.stage] || r.stage || '') + ': '
+          + liveEsc(r.reason) + '</div></div>';
+      }).join('')
+    + '</details>';
+}
+
 function liveOutlierNote(d){
   var o = d.outliers;
   if (!o || !o.priced) return '';
@@ -4313,7 +4347,7 @@ async function renderLiveListings(card, grade, opts){
              + 'in eBay&rsquo;s Card Condition field right now, and no shop title states it.')
           : ('No listing matched this exact card at this grade. A listing is only shown when its '
              + 'title confirms both the card and the set &mdash; a near miss is worse than nothing.'))
-      + '</div>'))) + excludedNote() + unstatedBlock() + liveSourceNote(d) + '</div>';
+      + '</div>'))) + excludedNote() + unstatedBlock() + liveRefusedBlock(d) + liveSourceNote(d) + '</div>';
     applyMeasuredGrade(d);
     return;
   }
@@ -4357,7 +4391,7 @@ async function renderLiveListings(card, grade, opts){
       + ended.map(liveRow).join('');
   }
   html += excludedNote() + unstatedBlock()
-        + liveOutlierNote(d) + liveSourceNote(d) + '</div>';
+        + liveOutlierNote(d) + liveRefusedBlock(d) + liveSourceNote(d) + '</div>';
   host.innerHTML = html;
   applyMeasuredGrade(d);
 }
@@ -6401,6 +6435,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261004-44c6394-siblings &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261004-7136652-refused &middot; click to hide</div>
 </body>
 </html>

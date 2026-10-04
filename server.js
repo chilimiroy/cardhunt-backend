@@ -2143,6 +2143,9 @@ const EBAY_MAX_PAGES = 3;
 // 10,000 results cannot be fully read by ANY client; the response says so.
 const EBAY_PAGE_MAX = 200;
 const EBAY_OFFSET_CEILING = 10000;
+// T4 (2026-10-04): refused rows carried per view, for the page's collapsed
+// "listings we believe are wrong". Past this the payload says how many more.
+const REFUSED_MAX = 300;
 
 // ── Which eBay sites /api/listings searches (T1) ──
 // A marketplace is where a card is SOLD; a language is what the card IS.
@@ -2369,6 +2372,14 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // reason, so "no listings" and "everything was filtered out" can never look
   // the same to the caller.
   const listings = [];
+  // T4 (2026-10-04): a refusal keeps what the page needs to SHOW it — price
+  // and link — so "N listings we believe are wrong" can be audited from the
+  // page. Cached with the view like every eBay row; never stored.
+  const refusedOf = it => {
+    const p = it.price && it.price.value != null ? it.price : it.currentBidPrice;
+    return { itemId: it.itemId || undefined, price: (p && parseFloat(p.value)) || null,
+             currency: (p && p.currency) || null, url: it.itemWebUrl || null, source: 'ebay' };
+  };
   const dropped = [];
   const disagreements = [];
 
@@ -2410,7 +2421,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       }
     } catch (e) { /* the parser must never break the gate */ }
 
-    if (!v.ok) { dropped.push({ title, itemId: it.itemId || undefined, reason: v.reason, gradeConflict: v.gradeConflict || undefined,
+    if (!v.ok) { dropped.push({ ...refusedOf(it), title, reason: v.reason, gradeConflict: v.gradeConflict || undefined,
                                 printingConflict: v.printingConflict || undefined,
                                 editionConflict: v.editionConflict || undefined }); continue; }
 
@@ -2421,7 +2432,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     // Graded. Structured marketplace data beats a word in a title, and it
     // was there all along. Raw direction only — see conditionSaysGraded.
     if (jpf.isRawGrade(grade) && cm.conditionSaysGraded(it.condition)) {
-      dropped.push({ title, itemId: it.itemId || undefined, reason: `wants raw, eBay states condition: ${it.condition}` });
+      dropped.push({ ...refusedOf(it), title, reason: `wants raw, eBay states condition: ${it.condition}` });
       continue;
     }
 
@@ -2429,7 +2440,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     const isAuction = (it.buyingOptions || []).includes('AUCTION');
     const priceObj = (it.price && it.price.value != null) ? it.price : (isAuction ? it.currentBidPrice : null);
     const priceNative = parseFloat(priceObj && priceObj.value) || 0;
-    if (priceNative <= 0) { dropped.push({ title, reason: 'no usable price' }); continue; }
+    if (priceNative <= 0) { dropped.push({ ...refusedOf(it), title, reason: 'no usable price' }); continue; }
     const shipOpt = it.shippingOptions && it.shippingOptions[0];
     const shipNative = (shipOpt && shipOpt.shippingCost && shipOpt.shippingCost.value != null)
       ? parseFloat(shipOpt.shippingCost.value) : null;
@@ -2445,8 +2456,8 @@ async function sourceEbay(card, grade, limit, opts = {}) {
         pc = await fx.toUsd(priceNative, cur);
         const shipCur = String((shipOpt && shipOpt.shippingCost && shipOpt.shippingCost.currency) || cur).toUpperCase();
         sc2 = shipNative > 0 ? await fx.toUsd(shipNative, shipCur) : null;
-      } catch (e) { dropped.push({ title, reason: 'currency not convertible: ' + e.message }); continue; }
-      if (!pc) { dropped.push({ title, reason: 'no usable price' }); continue; }
+      } catch (e) { dropped.push({ ...refusedOf(it), title, reason: 'currency not convertible: ' + e.message }); continue; }
+      if (!pc) { dropped.push({ ...refusedOf(it), title, reason: 'no usable price' }); continue; }
       price = pc.usd;
       shipping = shipNative == null ? null : shipNative === 0 ? 0 : (sc2 ? sc2.usd : null);
       fxNote = fx.describe(pc);
@@ -2659,7 +2670,13 @@ function mergeEbaySite(st, mp, r) {
     st.listings.push(l);
     s.kept++;
   }
-  if (st.dropped.length < 40) st.dropped.push(...(r.dropped || []).slice(0, 40 - st.dropped.length));
+  // T4: every refusal up to REFUSED_MAX (was a 40-row sample), one per item
+  // — a translated site re-returns US items, and one refusal is one row.
+  for (const d of r.dropped || []) {
+    if (st.dropped.length >= REFUSED_MAX) break;
+    if (d.itemId && st.dropped.some(x => x.itemId === d.itemId)) continue;
+    st.dropped.push(Object.assign({ marketplace: mp }, d));
+  }
   st.editionRefused += r.editionRefused || 0;
   if (r.printing) {
     st.printing.keptStated += r.printing.keptStated || 0;
@@ -2887,6 +2904,7 @@ async function gatherListings(card, grade, limit, opts) {
           (r.value.scanned ? ` of ${r.value.scanned} scanned` : '');
         if (r.value.dropped && r.value.dropped.length) {
           sources[s.id].droppedSample = r.value.dropped.slice(0, 12);
+          sources[s.id].refusedRows = r.value.dropped.slice(0, REFUSED_MAX);   // T4: the page's refused list
         }
         if (r.value.query) sources[s.id].query = r.value.query;
         // Two readers of one title that should agree. Surfaced, not swallowed.
@@ -2992,8 +3010,11 @@ async function judgeListings(card, grade, listings, opts, memo) {
       const v = l && l.source === 'ebay' && l.itemId && backVerdicts.get(backKey(l.itemId, card.api_card_id));
       if (v && v.state === 'other-back') {
         backReport.refused++;
-        if (backReport.refusedSample.length < 12) backReport.refusedSample.push({ title: l.title, itemId: l.itemId,
-          reason: 'photo shows a ' + (v.family === 'ja' ? 'Japanese-language' : 'English') + ' card back — a different printing' });
+        const refusal = { title: l.title, itemId: l.itemId, price: l.price, landed: l.landed, currency: 'USD',
+          url: l.url, marketplace: l.marketplace, source: 'ebay',
+          reason: 'photo shows a ' + (v.family === 'ja' ? 'Japanese-language' : 'English') + ' card back — a different printing' };
+        if (backReport.refusedSample.length < 12) backReport.refusedSample.push(refusal);
+        (backReport.refusedRows || (backReport.refusedRows = [])).push(refusal);
         continue;
       }
       if (v && v.state === 'genuine-back') backReport.genuine++;
@@ -3229,6 +3250,29 @@ function stampFollowUpWith(card, requestedId, grade, printing, edition, pendingR
     .catch(e => console.warn('[stamp] follow-up failed:', e.message));
 }
 
+// Every refusal of this view, photo checks first (they are the ones a title
+// cannot explain), then each source's text-gate refusals. One row per item;
+// an item that is ALSO in listings (refused on a translated site, kept from
+// its English one) is not wrong and is left out. total counts every refusal
+// the sources report, so a capped list says how many it does not show.
+function refusedRowsOf(sources, j) {
+  const kept = new Set((j.listings || []).map(l => l && l.itemId).filter(Boolean));
+  const rows = [], seen = new Set();
+  const add = (r, stage) => {
+    if (!r || rows.length >= REFUSED_MAX) return;
+    if (r.itemId) { if (kept.has(r.itemId) || seen.has(r.itemId)) return; seen.add(r.itemId); }
+    rows.push({ stage, source: r.source || null, marketplace: r.marketplace || null, title: r.title || '',
+                price: r.landed != null ? r.landed : (r.price != null ? r.price : null),
+                currency: r.currency || null, url: r.url || null, reason: r.reason || 'refused' });
+  };
+  ((j.stamp && j.stamp.refusedRows) || []).forEach(r => add(r, 'photo'));
+  ((j.back && j.back.refusedRows) || []).forEach(r => add(r, 'back'));
+  for (const [id, s] of Object.entries(sources || {}))
+    ((s && (s.refusedRows || s.droppedSample)) || []).forEach(r => add(Object.assign({ source: id }, r), 'title'));
+  const total = Object.values(sources || {}).reduce((n, s) => n + ((s && s.rejected) || 0), 0);
+  return { rows, total: Math.max(total, rows.length) };
+}
+
 function buildListingsPayload(card, requestedId, grade, printing, j, sources, tookMs, progress, edition) {
   // The headline figures skip anything the outlier check flagged. This is
   // the number a buyer acts on, and "$2.08" for a card that trades at
@@ -3238,7 +3282,17 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
   const trusted = listings.filter(outlier.trustworthy);
   sources = withStampRefusals(sources, j.stamp);
   sources = withBackRefusals(sources, j.back);
+  const refused = refusedRowsOf(sources, j);
+  sources = Object.fromEntries(Object.entries(sources || {}).map(([k, s]) => {
+    if (!s || !s.refusedRows) return [k, s];
+    const c = Object.assign({}, s); delete c.refusedRows; return [k, c];
+  }));
   return {
+    // T4 (2026-10-04): what the gates refused, each with its reason, for the
+    // page's collapsed "listings we believe are wrong". A separate list —
+    // never in listings, count, cheapest, the median or a print run.
+    refused: refused.rows,
+    refusedTotal: refused.total,
     cardId: card.api_card_id,
     requestedId,
     card: {
@@ -3453,6 +3507,7 @@ async function rebuildView(card, requestedId, grade, printing, edition, vs, ropt
     // without them a column of "B: all 13 rejected" (T2, promo sets) cannot
     // say WHY, and linkaudit had nothing to print.
     droppedSample: (r.dropped || []).slice(0, 12),
+    refusedRows: (r.dropped || []).slice(0, REFUSED_MAX),
     summary: `${r.kept} kept, ${r.rejected} rejected of ${r.scanned} scanned` });
   delete sources.ebay.reason;
   gathered.sources = sources;

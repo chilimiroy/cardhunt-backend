@@ -593,10 +593,14 @@ function gate(rows, reprints, opts) {
     const v = hit.verdict;
     if (v.state === 'found') {
       report.checked++; report.refused++;
-      if (report.refusedSample.length < 12) report.refusedSample.push({ title: row.title, itemId: row.itemId,
-        price: row.price, url: row.url, imageUrl: row.imageUrl, reprint: v.reprint, label: v.label,
+      const refusal = { title: row.title, itemId: row.itemId,
+        price: row.price, landed: row.landed, currency: 'USD', url: row.url, imageUrl: row.imageUrl, reprint: v.reprint, label: v.label,
+        marketplace: row.marketplace, source: 'ebay',
         reason: v.kind === 'lookalike' ? 'photo matches ' + (v.label || 'another card') + ', not this card'
-                                       : 'photo shows the ' + (v.label || 'reprint') + ' stamp' });
+                                       : 'photo shows the ' + (v.label || 'reprint') + ' stamp' };
+      if (report.refusedSample.length < 12) report.refusedSample.push(refusal);
+      // Every refusal, for the page's "listings we believe are wrong" (T4).
+      (report.refusedRows || (report.refusedRows = [])).push(refusal);
       continue;
     }
     if (v.state === 'not-visible') { report.checked++; report.notVisible++; }

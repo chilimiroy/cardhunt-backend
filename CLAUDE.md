@@ -1242,9 +1242,18 @@ Response envelope:
 
 ```
 cardId, requestedId, card, grade, count, liveCount, cheapest, cheapestLive,
-outliers, gradePrice, listings[], sources{}, tookMs, cached, cachedAgeSec,
-freshness, attribution, fetchedAt
+outliers, gradePrice, listings[], refused[], refusedTotal, sources{}, tookMs,
+cached, cachedAgeSec, freshness, attribution, fetchedAt
 ```
+
+**`refused[]` (T4, 2026-10-04)**: every row a gate refused in this view —
+`stage` (title / photo / back), `source`, `marketplace`, `title`, `price`,
+`currency`, `url`, `reason` — photo refusals first, one row per item, an
+item also in `listings` left out, capped at `REFUSED_MAX` (300) with
+`refusedTotal` saying how many exist. A SEPARATE list: it never enters
+`count`, `cheapest`, a median or a print run. The page draws it collapsed
+at the end ("N listings we believe are wrong", `liveRefusedBlock`) — the
+gate auditable from the page, not only from linkaudit.
 
 Each listing row:
 
@@ -1633,6 +1642,7 @@ node stampcheck.test.js      # 107  the stamp GATE: found refuses, weak keeps, u
 node pslabel.test.js         # 29   T0: PSA-label titles ("#28", GAME/ROCKET/EXPEDITION/EN-151) kept, other cards' labels refused; a slab asks the bare number, raw the pair; "PSA 8 Card" is not a lot (12 fail on the old gate)
 node auction.test.js         # 10   T0: auctions asked for; a current bid labelled, never the cheapest or a baseline (6 fail on the old code)
 node lookalike.test.js       # 17   T1: bubble Mew ↔ 30th Mew both directions on our scans; verdict keyed on item + our card; the page says "matches … better", never "stamp"
+node refused.test.js         # 24   T4: refused rows carried with price, link and reason; never counted; drawn collapsed at the end (22 fail on the old code)
 node sibling.test.js         # 25   T1 2026-10-04: a same-name card's photo under our number refused at 0.40; unchecked hidden only below 55% of a current price; nothing hidden without one (20 fail on the old code)
 node backcheck.test.js       # 25   T3: English/Japanese backs both ways; other-language back refuses, own back labels, nothing claims nothing; never "verified"; the structure-not-colour LIMIT pinned; shared getItem, background, stored hashed
 ```

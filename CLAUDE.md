@@ -594,6 +594,7 @@ and what is not.
 |---|---|---|---|
 | reprint with a stamp (30th / Celebrations) | stamp gate (photo) + `REPRINT_FAMILIES` title words + reprint price band | the 55 originals in `REPRINT_OF` (54 templates; `30th-c-020` has no stamp on our scan) | 92.5% of reprint photos, 0 of 16 originals |
 | a different card sellers list under ours, both scans held | lookalike comparison (photo) | ONE pair: bubble Mew ex 232/091 ↔ 30th Mew ex 152/128 | 162/178 refused, 0/276 genuine |
+| a SAME-NAME card of the same set, under our number (2026-10-04) | sibling comparison (photo), margin 0.40 | 6,891 English cards (2,993 groups, 150 sets) | **7 of 11 swaps, 0 of ~1,470 genuine** — a reduction, not a solve |
 | named replica ("gold metal", "proxy", gold before 2004…) | title words (`NOT_A_SINGLE_CARD`, `goldBeforeGold`) | all | 0 of 896 right titles refused |
 | implausible price | outlier check (flags, never removes) | all with ≥5 priced and ≥$15 median, or a current stored price | 0 of 864 right rows flagged |
 | other-language copy | title (language words, Japanese set codes on an English card) — and the **card back** when the back is posted | all / back: on demand, flagged rows, most-faked cards | back: 11 of 12 Japanese, 0 of 52 English |
@@ -654,6 +655,54 @@ reprint of Paldean Fates #232 (USGMEN, 180 HP). `REPRINT_OF` is complete:
 (158) or Celebrations (25) main sets shares illustrator AND attacks with an
 older card except a TCG Pocket promo (checked on TCGdex; Celebrations #5
 Pikachu is a new Arita illustration, looked at).
+
+# SAME-NAME SIBLINGS — BUILT 2026-10-04 (T1), a reduction not a solve
+
+**The diagnosis was not the one expected.** Alakazam EX #125/124 showed
+#117/124 rows and #117 showed #25. `linkaudit --live --kept` on all three,
+Raw and PSA, then all eight eBay sites (361 rows): **every kept title
+stated the right number.** The photos did not: #125's five cheapest were an
+SVP 050 Alakazam ex, a Japanese Alakazam ex SAR, a Doctor Strange fan card,
+and two #117 full arts; #117's cheapest ($10) a #25. Many such titles read
+like eBay's catalogue ("The Pokémon Company Alakazam EX 125/124 … 160 HP")
+— what the seller picked, not what they hold. No title gate can see it.
+
+**Built:** `stampcheck` kind `sibling` — every other English card of the
+same name in the same set (`server.js photoChecksFor`, one DB query,
+cached 6 h) is compared like a lookalike pair, from OUR scans, templates
+built at runtime from TCGdex's `.jpg` (fetched and checked; within ±0.015 of
+the `.png` measurement). Rides the stamp gate and its stored verdicts (key
+`item@ours+s`). 0 eBay calls.
+
+**Measured** on 1,478 photos of six groups (Alakazam EX xy10, Umbreon VMAX
+swsh7, Charizard ex sv03.5, Giratina V swsh11, Raichu sv02; Greninja GX sm6
+returned no rows), every row with margin ≥ 0.10 looked at:
+
+| margin | swaps refused (of 11) | genuine refused |
+|---|---|---|
+| ≥ 0.30 (bubble Mew's) | 9 | **1** — Charizard ex 183 at 0.307 (prefers the 199 SIR) |
+| **≥ 0.40 (shipped)** | **7** | **0** |
+
+**Misses at 0.40, stated:** the $25 #117 under #125 (0.282) and the $10 #25
+under #117 (0.266) — **two of Roy's own examples** — plus a Giratina V 130
+under 186 at $2.08 (0.315, price-flagged anyway) and a 185 under 186 at
+$300 (0.320). Candidate, NOT built: margin ≥ 0.20 AND the row's price
+log-nearer the sibling's stored price than ours caught 10 of 11 with 0
+genuine on this sample — but it was read off this sample; measure it on a
+fresh one first. **Siblings only**: a fan card, another set's card or a
+foreign copy matches neither scan and stays. Same art in another foil
+(rainbow/gold of one illustration) is a near-tie by construction: kept.
+
+**Unchecked rows (Roy, 2026-10-04):** where siblings are the only check, an
+unchecked row is HIDDEN only below `SIBLING_HIDE_FRACTION` (0.55) of the
+card's current, measured raw price (the Alakazam swaps sat at 14%); every
+other unchecked row is shown, chip "Photo being compared". No current
+stored price (or a graded view) hides nothing — no baseline, as outlier.js.
+A card with a stamp or a held pair keeps "unchecked is hidden".
+**Load:** the follow-up checks every row of every view of these 6,891
+cards through the one worker pool, cheapest first (~2.5 s/photo with 2-3
+templates on Render, est.); a busy sibling card delays a stamp card's
+checks. Watch `poolState()` before raising `STAMP_WORKERS`.
 
 # THE STAMP MATCHER ON THE ARTWORK — measured 2026-10-03 (T1), NOT built
 
@@ -1105,6 +1154,7 @@ is not handed to a waiter of another origin — it tries under its own. At a
 | Reprint stamp gate, on opening one of the 55 originals | automatic | **0** — measured 2026-10-02 under costmeter: Lugia open = 2 searches + 1 token, stamp work 82 `i.ebayimg.com` fetches (CDN, not the API), once per item; the page's ~30 `?poll=1` re-reads **0** |
 | `/api/stamp` (one row, by hand) | | **0** — same queue and cache as the gate |
 | Lookalike check (bubble Mew ↔ 30th Mew) | automatic, same gate | **0** — CDN photos only |
+| Same-name sibling check (2026-10-04) | automatic, same gate, on 6,891 English cards | **0** eBay — CDN photos + our scans from TCGdex (once per process per card) |
 | Auctions (2026-10-04) | part of every search | **0 extra** — `buyingOptions` is a filter on the same call |
 | **Back check, automatic** (2026-10-04) | after opening a most-faked card (Shining Charizard, Base Charizard, Pikachu VMAX), or rows the outlier check flagged | **+1 getItem per row not yet checked, at most 20 a view**, background (yields at the soft stop); **0** once a row's verdict is stored. Measured live: Shining Charizard Raw first open = 1 search + 20 getItem; its 52 rows clear over three opens, then 1 a view. Counted under the opener's origin |
 | "Check card back" (one row) | `/api/back` | **1** getItem — **0** if Verify or Photos fetched it in the last 15 min, or the verdict is stored |
@@ -1583,6 +1633,7 @@ node stampcheck.test.js      # 107  the stamp GATE: found refuses, weak keeps, u
 node pslabel.test.js         # 29   T0: PSA-label titles ("#28", GAME/ROCKET/EXPEDITION/EN-151) kept, other cards' labels refused; a slab asks the bare number, raw the pair; "PSA 8 Card" is not a lot (12 fail on the old gate)
 node auction.test.js         # 10   T0: auctions asked for; a current bid labelled, never the cheapest or a baseline (6 fail on the old code)
 node lookalike.test.js       # 17   T1: bubble Mew ↔ 30th Mew both directions on our scans; verdict keyed on item + our card; the page says "matches … better", never "stamp"
+node sibling.test.js         # 25   T1 2026-10-04: a same-name card's photo under our number refused at 0.40; unchecked hidden only below 55% of a current price; nothing hidden without one (20 fail on the old code)
 node backcheck.test.js       # 25   T3: English/Japanese backs both ways; other-language back refuses, own back labels, nothing claims nothing; never "verified"; the structure-not-colour LIMIT pinned; shared getItem, background, stored hashed
 ```
 
@@ -2167,6 +2218,15 @@ matcher separated bubble Mew from 30th Mew at 0 of 276 genuine refused and
 162 of 178 caught: a glared genuine photo scores low against both, but
 higher against its own. Use a margin so a near-tie is undecided, and set it
 above the hardest genuine photo, not at it.
+*Archive:* none — 2026-10-04, PROGRESS.md
+
+**A title can state the right number over a photo of another card.**
+"Alakazam EX shows #117 listings" read as a number-gate failure; every one
+of 361 kept titles stated the right number, and the photos were siblings,
+other sets and fan art. Read the kept titles AND look at the photos of the
+cheapest rows before deciding which layer failed — the hypothesis in the
+task ("titles with no number") was wrong, and the fix it prescribed would
+have changed nothing.
 *Archive:* none — 2026-10-04, PROGRESS.md
 
 **Know what a matcher cannot see.** Normalised cross-correlation reads

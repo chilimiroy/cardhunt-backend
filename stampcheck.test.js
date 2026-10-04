@@ -216,9 +216,9 @@ console.log('\n6. THE SERVER — wired after the text gates, before display');
 const S = fs.readFileSync(__dirname + '/server.js', 'utf8').split('\r\n').join('\n');
 const fnS = decl => { const i = S.indexOf('\n' + decl); return i < 0 ? '' : S.slice(i + 1, S.indexOf('\n}\n', i + 1) + 2); };
 const jl = fnS('async function judgeListings(');
-ok('judgeListings runs stampcheck.gate', /stampcheck\.gate\(listings, stampReprints\)/.test(jl));
+ok('judgeListings runs stampcheck.gate', /stampcheck\.gate\(listings, stampReprints, \{ hideBelow \}\)/.test(jl));
 ok('...BEFORE the outlier check (reprints cannot set the median)', jl.indexOf('stampcheck.gate(') > 0 && jl.indexOf('stampcheck.gate(') < jl.indexOf('outlier.flagOutliers('));
-ok('...never on a reprint\'s own listings (noReprintCheck)', /opts\.noReprintCheck \? \[\] : cm\.photoChecksOf\(card\)/.test(jl));
+ok('...never on a reprint\'s own listings (noReprintCheck)', /opts\.noReprintCheck \? \[\] : await photoChecksFor\(card\)/.test(jl));
 ok('a photo-check update never fetches the reprint\'s listings (noFetch)', /else if \(opts\.noFetch\) why =/.test(jl));
 // withStampRefusals, run for real.
 const wsr = new Function('return ' + fnS('function withStampRefusals(').replace(/^function withStampRefusals/, 'function'))();
@@ -235,7 +235,8 @@ ok('a rebuild checks ITS hidden rows (j.stampPending), not rows on the payload',
 ok('judgeListings reads stored verdicts BEFORE the gate', jl.indexOf('await stampcheck.loadVerdicts(listings, stampReprints)') > 0 && jl.indexOf('await stampcheck.loadVerdicts(listings, stampReprints)') < jl.indexOf('stampcheck.gate('));
 ok('the server hands stampcheck a store, keyed on hashes, on its own table', /stampcheck\.setStore\(\{/.test(S) && /CREATE TABLE IF NOT EXISTS listing_photo_verdicts/.test(S) && /item_key = ANY\(\$1\)/.test(S));
 ok('the store holds no title, price, URL or photo column', !/\b(title|price|url|image|photo_url)\b/.test(S.slice(S.indexOf('const PHOTO_VERDICTS_SQL'), S.indexOf('PRIMARY KEY (item_key', S.indexOf('const PHOTO_VERDICTS_SQL')))));
-const fu = fnS('function stampFollowUp(');
+// T1 (2026-10-04): the follow-up resolves the checks (siblings included), then runs.
+const fu = fnS('function stampFollowUp(') + fnS('function stampFollowUpWith(');
 ok('the follow-up re-judges with noFetch and starts nothing further', /rebuildView\([^)]*\{ noFetch: true, stamp: true \}\)/.test(fu) && /if \(!ropts\.stamp\) stampFollowUp/.test(fnS('async function rebuildView(')));
 ok('the follow-up makes no eBay call', !/fetchEbay|sourceEbay|gatherListings|ebayLoadMore/.test(fu));
 const a = S.indexOf("app.get('/api/stamp/:cardId'"), b = S.indexOf('\napp.', a + 10);
@@ -251,7 +252,12 @@ const H = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
 const fn = name => { const i = H.indexOf('function ' + name + '('); return i < 0 ? '' : H.slice(i, H.indexOf('\n}', i) + 2); };
 ok('no "Check photo" button and no /api/stamp call from the page', !/Check photo for reprint stamp/.test(H) && !/\/api\/stamp\//.test(H));
 ok('a row shows the server\'s stamp state (l.stamp)', /var st = l && l\.stamp;/.test(fn('stampLine')));
-ok('chips: not visible / unreadable — no "found" (refused) and no "pending" (hidden, T2)', !/STAMP_CHIP = \{[^}]*'pending'/.test(H) && /'not-visible':\s*'No stamp visible — not proof'/.test(H) && /'unreadable':/.test(H) && !/STAMP_CHIP = \{[^}]*'found'/.test(H));
+// T1 (2026-10-04): "pending" exists only for a same-name SIBLING check, the
+// one kind a row is shown while checked (stampcheck.gate emits it nowhere else).
+ok('chips: not visible / unreadable — no "found" (refused); "pending" only as the sibling comparison',
+   /STAMP_CHIP = \{[^}]*'pending':\s+'Photo being compared'/.test(H)
+   && /state: 'pending', kind: 'sibling'/.test(fs.readFileSync(__dirname + '/stampcheck.js', 'utf8'))
+   && (fs.readFileSync(__dirname + '/stampcheck.js', 'utf8').match(/state: 'pending'/g) || []).length === 1 &&/'not-visible':\s*'No stamp visible — not proof'/.test(H) && /'unreadable':/.test(H) && !/STAMP_CHIP = \{[^}]*'found'/.test(H));
 ok('nothing on the page calls a stamp result "verified" or "original"', !/STAMP_CHIP[\s\S]{0,400}(verified|genuine original)/i.test(H));
 ok('the panel says how many the stamp check refused', /liveStampNote\(d\)/.test(fn('excludedNote')) && /refused &mdash; the seller&rsquo;s photo shows the/.test(fn('liveStampNote')));
 ok('the panel says how many are shown and how many still being checked', /still being checked for the stamp/.test(fn('liveStampNote')));

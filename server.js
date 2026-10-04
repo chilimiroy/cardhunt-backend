@@ -2932,6 +2932,25 @@ async function gatherListings(card, grade, limit, opts) {
 // Outliers, the reprint price band, then the sort — over EVERY row of the
 // view. Shared by the first answer and each continuation page, so a row
 // arriving on page 9 is judged against the same peers as one from page 1.
+// The card's own number-matched stored price, and whether it is current and
+// measured (pricequality) — once per view, in memo. Read by the outlier
+// check and, before it, by the sibling gate's hide line.
+async function marketRefOf(card, memo) {
+  if ('marketPrice' in memo) return memo.marketRef;
+  const mp = await numberMatchedPrice(card.api_card_id).catch(() => null);
+  memo.marketPrice = mp && mp.isReal ? mp.price : null;
+  memo.marketRef = null;
+  if (mp && mp.isReal) {
+    const q = await pricequality.annotate(db, [{ id: mp.cardId, price: mp.price, source: mp.source,
+      recordedAt: mp.recordedAt, meta: mp.meta }]).catch(() => null);
+    const pq = q && q.get(mp.cardId);
+    memo.marketRef = { price: mp.price, source: mp.source, recordedAt: mp.recordedAt,
+                       current: !!(pq && pq.kind === 'measured' && !pq.flags.length),
+                       quality: pq ? pq.label : 'unknown' };
+  }
+  return memo.marketRef;
+}
+
 async function judgeListings(card, grade, listings, opts, memo) {
   opts = opts || {}; memo = memo || {};
   // ── The reprint stamp in the seller's photo (TASK T1, 2026-10-02) ──
@@ -2949,10 +2968,15 @@ async function judgeListings(card, grade, listings, opts, memo) {
   let stampReport = null, stampPending = [];
   // The photo checks: reprints' stamps, and lookalikes compared (T1,
   // 2026-10-04 — cardmatch.photoChecksOf). One gate, one queue.
-  const stampReprints = opts.noReprintCheck ? [] : cm.photoChecksOf(card);
+  // Same-name siblings too (T1, 2026-10-04): where they are the only check,
+  // an unchecked row is hidden only below SIBLING_HIDE_FRACTION of the card's
+  // current raw price; with no such price nothing is hidden.
+  const stampReprints = opts.noReprintCheck ? [] : await photoChecksFor(card);
   if (stampReprints.length) {
     await stampcheck.loadVerdicts(listings, stampReprints);
-    const sg = timing.timeSync('stamp-gate', () => stampcheck.gate(listings, stampReprints));
+    const mref = await marketRefOf(card, memo);
+    const hideBelow = mref && mref.current && jpf.isRawGrade(grade) ? mref.price * stampcheck.SIBLING_HIDE_FRACTION : null;
+    const sg = timing.timeSync('stamp-gate', () => stampcheck.gate(listings, stampReprints, { hideBelow }));
     listings = sg.listings; stampReport = sg.report; stampPending = sg.pending;
   }
   // The card back (T3): verdicts already known are applied — another
@@ -2992,19 +3016,7 @@ async function judgeListings(card, grade, listings, opts, memo) {
   // (2026-10-04): where the feed is mostly fakes its median is theirs. Raw
   // grades only (the stored price is ungraded), real and current only — an
   // old, thin or unsettled headline judges nothing. One query per view.
-  if (!('marketPrice' in memo)) {
-    const mp = await numberMatchedPrice(card.api_card_id).catch(() => null);
-    memo.marketPrice = mp && mp.isReal ? mp.price : null;
-    memo.marketRef = null;
-    if (mp && mp.isReal) {
-      const q = await pricequality.annotate(db, [{ id: mp.cardId, price: mp.price, source: mp.source,
-        recordedAt: mp.recordedAt, meta: mp.meta }]).catch(() => null);
-      const pq = q && q.get(mp.cardId);
-      memo.marketRef = { price: mp.price, source: mp.source, recordedAt: mp.recordedAt,
-                         current: !!(pq && pq.kind === 'measured' && !pq.flags.length),
-                         quality: pq ? pq.label : 'unknown' };
-    }
-  }
+  await marketRefOf(card, memo);
   const ref = memo.marketRef && memo.marketRef.current && jpf.isRawGrade(grade) ? memo.marketRef : null;
   const judged = timing.timeSync('outlier', () => outlier.flagOutliers(listings, { reference: ref }));
   if (!judged.stats.reference && memo.marketRef)
@@ -3129,9 +3141,79 @@ function withBackRefusals(sources, back) {
 // Pending rows are checked in display order, so the top of the list — the
 // cheapest rows, the ones a buyer acts on — clears first.
 const STAMP_REBUILD_MS = 1500;
+// ── Same-name siblings in the set (T1, 2026-10-04; stampcheck.SIBLING_MARGIN) ──
+// Every other English card of this name in this set is a photo check of its
+// own: Alakazam EX #125/124 listings were photos of #117 and #25 titled
+// "125/124". Found by a query (6,891 English cards have one), compared from
+// OUR scans, templates built here at runtime — fetched, never assumed: TCGdex
+// serves a .jpg beside each .png (jpeg-js is a dependency, pngjs is not), and
+// anything that does not decode as a JPEG leaves that sibling unchecked.
+// Building is bounded (SIBLING_BUILD_MS): a slow scan host leaves the view
+// without the sibling check rather than holding the answer. Zero eBay calls.
+const SIBLING_TTL_MS = 6 * 3600 * 1000, SIBLING_BUILD_MS = 3000;
+const _siblingRows = new Map();   // cardId -> { at, rows }
+const _wholeTpl = new Map();      // cardId -> Promise<template entry | null>
+async function siblingRowsOf(card) {
+  const cid = card.api_card_id, hit = _siblingRows.get(cid);
+  if (hit && Date.now() - hit.at < SIBLING_TTL_MS) return hit.rows;
+  const r = await db.query(
+    `SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_total, c.image_large, c.image_small
+       FROM cards c JOIN cards me ON me.api_card_id = $1
+      WHERE c.set_api_id = me.set_api_id AND lower(c.name) = lower(me.name)
+        AND c.api_card_id LIKE 'en-%' AND ${digital.visibleSql('c')}`, [cid]);
+  const rows = r.rows.length > 1 ? r.rows : [];
+  _siblingRows.set(cid, { at: Date.now(), rows });
+  return rows;
+}
+function wholeTemplateOf(row) {
+  const id = row.api_card_id;
+  if (_wholeTpl.has(id)) return _wholeTpl.get(id);
+  const src = String(row.image_large || row.image_small || '');
+  const url = /^https:\/\/assets\.tcgdex\.net\/.+\.png$/.test(src) ? src.replace(/\.png$/, '.jpg') : src;
+  const p = (async () => {
+    if (!/^https:\/\//.test(url)) return null;
+    const r = await fetch(url, { signal: AbortSignal.timeout(SIBLING_BUILD_MS) });
+    if (!r.ok) return null;
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!(buf[0] === 0xff && buf[1] === 0xd8)) return null;
+    const img = stampcheck.decodeJpeg(buf);
+    const t = stampcheck.resize(img, 96, 96 * img.h / img.w);
+    return { scan: url, w: t.w, h: t.h, rgb: Buffer.from(t.data).toString('base64') };
+  })().catch(() => null);
+  _wholeTpl.set(id, p);
+  p.then(v => { if (!v) setTimeout(() => _wholeTpl.delete(id), 10 * 60 * 1000); });   // retry a failed scan later
+  return p;
+}
+// Every photo check of this card: reprints' stamps, held lookalike pairs
+// (cardmatch.photoChecksOf), then its same-name siblings when their scans
+// are ready. One definition for the gate, the follow-up and /api/stamp.
+async function photoChecksFor(card) {
+  const base = cm.photoChecksOf(card);
+  const cid = String(card.api_card_id || '');
+  if (!db || !/^en-/.test(cid)) return base;
+  try {
+    const rows = await siblingRowsOf(card);
+    if (!rows.length) return base;
+    const built = await Promise.race([
+      Promise.all(rows.map(async row => ({ row, tpl: await wholeTemplateOf(row) }))),
+      new Promise(res => setTimeout(() => res(null), SIBLING_BUILD_MS))]);
+    if (!built) return base;
+    const mine = built.find(b => b.row.api_card_id === cid);
+    if (!mine || !mine.tpl) return base;
+    const sibs = built.filter(b => b.row.api_card_id !== cid && b.tpl).map(b => ({
+      cardId: b.row.api_card_id, kind: 'sibling', ours: cid,
+      label: `${b.row.name} #${b.row.number}${b.row.set_total ? '/' + b.row.set_total : ''}${b.row.rarity ? ' (' + b.row.rarity + ')' : ''}`,
+      wholes: { [cid]: mine.tpl, [b.row.api_card_id]: b.tpl } }));
+    return base.concat(sibs);
+  } catch (e) { console.warn('[sibling] checks not built:', e.message); return base; }
+}
+
 function stampFollowUp(card, requestedId, grade, printing, edition, pendingRows) {
   if (!pendingRows || !pendingRows.length) return;
-  const reprints = cm.photoChecksOf(card);
+  photoChecksFor(card).then(reprints => stampFollowUpWith(card, requestedId, grade, printing, edition, pendingRows, reprints))
+    .catch(e => console.warn('[stamp] follow-up failed:', e.message));
+}
+function stampFollowUpWith(card, requestedId, grade, printing, edition, pendingRows, reprints) {
   const vkey = listingKey(card.api_card_id, viewCacheGrade(grade, printing, edition));
   let timer = null, last = 0;
   const rebuild = async () => {
@@ -4906,8 +4988,8 @@ app.get('/api/stamp/:cardId', async (req, res) => {
   try {
     const card = await resolveListingCard(cardId);
     if (!card) return res.status(404).json(Object.assign(base, { error: 'card not in catalogue' }));
-    const reprints = cm.photoChecksOf(card);
-    if (!reprints.length) return res.status(400).json(Object.assign(base, { error: 'no known reprint or lookalike of this card — there is nothing to look for' }));
+    const reprints = await photoChecksFor(card);
+    if (!reprints.length) return res.status(400).json(Object.assign(base, { error: 'no known reprint, lookalike or same-name card in its set — there is nothing to look for' }));
     const row = cachedListingRow([cardId, card.api_card_id].filter(Boolean), itemId);
     if (!row) return res.status(404).json(Object.assign(base, { error: 'this listing is no longer in the 15-minute view — reopen the card and press again' }));
     // The same queue, worker pool and item-id cache the listing gate uses:

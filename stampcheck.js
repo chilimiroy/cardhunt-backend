@@ -236,12 +236,30 @@ function wholeScore(photo, t) {
   }
   return best;
 }
-function wholeImage(id) {
-  const e = (templates().wholes || {})[id];
+// ── Same-name siblings (T1, 2026-10-04) ──
+// Alakazam EX #125/124 (gold secret) showed #117/124 (full art) and #25/124
+// listings: every title stated 125/124 — the seller typed (or eBay's catalogue
+// wrote) the number of the dearer card over a photo of the cheaper one. No
+// title gate can see that. Every other card of the same name in the same set
+// is compared like a lookalike pair, from OUR scans, built at runtime by the
+// server (check.wholes) rather than shipped in stamps.json — there are 6,891
+// such English cards. Measured on 1,478 photos of six groups (Alakazam EX
+// xy10, Umbreon VMAX swsh7, Charizard ex sv03.5, Giratina V swsh11, Raichu
+// sv02), every row with margin >= 0.10 looked at: 11 true swaps at 0.267-
+// 0.524, the hardest genuine photo (a Charizard ex 183 that prefers the 199
+// SIR) at 0.307. At 0.40: 7 of 11 refused, 0 genuine. A REDUCTION, not a
+// solve — and siblings only: a fan-art card, another set's card or a foreign
+// copy matches neither scan and stays (it is the price check's, or nobody's).
+// Same artwork in another foil (rainbow / gold of one illustration) is a
+// near-tie by construction: undecided, kept.
+const SIBLING_MARGIN = 0.40;
+function wholeImage(id, check) {
+  const e = (check && check.wholes && check.wholes[id]) || (templates().wholes || {})[id];
   return e ? templateImage(e) : null;
 }
-const isLookalike = c => c && c.kind === 'lookalike';
-const lookalikeReady = c => isLookalike(c) && !!wholeImage(c.cardId) && !!wholeImage(c.ours);
+const isLookalike = c => c && (c.kind === 'lookalike' || c.kind === 'sibling');
+const isSibling = c => c && c.kind === 'sibling';
+const lookalikeReady = c => isLookalike(c) && !!wholeImage(c.cardId, c) && !!wholeImage(c.ours, c);
 
 // The verdict for one decoded photo against every photo check of the card.
 // checks: [{ cardId: 'en-30th-c-029', family: {label} }] (cardmatch.reprintCardsOf)
@@ -256,10 +274,10 @@ function judge(photo, checks, opts) {
   // Comparative first: a lookalike found is as strong as a stamp found.
   for (const lc of (checks || []).filter(isLookalike)) {
     if (!lookalikeReady(lc)) { scores.push({ lookalike: lc.cardId, checked: false, why: 'no whole-card template for this pair' }); continue; }
-    const ours = wholeScore(photo, wholeImage(lc.ours)), other = wholeScore(photo, wholeImage(lc.cardId));
+    const ours = wholeScore(photo, wholeImage(lc.ours, lc)), other = wholeScore(photo, wholeImage(lc.cardId, lc));
     const margin = +(other - ours).toFixed(3);
     scores.push({ lookalike: lc.cardId, label: lc.label, checked: true, ours: +ours.toFixed(3), other: +other.toFixed(3), margin });
-    if (margin >= LOOKALIKE_MARGIN) return { state: 'found', kind: 'lookalike', reprint: lc.cardId, label: lc.label,
+    if (margin >= (isSibling(lc) ? SIBLING_MARGIN : LOOKALIKE_MARGIN)) return { state: 'found', kind: 'lookalike', reprint: lc.cardId, label: lc.label,
       says: `The seller's photo matches ${lc.label} better than this card — a different card listed under this one.`, scores };
   }
   for (const rc of reprints) {
@@ -412,7 +430,9 @@ function pump() {
 // stored stamp verdict still reads.
 function verdictKey(itemId, checks) {
   const lc = (checks || []).find(isLookalike);
-  return lc ? itemId + '@' + lc.ours : itemId;
+  // '+s': the verdict includes the sibling comparison. A verdict made before
+  // siblings existed (bubble Mew's pair alone) is not that answer.
+  return lc ? itemId + '@' + lc.ours + ((checks || []).some(isSibling) ? '+s' : '') : itemId;
 }
 function checkItem(itemId, imageUrl, reprints, cardId) {
   const url = photoUrl(imageUrl);
@@ -527,7 +547,16 @@ async function loadVerdicts(rows, checks) {
 // report.pending and handed back so the caller can check it — it appears
 // when its verdict lands, instead of appearing and then vanishing. Nothing
 // here waits. Hidden is temporary; only "found" ever refuses.
-function gate(rows, reprints) {
+// opts.hideBelow (T1, 2026-10-04): when EVERY usable check is a sibling
+// comparison, an unchecked row is hidden only if it is priced below this
+// (the server passes ~55% of the card's current, measured stored price —
+// the Alakazam swaps sat at 14%); every other unchecked row is SHOWN while
+// it is checked. No baseline (null) hides nothing, as outlier.js judges
+// nothing without one. A stamp or a held lookalike pair keeps the old rule:
+// unchecked is hidden.
+const SIBLING_HIDE_FRACTION = 0.55;
+function gate(rows, reprints, opts) {
+  opts = opts || {};
   const T = templates().templates || {};
   const usable = (reprints || []).filter(r => isLookalike(r) ? lookalikeReady(r) : T[r.cardId]);
   const report = { applied: false, ebayCalls: 0, checked: 0, refused: 0, notVisible: 0, unreadable: 0,
@@ -542,13 +571,25 @@ function gate(rows, reprints) {
   report.applied = true;
   const onlyLook = usable.every(isLookalike);
   report.kind = onlyLook ? 'lookalike' : usable.some(isLookalike) ? 'both' : 'stamp';
+  const onlySiblings = usable.every(isSibling);
+  const hideBelow = onlySiblings ? (opts.hideBelow > 0 ? opts.hideBelow : null) : Infinity;
+  if (onlySiblings) { report.kind = 'sibling'; report.hideBelow = hideBelow; report.pendingShown = 0; }
   const out = [], pending = [];
   for (const row of rows) {
     if (!row || row.source !== 'ebay' || !row.itemId) { out.push(row); continue; }
     const url = photoUrl(row.imageUrl);
     if (!url) { report.unreadable++; out.push(Object.assign({}, row, { stamp: { state: 'unreadable', says: 'No eBay photo to check.' } })); continue; }
     const hit = cacheGet(verdictKey(row.itemId, reprints), url);
-    if (!hit) { report.pending++; pending.push(row); continue; }
+    if (!hit) {
+      report.pending++; pending.push(row);
+      const price = Number(row.landed != null ? row.landed : row.price);
+      if (hideBelow !== Infinity && !(hideBelow != null && price > 0 && price < hideBelow)) {
+        report.pendingShown++;
+        out.push(Object.assign({}, row, { stamp: { state: 'pending', kind: 'sibling',
+          says: 'Photo not yet compared with the other cards of this name in the set.' } }));
+      }
+      continue;
+    }
     const v = hit.verdict;
     if (v.state === 'found') {
       report.checked++; report.refused++;
@@ -565,7 +606,8 @@ function gate(rows, reprints) {
   report.summary = report.refused + (onlyLook ? ' refused (the seller’s photo matches another card better), '
                                               : ' refused (the seller’s photo shows a reprint’s stamp or another card), ')
     + report.notVisible + (onlyLook ? ' not clearly the other card, ' : ' no stamp visible, ') + report.unreadable + ' unreadable'
-    + (report.pending ? ', ' + report.pending + ' hidden until checked' : '');
+    + (report.pending ? ', ' + (report.pending - (report.pendingShown || 0)) + ' hidden until checked'
+                        + (report.pendingShown ? ', ' + report.pendingShown + ' shown while checked' : '') : '');
   return { listings: out, report, pending };
 }
 
@@ -582,6 +624,6 @@ if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
 }
 
 module.exports = { THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, crop, resize, rotate90, nccMax, bestScore,
-                   judge, checkItem, checkBackPhoto, gate, verdictKey, wholeScore, LOOKALIKE_MARGIN, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
+                   judge, checkItem, checkBackPhoto, gate, verdictKey, wholeScore, LOOKALIKE_MARGIN, SIBLING_MARGIN, SIBLING_HIDE_FRACTION, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
                    _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; },
                    _clearCache: () => { _cache.clear(); _missed.clear(); } };

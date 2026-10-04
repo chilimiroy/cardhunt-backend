@@ -1,5 +1,41 @@
 # CardHunt — Progress Log
 
+## 2026-10-04 (evening) — T1 siblings, T2 filter first, T3 the back verdicts read
+
+**T1 — Alakazam EX, Fates Collide.** linkaudit `--live --kept` on xy10-125,
+-117, -25 (Raw: 55/65, 49/52, 85/88 kept; PSA *: 48/51, 9/15, 7/7) and all
+eight sites (#125 222 rows, #117 139): **0 kept titles with a wrong or
+missing N/124.** The card page, search and set page resolve the right ids
+(checked in the browser). The wrong rows are photos: #125's cheapest five
+are an SVP 050 Alakazam ex ($3, flagged), a Japanese Alakazam ex SAR ($10,
+flagged), a Doctor Strange fan card ($24 — the headline cheapest), two #117
+full arts ($25, $26.72); #117's $10 is a #25. 6,891 English cards share a
+name with another card of their set (2,993 groups, 150 sets). Sibling photo
+comparison measured on 1,478 photos / six groups and built at margin 0.40:
+7 of 11 swaps, 0 genuine (CLAUDE.md "SAME-NAME SIBLINGS"). Hide rule Roy's:
+unchecked hidden only below 55% of a current price. Also seen, not fixed:
+"Fates Collide Partial Set | Alakazam EX 125/124" (a 100-card lot photo)
+kept — "partial set" is not lot vocabulary yet.
+
+**T2 — the order was right on the server, wrong on the page.** Server:
+text gates → stamp → back verdicts → outlier → payload. The page then
+grouped EVERY live row by print run: "Print run not stated — median
+$228.69, from $35.99" on Base Charizard came from flagged rows (gold
+replicas; Charizard ex 228/197 and SVP 056 titled "4/102 Base Set").
+`partitionLive` now splits before grouping; flagged rows drawn after
+(`44c6394`). The back check covers every group: its 20-a-view budget is per
+VIEW (an edition request is its own view) and groups partition one view.
+
+**T3 — the back verdicts on Base Charizard (53 rows shown, 152 hidden for
+the stamp check):** 40 genuine back, 10 no claim, 3 unchecked. The $289.99
+"Pokémon cards, Charizard Holo 4/102 Base Set 1999 … 120 HP Rare" (the
+example among the original ten) is gold metal: **no claim**, as designed —
+the back check never refuses an English back. The $35.99, $43.84 and $60
+"genuine back" rows are genuine cards of the WRONG Charizard (ex 228/197,
+SVP 056): kind D, which a genuine back cannot reveal. What the wrong rows
+share: catalogue-shaped titles ("The Pokémon Company … Stage 2 120 HP
+Arita") and prices the outlier check already flags against $944.53.
+
 ## 2026-10-04 (later) — T0 missing listings, T1 comparative matching, T2 the Mew rows, T3 the card back BUILT
 
 **T0 — listings missing everywhere, four causes, all fixed** (CLAUDE.md, THE

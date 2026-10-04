@@ -37,7 +37,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.9.2';   // bump when this file changes
+const VERSION = '5.9.3';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -191,12 +191,39 @@ function extractPrice(card) {
 }
 
 // ── DB WRITE ──────────────────────────────────────────────────
-async function upsertCards(cards) {
+// opts.insertOnly (cardgap, 2026-10-04): a card already held is left exactly
+// as it is — its rarity may be manifest's or Yuyu-tei's, its art may be
+// Limitless's, and an upsert from the set listing would overwrite the first
+// with positional inference. Only a row that did not exist gets a price row.
+async function upsertCards(cards, opts = {}) {
   if (!db || !cards.length) return { written: 0, failed: 0, firstError: null };
   let written = 0, failed = 0, firstError = null;
 
   for (const c of cards) {
     try {
+      if (opts.insertOnly) {
+        const ins = await db.query(`
+          INSERT INTO cards (api_card_id,name,name_en,number,rarity,supertype,
+            image_small,image_large,set_api_id,set_name,set_name_en,set_total,
+            tcgplayer_data,cardmarket_data,set_logo,set_series,set_release,image_lang)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+          ON CONFLICT (api_card_id) DO NOTHING`,
+          [c.api_card_id, c.name, c.name_en || null, c.number, c.rarity, c.supertype,
+           c.image_small, c.image_large, c.set_api_id, c.set_name, c.set_name_en || null,
+           c.set_total,
+           JSON.stringify(c.tcgplayer || null), JSON.stringify(c.cardmarket || null),
+           c.set_logo || null, c.set_series || null, c.set_release || null,
+           c.image_lang || null]);
+        if (ins.rowCount !== 1) continue;
+        written++;
+        if (c.price > 0) {
+          await db.query(
+            `INSERT INTO price_history (card_api_id,price_usd,source,condition)
+             VALUES ($1,$2,$3,'raw_nm')`,
+            [c.api_card_id, c.price, c.price_source]).catch(() => {});
+        }
+        continue;
+      }
       await db.query(`
         INSERT INTO cards (api_card_id,name,name_en,number,rarity,supertype,
           image_small,image_large,set_api_id,set_name,set_name_en,set_total,
@@ -254,7 +281,12 @@ async function tcgdexLogo(base) {
   return null;
 }
 
-async function ingestSet(setId, lang, setName, printedTotal) {
+// opts.only (cardgap): write just these TCGdex localIds, insert-only, with the
+// set's fields taken from the cards already held (opts.held) so a filled card
+// carries the same set name, total and logo as its neighbours, and its number
+// follows the set's stored form (Limitless-ingested sets store "78", TCGdex
+// lists "078").
+async function ingestSet(setId, lang, setName, printedTotal, opts = {}) {
   // 1. English prices + rarity from pokemontcg.io (indexed by number)
   const pIndex = {};
   if (lang === 'en') {
@@ -305,12 +337,15 @@ async function ingestSet(setId, lang, setName, printedTotal) {
     }
   }
 
-  const printed = printedTotal ||
+  const printedFromTcgdex = printedTotal ||
     (td.cardCount && (td.cardCount.official || td.cardCount.total)) || td.cards.length;
-  const setLogo = await tcgdexLogo(td.logo);
+  const held = opts.held || null;
+  const printed = held && held.set_total ? held.set_total : printedFromTcgdex;
+  const setLogo = held ? held.set_logo : await tcgdexLogo(td.logo);
+  const listed = opts.only ? td.cards.filter(c => opts.only.has(String(c.localId))) : td.cards;
 
-  const rows = td.cards.map(c => {
-    const num = String(c.localId);
+  const rows = listed.map(c => {
+    const num = (held && !held.padded) ? String(c.localId).replace(/^0+(?=\d)/, '') : String(c.localId);
     const pi = pIndex[num] || pIndex[num.replace(/^0+/, '')] || {};
     const rarity = normRarity(pi.rarity) || normRarity(c.rarity) || inferRarity(num, printed, c.name);
     const price = (pi.price && pi.price > 0)
@@ -329,17 +364,17 @@ async function ingestSet(setId, lang, setName, printedTotal) {
       image_large: c.image ? `${c.image}/high.png`
                  : (lang === 'en' && pi.images ? pi.images.large : null),
       image_lang: c.image ? lang : (lang === 'en' && pi.images ? 'en' : null),
-      set_api_id: setId, set_name: setName || td.name,
-      set_name_en: enSetName, set_total: printed,
+      set_api_id: setId, set_name: held ? held.set_name : (setName || td.name),
+      set_name_en: held ? held.set_name_en : enSetName, set_total: printed,
       set_logo: setLogo,
-      set_series: (td.serie && td.serie.name) || null,
-      set_release: td.releaseDate || null,
+      set_series: held ? held.set_series : ((td.serie && td.serie.name) || null),
+      set_release: held ? held.set_release : (td.releaseDate || null),
       tcgplayer: pi.tcgplayer || null, cardmarket: pi.cardmarket || null,
       price, price_source: (pi.price && pi.price > 0) ? (pi.source || 'tcgplayer') : 'estimate'
     };
   });
 
-  const res = await upsertCards(rows);
+  const res = await upsertCards(rows, { insertOnly: !!opts.only });
   if (res.failed > 0) {
     console.log(`\n     DB WRITE FAILED for ${res.failed}/${rows.length} cards in ${setId}`);
     console.log(`     first error: ${res.firstError}`);
@@ -4450,6 +4485,71 @@ async function setGap(lang, flag) {
   await ingestLang(lang);
 }
 
+// ══════════════════════════════════════════════════════════════
+// CARD GAP — cards missing INSIDE a set we hold (TASK T3, 2026-10-04)
+//
+// setgap asks "which sets are missing?" and nothing asked "which cards?".
+// A set is ingested once and the progress file marks it done forever, so
+// cards TCGdex added afterwards were never fetched: measured 2026-10-04,
+// 6 English sets short 104 cards (HS trainer kits held 1 of 30 each, mep
+// 60 of 89, tk-sm-r 19 of 30, swshp SWSH299-305) and 36 Japanese sets short
+// 440 — nearly all the secret rares above the printed total (SV8 107-138,
+// S8b's VMAX climax 278-285, every SM GX tail).
+//
+//   node ingest.js cardgap <lang>                  measure, write nothing
+//   node ingest.js cardgap <lang> --fix [--set=X]  insert the missing cards
+//
+// --fix is INSERT-ONLY: a held card is never touched. The new card takes
+// the set fields of its held neighbours. Rarity is positional until
+// `manifest <lang> <set>` runs; price is an estimate until a refresh or
+// `tcgdexprices` reaches it — both printed below as the next step.
+// ══════════════════════════════════════════════════════════════
+async function cardGap(lang, ...rest) {
+  if (!db) { console.log('  DATABASE_URL required'); return; }
+  lang = lang || 'en';
+  const doFix = rest.includes('--fix');
+  const only = (rest.find(a => a && a.startsWith('--set=')) || '').slice(6).split(',').filter(Boolean);
+  const fold = x => String(x).replace(/^0+(?=\d)/, '');
+
+  const have = await db.query(`
+    SELECT set_api_id, array_agg(number) AS nums,
+           max(set_name) AS set_name, max(set_name_en) AS set_name_en, max(set_total) AS set_total,
+           max(set_logo) AS set_logo, max(set_series) AS set_series, max(set_release) AS set_release
+    FROM cards WHERE api_card_id LIKE $1 GROUP BY set_api_id`, [lang + '-%']);
+
+  console.log(`\n  CARD GAP — ${lang}: ${have.rows.length} sets held${doFix ? '  (--fix: insert-only)' : ''}\n`);
+  let short = 0, missingTotal = 0, inserted = 0, unreachable = [];
+  const filled = [];
+  for (const h of have.rows) {
+    if (only.length && !only.includes(h.set_api_id)) continue;
+    if (isDigitalSet(h.set_api_id)) continue;
+    const td = await get(`${TCGDEX}/${lang}/sets/${encodeURIComponent(h.set_api_id)}`);
+    await sleep(DELAY_TCGDEX);
+    if (!td || !td.cards) { unreachable.push(h.set_api_id); continue; }
+    const heldF = new Set(h.nums.map(fold));
+    const miss = td.cards.filter(c => !heldF.has(fold(c.localId)));
+    if (!miss.length) continue;
+    short++; missingTotal += miss.length;
+    console.log(`  ${h.set_api_id.padEnd(12)} held ${String(h.nums.length).padStart(4)} / TCGdex ${String(td.cards.length).padEnd(4)} ` +
+      `missing ${String(miss.length).padStart(3)} (${miss.filter(c => c.image).length} with art)  ` +
+      miss.slice(0, 4).map(c => c.localId + ' ' + c.name).join('; '));
+    if (!doFix) continue;
+    const held = { ...h, padded: h.nums.some(n => /^0\d/.test(String(n))) };
+    const r = await ingestSet(h.set_api_id, lang, h.set_name, h.set_total,
+      { only: new Set(miss.map(c => String(c.localId))), held });
+    inserted += r.written || 0;
+    if (r.written) filled.push(h.set_api_id);
+    console.log(`               inserted ${r.written || 0}${r.failed ? ', FAILED ' + r.failed : ''}`);
+  }
+  console.log(`\n  ${short} sets short, ${missingTotal} cards missing` +
+    (unreachable.length ? `; ${unreachable.length} held sets TCGdex does not list (${unreachable.slice(0, 12).join(' ')}${unreachable.length > 12 ? ' …' : ''})` : ''));
+  if (doFix) {
+    console.log(`  inserted ${inserted}. Next, per set: node ingest.js manifest ${lang} <set>  (rarity), then tcgdexprices / refresh (prices)`);
+    if (filled.length) console.log(`  filled: ${filled.join(' ')}`);
+  } else if (missingTotal) console.log(`  Insert them with:  node ingest.js cardgap ${lang} --fix`);
+  console.log('');
+}
+
 
 // ══════════════════════════════════════════════════════════════
 // LIMITLESS CATALOG — card lists for sets TCGdex never populated
@@ -5259,7 +5359,7 @@ async function main() {
   console.log(`  Digital-only sets: ${digitalSource}`);
 
   const KNOWN = ['status','prices','scrape','safeprices','clean','test','diagnose',
-                 'reprice','ids','verify','retry','names','pokedex','setmeta','imgclean','imgreport','setcover','pricefix','pricecheck','filtertest','ytest','jpcheck','jppurge','yuyutei','rarityfill','alerts','estfix','manifest','verifyset','setgap','lmset','lmingest','nameprobe','cnprobe','audit','refresh','imgprobe','imgfetch','imgsrc','imgscrape','tcgdexprices','all',
+                 'reprice','ids','verify','retry','names','pokedex','setmeta','imgclean','imgreport','setcover','pricefix','pricecheck','filtertest','ytest','jpcheck','jppurge','yuyutei','rarityfill','alerts','estfix','manifest','verifyset','setgap','cardgap','lmset','lmingest','nameprobe','cnprobe','audit','refresh','imgprobe','imgfetch','imgsrc','imgscrape','tcgdexprices','all',
                  'en','ja','zh-tw','zh-cn','fr','de','it','es','pt','ko'];
   if (!KNOWN.includes(cmd)) {
     console.log(`\n  Unknown command: "${cmd}"`);
@@ -5318,6 +5418,7 @@ async function main() {
   }
   else if (cmd === 'verifyset')  { await verifySetData(process.argv[3], process.argv[4]); }
   else if (cmd === 'setgap')     { await setGap(process.argv[3], process.argv[4]); }
+  else if (cmd === 'cardgap')    { await cardGap(process.argv[3], ...process.argv.slice(4)); }
   else if (cmd === 'lmset')      { await limitlessSetPreview(process.argv[3], process.argv[4]); }
   else if (cmd === 'nameprobe')  { await nameProbe(process.argv[3], process.argv[4]); }
   else if (cmd === 'cnprobe')    { await cnProbe(process.argv[3], process.argv[4]); }

@@ -81,7 +81,10 @@ ok('…with a link to the listing', /href="https:\/\/www\.ebay\.com\/itm\/4"/.te
 ok('it says it is not counted, and how many are not listed', /Not counted in anything above/.test(html) && /more refused/.test(html));
 ok('nothing refused: nothing drawn', typeof pctx.liveRefusedBlock === 'function' && pctx.liveRefusedBlock({ refused: [], refusedTotal: 0 }) === '');
 const rl = fnH('renderLiveListings');
-ok('both panel endings append it after the listings', (rl.match(/liveRefusedBlock\(d\) \+ liveSourceNote\(d\)/g) || []).length === 2);
+// T5 added the auction endings: EVERY ending that draws the source note
+// draws the refused block before it (at least the original two).
+ok('every panel ending appends it after the listings', (rl.match(/liveRefusedBlock\(d\) \+ liveSourceNote\(d\)/g) || []).length >= 2
+  && (rl.match(/liveRefusedBlock\(d\) \+ liveSourceNote\(d\)/g) || []).length === (rl.match(/liveSourceNote\(d\)/g) || []).length);
 ok('the panel never reads d.refused for a count or a price', !/d\.refused/.test(rl.replace(/liveRefusedBlock\(d\)/g, '')));
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

@@ -1628,6 +1628,14 @@ function normaliseListing(o) {
     // by then "which kind of price is this" has no other answer.
     // null means an ordinary marketplace listing price.
     priceKind: o.priceKind || null,
+    // ── Sale type (T5, 2026-10-04) ──
+    // Buy It Now or auction, as the PAGE splits them. An auction that also
+    // carries a Buy It Now price is buyable at that price now, so it is
+    // Buy It Now (its current bid rides along in currentBid). Only a row
+    // whose number is a current bid is an auction — and a bid is never a
+    // price: outlier.isCurrentBid keeps it out of cheapest and every median.
+    saleType: o.priceKind === 'current-bid' ? 'auction' : 'buy-it-now',
+    currentBid: Number.isFinite(o.currentBid) ? +o.currentBid.toFixed(2) : null,
     // ── Labels, carried through ──
     // sourceEbay works these out from the seller's title and they were being
     // dropped right here: this function returns a fixed shape, and edition
@@ -2078,6 +2086,8 @@ async function sourceYahoo(card, grade, limit, opts = {}) {
         sourceLabel: 'Yahoo JP',
         condition: jpf.isRawGrade(grade) ? 'Raw' : String(grade),
         listingType: feed.live ? (it.isFixedPrice ? 'fixed' : 'auction') : 'ended',
+        // A live Yahoo auction's yen is its current price — a bid (T5).
+        priceKind: feed.live && !it.isFixedPrice ? 'current-bid' : (base.priceKind || null),
         live: feed.live,
         printing: pclaim.key, printingStated: pclaim.stated
       }));
@@ -2495,6 +2505,11 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       listingType: isAuction ? 'auction' : 'fixed',
       // An auction's number is its CURRENT bid — not what it will sell for.
       priceKind: isAuction && !(it.price && it.price.value != null) ? 'current-bid' : null,
+      // An auction WITH Buy It Now: the bid beside the buy price (T5), in
+      // USD at the row's own rate. Shown, never a price.
+      currentBid: isAuction && it.price && it.price.value != null && it.currentBidPrice
+        && String(it.currentBidPrice.currency || cur).toUpperCase() === cur
+        ? parseFloat(it.currentBidPrice.value) * (price / priceNative) : null,
       endsAt: it.itemEndDate || null,
       bids: Number.isFinite(it.bidCount) ? it.bidCount : null,
       live: true,
@@ -3320,6 +3335,12 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
     liveCount: j.liveCount,
     cheapest: trusted.length ? trusted[0].landed : null,
     cheapestLive: (trusted.find(l => l.live) || {}).landed ?? null,
+    // T5: how many live rows the page's two tabs hold. cheapest above is
+    // Buy It Now only — trustworthy() never takes a current bid.
+    saleTypes: {
+      buyItNow: listings.filter(l => l.live && l.saleType !== 'auction').length,
+      auction: listings.filter(l => l.live && l.saleType === 'auction').length,
+    },
     // What the outlier check did, and why — reported even when it did not
     // run. "Not applied: median $0.99 is below $15" is a different fact
     // from "applied, nothing flagged".

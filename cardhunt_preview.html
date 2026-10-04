@@ -951,7 +951,8 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
         <div class="lbox">
           <div class="lhdr">
             <div class="ltabs2">
-              <button class="ltab on" onclick="setLTab(this,'live')">Live listings</button>
+              <button class="ltab on" id="ltab-bin" onclick="setLTab(this,'live')">Buy It Now</button>
+              <button class="ltab" id="ltab-auction" onclick="setLTab(this,'auction')">Auctions</button>
               <button class="ltab" onclick="setLTab(this,'sold')">Recent sales</button>
               <button class="ltab" onclick="setLTab(this,'local')">Near you</button>
             </div>
@@ -2938,7 +2939,7 @@ function selGrade(grade,base){
   // That is the defect CLAUDE.md records under "the listings panel had two
   // writers, one of them ungated", reintroduced by wiring the selector into
   // selGrade. The other tabs still need this.
-  if (S.ltab && S.ltab !== 'live') buildMockListings(S.currentCard,base,S.ltab);
+  if (S.ltab && S.ltab !== 'live' && S.ltab !== 'auction') buildMockListings(S.currentCard,base,S.ltab);
 
   // Grade badge on card image
   var oldBadge = document.getElementById('grade-badge');
@@ -3640,6 +3641,14 @@ function quotaRefusedIn(d) {
   return Object.keys(src).some(function (k) { return src[k] && src[k].status === 'quota'; });
 }
 
+// The two tabs say how many rows each holds (T5) — written by this one
+// function, from the answer the panel is drawing.
+function liveTabCounts(d){
+  var st = (d && d.saleTypes) || null;
+  var b = document.getElementById('ltab-bin'), a = document.getElementById('ltab-auction');
+  if (b) b.textContent = 'Buy It Now' + (st ? ' (' + st.buyItNow + ')' : '');
+  if (a) a.textContent = 'Auctions' + (st ? ' (' + st.auction + ')' : '');
+}
 function liveEndsIn(iso){
   if (!iso) return '';
   var ms = new Date(iso) - Date.now();
@@ -3687,7 +3696,12 @@ function liveRow(l){
   var landed = fmtCurrency(Number(l.landed));
   var ship = liveShip(l);
   var orig = liveOrigPrice(l) ? ' \u00b7 ' + liveOrigPrice(l) : '';
-  var when = l.live ? (l.listingType === 'auction' ? liveEndsIn(l.endsAt) : 'buy it now') : 'ended';
+  var when = !l.live ? 'ended'
+    : l.saleType === 'auction' ? liveEndsIn(l.endsAt)
+    : l.listingType === 'auction'
+      ? 'buy it now' + (l.currentBid != null ? ' (auction bid ' + fmtCurrency(Number(l.currentBid)) + ')' : '')
+        + (l.endsAt ? ' · auction ' + liveEndsIn(l.endsAt) : '')
+      : 'buy it now';
   var bids = (l.bids != null && l.bids > 0) ? ' \u00b7 ' + l.bids + ' bid' + (l.bids === 1 ? '' : 's') : '';
   return '<div class="lrow-wrap"><a href="' + liveEsc(l.url) + '" target="_blank" rel="noopener" '
     + 'class="lrow2" style="display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--bd);'
@@ -4200,6 +4214,19 @@ async function renderLiveListings(card, grade, opts){
 
   var rows = d.listings || [];
 
+  // ── Sale type (T5, 2026-10-04) ──
+  // An auction's number is its current bid, not a price: auctions get their
+  // own tab, ending soonest first, and never a "cheapest". An auction that
+  // also offers Buy It Now is buyable now — the server files it under Buy It
+  // Now (saleType) with its current bid beside. Ended rows are comparables
+  // and stay in the Buy It Now view's "Recently ended" group, as before.
+  var saleView = S.saleType === 'auction' ? 'auction' : 'buy-it-now';
+  liveTabCounts(d);
+  rows = rows.filter(function (l) {
+    if (!l.live) return saleView === 'buy-it-now';
+    return (l.saleType === 'auction') === (saleView === 'auction');
+  });
+
   // ── The selection's second half, applied here ──
   //
   // The GRADE went to the server and the gate enforced it. For eBay the raw
@@ -4336,6 +4363,16 @@ async function renderLiveListings(card, grade, opts){
   }
 
   var stampWaiting = !!(d && d.stampGate && d.stampGate.pending > 0);
+  if (!rows.length && saleView === 'auction' && !pause) {
+    var st = d.saleTypes || {};
+    host.innerHTML = head + '<div style="font-size:11px;color:var(--mu);line-height:1.6">'
+      + 'No auction of this exact card at this selection right now'
+      + (st.buyItNow ? ' &mdash; ' + st.buyItNow + ' Buy It Now listing' + (st.buyItNow === 1 ? ' is' : 's are')
+          + ' in the other tab' : '') + '.</div>'
+      + excludedNote() + unstatedBlock() + liveRefusedBlock(d) + liveSourceNote(d) + '</div>';
+    applyMeasuredGrade(d);
+    return;
+  }
   if (!rows.length) {
     host.innerHTML = head
       // "No listing matched" is FALSE when eBay was never asked — the pause
@@ -4361,6 +4398,24 @@ async function renderLiveListings(card, grade, opts){
   var live = parts.live, liveFlagged = parts.liveFlagged, ended = parts.ended;
   var flagged = rows.filter(function(l){ return l.suspect; });
   var html = head;
+  if (saleView === 'auction') {
+    // No cheapest, no median, no print-run price: every number here is a
+    // bid that will move. Ending soonest first — what a bidder acts on.
+    var auc = rows.slice().sort(function (a, b) {
+      var ta = a.endsAt ? new Date(a.endsAt).getTime() : Infinity;
+      var tb = b.endsAt ? new Date(b.endsAt).getTime() : Infinity;
+      return ta - tb;
+    });
+    html += '<div style="font-size:11px;color:var(--mu);margin-bottom:10px;line-height:1.6">'
+      + auc.length + ' auction' + (auc.length === 1 ? '' : 's') + ', ending soonest first. '
+      + 'Each price is the <strong>current bid</strong>, not what the card will sell for &mdash; '
+      + 'it is never counted in the cheapest price or any median.</div>'
+      + auc.map(liveRow).join('');
+    html += excludedNote() + unstatedBlock() + liveOutlierNote(d) + liveRefusedBlock(d) + liveSourceNote(d) + '</div>';
+    host.innerHTML = html;
+    applyMeasuredGrade(d);
+    return;
+  }
   if (d.cheapestLive != null) {
     html += '<div style="font-size:20px;font-weight:800;margin-bottom:2px">'
       + fmtCurrency(Number(d.cheapestLive)) + '</div>'
@@ -4468,7 +4523,10 @@ function setLTab(el,tab){
   document.querySelectorAll('.ltab').forEach(b=>b.classList.remove('on'));
   el.classList.add('on');
   S.ltab=tab;
-  if(tab==='live'){ renderListingFinder(S.currentCard||LF.card); return; }
+  // T5: Buy It Now and Auctions are two views of ONE answer — the same
+  // request, the same gate, the same filters; only the sale type differs.
+  if(tab==='live'||tab==='auction'){ S.saleType = tab==='auction' ? 'auction' : 'buy-it-now';
+    renderListingFinder(S.currentCard||LF.card); return; }
   buildMockListings(S.currentCard,S.activeGradeBase,tab);
 }
 
@@ -6435,6 +6493,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261004-7136652-refused &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261005-431b523-saletype &middot; click to hide</div>
 </body>
 </html>

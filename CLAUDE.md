@@ -1166,7 +1166,7 @@ is not handed to a waiter of another origin — it tries under its own. At a
 ## Tooling — counted against the 300/day allowance
 
 A one-day raise goes in `ebayquota.TOOLING_OVERRIDES`, keyed on the UTC day,
-so it lapses by itself (2026-10-04: 700, Roy, for the card-back
+so it lapses by itself (2026-10-04: 700 then 2,000, Roy, for the card-back and query audits —
 re-measurement).
 
 | tool / route | typical invocation | eBay |

@@ -69,8 +69,9 @@ const HOURLY_LIMIT  = 600;
 const TOOLING_DAILY = 300;
 // A one-day raise, granted by Roy for a named measurement, keyed on the UTC
 // day so it lapses by itself at midnight — never a standing change.
-// 2026-10-04: 700, for the card-back re-measurement (TASK T3).
-const TOOLING_OVERRIDES = { '2026-10-04': 700 };
+// 2026-10-04: 700, for the card-back re-measurement (TASK T3); raised to
+// 2000 the same evening by Roy, for the catalogue query audit (T2).
+const TOOLING_OVERRIDES = { '2026-10-04': 2000 };
 function toolingAllowance(now) {
   return TOOLING_OVERRIDES[(now || new Date()).toISOString().slice(0, 10)] || TOOLING_DAILY;
 }

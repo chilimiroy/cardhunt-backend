@@ -175,7 +175,7 @@ const L = q.DAILY_LIMIT;
   s = await lv(1200, 0, { user_calls: 700, background_calls: 200, tooling_calls: 300 });
   chk('broken down by origin', s.byOrigin.user === 700 && s.byOrigin.background === 200 && s.byOrigin.tooling === 300);
   chk('  tooling spent shows as spent, while the user is still served', s.tooling.remaining === q.toolingAllowance() - 300 && s.allowed);
-chk('a one-day raise lapses by itself: 300 the day after', q.toolingAllowance(new Date('2026-10-05T00:00:01Z')) === 300 && q.toolingAllowance(new Date('2026-10-04T23:59:59Z')) === 700);
+chk('a one-day raise lapses by itself: 300 the day after', q.toolingAllowance(new Date('2026-10-05T00:00:01Z')) === 300 && q.toolingAllowance(new Date('2026-10-04T23:59:59Z')) === q.TOOLING_OVERRIDES['2026-10-04'] && q.TOOLING_OVERRIDES['2026-10-04'] > 300);
   chk('  calls from before origins were counted show as unattributed, not as user', s.unattributed === 0);
   s = await lv(4900, 0, { user_calls: 10 });
   chk('  4,900 used, 10 tagged -> 4,890 unattributed', s.unattributed === 4890, s.unattributed);

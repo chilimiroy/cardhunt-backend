@@ -1,5 +1,103 @@
 # CardHunt — Progress Log
 
+## 2026-10-05 (later) — T1 colour alone measured, T2 cross-set lookalikes, T3 spec tracked, T4 deals seen live
+
+**eBay spend:** 151 US-page-1 card views on Render (30 gold/dark/warm cards,
+Mewtwo ☆, 120 highest-priced English cards); day at 257 of 5,000 after.
+Every photo was read from eBay's CDN (0 calls).
+
+**T1 — colour alone does NOT refuse.** On the 378 labelled rows, colour excess
+above the shipped 0.40 with no other signal hits 2 genuine: $610 Magikarp &
+Wailord GX 161 (0.424, no back) and $758 Shining Charizard (0.416, genuine back
+seen). First genuine falls at 0.424; at 0.45 colour alone catches 44/95 metal,
+at 0.50 34/95 (two signals: 51).
+
+| threshold | metal caught (95) | genuine hit (195) | union with two-signal rule |
+|---|---|---|---|
+| 0.30 | 65 | 3 | — |
+| 0.40 | 51 | 2 | 58 metal / 2 genuine |
+| 0.45 | 44 | 0 | 56 / 0 |
+| 0.50 | 34 | 0 | 56 / 0 |
+
+Widened: 30 more cards (6 Gold Stars, gold items/SV gold hyper rares incl. gold
+energies, SWSH gold VSTAR, Umbreon/Gengar VMAX alts, M Gengar EX, Darkrai GX,
+Mewtwo-EX FA, warm arts: Charizard V CP 79, Charizard ex 199, Blaziken VMAX alt,
+R&C GX). 1,623 rows profiled; all 41 above 0.30 looked at: **37 metal, 4
+genuine gold hyper rares** — Reversal Energy sv04-266 at **0.491**, 0.352, 0.310
+and Basic Water Energy sv02-279 at **0.470**. Why: our TCGdex scan of a gold
+hyper rare is not read as gold (Water Energy's scan 0.000, Reversal 0.191) —
+the scan renders the foil flat. So no threshold refuses colour alone without a
+genuine card: two signals stay. The 4 rows are in `material.fixture.json`
+(`widen-hr`); material.test.js fails 4 assertions with colour standalone.
+Gold Stars on eBay are thin (1-8 rows each) — the Gold Star sample is still small.
+
+Coverage: **1,590 English cards have no reference profile** — 806 use
+pokemontcg.io art (PNG, and `SCAN_HOST` admits TCGdex .jpg only: Shiny Vault
+122, Hidden Fates/Dragon Majesty 156, Crown Zenith GG 70, Trainer Galleries
+120, SM promos 67, Classic Collection incl. CC002), 754 have no image (B2a 131,
+mep 89, trainer kits, svp 34, mfb 34), 30 scrydex. Fix = a PNG decode path for
+pokemontcg.io scans (not built). Metal-photo signal: only rows the back check
+fetched (MOST_FAKED + flagged, ≤20 a view). **Rainbow-foil metal is uncovered**
+by colour (Pikachu VMAX, PROGRESS 2026-10-05). **Washed-out gold is uncovered
+too**: the top `/api/deals` pick (below) is a gold metal Shining Charizard at
+excess 0.059 — blue-white light desaturates gold below the HSV bound.
+
+On Render: every first view had the novelty check 100% `pending` (by design —
+profiled after the answer); the poll answer applied it (Charizard V CP: 2
+refused, 9 flagged of ~26 metal above 0.30 — most metal there is kept).
+
+**T2 — Mewtwo ☆: the other card is XY Evolutions Mewtwo 51/108** (130 HP,
+Psychic/Barrier, Base Set art). 80 rows (US page 1, 2026-10-05), labelled by
+eye: 5 genuine ☆, 75 Evolutions. `wholeScore` vs both scans, margin = Evolutions − ☆:
+
+| | genuine ☆ (5) | Evolutions (75) |
+|---|---|---|
+| margin range | −0.454 … **−0.073** (hardest: a sharp $4,500 raw) | **+0.043** … +0.39 |
+| caught at 0.30 (LOOKALIKE_MARGIN) | 0 | 22 |
+| caught at 0.40 (SIBLING_MARGIN) | 0 | 0 |
+| caught at 0.10 | 0 | 71 |
+
+Base Set / Base Set 2 Mewtwo scans are the same art: a near-tie with
+Evolutions by construction. The rows that matter most are not caught at 0.30:
+the $25 headline-cheapest row (+0.156) and the unflagged $900-$3,500
+Evolutions rows (+0.135 … +0.39, 2 of 10 at ≥0.30).
+
+**How general — one more found, same shape.** Of 150 views, 104 had ≥8 rows;
+cards whose kept rows are ≥40% price-flagged: Mewtwo ☆ and **Dragonite ex
+EX Dragon 90/97** (122 rows, 69 flagged) only. Scoring the flagged rows against
+every same-Pokémon English scan (50-120 per card) named the other card with no
+hint: **XY Evolutions Dragonite-EX 72/108** (51 of 58 rows at margin ≥0.10).
+Labelled: 31 genuine (hardest −0.182), ~79 Evolutions, ~12 third cards (BW
+Dragonite, Roaring Skies Dragonite-EX, a Giratina) near zero — undecided, kept.
+At 0.30: 17 Evolutions caught, 0 genuine. Both are 2016 Evolutions cards sold
+under an ex-era card's catalogue title — eBay's catalogue mapping, not sellers
+typing. **The cheap finder:** "most kept rows price-flagged" per view, then
+the cross-set scan scorer names the other card (0 extra eBay calls once a view
+exists). **Not shipped:** at the measured 0.30 the pairs catch ~25% and miss
+the rows that set the headline; a margin near 0.10 catches 71/75 and 64/79
+with 0/36 genuine, but 36 genuine rows on two cards (the ☆ has 5 on eBay at
+all) is too thin to ship a new margin. Also `verdictKey` would reuse
+xy12-72's stored sibling verdicts (keyed `@ours+s`) made without the new pair.
+
+**T3** — `TASK-counterfeit-gate.md` tracked (`8be954b`; it was already in the
+root, untracked). T1 pinned in `52fb48f`.
+
+**T4 — `/api/deals` with real cached views (first time):** 52 considered, 8
+shown — and at most 2 are like-for-like (Lugia ex $558, Skyridge Charizard
+crystal $1,698). #1 is a **gold metal novelty Shining Charizard** ($180 vs
+$1,701; no signal saw it); Mewtwo ☆ $1,690 is an **Evolutions Mewtwo** (row 9,
+margin +0.21); Golem "Damaged", Dialga EX "DMG/PEELING", Rayquaza CoL "MP" are
+**seller-stated damage** priced against a near-mint headline; LC Charizard
+"Non-Holo" against the holo price. The shelf recommends; it needs a stricter
+bar than "no check flagged it" — Roy's call (stated damage out; a deal on a
+MOST_FAKED card only with a genuine back seen).
+`safeprices ja --all` on SM6b/SM8b/S10a: 22 of 370 priced (Yahoo only), 348
+no Yahoo data — Yuyu-tei is the source that covers them (the open decision).
+PSA: nothing new to measure; the email to collectors-apis@collectors.com is
+Roy's (ask about population data in the same message).
+
+---
+
 ## 2026-10-05 — T0 budget, T1 gold/black novelty cards, T2 movers, T3 deals, T4, T5
 
 **T0 — CLAUDE.md 163k -> 50k, under a 60k budget** that `claudesplit.test.js`

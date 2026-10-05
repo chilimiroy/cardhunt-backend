@@ -133,7 +133,7 @@ Trad. 83 / 7,436, 0%, 95.6% · Simp. 8 / 877, 0%, **0% art**.
 - **Chinese is parked**: no rarity source, TCGdex's Chinese pricing is the
   Japanese card's under a translated name. `pricingAllowedFor()` = en, ja.
 - 2026-10-05: manifest re-run on the 12 stopped JA sets (SM6b … SM9): 1,107
-  cards, 31 rarities corrected (SM6b 9, SM8b 4, S10a 18); safeprices not re-run.
+  cards, 31 rarities corrected (SM6b 9, SM8b 4, S10a 18); safeprices re-run: 22 of 370 priced, the rest have no Yahoo data.
 - **5,475 Japanese cards (39%) are not on TCGdex** (Limitless-ingested);
   rarity positional; Yuyu-tei could supply it (open).
 - **English names are thin**: Japanese `name_en` 36%, `set_name_en` 4.7% — eBay
@@ -242,10 +242,13 @@ Unown `%3F`, Ancient Mew (no number), ex5.5 and mfb (no listings).
 - **Decided 2026-10-05 (Roy):** Yellow A Alternate (xya) is NOT deleted — own
   printed numbers (24a/119) and own listings (36 kept), unlike the TG twins;
   and **no softer 0.2x price flag** — it would catch genuine damaged copies.
-- **Open:** Mewtwo ☆ (ex13-103): ~75 of 88 kept rows on 2026-10-04 showed a
-  130 HP Base-style Mewtwo under catalogue titles "Mewtwo Star 103/110 … 80 HP"
-  ($2-$1,112) — a kind-D wrong card; a `LOOKALIKES` pair, measured first, is
-  the cheap route. Celebrations CC002 has no material reference (no scan profile).
+- **Open: cross-set lookalikes** — Mewtwo ☆ ex13-103 (75 of 80 rows are
+  Evolutions Mewtwo xy12-51) and Dragonite ex ex3-90 (~79 Evolutions
+  Dragonite-EX xy12-72), under ex-era catalogue titles. Pairs measured, NOT
+  shipped: at 0.30 they catch ~25%; ~0.10 catches most but rests on 36 genuine
+  rows. Finder: >=40% of a view price-flagged, then score against same-Pokémon
+  scans (PROGRESS 2026-10-05 (later)). 1,590 EN cards have no material
+  reference (pokemontcg.io PNG art incl. CC002, or no image).
 - Existing Yahoo base rows were not repaired for printing (143 of 191 JP cards
   holding both sit >5x the Yuyu-tei base) — `jpcheck` over them is owed.
 
@@ -280,6 +283,8 @@ Rules of the gate:
   a current measured raw price; otherwise shown "Photo being compared".
 - **Material (novelty): two of {colour > 0.40 above our scan, outlier flag, metal
   photo} refuse; one flags `counterfeit-likely`; a genuine back never refuses.**
+  **Colour alone never refuses**: genuine gold hyper rares reach 0.491 (our scan
+  reads their foil flat); `material.test.js` pins it (PROGRESS 2026-10-05 (later)).
   Unprofiled rows shown (`materialPending`), profiled after the answer, stored
   `check_kind 'material'`. A repeated-photo hash was measured and NOT built: no
   novelty template recurred across cards in 19,054 photos (PROGRESS 2026-10-05).
@@ -427,7 +432,9 @@ schtasks /Run   /TN "CardHunt nightly refresh"
 - **Best deals** (`deals.js`, `/api/deals`): cheapest trusted Buy It Now
   (shipping stated, no flag, novelty-checked, ≥3 such rows) 15%+ below the
   card's CURRENT measured price; only views opened in the last 15 minutes;
-  never fetches. Not the outlier signal: outliers are below trust.
+  never fetches. Not the outlier signal: outliers are below trust. **Seen live
+  2026-10-05: at most 2 of 8 like-for-like** (a metal novelty, an Evolutions
+  Mewtwo, stated damage vs a NM price) — a stricter bar is Roy's call.
 
 ## Near you (local card shops) — PLANNED, needs a real data source
 Honest empty state. **Do not fill it with anything a source did not return.**

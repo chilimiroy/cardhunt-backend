@@ -107,5 +107,24 @@ drop(sy, 'Sylveon V SWSH202 promo', /slab|graded|PSA/i, 'PSA 10');
 ok(cm.verify('Charizard 4/102 Base Set Holo', ch, 'Raw NM').ok, 'Charizard 4/102 still kept');
 ok(!cm.verify('Charizard 4/130 Base Set 2', ch, 'Raw NM').ok, 'Base Set 2 still refused');
 
+// ── Ancient Mew prints no number (T4, 2026-10-06, PRINTS_NO_NUMBER) ──
+// Stored as Miscellaneous Promos #001 with set_release 1995-12-31 (UTC):
+// asked "Ancient Mew 001 promo", every title refused on the number, and the
+// year gate would refuse "2000", the year the card states.
+const am = { cardId: 'en-miscp-001', name: 'Ancient Mew', number: '001', setName: 'Miscellaneous Promos', setTotal: 1, lang: 'en', setYear: 1995 };
+ok(cm.buildQuery(am, 'Raw') === 'Ancient Mew pokemon', 'Ancient Mew asked by name alone: ' + cm.buildQuery(am, 'Raw'));
+ok(!/001|Miscellaneous/.test(cm.buildQuery(am, 'PSA 10')) && /PSA 10/.test(cm.buildQuery(am, 'PSA 10')), 'a slab ask: name and grade, no number or set');
+for (const [g, t] of [['Raw', 'Ancient Mew Pokemon Card 2000 Movie Promo'], ['Raw', 'Ancient Mew Nintedo misprint promo'],
+                      ['PSA 9', 'PSA 9 Ancient Mew Promo 2000 Pokemon Power of One']]) {
+  const v = cm.verify(t, am, g);
+  ok(v.ok, 'KEPT ' + g + ': ' + t + ' — ' + v.reason);
+}
+for (const [t, why] of [['Pokemon Mew 8 Black Star Promo', /ancient/i], ['Ancient Mew 001/1', /prints no number/],
+                        ['Ancient Mew Japanese promo 2000', /language/], ['Ancient Mew 1996 promo', /year|1996/]]) {
+  const v = cm.verify(t, am, 'Raw');
+  ok(!v.ok && why.test(v.reason || ''), 'refused: ' + t + ' — ' + (v.reason || 'kept'));
+}
+ok(cm.promoOf(am) === null && cm.printsNoNumber(am) && cm.printsNoNumber(pk) === null, 'only the listed card is numberless');
+
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

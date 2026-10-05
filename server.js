@@ -1949,6 +1949,7 @@ function editionsOfCard(card) {
 
 function filterCard(card, nameOverride) {
   return {
+    cardId: card.api_card_id,   // rules keyed on one card (cm.PRINTS_NO_NUMBER)
     printings: printingsOf(card),
     name: nameOverride || card.name,
     number: card.number,
@@ -2305,6 +2306,8 @@ async function sourceYahoo(card, grade, limit, opts = {}) {
 function ebayMatchCard(card) {
   const name = card.name_en || card.name;
   return {
+    // The id, for rules keyed on one card (cm.PRINTS_NO_NUMBER, T4 2026-10-06).
+    cardId: card.api_card_id,
     printings: printingsOf(card),
     name, nameEn: card.name_en || null,
     number: card.number,

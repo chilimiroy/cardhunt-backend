@@ -2192,6 +2192,7 @@ async function openSet(setId, apiSetId){
   var kitChips = document.getElementById('sd-kits');
   if (kitChips) kitChips.style.display = 'none';
   if (setId === TK_GROUP_ID) return openKitGroup();
+  if (setId === WP_GROUP_ID) return openKitGroup(WP_GROUP_ID);
 
   var all = getSetsData().concat(JP, ZH_TW, ZH_CN,
     (S.enSets||[]).map(function(x){ return {id:x.id,n:x.name,s:x.series,t:x.total,d:x.releaseDate,lo:(x.images&&x.images.logo)||'',aid:x.id}; }));
@@ -6294,19 +6295,38 @@ function groupTrainerKits(data) {
     kits: kits };
   return data.filter(function(x){ return !isTrainerKit(x); }).concat([group]);
 }
+// ── Ancient Mew, grouped with the Wizards promos (T4, 2026-10-06) ──
+// Ancient Mew is TCGdex's one-card "Miscellaneous Promos" (miscp). It is not
+// a Black Star Promo, and moving it would strand its 12 price_history rows,
+// so it is NOT moved: the Wizards Black Star Promos tile opens both sets'
+// cards on one page, each card keeping its own set id, number and price, and
+// the page says which is which. A UI grouping only, like the trainer kits.
+var WP_GROUP_ID = 'en-group-wotc-promos';
+var WP_MEMBERS = ['basep', 'miscp'];
+function groupWotcPromos(data) {
+  var members = (data || []).filter(function(x){ return x && x.lang === 'en' && WP_MEMBERS.indexOf(String(x.aid || '')) >= 0; });
+  var bsp = members.filter(function(x){ return x.aid === 'basep'; })[0];
+  if (!bsp || members.length < 2) return data;
+  var group = Object.assign({}, bsp, { id: WP_GROUP_ID, aid: WP_GROUP_ID, kits: members,
+    t: members.reduce(function(n, k){ return n + (k.cardCount || k.t || 0); }, 0),
+    cardCount: members.reduce(function(n, k){ return n + (k.cardCount || 0); }, 0),
+    note: 'Black Star Promos, plus Ancient Mew (TCGdex files it as Miscellaneous Promos &mdash; it is not a Black Star Promo)' });
+  return data.filter(function(x){ return members.indexOf(x) < 0; }).concat([group]);
+}
 
 // One page, every kit's cards, each fetched by its OWN set id from the same
 // endpoint a set page uses. A kit that fails to load is named, not hidden.
-async function openKitGroup(){
-  var group = groupTrainerKits(getSetsData()).filter(function(x){ return x.id === TK_GROUP_ID; })[0];
+async function openKitGroup(gid){
+  gid = gid || TK_GROUP_ID;
+  var group = groupWotcPromos(groupTrainerKits(getSetsData())).filter(function(x){ return x.id === gid; })[0];
   if (!group) return;
   S.currentSet = group;
   S.kitFilter = null;
   setSourceNote(null);   // the last set's "N of N cards" note is not this page's
   document.getElementById('sd-bc').textContent = group.n;
-  document.getElementById('sd-hdr').innerHTML = '<div><div style="font-size:22px;font-weight:800;letter-spacing:-.4px">Trainer Kits</div>'
-    + '<div style="font-size:12px;color:var(--fa);margin-top:3px">' + group.kits.length + ' kits &middot; '
-    + group.cardCount + ' cards &middot; each card keeps its own kit, number and price</div></div>';
+  document.getElementById('sd-hdr').innerHTML = '<div><div style="font-size:22px;font-weight:800;letter-spacing:-.4px">' + liveEsc(group.n) + '</div>'
+    + '<div style="font-size:12px;color:var(--fa);margin-top:3px">' + (group.note ? group.note + ' &middot; ' : group.kits.length + ' kits &middot; ')
+    + group.cardCount + ' cards &middot; each card keeps its own ' + (group.note ? 'set' : 'kit') + ', number and price</div></div>';
   SS('setdetail');
   var grid = document.getElementById('sd-grid');
   grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--mu)">Loading ' + group.kits.length + ' kits&hellip;</div>';
@@ -6344,7 +6364,7 @@ function renderKitChips(group, failed){
   host.style.display = '';
   var counts = {};
   S.allCards.forEach(function(c){ counts[c._kit] = (counts[c._kit] || 0) + 1; });
-  var html = '<button class="fchip' + (!S.kitFilter ? ' on' : '') + '" onclick="selKit(null)">All kits (' + S.allCards.length + ')</button>';
+  var html = '<button class="fchip' + (!S.kitFilter ? ' on' : '') + '" onclick="selKit(null)">' + (group.note ? 'All' : 'All kits') + ' (' + S.allCards.length + ')</button>';
   group.kits.slice().sort(function(a, b){ return String(a.d || '').localeCompare(String(b.d || '')) || a.n.localeCompare(b.n); })
     .forEach(function(k){
       html += '<button class="fchip' + (S.kitFilter === k.aid ? ' on' : '') + '" onclick="selKit(&quot;' + k.aid + '&quot;)">'
@@ -6368,7 +6388,7 @@ function renderSets() {
   // Trainer kits: one tile for all of them (T5, Roy, 2026-10-05). A grouping
   // of the TILES only — every kit keeps its own set id and card ids, so
   // prices, alerts and listings are untouched.
-  data = groupTrainerKits(data);
+  data = groupWotcPromos(groupTrainerKits(data));   // Ancient Mew with the Wizards promos (T4)
   var filt = data.filter(function(x){
     var matchQ = !q || (x.n && x.n.toLowerCase().indexOf(q) >= 0)
                     || (x.en && x.en.toLowerCase().indexOf(q) >= 0)
@@ -6685,6 +6705,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261005-90ab24b-t5kits &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-7e780f7-t4mew &middot; click to hide</div>
 </body>
 </html>

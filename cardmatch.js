@@ -1151,8 +1151,26 @@ const PROMO_WORDS = /\bpromos?\b|\bblack\s*star\b/i;
 // 001 Sprigatito on the first live run. Each is its own catalogue set.
 const NOT_BLACK_STAR = /\bmc\s*donald'?s?\b|\bhappy\s*meal\b|\btrick\s*or\s*treat\b/i;
 
+// ── Cards that print NO number (T4, 2026-10-06) ───────────────
+// Ancient Mew (2000, given out with Pokémon the Movie 2000) prints no
+// collector number; TCGdex files it as "Miscellaneous Promos" #001, a number
+// no seller writes. Asked as "Ancient Mew 001 promo", every title was refused
+// on "does not state promo number 001". Keyed by CARD id: the rule is about
+// what one card prints, not a set. Not moved (12 price_history rows keep the
+// id); grouped with the Wizards promos on the page instead.
+//   year   the year the card states, for the year gate. The set's
+//          release_date (TCGdex 1996-01-01, stored 1995-12-31 22:00 UTC)
+//          would refuse every "2000" title.
+const PRINTS_NO_NUMBER = {
+  'en-miscp-001': { year: 2000 },
+};
+function printsNoNumber(card) {
+  const id = String((card && (card.cardId || card.api_card_id || card.id)) || '');
+  return PRINTS_NO_NUMBER[id] || null;
+}
+
 function promoOf(card) {
-  if (!card || reprintOf(card)) return null;
+  if (!card || reprintOf(card) || printsNoNumber(card)) return null;
   const id = String(card.cardId || card.api_card_id || card.id || '');
   if (id && !/^en-/.test(id)) return null;           // English catalogue only
   const setId = setIdOf(card);
@@ -1700,7 +1718,11 @@ function buildQuery(card, grade, opts) {
   if (name) bits.push(name);
 
   const promo = promoOf(card);
-  if (promo) {
+  const numberless = printsNoNumber(card);
+  if (numberless) {
+    // Prints no number: the name alone (PRINTS_NO_NUMBER). No set name either —
+    // nobody writes "Miscellaneous Promos"; the gate still checks the name.
+  } else if (promo) {
     // The number as printed, no total; a plain number also says "promo",
     // since "Pikachu 1" alone is every set's #1. The set name is not asked:
     // sellers write "Promo" or "Black Star Promo", rarely "SWSH Black Star
@@ -1756,7 +1778,7 @@ function buildQuery(card, grade, opts) {
   // regardless — this only affects what is ASKED.
   // Omit a CJK set name specifically — not merely one lacking Latin letters,
   // which would also drop "151", a perfectly searchable English set name.
-  if (card.setName && !promo && !CJK.test(String(card.setName))) {
+  if (card.setName && !promo && !numberless && !CJK.test(String(card.setName))) {
     const asked = askedSetName(card.setName, opts.setAsk === false ? null : card, grade);
     if (asked) bits.push(asked);
   }
@@ -2027,6 +2049,8 @@ function verifyLetterNumber(t, card, grade) {
 }
 
 function verify(title, card, grade, opts) {
+  const nn = printsNoNumber(card);
+  if (nn && nn.year && card.setYear !== nn.year) card = Object.assign({}, card, { setYear: nn.year });
   const r = verifyCore(title, card, grade, opts) || { ok: false, reason: 'no verdict' };
   r.evidence = printingEvidence(card);
   // Printing (TASK T10): every verdict says what the title claimed, so kept
@@ -2270,6 +2294,15 @@ function verifyCore(title, card, grade, opts) {
     const v = verifyPromoNumber(t, card, grade, promo);
     return v.ok ? accept(v) : v;
   }
+  if (printsNoNumber(card)) {
+    // Nothing printed to match: the name (§3) is the evidence. A title
+    // carrying an N/M pair is some numbered card, not this one.
+    const pairs = numberPairsIn(t);
+    if (pairs.length) return { ok: false, reason: 'title has ' + pairs.map(x => x.raw).join(', ') +
+      ' — a numbered card; ' + (card.name || 'this card') + ' prints no number' };
+    return accept({ ok: true, reason: null, confidence: 'name-only (the card prints no number)',
+                    matched: { number: null, set: card.setName, grade: grade } });
+  }
   const wantNum = normNum(card.number);
   const wantTot = card.setTotal ? normNum(card.setTotal) : null;
   const letterCheck = verifyLetterNumber(t, card, grade);
@@ -2393,7 +2426,7 @@ const API = {
   REPRINT_FAMILIES, REPRINT_OF, setIdOf, familyOfSet, familyNamedBy, familiesReprinting, reprintCardsOf,
   LOOKALIKES, lookalikesOf, photoChecksOf, SET_WRITTEN_AS,
   reprintOf, asPrinted,
-  PROMO_SETS, promoOf, promoNumberIn, SUBSET_SETS, printedTotal, totalFits,
+  PROMO_SETS, promoOf, promoNumberIn, PRINTS_NO_NUMBER, printsNoNumber, SUBSET_SETS, printedTotal, totalFits,
   PRINTINGS, printingLabel, printingClaim, printingRefusal, parsePrintingParam,
   EDITIONS, editionClaim, editionLabel, editionRefusal, parseEditionParam,
   EBAY_KEYWORD_LIMIT

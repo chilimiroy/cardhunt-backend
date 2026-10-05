@@ -124,6 +124,16 @@ for (const [t, why] of [['Pokemon Mew 8 Black Star Promo', /ancient/i], ['Ancien
   const v = cm.verify(t, am, 'Raw');
   ok(!v.ok && why.test(v.reason || ''), 'refused: ' + t + ' — ' + (v.reason || 'kept'));
 }
+// Live titles, 2026-10-06 (US, raw, 200 scanned): the name kept 59, 3 were the card.
+for (const t of ['2000 Pokemon Game Movie Promo Ancient Mew HEAVILY PLAYED CONDITION', '2000 Pokemon Movie Promos Ancient Mew',
+                 'Pokemon Card/Card - Ancient Mew (Primal) - Promo - Swirl! Excellent'])
+  ok(cm.verify(t, am, 'Raw').ok, 'KEPT (live, the card): ' + t);
+for (const t of ['ANCIENT MEW DETAILS INSERT CARD - Pokemon Card - Promo - NM', 'Ancient Mew Info Card LP Pokemon Promo Info Card',
+                 'Ancient Mew Cover Card (Pokemon The Movie)', 'Ancient Mew Details - Promo Card Info Insert - 1999 Wizards of the Coast - LP-NM',
+                 "Pokemon Card Ancient Mew Metal Colored | Collector's Edition", 'Made of solid stainless steel metal - NEW Pokemon Ancient Mew Promos Promo Card',
+                 'NEW Metal Pokémon Card Ancient Mew Promos Cards Gift for Kids Collectible Toy'])
+  ok(!cm.verify(t, am, 'Raw').ok, 'refused (live, not the card): ' + t);
+ok(cm.verify('ANCIENT MEW 2000 POKEMON GAME PROMO 2000 MOVIE PSA 9 Q0895', am, 'PSA 9').ok, 'KEPT (live): a PSA 9 slab of the card');
 ok(cm.promoOf(am) === null && cm.printsNoNumber(am) && cm.printsNoNumber(pk) === null, 'only the listed card is numberless');
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

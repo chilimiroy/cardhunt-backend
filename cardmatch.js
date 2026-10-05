@@ -1161,8 +1161,18 @@ const NOT_BLACK_STAR = /\bmc\s*donald'?s?\b|\bhappy\s*meal\b|\btrick\s*or\s*trea
 //   year   the year the card states, for the year gate. The set's
 //          release_date (TCGdex 1996-01-01, stored 1995-12-31 22:00 UTC)
 //          would refuse every "2000" title.
+//   notThis   what else is sold under the name. With no number to check,
+//          the name kept 59 of 200 live rows (2026-10-06, US, raw) and 56
+//          were not the card: the paper "Ancient Mew Details" insert that
+//          came with it (~30, "details / info / cover card", "insert") and
+//          metal replicas whose titles miss the lot words ("Metal Pokémon
+//          Card", "stainless steel"). No Ancient Mew is metal, and none of
+//          these words is in its name.
+//          'notThis' reads the title with the card's own name still in.
 const PRINTS_NO_NUMBER = {
-  'en-miscp-001': { year: 2000 },
+  'en-miscp-001': { year: 2000,
+    notThis: /\b(?:details?|info(?:rmation)?|cover)\s+(?:promo\s+)?card\b|\binserts?\b|\bmetal\b|\bstainless\b/i,
+    notThisSays: 'the paper Ancient Mew details insert, or a metal replica' },
 };
 function printsNoNumber(card) {
   const id = String((card && (card.cardId || card.api_card_id || card.id)) || '');
@@ -2297,6 +2307,8 @@ function verifyCore(title, card, grade, opts) {
   if (printsNoNumber(card)) {
     // Nothing printed to match: the name (§3) is the evidence. A title
     // carrying an N/M pair is some numbered card, not this one.
+    const nn = printsNoNumber(card), not = nn.notThis && t.match(nn.notThis);
+    if (not) return { ok: false, reason: `title says "${not[0]}" — ${nn.notThisSays}, not the card` };
     const pairs = numberPairsIn(t);
     if (pairs.length) return { ok: false, reason: 'title has ' + pairs.map(x => x.raw).join(', ') +
       ' — a numbered card; ' + (card.name || 'this card') + ' prints no number' };

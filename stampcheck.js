@@ -478,10 +478,14 @@ function checkBackPhoto(imageUrl) {
 // flag), METAL PHOTO (another of the seller's photos, not a genuine back, is
 // gold- or black-dominated beyond the scan — from the back check's getItem).
 // Two refuse, one flags; a genuine back seen never lets them refuse.
-// At 0.35: 53 of 95 metal refused, 0 of 186 genuine (the threshold was read
-// off that sample — 0.30 refused one genuine $3,111 Shining Charizard).
+// Threshold: above the hardest genuine photo, not at it. 0.30 refused a
+// genuine $3,111 Shining Charizard; 0.35 a genuine Charizard ex 199 SIR
+// (warm sunset art in warm light, excess 0.352) on the 12-card run. At 0.40:
+// 51 of 95 labelled metal refused, 22 flagged; 0 of 195 genuine refused, 6
+// flagged; 12 cards / 1,990 shown rows: 68 refused, every one looked at —
+// 66 metal, 2 other cards, 0 genuine.
 const MATERIAL_VERSION = 'material-1';
-const MATERIAL_GOLD_EXCESS = 0.35;
+const MATERIAL_GOLD_EXCESS = 0.40;
 const MATERIAL_PHOTO_SIZE = 's-l225';   // the size the measurement used
 const SCAN_HOST = /^https:\/\/assets\.tcgdex\.net\/[^?#]+\.jpg$/;
 // Centre 60% of the frame (backgrounds and sleeves stay out). HSV gold:

@@ -44,8 +44,13 @@ console.log('\n  what it catches');
 const metal = of('metal');
 const refused = metal.filter(r => act(r) === 'refuse').length, flagged = metal.filter(r => act(r) === 'flag').length;
 ok(metal.length >= 90, 'the fixture holds the metal rows (' + metal.length + ')');
-ok(refused >= 53, 'metal rows refused: ' + refused + ' of ' + metal.length + ' (measured 53)');
-ok(refused + flagged >= 74, 'metal rows refused or flagged: ' + (refused + flagged) + ' of ' + metal.length + ' (measured 74)');
+ok(refused >= 51, 'metal rows refused: ' + refused + ' of ' + metal.length + ' (measured 51)');
+ok(refused + flagged >= 73, 'metal rows refused or flagged: ' + (refused + flagged) + ' of ' + metal.length + ' (measured 73)');
+
+ok(sc.MATERIAL_GOLD_EXCESS >= 0.40, 'the threshold sits above the hardest genuine photo seen (Charizard ex 199 SIR, excess 0.352)');
+ok(sc.materialJudge({ profile: { gold: 0.364, black: 0.015 }, ref: { gold: 0.012, black: 0.011 }, priceFlag: false,
+     back: { state: 'no-claim', metal: true } }).action !== 'refuse',
+   'that genuine SIR ($446.73, warm light, no back posted) is not refused');
 
 console.log('\n  the rule');
 const ref = { gold: 0.2, black: 0.1 };

@@ -2188,6 +2188,10 @@ async function openSet(setId, apiSetId){
   document.getElementById('sd-rar').value='all';
   document.getElementById('sd-q').value='';
   document.querySelectorAll('[data-tf="type"]').forEach(function(b){ b.classList.toggle('on', b.dataset.tv==='all'); });
+  S.kitFilter = null;
+  var kitChips = document.getElementById('sd-kits');
+  if (kitChips) kitChips.style.display = 'none';
+  if (setId === TK_GROUP_ID) return openKitGroup();
 
   var all = getSetsData().concat(JP, ZH_TW, ZH_CN,
     (S.enSets||[]).map(function(x){ return {id:x.id,n:x.name,s:x.series,t:x.total,d:x.releaseDate,lo:(x.images&&x.images.logo)||'',aid:x.id}; }));
@@ -2374,6 +2378,7 @@ function applyFilters(){
   let cards=[...S.allCards];
 
   // Filter
+  if(S.kitFilter) cards=cards.filter(c=>c._kit===S.kitFilter);   // Trainer Kits group (T5)
   if(S.tbType&&S.tbType!=='all') cards=cards.filter(c=>c.supertype===S.tbType);
   if(rar&&rar!=='all') cards=cards.filter(c=>c.rarity===rar);
   if(q) cards=cards.filter(c=>c.name.toLowerCase().includes(q)||(c.number+'').includes(q));
@@ -2440,6 +2445,7 @@ function applyFilters(){
       +'<div class="cti">'+imgOrSk(c)+'</div>'
       +'<div class="ci">'
       +'<div class="cn" title="'+(c.nameEn||c.name||'')+'">'+nameWithEn(c.name, c.nameEn)+'</div>'
+      +(c._kitName?'<div class="cs" style="color:var(--fa)">'+liveEsc(c._kitName.replace(/ trainer Kit/i,''))+'</div>':'')
       +'<div class="cs">#'+c.number+' &middot; '+(c.rarity||'')+(c._raritySource==='inferred'?'<span style="color:var(--fa);font-size:9px">*</span>':'')+'</div>'
       +'<div class="cr"><span class="cp">'+priceStr+estMark+'</span></div>'
       +'</div></div>');
@@ -6269,14 +6275,104 @@ function fmtCurrency(usd){
   if(currentCurrency==='JPY') return sym + Math.round(val).toLocaleString();
   return sym + val.toFixed(2);
 }
+// ── Trainer kits, grouped in the UI (T5, 2026-10-05) ──
+// 20 English kits (tk-*) are each half a box; Roy wants them in one entry,
+// all cards together, filterable by kit. Checked first: every kit holds all
+// the cards TCGdex lists (SM Lycanroc: TCGdex has 18 of 30), and 38 of 40
+// sampled cards returned eBay listings. NEVER merged in the data.
+var TK_GROUP_ID = 'en-group-trainer-kits';
+function isTrainerKit(x) { return x && x.lang === 'en' && /^tk-/.test(String(x.aid || '')); }
+function groupTrainerKits(data) {
+  var kits = (data || []).filter(isTrainerKit);
+  if (kits.length < 2) return data;
+  var first = kits.filter(function(k){ return k.lo || k.sampleImage; })[0] || {};
+  var dates = kits.map(function(k){ return String(k.d || ''); }).filter(Boolean).sort();
+  var group = { id: TK_GROUP_ID, aid: TK_GROUP_ID, n: 'Trainer Kits', en: null, s: kits[0].s, lang: 'en',
+    t: kits.reduce(function(n, k){ return n + (k.cardCount || k.t || 0); }, 0),
+    cardCount: kits.reduce(function(n, k){ return n + (k.cardCount || 0); }, 0),
+    d: dates.length ? dates[dates.length - 1] : '', lo: first.lo || '', sampleImage: first.sampleImage || '',
+    kits: kits };
+  return data.filter(function(x){ return !isTrainerKit(x); }).concat([group]);
+}
+
+// One page, every kit's cards, each fetched by its OWN set id from the same
+// endpoint a set page uses. A kit that fails to load is named, not hidden.
+async function openKitGroup(){
+  var group = groupTrainerKits(getSetsData()).filter(function(x){ return x.id === TK_GROUP_ID; })[0];
+  if (!group) return;
+  S.currentSet = group;
+  S.kitFilter = null;
+  setSourceNote(null);   // the last set's "N of N cards" note is not this page's
+  document.getElementById('sd-bc').textContent = group.n;
+  document.getElementById('sd-hdr').innerHTML = '<div><div style="font-size:22px;font-weight:800;letter-spacing:-.4px">Trainer Kits</div>'
+    + '<div style="font-size:12px;color:var(--fa);margin-top:3px">' + group.kits.length + ' kits &middot; '
+    + group.cardCount + ' cards &middot; each card keeps its own kit, number and price</div></div>';
+  SS('setdetail');
+  var grid = document.getElementById('sd-grid');
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:48px;color:var(--mu)">Loading ' + group.kits.length + ' kits&hellip;</div>';
+  var failed = [];
+  var lists = await Promise.all(group.kits.map(function(k){
+    var key = k.aid + '_en', cached = getCacheSet(key);
+    var got = cached && cached.length ? Promise.resolve(cached)
+      : fetch(BACKEND + '/api/sets/' + k.aid + '/cards?lang=en&uiSetId=' + encodeURIComponent(k.id))
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(bd){
+            if (!bd || !bd.data || !bd.data.length) return null;
+            var l = enrichImages(bd.data, k.aid); setCacheSet(key, l); return l;
+          }).catch(function(){ return null; });
+    return got.then(function(l){
+      if (!l) { failed.push(k.n); return []; }
+      return l.map(function(c){ return Object.assign({}, c, { _kit: k.aid, _kitName: k.n }); });
+    });
+  }));
+  if (S.currentSet !== group) return;   // the visitor moved on
+  S.allCards = [].concat.apply([], lists);
+  S.kitFailed = failed;
+  renderKitChips(group, failed);
+  applyFilters();
+}
+function renderKitChips(group, failed){
+  var host = document.getElementById('sd-kits');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'sd-kits';
+    host.className = 'fchips';
+    host.style.cssText = 'margin-bottom:14px;flex-wrap:wrap';
+    var grid = document.getElementById('sd-grid');
+    grid.parentNode.insertBefore(host, grid);
+  }
+  host.style.display = '';
+  var counts = {};
+  S.allCards.forEach(function(c){ counts[c._kit] = (counts[c._kit] || 0) + 1; });
+  var html = '<button class="fchip' + (!S.kitFilter ? ' on' : '') + '" onclick="selKit(null)">All kits (' + S.allCards.length + ')</button>';
+  group.kits.slice().sort(function(a, b){ return String(a.d || '').localeCompare(String(b.d || '')) || a.n.localeCompare(b.n); })
+    .forEach(function(k){
+      html += '<button class="fchip' + (S.kitFilter === k.aid ? ' on' : '') + '" onclick="selKit(&quot;' + k.aid + '&quot;)">'
+        + liveEsc(k.n.replace(/ trainer Kit/i, '')) + ' (' + (counts[k.aid] || 0) + ')</button>';
+    });
+  if (failed && failed.length) html += '<div style="width:100%;font-size:11px;color:var(--re);margin-top:6px">Did not load: '
+    + liveEsc(failed.join(', ')) + '</div>';
+  host.innerHTML = html;
+}
+function selKit(aid){
+  S.kitFilter = aid || null;
+  renderKitChips(S.currentSet, S.kitFailed);
+  applyFilters();
+}
+
 function renderSets() {
   var data = getSetsData();
   var q = (S.setsQ || '').toLowerCase();
   var isJP = S.lang === 'ja', isTW = S.lang === 'zh-tw', isCN = S.lang === 'zh-cn';
 
+  // Trainer kits: one tile for all of them (T5, Roy, 2026-10-05). A grouping
+  // of the TILES only — every kit keeps its own set id and card ids, so
+  // prices, alerts and listings are untouched.
+  data = groupTrainerKits(data);
   var filt = data.filter(function(x){
     var matchQ = !q || (x.n && x.n.toLowerCase().indexOf(q) >= 0)
-                    || (x.en && x.en.toLowerCase().indexOf(q) >= 0);
+                    || (x.en && x.en.toLowerCase().indexOf(q) >= 0)
+                    || (x.kits && x.kits.some(function(k){ return k.n.toLowerCase().indexOf(q) >= 0; }));
     var matchS = S.series === 'All' || x.s === S.series;
     return matchQ && matchS;
   });
@@ -6589,6 +6685,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261005-e910dd6-t2market &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261005-90ab24b-t5kits &middot; click to hide</div>
 </body>
 </html>

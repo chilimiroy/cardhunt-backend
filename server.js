@@ -977,6 +977,7 @@ app.get('/api/cards/:cardId', async (req, res) => {
 // order. Cached like everything else here (15 min) — the price table
 // changes nightly, and the cold query takes ~5s.
 const trending = require('./trending');
+const deals_ = require('./deals');
 app.get('/api/trending', async (req, res) => {
   const p = trending.parseParams(req.query);
   const key = `trending_${p.lang}_${p.sort}_${p.window}_${p.limit}`;
@@ -1028,6 +1029,47 @@ app.get('/api/trending', async (req, res) => {
     cSet(key, body);
     res.json(body);
   } catch (err) { res.status(500).json({ error: err.message, cards: [] }); }
+});
+
+// ── BEST DEALS (TASK T3, 2026-10-05; deals.js) ─────────────────
+// The cheapest trusted Buy It Now against the card's current measured price,
+// drawn ONLY from views opened in the last 15 minutes (the listing cache).
+// Reads the cache and the database; never gathers listings — 0 eBay calls.
+app.get('/api/deals', async (req, res) => {
+  const limit = Math.min(24, Math.max(1, parseInt(req.query.limit, 10) || 8));
+  const t0 = Date.now(), now = Date.now();
+  const views = [];
+  for (const [key, e] of listingCache.entries()) {
+    const parts = key.split('|');
+    if (parts.length !== 2 || now - e.ts > LISTING_TTL || !jpf.isRawGrade(parts[1])) continue;   // raw, unfiltered views only
+    views.push({ cardId: parts[0], grade: parts[1], ts: e.ts, payload: e.data });
+  }
+  const deals = [], skipped = {};
+  for (const v of views) {
+    let ref = null;
+    try {
+      const mp = await numberMatchedPrice(v.cardId);
+      if (mp) {
+        const q = await pricequality.annotate(db, [{ id: mp.cardId, price: mp.price, source: mp.source,
+          recordedAt: mp.recordedAt, meta: mp.meta }]);
+        const pq = q.get(mp.cardId);
+        ref = { price: mp.price, isReal: mp.isReal, source: mp.source, recordedAt: mp.recordedAt,
+                current: !!(pq && pq.kind === 'measured' && !pq.flags.length), quality: pq ? pq.label : 'unknown' };
+      }
+    } catch (e) { ref = null; }
+    const r = deals_.pickDeal(v.payload, ref);
+    if (!r.deal) { const why = r.why.replace(/-?\d+/g, 'N'); skipped[why] = (skipped[why] || 0) + 1; continue; }
+    const c = v.payload.card || {}, l = r.deal.listing;
+    deals.push({ cardId: v.cardId, name: c.name, number: c.number, set: c.set, image: c.image,
+      price: ref.price, priceSource: ref.source, priceDate: ref.recordedAt, discount: r.deal.discount, solidCount: r.deal.solidCount,
+      listing: { title: l.title, landed: l.landed, price: l.price, shipping: l.shipping, currency: 'USD', url: l.url,
+                 source: l.source, sourceLabel: l.sourceLabel, marketplace: l.marketplace, condition: l.condition },
+      listing_age_sec: Math.round((now - v.ts) / 1000) });
+  }
+  res.json({ rule: deals_.describeRule(), considered: views.length, count: Math.min(deals.length, limit),
+    deals: deals_.rankDeals(deals).slice(0, limit), skipped, ebayCalls: 0,
+    freshness: { maxAgeSeconds: Math.round(LISTING_TTL / 1000), note: 'listings from views opened in the last 15 minutes; nothing fetched' },
+    attribution: EBAY_ATTRIBUTION, tookMs: Date.now() - t0 });
 });
 
 // ── SEARCH ────────────────────────────────────────────────────
@@ -3229,11 +3271,11 @@ async function judgeListings(card, grade, listings, opts, memo) {
     if (!mref) materialReport.reason = 'our scan of this card has no colour profile yet';
     else {
       const kept = [];
-      for (const l of listings) {
+      for (let l of listings) {
         if (!materialPhotoOf(l)) { kept.push(l); continue; }
         const prof = materialProfileOf(l);
-        if (!prof) materialReport.pending++;
-        const bv = backVerdicts.get(backKey(l.itemId, card.api_card_id)) || null;
+        if (!prof) { materialReport.pending++; l = Object.assign({}, l, { materialPending: true }); }
+        const bv = backVerdicts.get(backKey(l.itemId, card.api_card_id)) || null;   // l may be a copy (materialPending)
         const m = stampcheck.materialJudge({ profile: prof, ref: mref, priceFlag: !!l.suspect, back: bv });
         if (m.action === 'refuse') {
           materialReport.refused++;

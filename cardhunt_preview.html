@@ -324,6 +324,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .cp{color:var(--money);font-size:16px;font-weight:800;letter-spacing:-.4px}.cc{font-size:11px;font-weight:700}.up{color:var(--gr)}.dn{color:var(--re)}
 .movers{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .mwin{margin-left:auto;font-size:11px;font-weight:600;color:var(--mu)}.mnote{font-size:12px;color:var(--mu);line-height:1.6;margin:10px 2px 0}
+.tdeal{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;color:var(--t)}
 .mempty{padding:16px 18px;font-size:12px;color:var(--mu);line-height:1.6}
 @media(max-width:640px){.movers{grid-template-columns:1fr}}
 .mbox{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
@@ -661,7 +662,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
       <div class="mbox"><div class="mhdr">📉 Fallers — value <span class="mwin" id="mv-fall-usd-w"></span></div><div id="mv-fall-usd"></div></div>
     </div>
     <div class="mnote" id="movers-note"></div>
-    <div class="sec-h"><div><div class="sec-t">💎 Best deals right now</div><div class="sec-s">Listed below market average</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
+    <div class="sec-h"><div><div class="sec-t">💎 Best deals right now</div><div class="sec-s" id="deals-sub">Cheapest trusted Buy It Now below the measured price — cards opened in the last 15 minutes</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
     <div class="cg" id="home-deals"><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div></div>
   </div>
 </div>
@@ -1989,33 +1990,14 @@ async function loadHome() {
   // app cannot resolve. That is the set-page cache defect recorded in
   // CLAUDE.md, reached from the home page instead.
   //
-  // There is no /api/trending, no movers endpoint and no deals endpoint.
-  // Rather than invent them, each section says so. A fallback must
-  // announce itself, and an empty shelf is a smaller lie than a full one.
-  var TRENDING = [], GAINERS = [], DECLINERS = [], DEALS = [];
+  // The fakes are gone; the shelves are real now (2026-10-05): movers from
+  // /api/trending (T2), deals from /api/deals (T3). Both say why when empty.
 
   // NOTHING is written into CARD_CACHE here. It has no expiry, so anything
   // put in it from the home page outlives the visit — and what used to be
   // put in it was invented.
 
-  // A named, visible reason beats an empty shelf. Each of these needs an
-  // endpoint that does not exist; saying which one is the honest version.
-  function notYet(id, what, endpoint) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    el.innerHTML = '<div style="padding:18px;border:1px dashed var(--bd);border-radius:var(--r);'
-      + 'color:var(--mu);font-size:12px;line-height:1.6;width:100%">'
-      + '<div style="font-weight:700;color:var(--tx);font-size:13px;margin-bottom:4px">'
-      + what + ' is not live yet</div>'
-      + 'This needs <span style="font-family:ui-monospace,monospace;color:var(--t)">'
-      + endpoint + '</span>, which the API does not serve. It used to show '
-      + 'hardcoded cards at invented prices, which is worse than showing nothing.'
-      + '</div>';
-  }
-
-  notYet('home-deals',    'Best deals', '/api/deals');
-  // Movers come from /api/trending (T2, 2026-10-05): four lists, each with
-  // its window stated. Deals are still handled by notYet() above.
+  loadHomeDeals();
   loadHomeMovers();
 
   renderLatestSearches();
@@ -5461,6 +5443,40 @@ async function loadTrending() {
   }).join('');
 }
 
+// ── BEST DEALS (T3, 2026-10-05) ──────────────────────────────
+// /api/deals: the cheapest trusted Buy It Now against the card's current
+// measured price, from views opened in the last 15 minutes ONLY — the server
+// never fetches to fill this shelf (deals.js). An empty shelf says why.
+async function loadHomeDeals() {
+  var host = document.getElementById('home-deals');
+  if (!host) return;
+  var d;
+  try {
+    var r = await fetch(BACKEND + '/api/deals?limit=8');
+    d = await r.json();
+    if (!r.ok) throw new Error(d && d.error ? d.error : 'HTTP ' + r.status);
+  } catch (e) {
+    host.innerHTML = '<div class="trend-empty">Best deals could not be loaded &mdash; ' + liveEsc(e.message) + '</div>';
+    return;
+  }
+  if (!d.deals.length) {
+    host.innerHTML = '<div class="trend-empty"><b>No deal to show right now.</b> '
+      + (d.considered ? d.considered + ' card' + (d.considered === 1 ? ' was' : 's were') + ' opened in the last 15 minutes and none had a trusted listing well below its measured price. '
+                      : 'No card has been opened in the last 15 minutes, and this shelf only reads listings already fetched. ')
+      + liveEsc(d.rule) + '</div>';
+    return;
+  }
+  host.innerHTML = d.deals.map(function (x) {
+    var l = x.listing;
+    var extra = '<div class="tmove up">' + fmtCurrency(l.landed) + ' delivered · ' + Math.round(x.discount * 100) + '% below'
+      + '<br><span class="was">' + liveEsc(l.sourceLabel || l.source || '') + ' · seen ' + Math.max(1, Math.round(x.listing_age_sec / 60)) + ' min ago</span></div>'
+      + (l.url ? '<a class="tdeal" href="' + liveEsc(l.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">View listing ↗</a>' : '');
+    return cardSummaryTile({ cardId: x.cardId, name: x.name,
+      setName: (x.set || '') + (x.number ? ' · #' + x.number : ''), img: x.image, market: x.price, marketIsReal: true },
+      { noAvg: true, extra: extra });
+  }).join('');
+}
+
 // ── HOME MOVERS (T2, 2026-10-05) ─────────────────────────────
 // Four lists from /api/trending — gainers and fallers, by % and by value —
 // compared on TCGdex prices only, same printing and product at both ends,
@@ -6553,6 +6569,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261005-ce494c9-movers &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261005-45747a4-deals &middot; click to hide</div>
 </body>
 </html>

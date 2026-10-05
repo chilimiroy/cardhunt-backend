@@ -3352,7 +3352,8 @@ function withBackRefusals(sources, back) {
   e.rejected = (e.rejected || 0) + back.refused;
   e.droppedSample = back.refusedSample.map(r => ({ title: r.title, itemId: r.itemId, reason: r.reason }))
     .concat(e.droppedSample || []).slice(0, 12);
-  e.summary = (e.summary || '') + ` (${back.refused} by the card-back check)`;
+  e.summary = String(e.summary || '').replace(/^\d+ kept, \d+ rejected/, `${e.count} kept, ${e.rejected || 0} rejected`)
+    + ` (${back.refused} by the card-back check)`;
   return Object.assign({}, sources, { ebay: e });
 }
 
@@ -3365,7 +3366,8 @@ function withMaterialRefusals(sources, material) {
   e.rejected = (e.rejected || 0) + material.refused;
   e.droppedSample = material.refusedSample.map(r => ({ title: r.title, itemId: r.itemId, reason: r.reason }))
     .concat(e.droppedSample || []).slice(0, 12);
-  e.summary = (e.summary || '') + ` (${material.refused} by the gold/black novelty check)`;
+  e.summary = String(e.summary || '').replace(/^\d+ kept, \d+ rejected/, `${e.count} kept, ${e.rejected || 0} rejected`)
+    + ` (${material.refused} by the gold/black novelty check)`;
   return Object.assign({}, sources, { ebay: e });
 }
 

@@ -94,6 +94,15 @@ ok(/priceFlag: !!l\.suspect/.test(judge) && /backVerdicts\.get\(backKey\(l\.item
 ok(/sources = withMaterialRefusals\(sources, j\.material\)/.test(src) && /function withMaterialRefusals/.test(src),
    'a refusal is counted in sources.ebay like any other');
 ok(/j\.material && j\.material\.refusedRows/.test(src), 'and listed in refused[] with its reason');
+{ // the REAL helper: the summary's "N kept" moves with the count (it said 53 while 36 were shown)
+  const vm = require('vm'), ctx = {}; vm.createContext(ctx);
+  const s2 = src.replace(/\r\n/g, '\n'), i = s2.indexOf('\nfunction withMaterialRefusals(');
+  vm.runInContext(i < 0 ? 'function withMaterialRefusals(s){return s}' : s2.slice(i + 1, s2.indexOf('\n}\n', i + 1) + 2), ctx);
+  const out = ctx.withMaterialRefusals({ ebay: { status: 'ok', count: 53, rejected: 147, scanned: 200,
+    summary: '53 kept, 147 rejected of 200 scanned', droppedSample: [] } }, { refused: 17, refusedSample: [] });
+  ok(out.ebay.count === 36 && /^36 kept, 164 rejected of 200 scanned \(17 by the gold\/black novelty check\)$/.test(out.ebay.summary),
+     'the eBay summary counts the refusals: ' + out.ebay.summary);
+}
 ok(/material: j\.material, ebayState/.test(src), 'the view state carries it, so a rebuild keeps it');
 // Found live on Render 2026-10-05: the FIRST answer's payload object named
 // stamp and back but not material — refusals made, not counted, not listed.

@@ -1068,9 +1068,22 @@ function familyNamedBy(title, card) {
 // whole card, margin 0.30 — 0 of 276 genuine bubble Mews refused, 163 of 178
 // 30th Mews refused; on the 30th card's own search, 0 of 178 refused.
 // A pair goes here only after that measurement for the pair. Both directions.
+// Cross-set, 2026-10-05 (PROGRESS "2026-10-05 (later)"): two ex-era cards
+// whose listings are mostly a 2016 XY Evolutions card under the old card's
+// catalogue title. Labelled by eye, margin = other − ours, at 0.30:
+//   Mewtwo ☆ 103/110 vs Evolutions Mewtwo 51/108 — 80 rows: 5 genuine
+//     (hardest −0.073) none refused; 22 of 75 Evolutions refused.
+//   Dragonite ex 90/97 vs Evolutions Dragonite-EX 72/108 — 122 rows: 31
+//     genuine (hardest −0.182) none refused; 17 of ~79 Evolutions refused.
+// A reduction (~25%), shipped at the Mew pair's margin — not re-tuned on
+// these two cards: the genuine sample (36 rows) is too thin to go lower.
 const LOOKALIKES = [
   { a: 'en-sv04.5-232', b: 'en-30th-152',
-    labels: { 'en-sv04.5-232': 'Paldean Fates Mew ex 232/091', 'en-30th-152': '30th Celebration Mew ex 152/128' } }
+    labels: { 'en-sv04.5-232': 'Paldean Fates Mew ex 232/091', 'en-30th-152': '30th Celebration Mew ex 152/128' } },
+  { a: 'en-ex13-103', b: 'en-xy12-51',
+    labels: { 'en-ex13-103': 'Holon Phantoms Mewtwo ☆ 103/110', 'en-xy12-51': 'XY Evolutions Mewtwo 51/108' } },
+  { a: 'en-ex3-90', b: 'en-xy12-72',
+    labels: { 'en-ex3-90': 'EX Dragon Dragonite ex 90/97', 'en-xy12-72': 'XY Evolutions Dragonite-EX 72/108' } }
 ];
 function lookalikesOf(card) {
   const id = String((card && (card.cardId || card.api_card_id || card.id)) || '');

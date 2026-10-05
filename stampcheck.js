@@ -576,7 +576,12 @@ function poolState() {
 // VERDICT_VERSION names the matcher that produced a verdict. Change it when
 // a template, the threshold or MATCH changes: older rows are then ignored
 // and those photos are checked again.
-const VERDICT_VERSION = 'stamp-1';
+// stamp-2 (2026-10-05): two cross-set lookalike pairs added (Mewtwo ☆ /
+// Evolutions Mewtwo, Dragonite ex / Evolutions Dragonite-EX). A verdict made
+// without them is not their answer — and Evolutions Dragonite-EX has a
+// same-name sibling, whose '+s' key would otherwise reuse the old verdicts.
+// Costs no eBay call: every photo is re-read from eBay's CDN.
+const VERDICT_VERSION = 'stamp-2';
 const MISS_MS = 60 * 1000;          // an item the store lacks is not asked about again for a minute
 const LOAD_TIMEOUT_MS = 2500;
 const _missed = new Map();          // itemId -> when the store last answered "none"

@@ -54,6 +54,25 @@ v = sc.judge(photoOf(img(PF)), onTH);
 ok('a bubble Mew photo under the 30th card is FOUND', v.state === 'found', 'margin ' + (v.scores[0] || {}).margin);
 ok('the margin is the measured 0.30', sc.LOOKALIKE_MARGIN === 0.30);
 
+console.log('\n  the cross-set pairs (2026-10-05): ex-era cards listed with Evolutions photos');
+for (const [ours, other, name] of [['en-ex13-103', 'en-xy12-51', 'Mewtwo ☆ / Evolutions Mewtwo'],
+                                   ['en-ex3-90', 'en-xy12-72', 'Dragonite ex / Evolutions Dragonite-EX']]) {
+  ok(name + ': named both directions', cm.photoChecksOf({ cardId: ours }).some(c => c.kind === 'lookalike' && c.cardId === other) &&
+     cm.photoChecksOf({ cardId: other }).some(c => c.kind === 'lookalike' && c.cardId === ours));
+  ok(name + ': both whole-card templates built', !!img(ours) && !!img(other));
+  const mine = cm.photoChecksOf({ cardId: ours });
+  let v2 = sc.judge(photoOf(img(other)), mine);
+  ok(name + ': the Evolutions photo under the ex-era card is FOUND', v2.state === 'found', 'margin ' + (v2.scores[0] || {}).margin);
+  v2 = sc.judge(photoOf(img(ours)), mine);
+  ok(name + ': the genuine card\'s photo is KEPT', v2.state !== 'found', 'margin ' + (v2.scores[0] || {}).margin);
+  v2 = sc.judge(photoOf(img(ours), { glare: true }), mine);
+  ok(name + ': a GLARED genuine photo is still kept', v2.state !== 'found', 'margin ' + (v2.scores[0] || {}).margin);
+  v2 = sc.judge(photoOf(img(other)), cm.photoChecksOf({ cardId: other }));
+  ok(name + ': the Evolutions photo on its OWN card is kept', v2.state !== 'found', 'margin ' + (v2.scores[0] || {}).margin);
+}
+ok('shipped at the Mew pair\'s margin, not re-tuned on these two', sc.LOOKALIKE_MARGIN === 0.30);
+ok('the verdict version moved with the pairs (older verdicts never answer for them)', sc.VERDICT_VERSION === 'stamp-2');
+
 console.log('\n  the verdict belongs to the photo AND the card viewed');
 const item = 'v1|123456789012|0';
 ok('a lookalike verdict is keyed on item + our card', sc.verdictKey(item, onPF) === item + '@' + PF && sc.verdictKey(item, onTH) === item + '@' + TH);

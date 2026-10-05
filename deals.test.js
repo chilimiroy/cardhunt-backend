@@ -36,6 +36,35 @@ ok(/needs 3/.test(why([row(50, { shippingKnown: false }), row(90), row(95)])), '
 ok(/needs 3/.test(why([row(50, { materialPending: true }), row(90), row(95)])), 'a row still waiting for its photo check is not offered');
 ok(/needs 3/.test(why([row(50, { live: false }), row(90), row(95)])), 'an ended listing is not a deal');
 ok(deals.MIN_DISCOUNT === 0.15 && deals.MIN_TRUSTED === 3, 'the thresholds are the stated ones');
+
+console.log('\n  the bar after the live look (2026-10-05): like for like only');
+const holoCard = rows => ({ listings: rows, printings: [{ key: 'holo' }, { key: 'reverse' }] });
+const pick = (rows, v) => deals.pickDeal((v || holoCard)(rows), ref);
+const cheapest = rows => (pick(rows).deal || { listing: {} }).listing.landed;
+const solid3 = [row(80), row(90), row(95)];
+ok(cheapest([row(50, { sellerStated: true, sellerCondition: 'DMG' })].concat(solid3)) === 80, 'stated damage ("Damaged", "DMG/PEELING") is not a deal');
+ok(cheapest([row(50, { sellerStated: true, sellerCondition: 'MP' })].concat(solid3)) === 80, 'stated MP is not a deal against a near-mint price');
+ok(cheapest([row(50, { sellerStated: true, sellerCondition: 'LP' })].concat(solid3)) === 80, 'stated LP neither');
+ok(cheapest([row(50, { sellerStated: true, sellerCondition: 'NM' })].concat(solid3)) === 50, 'KEPT: a stated near-mint copy');
+ok(cheapest([row(50, { sellerStated: true, sellerCondition: 'M' })].concat(solid3)) === 50, 'KEPT: a stated mint copy');
+ok(cheapest([row(50, { printingStated: true, printing: 'reverse' })].concat(solid3)) === 80, 'a stated reverse holo is not the holo price\'s deal');
+ok(cheapest([row(50, { printingStated: true, printing: 'normal' })].concat(solid3)) === 80, 'a stated "Non-Holo" is not the holo price\'s deal');
+ok(cheapest([row(50, { printingStated: true, printing: 'holo' })].concat(solid3)) === 50, 'KEPT: the stated printing IS the priced one');
+ok(cheapest([row(50, { printingStated: false, printing: null })].concat(solid3)) === 50, 'KEPT: a title that states no printing');
+ok(deals.pickDeal({ listings: [row(50, { printingStated: true, printing: 'holo' })].concat(solid3), printings: [{ key: 'normal' }, { key: 'holo' }] }, ref).deal.listing.landed === 80,
+   'a card in normal AND holo: a stated printing cannot be shown to be the priced one');
+ok(cheapest([row(50, { editionStated: true, editionKey: '1st-edition' })].concat(solid3)) === 80, 'a stated 1st Edition is not the unlimited price\'s deal');
+ok(cheapest([row(50, { editionStated: true, editionKey: 'unlimited' })].concat(solid3)) === 50, 'KEPT: a stated Unlimited');
+ok(cheapest([row(50, { stamp: { state: 'pending', kind: 'sibling' } })].concat(solid3)) === 80, 'a photo still being compared is not a deal');
+ok(cheapest([row(50, { stamp: { state: 'not-visible' } })].concat(solid3)) === 50, 'KEPT: a photo checked and clear');
+ok(cheapest([row(50, { back: { state: 'no-claim', metal: true } })].concat(solid3)) === 80, 'a metal photo among the seller\'s is not a deal');
+ok(cheapest([row(50, { back: { state: 'genuine-back' } })].concat(solid3)) === 50, 'KEPT: a genuine back seen');
+const ex = pick([row(50, { sellerStated: true, sellerCondition: 'DMG' }), row(55, { printingStated: true, printing: 'reverse' })].concat(solid3)).excluded;
+ok(ex && ex['stated condition below near mint'] === 1 && ex['states another printing'] === 1, 'every excluded row is counted by its reason');
+
+console.log('\n  switched off (Roy, 2026-10-05)');
+ok(deals.ENABLED === false, 'deals.ENABLED is false until the shelf is re-measured live');
+ok(/switched off/.test(deals.OFF_REASON), 'the off state carries its reason');
 ok(/Nothing is fetched/.test(deals.describeRule()), 'the rule says nothing is fetched');
 
 console.log('\n  wiring');
@@ -52,6 +81,8 @@ const page = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
 ok(/fetch\(BACKEND \+ '\/api\/deals/.test(page) && /loadHomeDeals\(\)/.test(page), 'the home shelf reads /api/deals');
 ok(!/function notYet/.test(page), 'the "not live yet" placeholder is gone, not left dormant');
 ok(/No deal to show right now/.test(page) && /opened in the last 15 minutes/.test(page), 'an empty shelf says why');
+ok(/if \(!deals_\.ENABLED\) return res\.json\(\{ enabled: false, reason: deals_\.OFF_REASON/.test(h), 'switched off, /api/deals answers enabled:false with the reason before reading any view');
+ok(/d\.enabled === false/.test(page) && /Best deals is switched off/.test(page), 'and the page says it is off, not "no deal right now"');
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

@@ -1036,6 +1036,10 @@ app.get('/api/trending', async (req, res) => {
 // drawn ONLY from views opened in the last 15 minutes (the listing cache).
 // Reads the cache and the database; never gathers listings — 0 eBay calls.
 app.get('/api/deals', async (req, res) => {
+  // Off (deals.ENABLED) answers that it is off and why — never an empty
+  // shelf that reads as "no deals right now".
+  if (!deals_.ENABLED) return res.json({ enabled: false, reason: deals_.OFF_REASON, rule: deals_.describeRule(),
+    considered: 0, count: 0, deals: [], skipped: {}, ebayCalls: 0 });
   const limit = Math.min(24, Math.max(1, parseInt(req.query.limit, 10) || 8));
   const t0 = Date.now(), now = Date.now();
   const views = [];
@@ -1044,7 +1048,7 @@ app.get('/api/deals', async (req, res) => {
     if (parts.length !== 2 || now - e.ts > LISTING_TTL || !jpf.isRawGrade(parts[1])) continue;   // raw, unfiltered views only
     views.push({ cardId: parts[0], grade: parts[1], ts: e.ts, payload: e.data });
   }
-  const deals = [], skipped = {};
+  const deals = [], skipped = {}, excluded = {};
   for (const v of views) {
     let ref = null;
     try {
@@ -1058,6 +1062,7 @@ app.get('/api/deals', async (req, res) => {
       }
     } catch (e) { ref = null; }
     const r = deals_.pickDeal(v.payload, ref);
+    for (const [k, n] of Object.entries(r.excluded || {})) excluded[k] = (excluded[k] || 0) + n;
     if (!r.deal) { const why = r.why.replace(/-?\d+/g, 'N'); skipped[why] = (skipped[why] || 0) + 1; continue; }
     const c = v.payload.card || {}, l = r.deal.listing;
     deals.push({ cardId: v.cardId, name: c.name, number: c.number, set: c.set, image: c.image,
@@ -1066,8 +1071,8 @@ app.get('/api/deals', async (req, res) => {
                  source: l.source, sourceLabel: l.sourceLabel, marketplace: l.marketplace, condition: l.condition },
       listing_age_sec: Math.round((now - v.ts) / 1000) });
   }
-  res.json({ rule: deals_.describeRule(), considered: views.length, count: Math.min(deals.length, limit),
-    deals: deals_.rankDeals(deals).slice(0, limit), skipped, ebayCalls: 0,
+  res.json({ enabled: true, rule: deals_.describeRule(), considered: views.length, count: Math.min(deals.length, limit),
+    deals: deals_.rankDeals(deals).slice(0, limit), skipped, excludedRows: excluded, ebayCalls: 0,
     freshness: { maxAgeSeconds: Math.round(LISTING_TTL / 1000), note: 'listings from views opened in the last 15 minutes; nothing fetched' },
     attribution: EBAY_ATTRIBUTION, tookMs: Date.now() - t0 });
 });

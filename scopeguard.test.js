@@ -44,7 +44,10 @@ for (const f of served) {
 
 // ── The page's top-level names ────────────────────────────────
 const page = read('cardhunt_preview.html');
-const inline = page.match(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/)[1];
+// The page's own script is the LARGEST inline one: the head carries a small
+// theme script (T6, 2026-10-06) that must run before paint.
+const inline = [...page.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
+  .map(m => m[1]).sort((a, b) => b.length - a.length)[0];
 const pageNames = [...new Set(
   [...inline.matchAll(/^(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm)].map(m => m[1])
 )];

@@ -3,7 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>CardHunt</title>
+<!-- ══ THEME, BEFORE THE FIRST PAINT (T6, 2026-10-06) ══
+     Three states: follow the system (no attribute — the tokens' own
+     prefers-color-scheme block decides), always light, always dark. The
+     choice is per device, in localStorage ('ch_theme'), never the database.
+     Set here, in the head, before any stylesheet paints, so a dark-mode
+     visitor never sees a flash of light. A blocked or empty localStorage
+     falls back to the system. -->
+<script>
+(function(){try{var t=localStorage.getItem('ch_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+</script>
 
 <!-- ══ FONTS — LOADED WITHOUT BLOCKING THE FIRST PAINT ══
      The redesign carries three: Source Serif 4 for headings, IBM Plex Sans
@@ -80,6 +91,7 @@
    instead of borrowing the accent.
    ══════════════════════════════════════════════════════════════ */
 :root{
+  color-scheme:light;   /* form controls and scrollbars follow the theme (T6) */
   /* ── redesign tokens ── */
   --bg:#F2F3F6; --surface:#FFFFFF; --surface-2:#E9EBF1; --surface-3:#DEE1E9;
   --ink:#14161C; --ink-2:#4B5063; --ink-3:#868CA0; --border:#DBDEE7;
@@ -109,6 +121,7 @@
    explicit light choice win over the system preference. */
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
+    color-scheme:dark;
     --bg:#14161B; --surface:#1C1F27; --surface-2:#262A34; --surface-3:#323744;
     --ink:#ECEDF3; --ink-2:#B7BBCB; --ink-3:#7E859A; --border:#333A48;
     --accent:#7C97EC; --accent-ink:#0E1220; --accent-soft:#232B47;
@@ -121,6 +134,7 @@
   }
 }
 :root[data-theme="dark"]{
+  color-scheme:dark;
   --bg:#14161B; --surface:#1C1F27; --surface-2:#262A34; --surface-3:#323744;
   --ink:#ECEDF3; --ink-2:#B7BBCB; --ink-3:#7E859A; --border:#333A48;
   --accent:#7C97EC; --accent-ink:#0E1220; --accent-soft:#232B47;
@@ -149,17 +163,17 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 /* openM()/closeM() toggle .on; the overlays they open are display:none
    inline, so they need a rule that wins. */
 .ovl.on{display:flex !important}
-.nav{position:sticky;top:0;z-index:200;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--bd);height:58px;display:flex;align-items:center;padding:0 24px;gap:2px}
+.nav{position:sticky;top:0;z-index:200;background:color-mix(in srgb,var(--surface) 96%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--bd);height:58px;display:flex;align-items:center;padding:0 24px;gap:2px}
 .logo{font-size:20px;font-weight:800;display:flex;align-items:center;gap:10px;margin-right:28px;letter-spacing:-.5px;cursor:pointer}
-.logo-i{width:34px;height:34px;background:var(--t);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;flex-shrink:0}
+.logo-i{width:34px;height:34px;background:var(--t);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--accent-ink);font-size:18px;flex-shrink:0}
 .logo em{color:var(--t);font-style:normal}
 .nl{padding:7px 14px;border-radius:var(--rs);font-size:13px;font-weight:500;color:var(--mu);border:none;background:none;transition:all .15s}
-.nl:hover{color:var(--tx);background:#F0F0F5}.nl.on{color:var(--t);background:var(--tl);font-weight:600}
+.nl:hover{color:var(--tx);background:var(--surface-2)}.nl.on{color:var(--t);background:var(--tl);font-weight:600}
 .nav-r{margin-left:auto;display:flex;align-items:center;gap:8px}
 .nsearch{position:relative}.nsearch input{padding:7px 14px 7px 34px;border:1.5px solid var(--bd);border-radius:22px;font-size:13px;outline:none;width:195px;background:var(--bg);color:var(--tx);transition:all .2s}
 .nsearch input:focus{border-color:var(--t);width:250px;background:var(--w)}.nsearch-i{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none;opacity:.45}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--rs);font-size:13px;font-weight:500;border:1.5px solid var(--bd);background:var(--w);color:var(--tx);cursor:pointer;transition:all .15s;text-decoration:none;white-space:nowrap}
-.btn:hover{background:var(--bg)}.btn.p{background:var(--t);color:#fff;border-color:var(--t)}.btn.p:hover{background:var(--td)}.btn.sm{padding:5px 12px;font-size:12px;border-radius:8px}
+.btn:hover{background:var(--bg)}.btn.p{background:var(--t);color:var(--accent-ink);border-color:var(--t)}.btn.p:hover{background:var(--td)}.btn.sm{padding:5px 12px;font-size:12px;border-radius:8px}
 /* Phone: the nav WRAPS. Measured at 390px, every one of the nine screens
    scrolled sideways (501-893px), and on each the page was exactly as wide
    as its nav. Links stay on the first rows; the actions (search, Compare,
@@ -199,14 +213,14 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
    still applied - so the panel stayed 460px wide after the layout port gave
    it the full column. Dead CSS is not inert when the name collides. */
 .llogo{display:flex;align-items:center;gap:12px;margin-bottom:36px;justify-content:center}
-.llogo-i{width:52px;height:52px;background:var(--t);border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px}
+.llogo-i{width:52px;height:52px;background:var(--t);border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--accent-ink);font-size:28px}
 .llogo-t{font-size:30px;font-weight:800;color:#fff;letter-spacing:-.6px}.llogo-t em{color:var(--t);font-style:normal}
 .lh{font-size:24px;font-weight:700;color:#fff;margin-bottom:6px;text-align:center;letter-spacing:-.4px}
 .lsub{font-size:14px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:32px;line-height:1.6}
 .lf{margin-bottom:14px}.lf label{display:block;font-size:11px;font-weight:700;color:rgba(255,255,255,.45);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em}
 .lf input{width:100%;padding:12px 16px;background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.12);border-radius:10px;font-size:14px;color:#fff;outline:none;transition:all .2s}
 .lf input::placeholder{color:rgba(255,255,255,.28)}.lf input:focus{border-color:var(--t);background:rgba(255,255,255,.1)}
-.lbtn{width:100%;padding:14px;background:var(--t);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;margin-top:6px;cursor:pointer;transition:all .15s}
+.lbtn{width:100%;padding:14px;background:var(--t);color:var(--accent-ink);border:none;border-radius:10px;font-size:15px;font-weight:700;margin-top:6px;cursor:pointer;transition:all .15s}
 .lbtn:hover{background:var(--td);transform:translateY(-1px);box-shadow:var(--sh2)}
 .ldiv{display:flex;align-items:center;gap:14px;margin:24px 0;color:rgba(255,255,255,.22);font-size:12px}
 .ldiv::before,.ldiv::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.08)}
@@ -313,12 +327,12 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .ct{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:all .18s;box-shadow:var(--sh)}.ct:hover{box-shadow:var(--sh2);transform:translateY(-3px)}
 .cti{height:162px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;background:linear-gradient(145deg,#f5f5fb,#ebebf4)}
 .cti img{height:144px;width:auto;object-fit:contain;border-radius:5px;box-shadow:0 3px 14px rgba(0,0,0,.2);position:relative;z-index:1}
-.sk{border-radius:8px;background:linear-gradient(90deg,#f0f0f5 25%,#e6e6f0 50%,#f0f0f5 75%);background-size:200% 100%;animation:sk 1.5s infinite}
+.sk{border-radius:8px;background:linear-gradient(90deg,var(--surface-2) 25%,var(--surface-3) 50%,var(--surface-2) 75%);background-size:200% 100%;animation:sk 1.5s infinite}
 @keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .btl{position:absolute;top:8px;left:8px;z-index:2}.btr{position:absolute;top:8px;right:8px;z-index:2}
 .b{display:inline-flex;align-items:center;padding:2px 8px;border-radius:22px;font-size:10px;font-weight:700;line-height:1.5}
-.bd2{background:var(--good-soft);color:var(--good);border:1px solid var(--good)}.bh{background:#FEF3C7;color:#92400E;border:1px solid #FDE68A}
-.bg2{background:#EEEDFE;color:#5B21B6;border:1px solid #C4C2F4}.bu{background:#D1FAE5;color:#065F46;border:1px solid #A7F3D0}.bdn{background:#FEE2E2;color:#991B1B;border:1px solid #FECACA}
+.bd2{background:var(--good-soft);color:var(--good);border:1px solid var(--good)}.bh{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)}
+.bg2{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent)}.bu{background:var(--good-soft);color:var(--good);border:1px solid var(--good)}.bdn{background:var(--crit-soft);color:var(--crit);border:1px solid var(--crit)}
 .ci{padding:11px 13px}.cn{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
 .cs{font-size:11px;color:var(--mu);margin-bottom:8px}.cr{display:flex;align-items:center;justify-content:space-between}
 .cp{color:var(--money);font-size:16px;font-weight:800;letter-spacing:-.4px}.cc{font-size:11px;font-weight:700}.up{color:var(--gr)}.dn{color:var(--re)}
@@ -455,16 +469,16 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .certbtn:hover{border-color:var(--accent);color:var(--accent)}
 .certbtn[disabled]{opacity:.6;cursor:wait}
 .certchip{font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
-.certchip.no-cert{background:#E2E8F0;color:#334155}
-.certchip.entered{background:transparent;color:#B45309;border:1px dashed #B45309}
+.certchip.no-cert{background:var(--surface-2);color:var(--ink-2)}
+.certchip.entered{background:transparent;color:var(--warn);border:1px dashed var(--warn)}
 .certchip.verified{background:#166534;color:#fff}
 .certchip.mismatch{background:#B91C1C;color:#fff}
-.certchip.error{background:transparent;color:#B91C1C;border:1px solid #B91C1C}
+.certchip.error{background:transparent;color:var(--crit);border:1px solid #B91C1C}
 /* Reprint stamp (T1): a found stamp never reaches the page (the row is
    refused). Not-visible is deliberately quiet — absence of a stamp is weak
    evidence and must not look like a pass. */
 .certchip.stamp-not-visible,.certchip.stamp-pending{background:transparent;color:var(--mu);border:1px dashed var(--bd)}
-.certchip.stamp-unreadable{background:#E2E8F0;color:#334155}
+.certchip.stamp-unreadable{background:var(--surface-2);color:var(--ink-2)}
 .stampslot{display:contents}
 .certsays{flex-basis:100%;color:var(--mu);line-height:1.4}
 .certline a{color:var(--accent);font-weight:600}
@@ -484,7 +498,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .selnote{margin-top:10px;font-size:11px;color:var(--mu);line-height:1.6}
 .gchips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
 .gchip{padding:5px 11px;border:1.5px solid var(--bd);border-radius:22px;font-size:11px;font-weight:600;color:var(--mu);background:var(--w);cursor:pointer;transition:all .15s}
-.gchip.on{background:var(--pu);color:#fff;border-color:var(--pu);box-shadow:0 2px 8px rgba(124,58,237,.3)}.gchip:hover:not(.on){border-color:var(--pu);color:var(--pu)}
+.gchip.on{background:var(--pu);color:var(--accent-ink);border-color:var(--pu);box-shadow:0 2px 8px rgba(124,58,237,.3)}.gchip:hover:not(.on){border-color:var(--pu);color:var(--pu)}
 .mbox2{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
 .mr2{display:flex;justify-content:space-between;align-items:center;padding:9px 16px;border-bottom:1px solid var(--bd);font-size:12px}.mr2:last-child{border-bottom:none}
 .ml2{color:var(--mu)}.mv2{font-weight:600;text-align:right;max-width:64%;word-break:break-word}
@@ -497,7 +511,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .chart-h{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 16px;margin-bottom:16px}
 .chart-h > div:first-child{flex:1 1 220px;min-width:0}
 .chart-t{font-size:15px;font-weight:700;letter-spacing:-.2px}.chart-s{font-size:11px;color:var(--mu);margin-top:3px}
-.rchips{display:flex;gap:4px}.rc{padding:4px 11px;border:1.5px solid var(--bd);border-radius:22px;font-size:11px;font-weight:600;color:var(--mu);background:var(--w);cursor:pointer;transition:all .15s}.rc.on{background:var(--t);color:#fff;border-color:var(--t)}
+.rchips{display:flex;gap:4px}.rc{padding:4px 11px;border:1.5px solid var(--bd);border-radius:22px;font-size:11px;font-weight:600;color:var(--mu);background:var(--w);cursor:pointer;transition:all .15s}.rc.on{background:var(--t);color:var(--accent-ink);border-color:var(--t)}
 .cwrap{position:relative;width:100%;height:178px}
 /* Said in place of a line when there are not two recorded prices to join. */
 .cmsg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:0 20px;font-size:12.5px;color:var(--ink-2);border:1px dashed var(--bd);border-radius:8px}
@@ -552,7 +566,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <button class="nl" onclick="SS('portfolio')">Portfolio</button>
     <div class="nav-r">
       <div class="nsearch"><span class="nsearch-i">🔍</span><input id="nav-q" placeholder="Search any card…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
-      <button class="btn" onclick="toggleCurrency()" id="currency-btn">🌐 USD</button><button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--re);color:#fff;font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button>
+      <button class="btn" onclick="cycleTheme()" id="theme-btn" title="Theme: follows your device">◐ Auto</button><button class="btn" onclick="toggleCurrency()" id="currency-btn">🌐 USD</button><button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--re);color:var(--accent-ink);font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button>
     </div>
   </nav>
   <div class="hero">
@@ -757,7 +771,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
         oninput="triggerAutocomplete(this.value,'main-ac')"
         onkeydown="handleAcKey(event,'main-ac')"
         autocomplete="off">
-      <div id="main-ac" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border:1.5px solid var(--bd);border-radius:12px;box-shadow:var(--sh3);z-index:100;overflow:hidden;max-height:320px;overflow-y:auto"></div>
+      <div id="main-ac" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1.5px solid var(--bd);border-radius:12px;box-shadow:var(--sh3);z-index:100;overflow:hidden;max-height:320px;overflow-y:auto"></div>
     </div>
       <button class="btn p" style="padding:14px 28px;font-size:15px;border-radius:12px" onclick="doSearch(document.getElementById('search-main').value)">🔍 Search</button>
     </div>
@@ -872,7 +886,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <button class="nl on">Card</button>
     <div class="nav-r">
       <button class="btn" onclick="openCompare()">⚖️ Compare</button>
-      <button class="btn" onclick="addAlertFromCard()" style="border-color:var(--am);color:var(--am)" onmouseover="this.style.background='#FEF3C7'" onmouseout="this.style.background=''">🔔 Set Alert</button>
+      <button class="btn" onclick="addAlertFromCard()" style="border-color:var(--am);color:var(--am)" onmouseover="this.style.background='var(--warn-soft)'" onmouseout="this.style.background=''">🔔 Set Alert</button>
       <button class="btn" id="watch-btn" onclick="toggleWatch()">🤍 Watch</button>
       
     </div>
@@ -1210,7 +1224,7 @@ function refuseForeignId(id, where) {
     var n = document.createElement('div');
     n.setAttribute('role', 'alert');
     n.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:10000;'
-      + 'background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B;padding:10px 16px;border-radius:8px;'
+      + 'background:var(--crit-soft);border:1px solid var(--crit);color:var(--crit);padding:10px 16px;border-radius:8px;'
       + 'font-size:13px;max-width:92vw;box-shadow:0 4px 16px rgba(0,0,0,.12)';
     n.textContent = 'This card could not be opened: "' + id + '" is not a CardHunt card id. '
       + 'It has been logged as a bug.';
@@ -1720,8 +1734,8 @@ async function loadAllSets() {
   if (out && !document.getElementById('sets-fallback-note')) {
     const n = document.createElement('div');
     n.id = 'sets-fallback-note';
-    n.style.cssText = 'background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;'
-      + 'padding:10px 16px;margin-bottom:16px;font-size:12px;color:#92400E;line-height:1.6';
+    n.style.cssText = 'background:var(--warn-soft);border:1px solid var(--warn);border-radius:10px;'
+      + 'padding:10px 16px;margin-bottom:16px;font-size:12px;color:var(--warn);line-height:1.6';
     n.textContent = 'Showing a built-in set list because the API did not respond. '
       + 'Some sets will show estimated prices and no listing links. Reload once it wakes.';
     out.parentNode.insertBefore(n, out);
@@ -2328,7 +2342,7 @@ function setSourceNote(source, lang, realCount, total){
   var old = document.getElementById('sd-lang-note');
   if (old) old.remove();
   if (!source) return;
-  var msg = '', bg = '#EFF6FF', bd = '#BFDBFE', fg = '#1E40AF';
+  var msg = '', bg = 'var(--accent-soft)', bd = 'var(--border)', fg = 'var(--accent)';
 
   if (source === 'cardhunt_db') {
     var pct = (total && realCount != null) ? Math.round((realCount / total) * 100) : null;
@@ -2337,20 +2351,20 @@ function setSourceNote(source, lang, realCount, total){
         + (lang === 'ja' ? '. Japanese prices from Yahoo Auctions medians.'
          : lang === 'zh-tw' || lang === 'zh-cn' ? '. Chinese prices from Yahoo Auctions medians.'
          : '. English prices from TCGPlayer market data.');
-    bg = '#F0FDF4'; bd = '#BBF7D0'; fg = '#166534';
+    bg = 'var(--good-soft)'; bd = 'var(--border)'; fg = 'var(--good)';
   } else if (lang === 'ja') {
     msg = 'Live from TCGdex — not yet in our database, so prices are estimates.';
-    bg = '#FEF2F2'; bd = '#FECACA'; fg = '#991B1B';
+    bg = 'var(--crit-soft)'; bd = 'var(--border)'; fg = 'var(--crit)';
   } else if (lang === 'zh-tw' || lang === 'zh-cn') {
     msg = 'Live from TCGdex — not yet in our database, so prices are estimates.';
-    bg = '#FFF7ED'; bd = '#FED7AA'; fg = '#9A3412';
+    bg = 'var(--warn-soft)'; bd = 'var(--border)'; fg = 'var(--warn)';
   } else if (source === 'tcgdex+pokemontcg') {
     msg = 'Live: images from TCGdex, prices from TCGPlayer via pokemontcg.io.';
-    bg = '#FFFBEB'; bd = '#FDE68A'; fg = '#92400E';
+    bg = 'var(--warn-soft)'; bd = 'var(--border)'; fg = 'var(--warn)';
   } else if (source === 'pokemontcg') {
     msg = 'Live TCGPlayer market prices via pokemontcg.io. Not our database, so '
         + 'these cards have foreign ids and listing links may not resolve.';
-    bg = '#FFFBEB'; bd = '#FDE68A'; fg = '#92400E';
+    bg = 'var(--warn-soft)'; bd = 'var(--border)'; fg = 'var(--warn)';
   } else if (source === 'tcgdex') {
     // The silent one. English + 'tcgdex' used to fall off the end of this
     // chain and return, so a whole set of mockP() estimates was displayed
@@ -2360,7 +2374,7 @@ function setSourceNote(source, lang, realCount, total){
     msg = 'This set is not in the CardHunt database, so every price here is an '
         + 'ESTIMATE from rarity and set age — not a measured market price. '
         + 'Catalogue and images are live from TCGdex.';
-    bg = '#FEF2F2'; bd = '#FECACA'; fg = '#991B1B';
+    bg = 'var(--crit-soft)'; bd = 'var(--border)'; fg = 'var(--crit)';
   } else { return; }
 
   var note = document.createElement('div');
@@ -3665,7 +3679,7 @@ function liveEndsIn(iso){
 // no keyword could ever reject it; only its own peers can say it is wrong.
 function liveSuspectNote(l){
   if (!l.suspect) return '';
-  return '<div style="font-size:10px;color:#B45309;margin-top:2px">'
+  return '<div style="font-size:10px;color:var(--warn);margin-top:2px">'
     + (l.suspect === 'implausible' ? '&#9888; ' : '&#8505; ')
     + liveEsc(l.suspectReason || 'unusually cheap for this card') + '</div>';
 }
@@ -3710,7 +3724,7 @@ function liveRow(l){
           + 'style="width:72px;height:100px;object-fit:cover;border-radius:6px;background:var(--bd);flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.15)">'
         : '<div style="width:72px;height:100px;border-radius:6px;background:var(--bd);flex-shrink:0"></div>')
     + '<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;flex-shrink:0;'
-    + (l.live ? 'background:#DCFCE7;color:#166534' : 'background:#F1F5F9;color:#64748B') + '">'
+    + (l.live ? 'background:var(--good-soft);color:var(--good)' : 'background:var(--surface-2);color:var(--ink-3)') + '">'
     + liveEsc(l.sourceLabel || l.source) + '</span>'
     + '<div style="flex:1;min-width:0">'
     + '<div class="lrow2-t">'
@@ -3738,12 +3752,12 @@ function liveRow(l){
     // and a retail ask sitting unlabelled beside auction rows is exactly
     // the blending this project already did once with stored prices.
     + (l.priceKind === 'shop-ask'
-        ? ' \u00b7 <span style="color:#B45309;font-weight:600">shop asking price</span>'
+        ? ' \u00b7 <span style="color:var(--warn);font-weight:600">shop asking price</span>'
         : '')
     // An auction's number is its current bid (T0, 2026-10-04): never the
     // card's cheapest, and the row says so.
     + (l.priceKind === 'current-bid'
-        ? ' \u00b7 <span style="color:#B45309;font-weight:600">current bid, not the final price</span>'
+        ? ' \u00b7 <span style="color:var(--warn);font-weight:600">current bid, not the final price</span>'
         : '')
     + '</div>'
     + liveSuspectNote(l) + '</div>'
@@ -3978,7 +3992,7 @@ function liveRefusedBlock(d){
         return '<div class="lrefrow" style="padding:6px 0;border-bottom:1px solid var(--bd);font-size:12px">'
           + '<div style="display:flex;justify-content:space-between;gap:10px"><span>' + title + '</span>'
           + '<span style="white-space:nowrap;color:var(--mu)">' + price + '</span></div>'
-          + '<div style="font-size:11px;color:#B45309">' + liveEsc(REFUSED_STAGE[r.stage] || r.stage || '') + ': '
+          + '<div style="font-size:11px;color:var(--warn)">' + liveEsc(REFUSED_STAGE[r.stage] || r.stage || '') + ': '
           + liveEsc(r.reason) + '</div></div>';
       }).join('')
     + '</details>';
@@ -4003,7 +4017,7 @@ function liveOutlierNote(d){
   return '<div style="font-size:10px;color:var(--fa);margin-top:6px">'
     + basis
     + (o.flagged
-        ? ' · <span style="color:#B45309">' + o.flagged
+        ? ' · <span style="color:var(--warn)">' + o.flagged
           + ' flagged as too cheap to be this card</span>. They are shown, ranked last.'
         : ' · none flagged')
     + '</div>';
@@ -4134,7 +4148,7 @@ function liveProgressLine(d, sitesInBody){
   if (!pg) return '';
   var inc = pg.incomplete && pg.incomplete.length;
   var a = pg.actions || {};
-  var color = inc ? '#B45309' : 'var(--mu)';
+  var color = inc ? 'var(--warn)' : 'var(--mu)';
   var btnCss = 'font-size:11px;padding:5px 10px;margin:6px 6px 0 0;border:1px solid var(--bd);border-radius:6px;'
     + 'background:var(--surface);color:var(--tx);cursor:pointer';
   var btns = '';
@@ -4445,7 +4459,7 @@ async function renderLiveListings(card, grade, opts){
   if (live.length) html += livePrintRuns(live);
   if (liveFlagged.length) {
     html += '<div class="lflagged" style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--bd)">'
-      + '<div style="font-size:10px;font-weight:700;color:#B45309;text-transform:uppercase;'
+      + '<div style="font-size:10px;font-weight:700;color:var(--warn);text-transform:uppercase;'
       + 'letter-spacing:.06em;margin-bottom:4px">Flagged &mdash; too cheap to be this card &mdash; '
       + liveFlagged.length + '</div>'
       + '<div style="font-size:11px;color:var(--mu);line-height:1.6;margin-bottom:8px">'
@@ -5769,7 +5783,7 @@ function renderAlertsList(){
     var borderColor = isTriggered ? 'var(--gr)' : 'var(--bd)';
     var statusBadge = isTriggered
       ? '<span class="badge b-grn">&#10003; Triggered</span>'
-      : isPaused ? '<span class="badge" style="background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB">&#9208; Paused</span>'
+      : isPaused ? '<span class="badge" style="background:var(--surface-2);color:var(--ink-2);border:1px solid var(--border)">&#9208; Paused</span>'
       : '<span class="badge b-pur">&#128994; Active</span>';
 
     html += '<div class="alert-card" style="border-color:'+borderColor+'">';
@@ -6268,6 +6282,28 @@ function toggleCurrency(){
   }
 }
 
+// ── Theme toggle (T6, 2026-10-06): Auto (the device's setting) -> Light -> Dark.
+// The head script applied the stored choice before paint; this only changes it.
+var THEMES = ['auto', 'light', 'dark'];
+var THEME_LABEL = { auto: '◐ Auto', light: '☀ Light', dark: '☾ Dark' };
+var THEME_TITLE = { auto: 'Theme: follows your device', light: 'Theme: always light', dark: 'Theme: always dark' };
+function currentTheme(){
+  var t = document.documentElement.getAttribute('data-theme');
+  return t === 'light' || t === 'dark' ? t : 'auto';
+}
+function applyTheme(t){
+  if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  else document.documentElement.removeAttribute('data-theme');
+  try { if (t === 'auto') localStorage.removeItem('ch_theme'); else localStorage.setItem('ch_theme', t); } catch (e) {}
+  var b = document.getElementById('theme-btn');
+  if (b) { b.textContent = THEME_LABEL[t]; b.title = THEME_TITLE[t]; }
+}
+function cycleTheme(){ applyTheme(THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length]); }
+document.addEventListener('DOMContentLoaded', function(){
+  var t = currentTheme(), b = document.getElementById('theme-btn');
+  if (b) { b.textContent = THEME_LABEL[t]; b.title = THEME_TITLE[t]; }
+});
+
 function fmtCurrency(usd){
   if(!usd) return CURRENCY_SYMBOLS[currentCurrency]+'0';
   var rate = CURRENCY_RATES[currentCurrency] || 1;
@@ -6705,6 +6741,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-7e780f7-t4mew &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-fbd0dbc-t6theme &middot; click to hide</div>
 </body>
 </html>

@@ -45,6 +45,22 @@
 //   * a >5x move in the window is FLAGGED suspect and sorted after the rest,
 //     never removed — the outlier.js rule. It is far more often a variant
 //     mix-up than a market.
+//
+// ── Movers compare TCGdex-path prices only (Roy, 2026-10-05) ──
+//   59 of the top 60 seven-day movers on 2026-10-04 were a METHOD change:
+//   tcgplayer_market was written by the old every-card internal search until
+//   09-29 and by the fallback-only search after, so Oranguru "moved" $20.72 ->
+//   $79.99 by matching its Staff prerelease. Now:
+//   * both ends are tcgdex_tcgplayer_* rows (the printing key is in the source,
+//     so same source = same printing), and the same TCGplayer productId where
+//     both rows carry one;
+//   * a card whose price pricequality marks (old / thin / unsettled) is left
+//     out, not flagged — an alternating price is a 500% mover that never moved;
+//   * the response says how many cards hold a TCGdex price at both ends of the
+//     window against how many hold one now. The nightly has asked TCGdex for
+//     every card only since late September, so 7- and 30-day pairs are thin
+//     until about 2026-10-06; `coverage.thin` says so instead of a short list
+//     posing as the whole market.
 
 'use strict';
 
@@ -102,6 +118,11 @@ const CARD_COLS = `c.api_card_id AS id, c.name, c.name_en, c.number, c.rarity,
   c.image_small, c.set_api_id, c.set_name, c.set_name_en`;
 
 const REAL = `ph.grade IS NULL AND ph.source NOT LIKE 'estimate%' AND ph.price_usd > 0`;
+// The TCGdex path (tcgdexprice.js): one source per printing key. Cardmarket
+// (tcgdex_cardmarket) is a different market and a second reading — not here.
+const TCGDEX_PATH = `ph.source LIKE 'tcgdex!_tcgplayer!_%' ESCAPE '!'`;
+// Below this share of current cards holding a pair, a list is called thin.
+const THIN_COVERAGE = 0.5;
 
 function priceSql(p) {
   const dir = p.sort === 'price-asc' ? 'ASC' : 'DESC';
@@ -137,7 +158,7 @@ function moverSql(p) {
                ph.card_api_id, ph.source, ph.edition, ph.variant,
                ph.price_usd, ph.recorded_at, ph.source_meta
         FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
-        WHERE ${REAL} AND ph.card_api_id LIKE $1
+        WHERE ${REAL} AND ph.card_api_id LIKE $1 AND ${TCGDEX_PATH} AND ${digital.visibleSql('c')}
           AND ${printsql.basePrintingSql('ph', 'c')}
           AND ph.recorded_at > NOW() - make_interval(days => $2)
         ORDER BY ph.card_api_id, ph.recorded_at DESC),
@@ -149,7 +170,9 @@ function moverSql(p) {
                 AND cur.source = ph.source
                 AND COALESCE(cur.edition, '') = COALESCE(ph.edition, '')
                 AND COALESCE(cur.variant, '') = COALESCE(ph.variant, '')
-        WHERE ${REAL}
+        WHERE ${REAL} AND ${TCGDEX_PATH}
+          AND (cur.source_meta->>'productId' IS NULL OR ph.source_meta->>'productId' IS NULL
+               OR ph.source_meta->>'productId' = cur.source_meta->>'productId' )
           AND ph.recorded_at <= cur.recorded_at - make_interval(days => $3)
           AND ph.recorded_at >= cur.recorded_at - make_interval(days => $4)
         ORDER BY ph.card_api_id, ph.recorded_at DESC)
@@ -164,16 +187,31 @@ function moverSql(p) {
   };
 }
 
+// How many cards hold a current TCGdex-path price — the denominator of coverage().
+function currentSql(p) {
+  return {
+    text: `SELECT COUNT(DISTINCT ph.card_api_id)::int AS n
+      FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
+      WHERE ${REAL} AND ph.card_api_id LIKE $1 AND ${TCGDEX_PATH}
+        AND ${printsql.basePrintingSql('ph', 'c')} AND ${digital.visibleSql('c')}
+        AND ph.recorded_at > NOW() - make_interval(days => $2)`,
+    values: [langPattern(p.lang), MAX_AGE_DAYS],
+  };
+}
+
 function round2(n) { return Math.round(n * 100) / 100; }
 
 // rows: [{ price, prev_price, ... }] with numeric-ish prices.
 // Returns { cards, eligible, excluded:{floor, unchanged}, suspect }.
-function rankMovers(rows, sort) {
+// quality (optional): Map(id -> pricequality result); a marked card is left out.
+function rankMovers(rows, sort, quality) {
   const pct = sort === 'gain-pct' || sort === 'fall-pct';
   const gain = sort === 'gain-pct' || sort === 'gain-usd';
-  const excluded = { floor: 0, direction: 0, small: 0 };
+  const excluded = { floor: 0, direction: 0, small: 0, flagged: 0 };
   const out = [];
   for (const r of rows) {
+    const q = quality && quality.get(r.id);
+    if (q && q.flags && q.flags.length) { excluded.flagged++; continue; }
     const now = Number(r.price), was = Number(r.prev_price);
     if (!(now > 0) || !(was > 0)) continue;
     const change = now - was;
@@ -202,16 +240,30 @@ function describeRule(p) {
       + 'The same price the card page shows.';
   }
   const w = WINDOWS[p.window];
-  return 'Change between two measured prices from the same source, edition and variant, '
+  return 'Change between two TCGdex prices (TCGplayer market) for the same printing, edition and product, '
     + w.label + ' apart (earlier price ' + w.days + '–' + (w.days + w.tolDays) + ' days before the latest), '
     + 'the latest within ' + MAX_AGE_DAYS + ' days. Estimates never count. '
     + (p.sort.endsWith('pct') ? 'Cards under $' + PCT_MIN_PREV.toFixed(2) + ' are left out of % sorts. ' : '')
     + 'Moves under $' + MIN_ABS_MOVE.toFixed(2) + ' are ignored; a move over ' + SUSPECT_RATIO
-    + 'x is flagged and sorted last.';
+    + 'x is flagged and sorted last. Prices marked old, thin or unsettled are left out.';
+}
+
+// How full is this list? eligible = cards with a TCGdex price at both ends;
+// current = cards with a TCGdex price now. Thin under THIN_COVERAGE.
+function coverage(p, eligible, current) {
+  const w = WINDOWS[p.window];
+  const share = current > 0 ? eligible / current : 0;
+  const thin = share < THIN_COVERAGE;
+  return { eligible, current, share: Math.round(share * 1000) / 1000, thin,
+    note: !thin ? null
+      : `Only ${eligible} of ${current} cards priced through TCGdex have a price ${w.label} earlier to compare with — `
+        + (w.days <= 1
+          ? 'most cards are re-priced every 3 to 30 days by value, so a day-to-day list covers only the cards re-priced daily.'
+          : 'the nightly has asked TCGdex for every card only since late September, so this is not the whole market yet.') };
 }
 
 module.exports = {
   SORTS, WINDOWS, LANGS, DEFAULT_SORT, DEFAULT_WINDOW,
-  MAX_AGE_DAYS, PCT_MIN_PREV, MIN_ABS_MOVE, SUSPECT_RATIO,
-  parseParams, priceSql, moverSql, rankMovers, describeRule,
+  MAX_AGE_DAYS, PCT_MIN_PREV, MIN_ABS_MOVE, SUSPECT_RATIO, THIN_COVERAGE, TCGDEX_PATH,
+  parseParams, priceSql, moverSql, currentSql, rankMovers, describeRule, coverage,
 };

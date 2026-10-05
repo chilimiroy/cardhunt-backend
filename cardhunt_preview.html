@@ -323,6 +323,9 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .cs{font-size:11px;color:var(--mu);margin-bottom:8px}.cr{display:flex;align-items:center;justify-content:space-between}
 .cp{color:var(--money);font-size:16px;font-weight:800;letter-spacing:-.4px}.cc{font-size:11px;font-weight:700}.up{color:var(--gr)}.dn{color:var(--re)}
 .movers{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.mwin{margin-left:auto;font-size:11px;font-weight:600;color:var(--mu)}.mnote{font-size:12px;color:var(--mu);line-height:1.6;margin:10px 2px 0}
+.mempty{padding:16px 18px;font-size:12px;color:var(--mu);line-height:1.6}
+@media(max-width:640px){.movers{grid-template-columns:1fr}}
 .mbox{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
 .mhdr{padding:14px 18px;border-bottom:1px solid var(--bd);font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
 .mrow{display:flex;align-items:center;gap:12px;padding:11px 18px;border-bottom:1px solid var(--bd);cursor:pointer;transition:background .12s}.mrow:hover{background:var(--bg)}.mrow:last-child{border-bottom:none}
@@ -650,8 +653,14 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
         <span style="font-size:11px;color:var(--fa)">Track any card price</span>
       </div>
     </div>
-    <div class="sec-h"><div><div class="sec-t">📊 Biggest movers</div><div class="sec-s">Largest % change in 7 days</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
-    <div class="movers"><div class="mbox"><div class="mhdr">🚀 Top Gainers</div><div id="gainers"></div></div><div class="mbox"><div class="mhdr">📉 Top Decliners</div><div id="decliners"></div></div></div>
+    <div class="sec-h"><div><div class="sec-t">📊 Biggest movers</div><div class="sec-s" id="movers-sub">TCGdex market prices, the same printing and product at both ends</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
+    <div class="movers">
+      <div class="mbox"><div class="mhdr">🚀 Gainers — % <span class="mwin" id="mv-gain-pct-w"></span></div><div id="mv-gain-pct"></div></div>
+      <div class="mbox"><div class="mhdr">📉 Fallers — % <span class="mwin" id="mv-fall-pct-w"></span></div><div id="mv-fall-pct"></div></div>
+      <div class="mbox"><div class="mhdr">🚀 Gainers — value <span class="mwin" id="mv-gain-usd-w"></span></div><div id="mv-gain-usd"></div></div>
+      <div class="mbox"><div class="mhdr">📉 Fallers — value <span class="mwin" id="mv-fall-usd-w"></span></div><div id="mv-fall-usd"></div></div>
+    </div>
+    <div class="mnote" id="movers-note"></div>
     <div class="sec-h"><div><div class="sec-t">💎 Best deals right now</div><div class="sec-s">Listed below market average</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
     <div class="cg" id="home-deals"><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div></div>
   </div>
@@ -2005,11 +2014,9 @@ async function loadHome() {
   }
 
   notYet('home-deals',    'Best deals', '/api/deals');
-  notYet('gainers',       'Top gainers', '/api/movers');
-  notYet('decliners',     'Top decliners', '/api/movers');
-
-  // gainers / decliners / deals are handled by notYet() above — the
-  // arrays they used to read held invented prices and are gone.
+  // Movers come from /api/trending (T2, 2026-10-05): four lists, each with
+  // its window stated. Deals are still handled by notYet() above.
+  loadHomeMovers();
 
   renderLatestSearches();
   renderHomeSetRow();
@@ -5454,6 +5461,59 @@ async function loadTrending() {
   }).join('');
 }
 
+// ── HOME MOVERS (T2, 2026-10-05) ─────────────────────────────
+// Four lists from /api/trending — gainers and fallers, by % and by value —
+// compared on TCGdex prices only, same printing and product at both ends,
+// marked prices (old / thin / unsettled) left out (trending.js). Each list
+// asks for 7 days first; where there are no 7-day pairs yet it asks for
+// 24 hours and SAYS so on the list. A thin list says it is not the whole
+// market (coverage.note) rather than passing for one.
+var MOVER_LISTS = ['gain-pct', 'fall-pct', 'gain-usd', 'fall-usd'];
+async function moverList(sort, lang) {
+  var tried = [];
+  for (var w of ['7d', '24h']) {
+    var r = await fetch(BACKEND + '/api/trending?lang=' + encodeURIComponent(lang) + '&sort=' + sort + '&window=' + w + '&limit=5');
+    var d = await r.json();
+    if (!r.ok) throw new Error(d && d.error ? d.error : 'HTTP ' + r.status);
+    tried.push(d);
+    if (d.cards && d.cards.length) return { d: d, fellBack: w !== '7d', first: tried[0] };
+  }
+  return { d: tried[tried.length - 1], fellBack: true, first: tried[0], empty: true };
+}
+async function loadHomeMovers() {
+  var lang = S.lang || 'en';
+  var notes = [];
+  await Promise.all(MOVER_LISTS.map(async function (sort) {
+    var host = document.getElementById('mv-' + sort), wEl = document.getElementById('mv-' + sort + '-w');
+    if (!host) return;
+    host.innerHTML = '<div class="mempty">Loading…</div>';
+    var res;
+    try { res = await moverList(sort, lang); }
+    catch (e) { host.innerHTML = '<div class="mempty">Could not load movers — ' + liveEsc(e.message) + '</div>'; return; }
+    var d = res.d, pct = /pct$/.test(sort);
+    if (wEl) wEl.textContent = d.windowLabel ? 'over ' + d.windowLabel : '';
+    if (res.fellBack && res.first && res.first.windowLabel && !res.empty)
+      notes.push('No card has a TCGdex price ' + res.first.windowLabel + ' apart yet, so the lists show 24 hours.');
+    if (d.coverage && d.coverage.thin && d.coverage.note) notes.push(d.coverage.note);
+    if (res.empty) { host.innerHTML = '<div class="mempty">Nothing to rank yet — no card has two TCGdex prices that far apart. This is missing data, not a quiet market.</div>'; return; }
+    host.innerHTML = d.cards.map(function (c, i) {
+      var up = c.change > 0;
+      return '<div class="mrow" onclick="openCard(' + JSON.stringify(c.id).replace(/"/g, '&quot;') + ')">'
+        + '<div class="mrank">' + (i + 1) + '</div>'
+        + (c.image ? '<img class="mimg" src="' + liveEsc(c.image) + '" alt="" onerror="this.style.visibility=\'hidden\'">' : '<div class="mimg"></div>')
+        + '<div class="minfo"><div class="mname">' + liveEsc(c.name) + '</div><div class="mset">'
+        + liveEsc((c.set && (c.set.nameEn || c.set.name)) || '') + (c.number ? ' · #' + liveEsc(c.number) : '') + '</div></div>'
+        + '<div class="mpr"><div class="mp">' + fmtCurrency(c.price) + '</div><div class="mc2 ' + (up ? 'up' : 'dn') + '">'
+        + (pct ? (up ? '+' : '') + c.changePct + '%' : (up ? '+' : '−') + fmtCurrency(Math.abs(c.change)))
+        + '</div><div class="mset">from ' + fmtCurrency(c.prevPrice) + '</div>'
+        + (c.suspect ? '<div class="mset" title="Moved more than 5x in the window — more often a printing mix-up than a market">check: &gt;5x</div>' : '')
+        + '</div></div>';
+    }).join('');
+  }));
+  var noteEl = document.getElementById('movers-note');
+  if (noteEl) noteEl.textContent = notes.filter(function (n, i) { return notes.indexOf(n) === i; }).join(' ');
+}
+
 // ── LATEST SEARCHES ───────────────────────────────────────────
 // Real: the cards this browser actually opened. Stored locally because
 // there is no sign-in, and stored as IDENTITY only — id, name, set, image
@@ -6493,6 +6553,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261005-431b523-saletype &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261005-ce494c9-movers &middot; click to hide</div>
 </body>
 </html>

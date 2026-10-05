@@ -992,10 +992,15 @@ app.get('/api/trending', async (req, res) => {
       eligible = r.rows.length ? Number(r.rows[0].eligible) : 0;
     } else {
       const r = await db.query(trending.moverSql(p));
-      const k = trending.rankMovers(r.rows, p.sort);
+      // Marked prices (old / thin / unsettled) are left out, not ranked (T2).
+      const q = await pricequality.annotate(db, r.rows.map(c => ({ id: c.id, price: c.price,
+        source: c.price_source, recordedAt: c.price_date, meta: c.price_meta })));
+      const k = trending.rankMovers(r.rows, p.sort, q);
       cards = k.cards.slice(0, p.limit);
       eligible = k.eligible;
-      extra = { ranked: k.cards.length, excluded: k.excluded, suspect: k.suspect };
+      const current = (await db.query(trending.currentSql(p))).rows[0].n;
+      extra = { ranked: k.cards.length, excluded: k.excluded, suspect: k.suspect,
+                coverage: trending.coverage(p, eligible, current) };
     }
     // A price swinging 4500 / 1200 nightly ranks as a "mover" and tops
     // price-desc; the tile says so rather than presenting it as settled (T1).

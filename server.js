@@ -298,6 +298,42 @@ function backFollowUp(card, requestedId, grade, printing, edition, rows) {
      .finally(() => backRunning.delete(vkey));
 }
 
+// The deal candidates' backs (TASK T1, 2026-10-05; deals.backCandidates).
+// The deals shelf requires a genuine back seen, and reads cached views only,
+// so the check happens here, when a raw view is opened or re-judged: the
+// cheapest rows that would be a deal but for the back, at most
+// deals.DEAL_BACK_MAX getItem calls a view (background; 0 when the view has
+// no candidate or its candidates' verdicts are stored). Then re-judged.
+const dealBackSpent = new Map();   // view key -> { n, at }: calls spent within one view's life
+const dealBackRunning = new Set();
+function dealBackFollowUp(card, requestedId, grade, printing, edition, payload) {
+  if (!deals_.ENABLED || printing || edition || !jpf.isRawGrade(grade) || !backcheck.familyOf(card.api_card_id)) return;
+  const cid = card.api_card_id, vkey = listingKey(cid, viewCacheGrade(grade, printing, edition));
+  const spent = dealBackSpent.get(vkey);
+  const used = spent && Date.now() - spent.at < LISTING_TTL ? spent.n : 0;
+  if (dealBackRunning.has(vkey) || used >= deals_.DEAL_BACK_MAX) return;
+  dealBackRunning.add(vkey);
+  (async () => {
+    const ref = await marketRefOf(card, {});
+    const todo = deals_.backCandidates(payload, ref && Object.assign({ isReal: true }, ref), deals_.DEAL_BACK_MAX - used)
+      .filter(r => !backVerdicts.has(backKey(r.itemId, cid)));
+    if (!todo.length) return;
+    let landed = 0;
+    const rec = used ? spent : { n: 0, at: Date.now() };
+    dealBackSpent.set(vkey, rec);
+    for (const r of todo) {
+      const v = await backCheckItem(card, r.itemId, { background: true }).catch(e => ({ error: e.message }));
+      rec.n += (v && v.calls) || 0;
+      if (v && v.error) break;
+      if (!v.retryable) landed++;
+    }
+    const vs = viewStateGet(vkey);
+    if (landed && vs && vs.gathered.ebayState)
+      await rebuildView(card, requestedId, grade, printing, edition, vs, { noFetch: true, stamp: true, back: true, material: true });
+  })().catch(e => console.warn('[deals] back follow-up failed:', e.message))
+     .finally(() => dealBackRunning.delete(vkey));
+}
+
 // ── What does ONE listing's card back show? (TASK T3) ──
 //   GET /api/back/:cardId?item=v1|167236883977|0
 // On demand: 1 getItem (0 when Verify or Photos already fetched it within 15
@@ -3183,8 +3219,18 @@ async function judgeListings(card, grade, listings, opts, memo) {
         (backReport.refusedRows || (backReport.refusedRows = [])).push(refusal);
         continue;
       }
+      // TASK T1: on a card decided one by one (backcheck.REQUIRE_GENUINE_BACK),
+      // a raw row judged no-claim is refused too — listed with its reason.
+      if (v && v.state === 'no-claim' && backcheck.requiresGenuineBack(card.api_card_id, grade)) {
+        backReport.refused++; backReport.requiredRefused = (backReport.requiredRefused || 0) + 1;
+        const refusal = { title: l.title, itemId: l.itemId, price: l.price, landed: l.landed, currency: 'USD',
+          url: l.url, marketplace: l.marketplace, source: 'ebay', reason: backcheck.REQUIRED_BACK_REASON };
+        if (backReport.refusedSample.length < 12) backReport.refusedSample.push(refusal);
+        (backReport.refusedRows || (backReport.refusedRows = [])).push(refusal);
+        continue;
+      }
       if (v && v.state === 'genuine-back') backReport.genuine++;
-      kept.push(v ? Object.assign({}, l, { back: { state: v.state, says: v.says } }) : l);
+      kept.push(v ? Object.assign({}, l, { back: { state: v.state, says: v.says, metal: !!v.metal } }) : l);
     }
     listings = kept;
   }
@@ -3752,6 +3798,7 @@ async function rebuildView(card, requestedId, grade, printing, edition, vs, ropt
   if (!ropts.stamp) stampFollowUp(card, requestedId, grade, printing, edition, j.stampPending);
   if (!ropts.back) backFollowUp(card, requestedId, grade, printing, edition, payload.listings);
   if (!ropts.material) materialFollowUp(card, requestedId, grade, printing, edition, payload.listings);
+  dealBackFollowUp(card, requestedId, grade, printing, edition, payload);
   return payload;
 }
 
@@ -3837,6 +3884,7 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   if (st) stampFollowUp(card, requestedId, grade, printing, edition, gathered.stampPending);
   if (st) backFollowUp(card, requestedId, grade, printing, edition, payload.listings);
   if (st) materialFollowUp(card, requestedId, grade, printing, edition, payload.listings);
+  if (st) dealBackFollowUp(card, requestedId, grade, printing, edition, payload);
   return payload;
 }
 

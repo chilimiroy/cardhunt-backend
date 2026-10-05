@@ -72,8 +72,19 @@ ok('a most-faked card (Shining Charizard): every row, capped at 20', bc.autoRows
 ok('a row already checked is not checked again', !bc.autoRows('en-neo4-107', rows, id => id === 'v1|0|0').some(r => r.itemId === 'v1|0|0'));
 ok('a non-eBay row is never checked (no getItem for it)', bc.autoRows('en-neo4-107', [{ source: 'yuyutei', itemId: 'x', suspect: 'implausible' }]).length === 0);
 
+console.log('\n  where absence IS evidence: decided card by card (TASK T1, 2026-10-05)');
+ok('Shining Charizard (22/22 metal removed, 0/13 genuine hidden) requires a genuine back on raw views', bc.requiresGenuineBack('en-neo4-107', 'raw') && bc.requiresGenuineBack('en-neo4-107', ''));
+ok('Base Charizard (6/6 metal removed, 1 doubtful of ~50 genuine) requires it too', bc.requiresGenuineBack('en-base1-4', 'Raw'));
+ok('KEPT: Pikachu VMAX (10 of 72 genuine would be hidden) does NOT', !bc.requiresGenuineBack('en-swsh4-188', 'raw'));
+ok('KEPT: Magikarp & Wailord GX (21% of genuine without a back seen) does NOT', !bc.requiresGenuineBack('en-sm9-161', 'raw'));
+ok('KEPT: an ordinary card never', !bc.requiresGenuineBack('en-sv03.5-199', 'raw'));
+ok('KEPT: a graded view of Shining Charizard — only raw was measured', !bc.requiresGenuineBack('en-neo4-107', 'PSA 10'));
+ok('the reason names the evidence and the card-specific basis', /no genuine card back/.test(bc.REQUIRED_BACK_REASON) && /on this card/.test(bc.REQUIRED_BACK_REASON));
+
 console.log('\n  wiring');
 const src = fs.readFileSync(__dirname + '/server.js', 'utf8');
+ok('judgeListings refuses a no-claim row only where requiresGenuineBack says so, listed with its reason',
+   /v\.state === 'no-claim' && backcheck\.requiresGenuineBack\(card\.api_card_id, grade\)/.test(src) && /reason: backcheck\.REQUIRED_BACK_REASON/.test(src));
 ok('/api/back exists and uses the SHARED getItem (one call serves Verify, Photos and the back)',
    /app\.get\('\/api\/back\/:cardId'/.test(src) && /ebayItemOnDemand\(itemId, cid, 'back', o\)/.test(src));
 ok('automatic runs are BACKGROUND (they yield at the soft stop)', /backCheckItem\(card, r\.itemId, \{ background: true \}\)/.test(src));

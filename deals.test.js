@@ -12,8 +12,12 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) { pass++; console.log('  ok    ' + m); } else { fail++; console.log('  FAIL  ' + m); } }
 console.log('\n  deals.test.js\n');
 
+// Every row carries a genuine back unless a test says otherwise: the bars
+// below are each tested alone; the genuine-back rule has its own section.
+let _id = 0;
 const row = (landed, o) => Object.assign({ source: 'ebay', live: true, saleType: 'buy-it-now', shippingKnown: true,
-  landed, price: landed, suspect: null, priceKind: 'listing' }, o || {});
+  landed, price: landed, suspect: null, priceKind: 'listing', itemId: 'v1|' + (++_id) + '|0',
+  back: { state: 'genuine-back' } }, o || {});
 const ref = { price: 100, isReal: true, current: true };
 const view = rows => ({ listings: rows });
 
@@ -62,9 +66,42 @@ ok(cheapest([row(50, { back: { state: 'genuine-back' } })].concat(solid3)) === 5
 const ex = pick([row(50, { sellerStated: true, sellerCondition: 'DMG' }), row(55, { printingStated: true, printing: 'reverse' })].concat(solid3)).excluded;
 ok(ex && ex['stated condition below near mint'] === 1 && ex['states another printing'] === 1, 'every excluded row is counted by its reason');
 
-console.log('\n  switched off (Roy, 2026-10-05)');
-ok(deals.ENABLED === false, 'deals.ENABLED is false until the shelf is re-measured live');
-ok(/switched off/.test(deals.OFF_REASON), 'the off state carries its reason');
+console.log('\n  the genuine-back rule (TASK T1, 2026-10-05): evidence it is real, not only no evidence it is fake');
+const noBack = o => Object.assign({ back: undefined }, o || {});
+// The gold Shining Charizard: no mark anywhere, back no-claim, 89% below.
+const goldCharizard = row(180.17, { back: { state: 'no-claim', metal: false }, title: 'Shining Charizard 107/105 Neo Destiny' });
+const shining = { price: 1701, isReal: true, current: true };
+const sc = deals.pickDeal(view([goldCharizard, row(1400), row(1500), row(1600)]), shining);
+ok(sc.deal && sc.deal.listing.landed === 1400, 'the gold Shining Charizard (no-claim back) is NOT the deal; the cheapest genuine-back row is');
+ok(sc.excluded && sc.excluded["no genuine back in the seller's photos"] === 1, 'and it is counted under its reason');
+r = deals.pickDeal(view([row(50, noBack()), row(80), row(95)]), ref);
+ok(r.deal && r.deal.listing.landed === 80 && r.excluded['back not checked yet'] === 1, 'a row the back check has not reached is not a deal yet, and says so');
+r = deals.pickDeal(view([row(50, noBack()), row(60, noBack()), row(70, noBack())]), ref);
+ok(!r.deal && /genuine back/.test(r.why), 'no solid row with a genuine back: no deal, and the reason names the back');
+r = deals.pickDeal(view([row(50, { back: { state: 'no-claim' } }), row(90), row(95)]), ref);
+ok(!r.deal && /genuine back is 10% below/.test(r.why), 'the next genuine-back row under 15% below: no deal at all');
+r = deals.pickDeal(view([row(50, { back: { state: 'no-claim' } }), row(80), row(95)]), ref);
+ok(r.deal && r.deal.listing.landed === 80, 'the next row with a genuine back, still 15% below, becomes the deal');
+ok(cheapest([row(50, { back: { state: 'other-back' } })].concat(solid3)) === 80, 'another language family\'s back is not a deal');
+
+console.log('\n  which backs a view checks for the shelf (backCandidates)');
+const cand = (rows, budget, rf) => deals.backCandidates(view(rows), rf || ref, budget == null ? deals.DEAL_BACK_MAX : budget).map(l => l.landed);
+const js = a => JSON.stringify(a);
+ok(deals.DEAL_BACK_MAX === 2, 'at most two getItem calls a view');
+ok(js(cand([row(50, noBack()), row(60, noBack()), row(70, noBack()), row(95, noBack())])) === '[50,60]', 'the cheapest unchecked candidates, cheapest first, capped');
+ok(js(cand([row(50, noBack()), row(60, noBack()), row(70, noBack())], 1)) === '[50]', 'capped by what the view may still spend');
+ok(js(cand([row(50, { back: { state: 'no-claim' } }), row(60, noBack()), row(70), row(80, noBack())])) === '[60]', 'a row already judged is not checked again; nothing dearer than a genuine-back row is');
+ok(js(cand([row(50), row(60, noBack()), row(70, noBack())])) === '[]', 'the cheapest row already has a genuine back: 0 calls');
+ok(js(cand([row(90, noBack()), row(95, noBack()), row(99, noBack())])) === '[]', 'nothing 15% below the price: 0 calls');
+ok(js(cand([row(50, noBack()), row(60, noBack())])) === '[]', 'fewer than three solid rows: 0 calls');
+ok(js(cand([row(50, noBack({ shippingKnown: false })), row(60, noBack()), row(70), row(80)])) === '[60]', 'a row failing another bar is never checked');
+ok(js(cand([row(50, noBack()), row(60), row(70)], 2, { price: 100, isReal: true, current: false })) === '[]', 'no current measured price: 0 calls');
+ok(js(cand([row(50, noBack()), row(60), row(70)], 0)) === '[]', 'budget spent: 0 calls');
+
+console.log('\n  switched back on (TASK T1, 2026-10-05)');
+ok(deals.ENABLED === true, 'deals.ENABLED is true with the genuine-back rule in place');
+ok(/switched off/.test(deals.OFF_REASON), 'the off state still carries its reason, should it be switched off again');
+ok(/genuine card/.test(deals.describeRule()) && /at most 2/.test(deals.describeRule()), 'the rule states the back and what it costs');
 ok(/Nothing is fetched/.test(deals.describeRule()), 'the rule says nothing is fetched');
 
 console.log('\n  wiring');
@@ -77,6 +114,13 @@ ok(/ebayCalls: 0/.test(h), 'and says so in the payload');
 ok(/parts\.length !== 2/.test(h) && /isRawGrade/.test(h), 'raw views without a printing or edition filter only');
 ok(/deals_\.pickDeal\(v\.payload, ref\)/.test(h) && /pricequality\.annotate/.test(h), 'the price end is the current, measured, number-matched price');
 ok(/materialPending: true/.test(src), 'rows the novelty check has not reached are marked, so no deal is an unchecked gold card');
+const fu = src.slice(src.indexOf('function dealBackFollowUp'), src.indexOf('// ── What does ONE listing'));
+ok(fu.length > 200, 'dealBackFollowUp exists');
+ok(/deals_\.ENABLED/.test(fu) && /isRawGrade\(grade\)/.test(fu) && /printing \|\| edition/.test(fu), 'it runs only when deals are on, on raw views without a printing or edition filter');
+ok(/deals_\.backCandidates\(/.test(fu) && /DEAL_BACK_MAX/.test(fu), 'it checks only backCandidates, within DEAL_BACK_MAX a view');
+ok(/background: true/.test(fu), 'background origin: it yields at the soft stop');
+ok((src.match(/^ {2}(if \(st\) )?dealBackFollowUp\(card, requestedId/gm) || []).length === 2, 'called after an open and after every re-judge');
+ok(/back: \{ state: v\.state, says: v\.says, metal: !!v\.metal \}/.test(src), 'a kept row carries the metal-photo signal, so the deals bar can read it');
 const page = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
 ok(/fetch\(BACKEND \+ '\/api\/deals/.test(page) && /loadHomeDeals\(\)/.test(page), 'the home shelf reads /api/deals');
 ok(!/function notYet/.test(page), 'the "not live yet" placeholder is gone, not left dormant');

@@ -122,6 +122,28 @@ function autoRows(cardId, rows, known) {
                      .slice(0, AUTO_MAX_PER_VIEW);
 }
 
+// ── Where absence IS evidence: cards decided one by one (TASK T1, 2026-10-05) ──
+// On most cards "no genuine back" claims nothing (above). On a card whose
+// listings are mostly metal copies, the trade changes: a RAW row the back
+// check has judged no-claim is hidden there — refused with its reason, listed
+// under refused[], never deleted. Unchecked rows stay shown. Measured on US
+// page 1, every row back-checked and labelled by eye (PROGRESS 2026-10-05,
+// "T1 — require a genuine back, per card"):
+//   card                      rows  metal  metal w/o genuine back  genuine  genuine hidden
+//   Shining Charizard neo4-107  35    22         22                   13       0
+//   Base Charizard base1-4      67     6          6                  ~50       1 (doubtful)
+//   M&W GX sm9-161              15     4          4                   10       1   NOT required
+//   Pikachu VMAX swsh4-188      94    18         18                   72      10   NOT required
+// M&W: the 2026-10-04 labelled set adds 8 of 32 genuine without a back seen
+// (21% together). Pikachu VMAX: 14% of genuine rows hidden to remove 19%
+// metal. Those two keep "absence claims nothing". Raw only: what was measured.
+const REQUIRE_GENUINE_BACK = new Set(['en-neo4-107', 'en-base1-4']);
+function requiresGenuineBack(cardId, grade) {
+  return REQUIRE_GENUINE_BACK.has(String(cardId || '')) && (!grade || /^(raw|ungraded|none)$/i.test(String(grade).trim()) || /^raw[\s_-]/i.test(String(grade).trim()));
+}
+const REQUIRED_BACK_REASON = 'no genuine card back in the seller’s photos — on this card most such listings are metal copies';
+
 module.exports = { BACK_VERSION, EN_MIN, JA_MIN, MARGIN, MOST_FAKED, AUTO_MAX_PER_VIEW,
+                   REQUIRE_GENUINE_BACK, REQUIRED_BACK_REASON, requiresGenuineBack,
                    templates, ready, scorePhoto, familyOf, listingVerdict, autoRows,
                    _reset: () => { _t = null; } };

@@ -28,18 +28,8 @@ const STORE_W = 64;                // stored template width; the matcher uses <=
 const WHOLE_W = 96;                // whole-card template width; the comparison runs at 24
 const LOCATOR = { card: 'en-30th-c-029', box: { x: 9, y: 346, w: 160, h: 120 }, scanW: 654 };
 
-function decodeAny(buf) {
-  if (buf[0] === 0x89 && buf[1] === 0x50) {
-    const { PNG } = require('pngjs');
-    const p = PNG.sync.read(buf);
-    // Flatten any transparency onto white, as a printed card would show.
-    const rgba = p.data;
-    for (let i = 0; i < rgba.length; i += 4) { const a = rgba[i + 3] / 255; for (let c = 0; c < 3; c++) rgba[i + c] = rgba[i + c] * a + 255 * (1 - a); }
-    return { w: p.width, h: p.height, data: (() => { const o = new Uint8Array(p.width * p.height * 3); for (let i = 0, j = 0; j < rgba.length; i += 3, j += 4) { o[i] = rgba[j]; o[i + 1] = rgba[j + 1]; o[i + 2] = rgba[j + 2]; } return o; })() };
-  }
-  if (buf[0] === 0xff && buf[1] === 0xd8) return sc.decodeJpeg(buf);
-  throw new Error('not a PNG or JPEG');
-}
+// PNG or JPEG: the one decoder lives in stampcheck (the server needs it too).
+const decodeAny = sc.decodeImage;
 
 // The emblem's silhouette inside its box, as fractions (read off the scan):
 // head ellipse centred (0.496, 0.66), radii (0.306, 0.319); ears as triangles.

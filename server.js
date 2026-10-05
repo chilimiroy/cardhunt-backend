@@ -195,7 +195,9 @@ const _materialRef = new Map();       // cardId -> Promise<{ gold, black } | nul
 const MATERIAL_MAX_PER_VIEW = 300, MATERIAL_REF_MS = 1500;
 function materialScanUrl(card) {
   const src = String((card && (card.image_small || card.image_large)) || '');
-  return /^https:\/\/assets\.tcgdex\.net\/.+\.(?:png|jpg)$/.test(src) ? src.replace(/\.png$/, '.jpg') : null;
+  if (/^https:\/\/assets\.tcgdex\.net\/.+\.(?:png|jpg)$/.test(src)) return src.replace(/\.png$/, '.jpg');
+  // pokemontcg.io art (806 English cards, 2026-10-05): PNG only, decoded as is.
+  return stampcheck.PNG_SCAN_HOST.test(src) ? src : null;
 }
 function materialApplies(card) { return /^en-/.test(String(card && card.api_card_id || '')) && !!materialScanUrl(card); }
 function materialRefOf(card) {

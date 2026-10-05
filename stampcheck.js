@@ -54,6 +54,20 @@ function decodeJpeg(buf) {
   const d = jpeg.decode(buf, { useTArray: true, formatAsRGBA: true, maxMemoryUsageInMB: 256 });
   return fromRGBA(d.width, d.height, d.data);
 }
+// A PNG or a JPEG, by its signature. Our catalogue scans come in both:
+// TCGdex as .jpg, pokemontcg.io (806 English cards, 2026-10-05) as .png only.
+// Transparency (pokemontcg.io's rounded corners) is flattened onto white, as
+// a printed card shows. One decoder — stampbuild.js uses this one.
+function decodeImage(buf) {
+  if (buf[0] === 0x89 && buf[1] === 0x50) {
+    const { PNG } = require('pngjs');
+    const p = PNG.sync.read(buf), rgba = p.data;
+    for (let i = 0; i < rgba.length; i += 4) { const a = rgba[i + 3] / 255; for (let c = 0; c < 3; c++) rgba[i + c] = rgba[i + c] * a + 255 * (1 - a); }
+    return fromRGBA(p.width, p.height, rgba);
+  }
+  if (buf[0] === 0xff && buf[1] === 0xd8) return decodeJpeg(buf);
+  throw new Error('not a PNG or JPEG');
+}
 function crop(img, x, y, w, h) {
   const out = new Uint8Array(w * h * 3);
   for (let r = 0; r < h; r++) out.set(img.data.subarray(((y + r) * img.w + x) * 3, ((y + r) * img.w + x + w) * 3), r * w * 3);
@@ -403,7 +417,9 @@ async function runJob(slot, job) {
   const type = (r && r.headers && r.headers.get('content-type')) || '';
   if (!r || !r.ok) return finish(slot, { state: 'unreadable', retryable: true, scores: [],
     says: 'eBay’s image server did not return the photo' + (r ? ' (HTTP ' + r.status + ')' : '') + '.' });
-  if (!/jpe?g/i.test(type)) return finish(slot, { state: 'unreadable', scores: [], says: 'The photo is not a JPEG (' + type.slice(0, 30) + ').' });
+  // eBay photos are JPEG; only OUR scan may be a PNG (pokemontcg.io art).
+  const scanPng = job.material && PNG_SCAN_HOST.test(job.url) && /png/i.test(type);
+  if (!/jpe?g/i.test(type) && !scanPng) return finish(slot, { state: 'unreadable', scores: [], says: 'The photo is not a JPEG (' + type.slice(0, 30) + ').' });
   const buf = Buffer.from(await r.arrayBuffer());
   slot.timer = setTimeout(() => finish(slot, { state: 'unreadable', retryable: true, scores: [],
     says: 'The photo check took too long and was stopped.' }, true), JOB_TIMEOUT_MS);
@@ -487,7 +503,15 @@ function checkBackPhoto(imageUrl) {
 const MATERIAL_VERSION = 'material-1';
 const MATERIAL_GOLD_EXCESS = 0.40;
 const MATERIAL_PHOTO_SIZE = 's-l225';   // the size the measurement used
-const SCAN_HOST = /^https:\/\/assets\.tcgdex\.net\/[^?#]+\.jpg$/;
+// Our scan: TCGdex's .jpg, or pokemontcg.io's .png where that is the only art
+// we hold (806 English cards — Shiny Vault, Hidden Fates, Crown Zenith GG,
+// Trainer Galleries, Classic Collection, SM promos). Measured 2026-10-05 on
+// 30 cards held on both hosts: gold fraction agrees (median |Δ| 0.003) except
+// two Gold Stars, which read LESS gold on pokemontcg.io (Jolteon ☆ −0.137,
+// Torchic ☆ −0.058) — a lower reference flags more, and two signals still
+// refuse. Exactly these two hosts: the URL is never a caller's.
+const PNG_SCAN_HOST = /^https:\/\/images\.pokemontcg\.io\/[\w.-]+\/[\w.-]+\.png$/;
+const SCAN_HOST = { test: u => /^https:\/\/assets\.tcgdex\.net\/[^?#]+\.jpg$/.test(u) || PNG_SCAN_HOST.test(u) };
 // Centre 60% of the frame (backgrounds and sleeves stay out). HSV gold:
 // hue 30-65°, s > 0.25, v > 0.35; near-black: v < 0.22.
 function colourProfile(img) {
@@ -720,7 +744,7 @@ if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
   wt.parentPort.on('message', m => {
     let v;
     try {
-      const img = decodeJpeg(Buffer.from(m.jpeg));
+      const img = m.material ? decodeImage(Buffer.from(m.jpeg)) : decodeJpeg(Buffer.from(m.jpeg));
       v = m.material ? Object.assign({ state: 'profiled' }, colourProfile(img))
         : m.back ? Object.assign({ state: 'scored' }, require('./backcheck.js').scorePhoto(img), colourProfile(img))
         : judge(img, m.reprints);
@@ -731,7 +755,7 @@ if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
 }
 
 module.exports = { MATERIAL_VERSION, MATERIAL_GOLD_EXCESS, MATERIAL_PHOTO_SIZE, colourProfile, checkMaterialPhoto, checkMaterialScan, metalPhotoOf, materialJudge,
-                   THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, crop, resize, rotate90, nccMax, bestScore,
+                   THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, decodeImage, PNG_SCAN_HOST, crop, resize, rotate90, nccMax, bestScore,
                    judge, checkItem, checkBackPhoto, gate, verdictKey, wholeScore, LOOKALIKE_MARGIN, SIBLING_MARGIN, SIBLING_HIDE_FRACTION, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
                    _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; },
                    _clearCache: () => { _cache.clear(); _missed.clear(); } };

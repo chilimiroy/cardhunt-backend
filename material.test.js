@@ -94,6 +94,35 @@ ok(sc.colourProfile(framed).gold === 0, 'only the centre 60% is read: a gold tab
 ok(sc.photoUrl('https://i.ebayimg.com/images/g/abc/s-l1600.jpg', sc.MATERIAL_PHOTO_SIZE) === 'https://i.ebayimg.com/images/g/abc/s-l225.jpg',
    'profiles are taken at the measured size (s-l225)');
 
+console.log('\n  our scan as a PNG (pokemontcg.io art, 806 English cards — 2026-10-05)');
+const { PNG } = require('pngjs');
+const png = new PNG({ width: 20, height: 20 });
+for (let i = 0; i < 400; i++) png.data.set(i < 20 ? [0, 0, 0, 0] : [212, 175, 55, 255], i * 4);   // a transparent top row
+const pimg = sc.decodeImage(PNG.sync.write(png));
+ok(pimg.w === 20 && pimg.h === 20 && sc.colourProfile(pimg).gold > 0.95, 'a gold PNG decodes and reads gold');
+ok(pimg.data[0] === 255 && pimg.data[1] === 255 && pimg.data[2] === 255, 'transparency (the rounded corners) is flattened onto white, not black');
+ok((() => { try { sc.decodeImage(Buffer.from('GIF89a')); return false; } catch (e) { return /not a PNG or JPEG/.test(e.message); } })(),
+   'anything else is refused, not guessed');
+ok(sc.PNG_SCAN_HOST.test('https://images.pokemontcg.io/cel25c/4_A.png') && sc.PNG_SCAN_HOST.test('https://images.pokemontcg.io/swsh45sv/SV107.png'),
+   'pokemontcg.io scans are accepted (CC002, Shiny Vault)');
+ok(!sc.PNG_SCAN_HOST.test('https://images.pokemontcg.io.evil.com/a/b.png') && !sc.PNG_SCAN_HOST.test('https://i.ebayimg.com/images/g/abc/s-l225.png')
+   && !sc.PNG_SCAN_HOST.test('https://images.pokemontcg.io/a/b.png?x=1'), 'no other host, no query string');
+const sjob = fs.readFileSync(__dirname + '/stampcheck.js', 'utf8');
+ok(/const scanPng = job\.material && PNG_SCAN_HOST\.test\(job\.url\) && \/png\/i\.test\(type\)/.test(sjob),
+   'a PNG is accepted only for OUR scan — an eBay photo is still JPEG or nothing');
+ok(/m\.material \? decodeImage\(/.test(sjob), 'the worker decodes a scan as PNG or JPEG');
+const sb = fs.readFileSync(__dirname + '/stampbuild.js', 'utf8');
+ok(/const decodeAny = sc\.decodeImage;/.test(sb) && !/PNG\.sync\.read/.test(sb), 'stampbuild uses the same decoder — one definition');
+const ssrc = fs.readFileSync(__dirname + '/server.js', 'utf8').replace(/\r/g, '');
+const msu = ssrc.slice(ssrc.indexOf('function materialScanUrl(card) {'), ssrc.indexOf('\nfunction materialApplies('));
+const scanUrlOf = msu.length > 50 ? new Function('stampcheck', msu + '\nreturn materialScanUrl;')(sc) : () => 'missing';
+ok(scanUrlOf({ image_small: 'https://images.pokemontcg.io/cel25c/4_A.png' }) === 'https://images.pokemontcg.io/cel25c/4_A.png',
+   'the server takes a pokemontcg.io scan as the reference (CC002 had none)');
+ok(scanUrlOf({ image_small: 'https://assets.tcgdex.net/en/neo/neo4/107/low.png' }) === 'https://assets.tcgdex.net/en/neo/neo4/107/low.jpg',
+   'a TCGdex scan is still read as its .jpg');
+ok(scanUrlOf({ image_small: 'https://images.scrydex.com/pokemon/x/large' }) === null && scanUrlOf({}) === null,
+   'any other host, or no image: no reference, said so (not guessed)');
+
 console.log('\n  wiring');
 const src = fs.readFileSync(__dirname + '/server.js', 'utf8');
 const judge = src.slice(src.indexOf('async function judgeListings'), src.indexOf('// One card view\'s listings'));

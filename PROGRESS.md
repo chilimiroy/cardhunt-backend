@@ -1,5 +1,97 @@
 # CardHunt — Progress Log
 
+## 2026-10-05 — T0 budget, T1 gold/black novelty cards, T2 movers, T3 deals, T4, T5
+
+**T0 — CLAUDE.md 163k -> 50k, under a 60k budget** that `claudesplit.test.js`
+now enforces (fires on the old file: 162,084 of 60,000). Measurements moved
+verbatim to the 2026-10-05 block below; settled narratives and the full old
+LESSONS to the archive ("MOVED FROM CLAUDE.md, 2026-10-05"). `7a75348`.
+
+**eBay spend for T1.** Roy lifted the hourly ceiling and tooling allowance for
+the last hour of 2026-10-04 UTC (`ce6c28a`, keyed on the day, lapsed at
+midnight). Spent: 343 listing views (335 cards US page 1, plus all-sites and
+Load-more on 15 novelty-prone cards) and 1,697 getItem photo fetches; the day
+ended at 4,589 of 5,000 (soft stop). Side effect on Render: bulk opening queued
+thousands of sibling/stamp photo checks in the one-worker pool, and the back
+check's automatic getItem ran in background on flagged rows.
+
+**T1 — repeated-photo hash: measured, carries nothing.** dHash (64-bit) of
+19,054 distinct photos from 19,499 rows. Clusters spanning 3+ cards: 2 at
+Hamming 0, 6 at <=2 — every one an extended-art case, a "choose your card"
+listing or a lot, ALREADY refused by title. At <=4 the big clusters (25, 10
+cards) are different GENUINE cards colliding (Charizard ex SIR, Gold Stars,
+Sylveon SIR). Same photo under 2 cards was almost always ONE listing in two
+searches. Not built.
+
+**T1 — what the gate showed.** Shining Charizard (US page 1, 2026-10-04): 52
+rows shown, **41 gold/black/silver metal**, 11 genuine (all >= $1,347); title
+gate had refused 148. All sites + more: 143 shown. Magikarp & Wailord GX 161:
+25 metal of 63. Mewtwo ☆ ex13-103: ~75 of 88 kept rows are a 130 HP
+Base-style Mewtwo under "Mewtwo Star 103/110 … 80 HP" catalogue titles,
+$2-$1,112 (kind D; open). Gold Mew ex 205: 118 genuine (control).
+
+Labelled by eye (contact sheets, zoom where unsure): 378 rows — Shining
+Charizard 70 metal / 36 genuine, M&W 25 / 32 (+6 other cards), Mewtwo ☆ 9
+genuine / 78 other card, gold Mew ex 118 genuine. Colour = gold fraction of
+the centre 60% of the s-l225 search photo minus the same on our TCGdex scan.
+
+| signal (labelled set) | Shining metal | Shining genuine | M&W metal | M&W genuine | ☆ page | gold Mew |
+|---|---|---|---|---|---|---|
+| colour excess > 0.30 | 44/70 | 2/36 | 21/25 | 1/32 | 1/87 | 0/118 |
+| outlier flag | 36/70 | 1/36 | 8/25 | 0/32 | 67/87 (wrong cards) | 0/118 |
+| genuine back found | 0/70 | 32/36 | 0/25 | 24/32 | 66/87 | — |
+| metal-coloured other photo | 29/70 | 3/36 | 15/25 | 2/32 | 3/87 | — |
+| 2 of {colour, price, metal photo}, no genuine back, 0.35 | 37 | 0 | 16 | 0 | 1 (wrong card $4.50) | 0 |
+
+Shipped at **0.40** (`materialJudge`): labelled 51/95 metal refused + 22
+flagged; 0/195 genuine refused, 6 flagged; $2,525 genuine Shining Charizard
+untouched. Why 0.40 not 0.35: the 12-card before/after at 0.35 refused one
+GENUINE Charizard ex 199 SIR ($446.73, warm sunset art in warm light, excess
+0.352, no back posted).
+
+**Before/after at 0.40** (rows shown before -> refused / flagged; offline,
+same profiles and back photos, shipped functions):
+
+| card | shown | refused | flagged | metal-photo signal |
+|---|---|---|---|---|
+| Shining Charizard neo4-107 | 143 | 38 | 23 | 143/143 |
+| Magikarp & Wailord GX sm9-161 | 63 | 16 | 6 | 63/63 |
+| Base Charizard base1-4 | 175 | 8 | 10 | 175/175 |
+| Pikachu VMAX swsh4-188 | 250 | 4 | 22 | 218/250 |
+| Umbreon VMAX alt swsh7-215 (dark) | 94 | 0 | 4 | 94/94 |
+| Charizard ex 199 SIR | 269 | 0 | 12 | 269/269 |
+| Mew ex 205 gold hyper rare | 390 | 0 | 10 | 385/390 |
+| Mewtwo ☆ (Gold Star) | 88 | 0 | 1 | 88/88 |
+| Celebrations CC002 (official metal) | 221 | 0 | 0 | — no scan profile |
+| Mewtwo-EX FA bw4-98 (dark) | 49 | 0 | 3 | — |
+| Charizard ex 234 SIR | 175 | 1 | 13 | 175/175 |
+| Rayquaza VMAX alt | 73 | 1 | 6 | 73/73 |
+
+Every one of the 68 flips was looked at (contact sheet, zooms): 66 gold/black
+metal (incl. $1,500-$3,000 "Shining Charizards"), 1 gold Charizard ex under
+Base Charizard, 1 $8 wrong card; **0 genuine**. Weak spot: rainbow-foil metal
+(Pikachu VMAX) is colour-alike — only price + metal photo catch it. In
+production the metal-photo signal exists only where the back check fetched
+getItem (most-faked cards and flagged rows, <=20 a view). `5160962`, `ce494c9`.
+
+**T2 — movers** (`45747a4`): TCGdex-path only, productId at both ends, marked
+prices left out. 2026-10-05: 7d 0 pairs, 30d 0, 24h 250 of 2,510 current.
+Home shows four lists over 24 hours and says why. Note: digital.test's
+literal scanner only passed on trending.js because the file was CRLF.
+
+**T3 — deals** (`9cf27f3`): `/api/deals`, cache only, 0 calls; rule in
+deals.js. Unverified with real cached views (local has no eBay keys).
+
+**T4** — decisions recorded, nothing built (Yellow A Alternate kept; no 0.2x flag).
+
+**T5** — manifest on the 12 JA sets: 1,107 cards, 31 rarities corrected (SM6b
+9, SM8b 4, S10a 18), 0 not found. PSA pair test 09:10 UTC (window reset 06:29,
+nothing of ours called PSA): keyed fp ac5277fe6cf6 and corrupted fp
+e7f42681d6d0 both 429 "100 per Day", Retry-After 76,748 s. The pool is spent
+by others before auth is read.
+
+---
+
 ## 2026-10-05 — measurements moved verbatim out of CLAUDE.md (T0)
 
 CLAUDE.md now has a 60k-character budget (claudesplit.test.js). These blocks

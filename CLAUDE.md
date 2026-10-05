@@ -71,6 +71,8 @@ Shared, never copied — every duplicated implementation here has drifted.
 | `certcheck.js` | cert number + photos from ONE shared getItem (15 min); PSA half NOT built |
 | `stampcheck.js` | photo checks on eBay's CDN (0 API calls), one worker pool, verdicts stored: reprint **stamp** (55 originals), **lookalike** pairs, same-name **siblings**; templates in `stamps.json` from OUR scans |
 | `backcheck.js` | card BACK: other family's back refuses, own back labels, nothing found claims nothing |
+| `stampcheck.js` (material) | gold/black NOVELTY card? photo colour vs OUR scan + outlier flag + a metal photo among the seller's others: two refuse, one flags, a genuine back never refuses (`materialJudge`, 0.40) |
+| `deals.js` | best deals: cheapest trusted Buy It Now vs a current measured price, from cached views only |
 | `pricequality.js` | is a headline current and measured? est / old (>30 d) / thin / unsettled; drawn by `priceMarksHtml` |
 | `setyield.js` | a refresh that priced nothing for a set or 200+ cards in a row: named, exit 2 |
 | `printsql.js` | `basePrintingSql` — the headline rule every reader uses |
@@ -130,6 +132,8 @@ Trad. 83 / 7,436, 0%, 95.6% · Simp. 8 / 877, 0%, **0% art**.
   `listing_photo_verdicts` holds hashed keys only — no title, price, URL, photo.
 - **Chinese is parked**: no rarity source, TCGdex's Chinese pricing is the
   Japanese card's under a translated name. `pricingAllowedFor()` = en, ja.
+- 2026-10-05: manifest re-run on the 12 stopped JA sets (SM6b … SM9): 1,107
+  cards, 31 rarities corrected (SM6b 9, SM8b 4, S10a 18); safeprices not re-run.
 - **5,475 Japanese cards (39%) are not on TCGdex** (Limitless-ingested);
   rarity positional; Yuyu-tei could supply it (open).
 - **English names are thin**: Japanese `name_en` 36%, `set_name_en` 4.7% — eBay
@@ -235,6 +239,13 @@ Unown `%3F`, Ancient Mew (no number), ex5.5 and mfb (no listings).
   for these is a **second reading**, never the headline. **Re-check TCGdex
   coverage around 2027-01** (`tcgdexharvest.js en --dry` on those sets).
 - `yahoojp_avg_N` ungated by construction, 0 rows. `ingest.js scrape` DELETED.
+- **Decided 2026-10-05 (Roy):** Yellow A Alternate (xya) is NOT deleted — own
+  printed numbers (24a/119) and own listings (36 kept), unlike the TG twins;
+  and **no softer 0.2x price flag** — it would catch genuine damaged copies.
+- **Open:** Mewtwo ☆ (ex13-103): ~75 of 88 kept rows on 2026-10-04 showed a
+  130 HP Base-style Mewtwo under catalogue titles "Mewtwo Star 103/110 … 80 HP"
+  ($2-$1,112) — a kind-D wrong card; a `LOOKALIKES` pair, measured first, is
+  the cheap route. Celebrations CC002 has no material reference (no scan profile).
 - Existing Yahoo base rows were not repaired for printing (143 of 191 JP cards
   holding both sit >5x the Yuyu-tei base) — `jpcheck` over them is owed.
 
@@ -257,7 +268,8 @@ photo here, ~1.2-1.3 s on Render. A timeout is retryable, never a verdict.
 | named replica | title words | all | 0/896 right titles refused |
 | implausible price | outlier (flag) | ≥5 priced or current stored price | 0/864 right flagged |
 | other-language copy | title; Japanese-family **back** | all / on demand, flagged rows, `MOST_FAKED` | back 11/12 JA, 0/52 EN |
-| metal replica, title silent | partly: outlier when cheap; back finds no genuine back (claims nothing) | — | 0/17 metal backs labelled |
+| gold/black/silver metal novelty, title silent (2026-10-05) | material check: colour vs our scan, outlier flag, metal photo — two refuse, one flags | English cards with a TCGdex scan | labelled: 51/95 refused + 22 flagged, **0/195 genuine refused**; 12 cards, 1,990 rows: 68 refused, all looked at, 0 genuine |
+| rainbow / silver metal (colour like the card) | price + metal photo only | same | Pikachu VMAX: 4 of its metal refused — most kept |
 | different illustration outside a held pair | **NOTHING** | — | |
 | printed counterfeit, real back | **NOTHING** (back would LABEL it) | — | |
 
@@ -266,6 +278,11 @@ Rules of the gate:
   rows are HIDDEN** (counted in `stampGate.pending`), appear as verdicts land.
 - **Siblings: unchecked hidden only below `SIBLING_HIDE_FRACTION` (0.55)** of
   a current measured raw price; otherwise shown "Photo being compared".
+- **Material (novelty): two of {colour > 0.40 above our scan, outlier flag, metal
+  photo} refuse; one flags `counterfeit-likely`; a genuine back never refuses.**
+  Unprofiled rows shown (`materialPending`), profiled after the answer, stored
+  `check_kind 'material'`. A repeated-photo hash was measured and NOT built: no
+  novelty template recurred across cards in 19,054 photos (PROGRESS 2026-10-05).
 - **Back: other family refuses, own family labels "matches a genuine card"
   (never "verified"), nothing found claims nothing.** Unchecked rows shown.
   Automatic ≤20 rows a view (outlier-flagged + `MOST_FAKED`), background.
@@ -312,7 +329,8 @@ one-day raises in `ebayquota.TOOLING_OVERRIDES` keyed on the UTC day.
 | "Search 7 more marketplaces" · "Load more" | 7 · 1 per site with more |
 | Verify (cert) · Photos (same item) · "Check card back" | 1 getItem · 0 · 1 (0 if fetched in 15 min or stored) |
 | back check, automatic | +1 getItem per unchecked row, ≤20 a view, background |
-| stamp / lookalike / sibling / auctions | 0 |
+| stamp / lookalike / sibling / auctions / novelty (material) | 0 |
+| home movers (4 × `/api/trending`) · best deals (`/api/deals`, cache only) | 0 |
 | search resolving to one card · ambiguous | 1 per card (+reprints) · 0 |
 | `/api/ebay/conditions?items=N` · `marketprobe` default | 1+N · 11 per card |
 | `node sitecheck.js` default · `node querygap.js en` · `linkaudit --live` | 41-89 · ~230 · 1 per card |
@@ -400,21 +418,28 @@ schtasks /Run   /TN "CardHunt nightly refresh"
 ```
 `task-watch.ps1` logs task state hourly to `task-watch.log`.
 
-## Movers and best deals
-Movers: decisions 2026-10-05 (Roy) — TCGdex-sourced prices only, drop flagged
-prices at either end, four lists (gainers/fallers by % and by value), window
-stated; clean 7-day pairs start ~2026-10-06, say so. Best deals: cheapest
-trusted Buy It Now vs a measured median, both ends solid, only from recently
-opened cards' cached listings, **0 eBay calls**. (Status: see PROGRESS.)
+## Movers and best deals — BUILT 2026-10-05
+- **Movers** (`trending.js`, Roy's decisions): both ends `tcgdex_tcgplayer_*`,
+  same printing and productId; pricequality-marked cards left out; four lists
+  on the home page, window stated; `coverage` says when a list is thin and
+  why. 2026-10-05: 7d **0 pairs** (TCGdex nightly since ~09-28), 24h 250 of
+  2,510 — the page shows 24 hours and says so. Re-check after 2026-10-06.
+- **Best deals** (`deals.js`, `/api/deals`): cheapest trusted Buy It Now
+  (shipping stated, no flag, novelty-checked, ≥3 such rows) 15%+ below the
+  card's CURRENT measured price; only views opened in the last 15 minutes;
+  never fetches. Not the outlier signal: outliers are below trust.
 
 ## Near you (local card shops) — PLANNED, needs a real data source
 Honest empty state. **Do not fill it with anything a source did not return.**
 Candidates to probe: Google Places, TCGplayer store locator, manual curation.
 
-## PSA cert lookups — the limit is not settled
-Keyed, keyless and corrupted-key calls all got the same 429 ("100 per Day",
-reset ~06:29 UTC) — the limiter answers before reading the key. Deciding test:
-first call after 06:29 UTC keyed, then a corrupted key. Nothing calls PSA.
+## PSA cert lookups — the free bucket is not ours
+2026-10-05 09:10 UTC, 2h41m after the 06:29 reset, nothing of ours having
+called PSA: keyed and corrupted-key calls BOTH 429 "100 per Day", same
+Retry-After (76,748 s). The limiter answers before reading the key and the
+bucket we are counted in is spent by others (shared IP or global). An
+allocation means writing to collectors-apis@collectors.com — Roy's call.
+Nothing calls PSA; certcheck steps 2-4 stay NOT BUILT.
 
 ## Sold data — NO SOURCE, and the page says so
 The eBay sold scrape is gone and must not return in any form. Options read
@@ -691,6 +716,11 @@ no auctions until asked). (PROGRESS 2026-10-04)
 filled; epid is seller-chosen — a signal not a gate; TCGdex asset host ~2
 images/s). *Archive:* "Cert verification — measured 2026-09-28, NOT built", "eBay's Set and Year: where they live (T4, 2026-10-01, `/api/ebay/setprobe`)", "Images: TCGdex's asset host is throughput-bound (T1, 2026-10-01)", "Trending, measured 2026-09-24 — `/api/trending`, rules in `trending.js`", "Narrowing vs the 75-row cap — measured 2026-09-27 (`/api/ebay/gradecost`)", "The cap is paged now (`ceadfbc`, 2026-09-28)", "Raw M and DMG: back, seller-stated (`08a05d0`, `d60dc0e`, `b96f1e3`)", "Known, deliberately not built"
 
+**The cheapest signal is only cheap if it fires.** A repeated-photo hash
+across cards found no novelty template in 19,054 photos, and at Hamming 4
+merged genuine cards of different sets — measure the hypothesis before
+building on it. (PROGRESS 2026-10-05)
+
 **A source label two paths write is not "the same source"** — label the path
 on the row (`source_meta.via`, productId) and pair on it. (PROGRESS 2026-10-04)
 
@@ -726,6 +756,10 @@ the server accepts it (`nofabricated.test.js`). *Archive:* "The page was still i
 `http://localhost:3001/app` (`?api=render` for eBay). *Archive:* "Verifying an unreleased endpoint"
 
 ## 5 · Code, tooling, tests
+
+**A source-reading test can depend on line endings** (slicers ending on a
+quote-paren-newline or a newline-brace-newline): keep a file's endings as
+they were, and make new slicers strip carriage returns. (PROGRESS 2026-10-05)
 
 **Escapes are mangled by every layer** — a quoted heredoc still corrupted one;
 use the editor tool for anything with a backslash, then run the byte check
@@ -775,6 +809,10 @@ request (T0, PROGRESS 2026-10-05).
 - Where a technique and a label disagree, look again (zoom) before blaming it.
 - A fold that helps matching can merge two cards (fold only padding).
 - A "known correct" sample is labelled by eye, not by the gate that kept it.
+- Widen before shipping a threshold: 0.35 was clean on 378 labelled rows and
+  refused a genuine SIR on 1,990 more; set it above the hardest one found (0.40).
+- Compare to the card's own scan, never a fixed colour: a gold Mew ex photo is
+  gold, and 0 of 118 were touched.
 
 ## 6 · Metered APIs (eBay)
 

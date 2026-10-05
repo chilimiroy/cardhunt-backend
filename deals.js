@@ -45,9 +45,17 @@
 'use strict';
 const outlier = require('./outlier');
 
-const ENABLED = true;
+// OFF AGAIN 2026-10-05, the same evening, after the live check: the gold
+// Shining Charizard was gone (refused in the panel, and no genuine back), but
+// the shelf's 2 picks were a gold Charizard ex 228/197 sold under Base
+// Charizard 4/102 (a DIFFERENT genuine card — its back is genuine; colour 0.244
+// on our warm Base scan leaves it under 0.40) and a genuine Pikachu VMAX with a
+// crease the title does not state. A genuine back says the card is real, not
+// that it is THIS card. Needs an "is this photo this card" answer first.
+const ENABLED = false;
 const OFF_REASON = 'Best deals is switched off while its bar is fixed: listings shown here must be the same card, '
-  + 'printing and condition as the price they are compared with, and on 2026-10-05 most were not.';
+  + 'printing and condition as the price they are compared with. On 2026-10-05 a genuine back was required and the '
+  + 'top pick was still a different card.';
 const MIN_DISCOUNT = 0.15;
 const MIN_TRUSTED = 3;
 // getItem calls a raw view may spend checking its deal candidates' backs.

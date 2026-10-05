@@ -98,8 +98,11 @@ ok(js(cand([row(50, noBack({ shippingKnown: false })), row(60, noBack()), row(70
 ok(js(cand([row(50, noBack()), row(60), row(70)], 2, { price: 100, isReal: true, current: false })) === '[]', 'no current measured price: 0 calls');
 ok(js(cand([row(50, noBack()), row(60), row(70)], 0)) === '[]', 'budget spent: 0 calls');
 
-console.log('\n  switched back on (TASK T1, 2026-10-05)');
-ok(deals.ENABLED === true, 'deals.ENABLED is true with the genuine-back rule in place');
+console.log('\n  off again (TASK T1, 2026-10-05): the live shelf\'s top pick was a different genuine card');
+ok(deals.ENABLED === false, 'deals.ENABLED is false until "is this photo this card" is answered');
+ok(/different card/.test(deals.OFF_REASON), 'the off state names why');
+const offCand = deals.backCandidates({ listings: [row(50, { back: undefined }), row(60), row(70)] }, ref, 2);
+ok(offCand.length === 0, 'switched off, no view spends a getItem on deal candidates');
 ok(/switched off/.test(deals.OFF_REASON), 'the off state still carries its reason, should it be switched off again');
 ok(/genuine card/.test(deals.describeRule()) && /at most 2/.test(deals.describeRule()), 'the rule states the back and what it costs');
 ok(/Nothing is fetched/.test(deals.describeRule()), 'the rule says nothing is fetched');

@@ -3809,7 +3809,7 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   const st = gathered.ebayState;
   const progress = withSourceFailures(listingsProgress(st, gathered.listings.length), gathered.sources);
   let payload = buildListingsPayload(card, requestedId, grade, printing,
-    { listings: gathered.listings, liveCount: gathered.liveCount, outliers: gathered.outliers, stamp: gathered.stamp, back: gathered.back },
+    { listings: gathered.listings, liveCount: gathered.liveCount, outliers: gathered.outliers, stamp: gathered.stamp, back: gathered.back, material: gathered.material },
     gathered.sources, gathered.tookMs, progress, edition);
   if (gathered.dryRun) {
     payload.dryRun = gathered.dryRun;

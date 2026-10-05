@@ -95,6 +95,11 @@ ok(/sources = withMaterialRefusals\(sources, j\.material\)/.test(src) && /functi
    'a refusal is counted in sources.ebay like any other');
 ok(/j\.material && j\.material\.refusedRows/.test(src), 'and listed in refused[] with its reason');
 ok(/material: j\.material, ebayState/.test(src), 'the view state carries it, so a rebuild keeps it');
+// Found live on Render 2026-10-05: the FIRST answer's payload object named
+// stamp and back but not material — refusals made, not counted, not listed.
+const firstAnswer = (src.match(/buildListingsPayload\(card, requestedId, grade, printing,\s*\{[^}]*\}/g) || []);
+ok(firstAnswer.length >= 1 && firstAnswer.every(s => /material: gathered\.material/.test(s)),
+   'the first answer carries it too (every payload object built by hand names material)');
 ok(/if \(!ropts\.material\) materialFollowUp\(/.test(src) && /if \(st\) materialFollowUp\(/.test(src),
    'rows are profiled after the answer, on the first answer and on rebuilds');
 ok(/check_kind = 'material'/.test(src) && /VALUES \(\$1,'material',\$2,\$3,'profiled',\$4,\$5\)/.test(src),

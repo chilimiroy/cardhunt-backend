@@ -87,6 +87,18 @@ ok(/isOurCardId\(b\.card_api_id\)/.test(pfPost), 'POST /api/portfolio refuses a 
 ok((server.match(/cardid\.ourIdSql\(/g) || []).length >= 4, 'single-card resolvers never serve a foreign row');
 ok(/cardid\.ourIdSql\('c'\)/.test(fs.readFileSync('cardparse.js', 'utf8')), '/api/search never resolves to a foreign row');
 
+// ── TCGdex's per-card path for our numbers (Unown '?' = TCGdex '%3F') ──
+const { tcgdexLocalId } = require('./cardid');
+ok(tcgdexLocalId('?') === '%253F', "Unown '?' asks TCGdex for exu-%253F (the form that answers)");
+ok(tcgdexLocalId('24a') === '24a' && tcgdexLocalId('H01') === 'H01' && tcgdexLocalId('!') === '!', 'ordinary numbers pass through');
+{
+  const ing = fs.readFileSync('ingest.js', 'utf8'), hv = fs.readFileSync('tcgdexharvest.js', 'utf8');
+  const raw = [ing, hv].join('\n').match(/cards\/\$\{(?:card|c)\.set_api_id\}-\$\{(?!tcgdexLocalId)[^}]*\}/g) || [];
+  ok(raw.length === 0, 'every per-card TCGdex ask by a stored number goes through tcgdexLocalId' + (raw.length ? ' — ' + raw.join(' ; ') : ''));
+  ok(/const fold = x => String\(x\)\.replace\(\/\^%3F\$\/i, '\?'\)/.test(ing), "cardgap folds TCGdex '%3F' to our '?'");
+  ok(/const foldNo = x => String\(x\)\.replace\(\/\^%3F\$\/i, '\?'\)/.test(ing), "manifest folds TCGdex '%3F' to our '?'");
+}
+
 // ── the database ──
 (async () => {
   if (!process.env.DATABASE_URL) { console.log('  (DATABASE_URL not set — database section skipped)'); return done(); }

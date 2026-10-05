@@ -41,4 +41,13 @@ function refusal(id) {
                    'Something resolved this card in another source\'s id space; that is a bug, not a card.' };
 }
 
-module.exports = { OUR_CARD_ID, isOurCardId, ourIdSql, refusal };
+// Our number -> the path segment TCGdex's per-card endpoint answers to.
+// TCGdex's own localId for Unown "?" (exu) is the literal text "%3F":
+// /cards/exu-%253F answers, /cards/exu-%3F is a 404 (probed 2026-10-05).
+// We store the printed '?', so every per-card ask goes through here.
+function tcgdexLocalId(number) {
+  const n = String(number == null ? '' : number);
+  return encodeURIComponent(n === '?' ? '%3F' : n);
+}
+
+module.exports = { OUR_CARD_ID, isOurCardId, ourIdSql, refusal, tcgdexLocalId };

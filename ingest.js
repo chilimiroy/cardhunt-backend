@@ -23,6 +23,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { tcgdexLocalId } = require('./cardid');
 let Pool = null;
 try { Pool = require('pg').Pool; } catch (e) { /* dry run without pg */ }
 
@@ -731,7 +732,7 @@ async function tcgdexPriceFor(card) {
     return { price: null, none: 'not-ready' };
   }
   await hostDelay('tcgdex', DELAY_TCGDEX);
-  const url = `${TCGDEX}/en/cards/${card.set_api_id}-${encodeURIComponent(card.number)}`;
+  const url = `${TCGDEX}/en/cards/${card.set_api_id}-${tcgdexLocalId(card.number)}`;
   let d = null, status = 0;
   for (let i = 0; i < 3 && !d; i++) {
     try {
@@ -1994,7 +1995,7 @@ async function rarityFill(lang, ...flags) {
       // Disagreement — ask the authoritative source about THIS card.
       let tcgRarity = null;
       try {
-        const d = await get(`${TCGDEX}/${lang}/cards/${c.set_api_id}-${c.number}`);
+        const d = await get(`${TCGDEX}/${lang}/cards/${c.set_api_id}-${tcgdexLocalId(c.number)}`);
         await sleep(DELAY_TCGDEX);
         st.asked++;
         const raw = d && d.rarity ? d.rarity : null;
@@ -4084,7 +4085,7 @@ async function priceCheck(lang, setId) {
     await hostDelay('tcgdex', DELAY_TCGDEX);
     let d = null, none = null;
     try {
-      const r = await fetch(`${TCGDEX}/${lang}/cards/${setId}-${encodeURIComponent(c.number)}`);
+      const r = await fetch(`${TCGDEX}/${lang}/cards/${setId}-${tcgdexLocalId(c.number)}`);
       if (r.status === 404) none = 'not-on-tcgdex';
       else if (r.ok) d = await r.json();
       else none = 'unreachable (HTTP ' + r.status + ')';
@@ -4278,7 +4279,8 @@ async function buildManifest(lang, arg1, arg2) {
     // cards #1-99 were "not found", and every card of SM1M, SM6b, S7D… —
     // so those sets never got manifest's rarity. Fold leading zeros on
     // both sides, ask with TCGdex's form; one listing request a set.
-    const foldNo = x => String(x).replace(/^0+(?=\d)/, '');
+    // Unown '?' is TCGdex localId '%3F'; we store '?' (2026-10-05).
+    const foldNo = x => String(x).replace(/^%3F$/i, '?').replace(/^0+(?=\d)/, '');
     const listing = await get(`${TCGDEX}/${lang}/sets/${encodeURIComponent(setId)}`);
     await sleep(DELAY_TCGDEX);
     const localIdOf = new Map(((listing && listing.cards) || []).map(x => [foldNo(x.localId), String(x.localId)]));
@@ -4396,7 +4398,7 @@ async function verifySetData(lang, setId) {
 
   for (let i = 0; i < cards.rows.length; i += step) {
     const c = cards.rows[i];
-    const d = await get(`${TCGDEX}/${lang}/cards/${setId}-${encodeURIComponent(c.number)}`);
+    const d = await get(`${TCGDEX}/${lang}/cards/${setId}-${tcgdexLocalId(c.number)}`);
     await sleep(DELAY_TCGDEX);
 
     if (!d || !d.name) {
@@ -4521,7 +4523,7 @@ async function cardGap(lang, ...rest) {
   lang = lang || 'en';
   const doFix = rest.includes('--fix');
   const only = (rest.find(a => a && a.startsWith('--set=')) || '').slice(6).split(',').filter(Boolean);
-  const fold = x => String(x).replace(/^0+(?=\d)/, '');
+  const fold = x => String(x).replace(/^%3F$/i, '?').replace(/^0+(?=\d)/, '');   // Unown '?' = TCGdex '%3F'
 
   const have = await db.query(`
     SELECT set_api_id, array_agg(number) AS nums,

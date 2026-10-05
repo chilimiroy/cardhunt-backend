@@ -65,6 +65,7 @@
 const { Pool } = require('pg');
 const T = require('./tcgdexprice.js');
 const fx = require('./fx.js');
+const { tcgdexLocalId } = require('./cardid');
 const srank = require('./sourcerank.js');
 const printsql = require('./printsql.js');   // T10: the ONE base-price rule the readers use
 
@@ -191,7 +192,7 @@ async function harvest(lang, flags) {
   const fetched = [];
   for (let i = 0; i < batch.length; i++) {
     const c = batch[i];
-    const d = await get(`${TCGDEX}/${lang}/cards/${c.set_api_id}-${encodeURIComponent(c.number)}`);
+    const d = await get(`${TCGDEX}/${lang}/cards/${c.set_api_id}-${tcgdexLocalId(c.number)}`);
     await sleep(DELAY);
     if (!d) { notFound++; continue; }
     const p = T.parsePricing(d);

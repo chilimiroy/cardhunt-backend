@@ -136,7 +136,7 @@ function pickDeal(payload, ref) {
 // is the deal; nothing dearer matters). `budget` is what the view may still
 // spend (DEAL_BACK_MAX minus what it has). 0 calls when there is no deal to make.
 function backCandidates(payload, ref, budget) {
-  if (!ENABLED || !refUsable(ref) || !(budget > 0)) return [];
+  if (!refUsable(ref) || !(budget > 0)) return [];
   const solid = solidRows(payload, ref);
   if (solid.length < MIN_TRUSTED) return [];
   const out = [];

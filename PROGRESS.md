@@ -1,5 +1,136 @@
 # CardHunt — Progress Log
 
+## 2026-10-06 — T1 "which card is this" measured and STOPPED; logos/Unown SQL; Ancient Mew; energy; T6 dark mode; T7 counted; T8 waiting on Roy
+
+**eBay spend:** ~10 user calls (Ancient Mew raw ×2, PSA 9, PSA 8, CGC 8, the
+card page with ?api=render). Day at ~790 of 5,000 at the check.
+
+### WHICH CARD IS THIS? — measured 2026-10-06 (T1), NOT built
+Question: name the card in a seller's photo from all English scans, not "is
+it card X". Shortlist (cheap) -> the existing matcher on the shortlist ->
+best match wins by a margin. Stop rule (Roy): if the shortlist does not
+reliably keep the right card, stop — a confident wrong name is worse than
+silence. **It does not keep it, so nothing was wired in.**
+
+Data: 20,360 English scans (TCGdex low.jpg / pokemontcg.io .png, 142 of
+20,502 failed both hosts). Labelled photos: the 1,010 rows of 2026-10-02
+(final kinds, "SPLIT BY KIND") + the 67 Base Charizard rows of 2026-10-05,
+labelled again by eye; 955 used (837 right, 21 different card with the true
+card identified by eye, 43 metal/recoloured, 45 other language). The
+different-card truths: Charizard ex 228/197 gold ×7 photos (3 distinct
+items: base1-4 #0, #7, #20 + 2026-10-05 #0, #5, #57, #62, several the same
+listing), Charizard ex 215/197 **or SVP 056** silver ×6 (same illustration,
+two cards — one photo shows "SVP 056"), Vivid Voltage Charizard 025,
+Umbreon VMAX 095 ×2, Pikachu VMAX 044, Giratina V 130 / 185 ×2, Lugia V
+185. Five D rows left out (not identifiable with certainty).
+
+Shortlist = find the card with the claimed card's scan (wholeScore's sweep,
+photo padded 15%, card 30-110% of width), 16×22 colour descriptor ×27
+jitters against all scans. Tried and no better: mean-card localisation
+(top-20 35.6%), several boxes (87.9%), fill-the-frame boxes (53%), a height
+prior + 48 px refinement (88.6%), 10×14 / art-only / grey descriptors
+(89-92%). The ceiling is localisation: on clean full-card photos the box
+lands on the inner art frame.
+
+| | n | top-1 | top-5 | top-20 | top-50 | top-200 |
+|---|---|---|---|---|---|---|
+| genuine: rank of the right card in 20,360 | 837 | 48.1% | 87.9% | 91.5% | 92.8% | 94.9% |
+| different card: rank of the TRUE card | 21 | 4.8% | 4.8% | 4.8% | 4.8% | — |
+
+Different-card ranks: 1,151-13,714 for 20 of 21 (the box is found with the
+WRONG card's scan, and a 16×22 descriptor reads layout and colour, not
+identity). **Gold 228: rank 11,303-13,714 on every photo — never shortlisted.**
+
+End to end, stage 2 = the existing matcher (wholeScore, free sweep) or the
+same NCC held to the located box (40 px, ±10% scale, ±8% position):
+
+| stage 2 | K | margin | genuine named as another card | different card: right / wrong / silent | metal named | other language named |
+|---|---|---|---|---|---|---|
+| wholeScore | 20 | 0.10 | 91 / 837 | 1 / 15 / 5 | 23 / 43 | 22 / 45 |
+| wholeScore | 20 | 0.30 | 9 / 837 | 0 / 1 / 20 | 2 / 43 | 0 / 45 |
+| wholeScore | 20 | 0.40 | 1 / 837 | 0 / 0 / 21 | 2 / 43 | 0 / 45 |
+| aligned | 20 | 0.20 | 38 / 837 | 0 / 8 / 13 | 14 / 43 | 2 / 45 |
+| aligned | 20 | 0.40 | 0 / 837 | 0 / 0 / 21 | 0 / 43 | 0 / 45 |
+
+K = 10 or 50 changes little. Why: with tens of candidates the max of
+whole-card NCC noise beats the right answer — wholeScore's sweep matches any
+card against a SUB-region of the photo (a metal Pikachu VMAX was "Charizard
+ex 199" by 0.29; a Japanese Base Charizard "sm6-100" by 0.24). Timing here:
+stage 1 ~4.4 s, stage 2 on 51 candidates ~7 s a photo (both slower under
+4-way load). Not a production path in any form measured.
+
+**The lead, NOT shipped:** as a PAIR, the shipped matcher does prefer 228
+over Base Charizard: 61 distinct genuine Base Charizard photos, hardest at
+-0.118 (0 refused at any margin ≥ 0.15); 3 distinct gold 228 photos at
++0.155, +0.033, +0.376 — 2 of 3 at 0.15, 1 of 3 at the shipped 0.30. A
+`LOOKALIKES` pair (CLAUDE.md: the cheap route for a recurring wrong card)
+is the way forward for 228, but three photos is not a rate: widen first
+(more 228 photos, the 215/SVP 056 silver twins) before setting a margin.
+Scripts: session scratchpad `lib.js`, `e2e.js`, `analyse.js`, `pair228.js`,
+`truth.js` (labels); outputs `full-*.jsonl`.
+
+### Logos and Unown — SQL for Roy (`roy-writes-20261006.sql`, `7e780f7`)
+Logos copied, not new: mcd23/mcd24 -> pokemontcg.io mcd21 plain arches (30
+rows); mep/svp -> the generic Black Star Promos star (TCGdex swshp/smp/xyp/bwp
+are the same 15,737-byte file; 315 rows). Unown '%3F' -> '?' (1 row, id kept,
+4 price_history rows). Each: backup SELECT, expected count, guarded UPDATE,
+undo. Code side shipped first: TCGdex answers `/cards/exu-%253F`, not
+`exu-%3F` (404) — `cardid.tcgdexLocalId` on every per-card ask (5 sites),
+manifest/cardgap fold '%3F' to '?' so a re-ingest neither 404s nor re-adds.
+
+### Ancient Mew (`aa44c71`, `fbd0dbc`, `d6f3193`) — grouped, not moved
+Prints no number: `cardmatch.PRINTS_NO_NUMBER` (by card id) asks "Ancient
+Mew pokemon", gates on the name, refuses any N/M pair, reads the year as
+2000 (set release 1995-12-31 UTC refused every "2000" title).
+ebayMatchCard/filterCard now carry cardId. Live, both directions:
+
+| ask | kept | of which the card | refused | note |
+|---|---|---|---|---|
+| Raw, name only | 59 / 200 | 3 | 141 | 56 = paper "details" insert (~30) + metal replicas |
+| Raw, + notThis | 3 / 200 | 3 | 197 | 0 previously refused now kept |
+| PSA 9 | 165 / 200 | ~all | 35 | JA/KO copies, an insert |
+| PSA 8 | 128 / 165 | all but 1 | 37 | "ANCIENT Mewtwo" kept -> refused |
+| CGC 8 | 8 / 16 | 8 | 8 | 5 inserts, 3 JA |
+
+Open for Roy: "Sealed Cello Pack – PSA 8" (the card graded in its 2000
+cellophane) is refused as sealed. Image: TCGdex has no image field (asset
+path 404); pokemontcg.io has no Ancient Mew in any of its 176 sets (its
+search API returned 500/502; read from its GitHub data) — blank, like the
+McDonald's art. Page: the Wizards Black Star Promos tile opens basep + miscp
+(54 cards, chip per set), header says Ancient Mew is not a Black Star Promo;
+opened in the browser.
+
+### Energy (T5) — confirmed
+TCGdex English, 220 sets: exactly two energy sets, sve (24) and mee (8), both
+held. Basic energies elsewhere print inside main sets (EX 36 in 6 sets, XY
+27, SM 18, DP 14, Base 12, Gym 12 …; 49 in trainer kits) — re-measured, same
+as 2026-10-05. "Every era's energy sets" is a UI grouping, not data.
+
+### T6 dark mode (`bcc9c28`)
+Tokens already followed prefers-color-scheme; added the before-paint head
+script (localStorage `ch_theme`), Auto/Light/Dark toggle before currency,
+color-scheme. Eye + in-page audit (text under 3:1) on home, sets, set page,
+card page with live rows and the refused list, search, results, alerts,
+portfolio, promo group, autocomplete, both themes. Broken and fixed: white
+top bar (the "Card" wordmark vanished), white autocomplete, light nav hover
+and skeleton under light text, white text on accent/status tokens (6),
+amber literal text 2.97:1, light source notes/badges -> soft tokens. No new
+colours; brand chips that paint their own background left as they are.
+
+### T7 translation — counted, not started
+~300 page strings (±50; ~900 words): 200 static text nodes, 12
+placeholders/titles, ~90 JS-built sentences, after removing catalogue data
+(set names, rarities, card names embedded in the page) and markup
+fragments. Plus server-written explanations shown on the page (refusal
+reasons, panel notes: cardmatch.js has 46 reason templates) — a second pool.
+
+### T8 accounts — not started; needs Roy (see the session report)
+
+**Process:** `git stash` rewrote touched files' endings again (restored);
+Git Bash `grep -c $'\r$'` miscounts CR — count with node.
+
+---
+
 ## 2026-10-05 (late) — T1 genuine-back rule, deals on and off again, T2 empty-panel kinds, T5 trainer kits
 
 **eBay spend:** ~170 calls (4 raw views + 107 getItem for the measurement, 10

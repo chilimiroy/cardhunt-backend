@@ -101,6 +101,8 @@ Gitignored (need a DB URL or residential IP): `sourcerank.js`,
 copies of the page once sat in Downloads). The build stamp bottom-left names
 the commit. `/app` serves `cardhunt_preview.html` byte for byte; the module
 `<script>` tags stay **absolute** so the `file://` fallback still loads them.
+Theme: Auto/Light/Dark, `localStorage ch_theme`, set by a head script before
+paint; colours only through the tokens (`theme.test.js`).
 Serve ONE file by name — **never `express.static(__dirname)`**
 (`node approute.test.js`: what IS served and 26 paths that are NOT).
 
@@ -227,8 +229,10 @@ set names by set id (`SET_WRITTEN_AS`); auctions asked via `buyingOptions`;
 lettered numbers are their own card. Re-run `node querygap.js en` (~200
 tooling calls) after any change to `buildQuery` or a set's vocabulary.
 Open: raw titles with the pair and no set name are never fetched (unmeasured);
-Ancient Mew (no number). Unown "?" stored as number `%3F` (TCGdex's localId) —
-the row needs number '?' (code is ready). mfb: eBay has nothing (`NO_EBAY_MARKET`);
+Ancient Mew prints no number: `cm.PRINTS_NO_NUMBER` (name only, year 2000, refuses its
+paper insert / metal / Mewtwo); grouped with basep on the page, not moved. Unown "?"
+`%3F` -> '?' is SQL for Roy (`roy-writes-20261006.sql`, with the mcd23/24 and
+mep/svp logo copies); TCGdex is asked via `cardid.tcgdexLocalId`. mfb: eBay has nothing (`NO_EBAY_MARKET`);
 an empty panel says none-returned / all-refused / no market (`payload.market`).
 Trainer kits: ONE grid tile, filter by kit — UI only (`groupTrainerKits`).
 
@@ -309,6 +313,9 @@ Rules of the gate:
   infrastructure); Japanese layout by template ("CAN THE STAMP MATCHER TELL A
   JAPANESE COPY?…" — 10.5 s a photo, 1 row of yield); sibling+price rule
   (2/14 on a fresh sample). Base Set 2's set mark needs alignment first.
+  **"Which card is this" across all 20,360 scans — STOPPED** (PROGRESS
+  2026-10-06: "WHICH CARD IS THIS?…"): the true card of a different-card photo
+  reached the shortlist 1 of 21 (gold 228: rank ~12,000). Lead: a 228 pair.
 - **The cheap route for a recurring wrong card is a new `LOOKALIKES` pair,
   measured first.**
 
@@ -613,7 +620,9 @@ of Forbidden Light; 236 cards refused on their own name (`maskOwnIdentity`;
 `ownname.test.js --db`). (PROGRESS 2026-10-04)
 
 **A filter measured at "0 wrong" may only have been measured one way** — say
-which direction a number is. (PROGRESS 2026-10-04)
+which direction a number is. (PROGRESS 2026-10-04) A shortlist that keeps the
+right card 91.5% on genuine photos kept it 4.8% on the photos it exists for
+(PROGRESS 2026-10-06).
 
 **A hoped-for grade is not a grade** (`stripSpeculative()`); **measure after
 deploying, not only before.** *Archive:* "A hoped-for grade is not a grade", "Slabs: BUILT 2026-09-27 — filter narrows, disagreement is refused"

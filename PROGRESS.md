@@ -1,5 +1,29 @@
 # CardHunt — Progress Log
 
+## 2026-10-05 (night) — deals off, Evolutions lookalike pairs shipped, PNG references
+
+**Deals OFF** (`dc890ca`). Bar in `deals.notADeal`, each rule fails the
+suite when removed. Why the gold card got through: on the live Shining
+Charizard view the row (v1|407260752181, $180.17 BIN) carries no mark in the
+panel either — no `suspect`, back `no-claim`, colour 0.059 above our scan
+(blue-white light), price not low enough to flag. Under the new bar it is
+still the pick (that view: 27 rows excluded — 3 stated condition, 1 edition,
+12 price flags, 3 novelty flags, 7 shipping unknown, 1 bid). So deals stay off.
+
+**Lookalike pairs at 0.30** (`6bbf149`), `VERDICT_VERSION` stamp-2. Shipped
+templates (from TCGdex high.png) vs the measurement's (.jpg): margins within
+0.014. Live re-score with the shipped `judge()`: Mewtwo ☆ 23/80 refused,
+Dragonite ex 15/122, all 38 looked at — all Evolutions; genuine side 0/5 and
+0/34; reverse on xy12-51 (195 rows) and xy12-72 (188) 0 refused. eBay: 6 calls.
+
+**PNG references** (`c2b68c1`): 806/806 pokemontcg.io scans profile through the
+shipped worker path. Host agreement on 30 cards held on both: median |Δgold|
+0.003; Jolteon ☆ −0.137, Torchic ☆ −0.058 (pokemontcg.io reads less gold).
+Before/after, CC002 / Shiny Vault Charizard VMAX / GG69 (244 rows): 0 refused,
+2 newly flagged — both gold metal (looked at). 754 cards have no image at all.
+
+---
+
 ## 2026-10-05 (later) — T1 colour alone measured, T2 cross-set lookalikes, T3 spec tracked, T4 deals seen live
 
 **eBay spend:** 151 US-page-1 card views on Render (30 gold/dark/warm cards,

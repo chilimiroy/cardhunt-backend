@@ -242,13 +242,14 @@ Unown `%3F`, Ancient Mew (no number), ex5.5 and mfb (no listings).
 - **Decided 2026-10-05 (Roy):** Yellow A Alternate (xya) is NOT deleted — own
   printed numbers (24a/119) and own listings (36 kept), unlike the TG twins;
   and **no softer 0.2x price flag** — it would catch genuine damaged copies.
-- **Open: cross-set lookalikes** — Mewtwo ☆ ex13-103 (75 of 80 rows are
-  Evolutions Mewtwo xy12-51) and Dragonite ex ex3-90 (~79 Evolutions
-  Dragonite-EX xy12-72), under ex-era catalogue titles. Pairs measured, NOT
-  shipped: at 0.30 they catch ~25%; ~0.10 catches most but rests on 36 genuine
-  rows. Finder: >=40% of a view price-flagged, then score against same-Pokémon
-  scans (PROGRESS 2026-10-05 (later)). 1,590 EN cards have no material
-  reference (pokemontcg.io PNG art incl. CC002, or no image).
+- **Cross-set lookalikes — SHIPPED at 0.30 (Roy, 2026-10-05), a reduction:**
+  Mewtwo ☆ ex13-103 ↔ Evolutions Mewtwo xy12-51, Dragonite ex ex3-90 ↔
+  Evolutions Dragonite-EX xy12-72 (Evolutions cards under ex-era catalogue
+  titles). 23/80 and 15/122 refused, all Evolutions; 0 genuine; 0 on the
+  Evolutions cards' own pages. Most Evolutions rows (margin 0.04-0.30) stay —
+  a lower margin needs more genuine photos. Finder: >=40% of a view
+  price-flagged, then score against same-Pokémon scans (PROGRESS 2026-10-05).
+- 754 EN cards have no image, so no material reference (B2a, mep, trainer kits).
 - Existing Yahoo base rows were not repaired for printing (143 of 191 JP cards
   holding both sit >5x the Yuyu-tei base) — `jpcheck` over them is owed.
 
@@ -266,12 +267,12 @@ photo here, ~1.2-1.3 s on Render. A timeout is retryable, never a verdict.
 | problem | caught by | on which cards | measured |
 |---|---|---|---|
 | 30th / Celebrations reprint | stamp template from OUR scan, 0.70 + title words + price band | 55 originals (`30th-c-020` no stamp) | 92.5% of reprint photos, 0/16 originals |
-| a different card listed under ours, both scans held | lookalike, margin 0.30 | ONE pair: bubble Mew 232/091 ↔ 30th Mew 152/128 | 162/178 caught, 0/276 genuine |
+| a different card listed under ours, both scans held | lookalike, margin 0.30 | 3 pairs: bubble Mew 232/091 ↔ 30th Mew 152/128; Mewtwo ☆ and Dragonite ex ↔ their Evolutions cards | Mew 162/178 caught, 0/276 genuine; Evolutions 38 caught, 0 genuine |
 | same-name card of the same set | sibling, margin 0.40 | 6,891 English cards | 7/11 swaps, 0/~1,470 genuine |
 | named replica | title words | all | 0/896 right titles refused |
 | implausible price | outlier (flag) | ≥5 priced or current stored price | 0/864 right flagged |
 | other-language copy | title; Japanese-family **back** | all / on demand, flagged rows, `MOST_FAKED` | back 11/12 JA, 0/52 EN |
-| gold/black/silver metal novelty, title silent (2026-10-05) | material check: colour vs our scan, outlier flag, metal photo — two refuse, one flags | English cards with a TCGdex scan | labelled: 51/95 refused + 22 flagged, **0/195 genuine refused**; 12 cards, 1,990 rows: 68 refused, all looked at, 0 genuine |
+| gold/black/silver metal novelty, title silent (2026-10-05) | material check: colour vs our scan, outlier flag, metal photo — two refuse, one flags | English cards with a scan (TCGdex .jpg, or pokemontcg.io .png for 806) | labelled: 51/95 refused + 22 flagged, **0/195 genuine refused**; 12 cards, 1,990 rows: 68 refused, all looked at, 0 genuine |
 | rainbow / silver metal (colour like the card) | price + metal photo only | same | Pikachu VMAX: 4 of its metal refused — most kept |
 | different illustration outside a held pair | **NOTHING** | — | |
 | printed counterfeit, real back | **NOTHING** (back would LABEL it) | — | |
@@ -429,12 +430,13 @@ schtasks /Run   /TN "CardHunt nightly refresh"
   on the home page, window stated; `coverage` says when a list is thin and
   why. 2026-10-05: 7d **0 pairs** (TCGdex nightly since ~09-28), 24h 250 of
   2,510 — the page shows 24 hours and says so. Re-check after 2026-10-06.
-- **Best deals** (`deals.js`, `/api/deals`): cheapest trusted Buy It Now
-  (shipping stated, no flag, novelty-checked, ≥3 such rows) 15%+ below the
-  card's CURRENT measured price; only views opened in the last 15 minutes;
-  never fetches. Not the outlier signal: outliers are below trust. **Seen live
-  2026-10-05: at most 2 of 8 like-for-like** (a metal novelty, an Evolutions
-  Mewtwo, stated damage vs a NM price) — a stricter bar is Roy's call.
+- **Best deals — SWITCHED OFF 2026-10-05 (Roy)** (`deals.ENABLED`;
+  `/api/deals` answers `enabled:false` + reason, the page says so). Seen live:
+  at most 2 of 8 like-for-like. The bar (`deals.notADeal`) now also refuses
+  stated LP/MP/HP/DMG, a stated other printing/edition, pending or marked
+  photos. **Still not enough**: the #1 row, a gold metal Shining Charizard,
+  carries no mark anywhere (colour 0.059, no price flag, back no-claim) and
+  is still the pick — switch on only after that class is answered.
 
 ## Near you (local card shops) — PLANNED, needs a real data source
 Honest empty state. **Do not fill it with anything a source did not return.**

@@ -37,6 +37,16 @@ ok(goldMew.length >= 100 && goldMew.every(r => act(r) === 'none'),
    'an SV gold hyper rare (Mew ex 205/165, ' + goldMew.length + ' rows) — not refused, not even flagged: its own scan is gold');
 const goldStar = of('genuine', 'gs');
 ok(goldStar.length && goldStar.every(r => act(r) !== 'refuse'), 'a Gold Star (Mewtwo ☆ 103/110, ' + goldStar.length + ' genuine rows) survives');
+// Why colour does not refuse alone (measured 2026-10-05): genuine rows reach
+// 0.491 above their own scan — gold hyper rares whose scan undercounts the
+// gold (Reversal Energy, Basic Water Energy), a $610 Magikarp & Wailord at
+// 0.424, a $758 Shining Charizard at 0.416. No threshold refuses colour alone
+// without one of them, and at 0.50 it would catch 34 of 95 metal, fewer than two signals.
+const colourOnly = genuine.filter(r => r.profile.gold - r.ref.gold > sc.MATERIAL_GOLD_EXCESS);
+ok(colourOnly.length >= 4 && colourOnly.every(r => act(r) !== 'refuse'),
+   'genuine rows above the colour threshold (' + colourOnly.length + ') are flagged, never refused — colour is one signal, not a verdict');
+const hr = of('genuine', 'widen-hr');
+ok(hr.length === 4 && hr.every(r => act(r) !== 'refuse'), 'the genuine gold hyper rares found widening the sample survive (' + hr.length + ')');
 ok(genuine.filter(r => act(r) === 'flag').length <= 8,
    'genuine rows flagged (sorted last, still shown): ' + genuine.filter(r => act(r) === 'flag').length + ' of ' + genuine.length);
 

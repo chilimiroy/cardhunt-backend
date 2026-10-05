@@ -145,10 +145,10 @@ async function loadBackVerdicts(card, rows) {
   let timer;
   try {
     await photoVerdictsTable();
-    const q = db.query(`SELECT item_key, state, label, says FROM listing_photo_verdicts
+    const q = db.query(`SELECT item_key, state, label, says, reprint FROM listing_photo_verdicts
       WHERE check_kind = 'back' AND version = $2 AND item_key = ANY($1)`, [[...want.keys()], backcheck.BACK_VERSION]);
     const got = await Promise.race([q, new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timed out')), 2500); })]);
-    for (const x of got.rows) { const k = want.get(x.item_key); if (k) { backVerdicts.set(k, { state: x.state, family: x.label, says: x.says, stored: true }); want.delete(x.item_key); } }
+    for (const x of got.rows) { const k = want.get(x.item_key); if (k) { backVerdicts.set(k, { state: x.state, family: x.label, says: x.says, metal: x.reprint === 'metal-photo', stored: true }); want.delete(x.item_key); } }
   } catch (e) { console.warn('[back] verdicts not read:', e.message); }
   finally { clearTimeout(timer); }
   for (const k of want.values()) backMissed.set(k, now);
@@ -160,20 +160,117 @@ async function backCheckItem(card, itemId, o) {
   if (!got.hit) return { error: (got.body && got.body.error) || 'eBay getItem failed', status: got.status };
   const images = (got.hit.images || []).map(x => (x && x.url) || x);
   const scores = await Promise.all(images.map(u => stampcheck.checkBackPhoto(u)));
+  // A gold/black metal photo among the seller's others is a novelty signal
+  // (T1, 2026-10-05) — judged against OUR scan, and kept with the verdict.
+  const mref = materialApplies(card) ? await materialRefOf(card) : null;
   const v = Object.assign(backcheck.listingVerdict(scores, cid), { photos: images.length,
+    metal: stampcheck.metalPhotoOf(scores, mref),
     scores: scores.map(x => x && { en: x.en, ja: x.ja, seen: x.seen }) });
   // A photo the CDN would not give is not a verdict: nothing stored, asked again later.
   if (scores.some(x => x && x.retryable) && v.state === 'no-claim') return Object.assign(v, { calls: got.calls, retryable: true });
-  backVerdicts.set(k, { state: v.state, family: v.family || null, says: v.says });
+  backVerdicts.set(k, { state: v.state, family: v.family || null, says: v.says, metal: v.metal });
+  // reprint column: 'metal-photo' when a metal photo was seen (no migration;
+  // a verdict stored before 2026-10-05 reads as "not seen").
   if (db) photoVerdictsTable().then(() => db.query(`INSERT INTO listing_photo_verdicts (item_key, check_kind, version, photo_key,
-      card_id, state, label, says, score) VALUES ($1,'back',$2,$3,$4,$5,$6,$7,$8)
+      card_id, state, label, says, score, reprint) VALUES ($1,'back',$2,$3,$4,$5,$6,$7,$8,$9)
       ON CONFLICT (item_key, check_kind, version) DO UPDATE SET photo_key = EXCLUDED.photo_key, state = EXCLUDED.state,
-      label = EXCLUDED.label, says = EXCLUDED.says, score = EXCLUDED.score, checked_at = now()`,
+      label = EXCLUDED.label, says = EXCLUDED.says, score = EXCLUDED.score, reprint = EXCLUDED.reprint, checked_at = now()`,
     [stampcheck.itemKey(k), backcheck.BACK_VERSION, stampcheck.photoKey(images.join(' ')), cid, v.state,
-     v.family || null, v.says, Math.max(-1, ...scores.map(x => (x && Math.max(x.en || -1, x.ja || -1)) || -1))]))
+     v.family || null, v.says, Math.max(-1, ...scores.map(x => (x && Math.max(x.en || -1, x.ja || -1)) || -1)),
+     v.metal ? 'metal-photo' : null]))
     .catch(e => console.warn('[back] verdict not stored:', e.message));
   return Object.assign({}, v, { calls: got.calls });
 }
+// ── Gold and black novelty cards (TASK T1, 2026-10-05; stampcheck.materialJudge) ──
+// Each eBay row's primary photo gets a colour profile (eBay's CDN, the stamp
+// worker pool, 0 eBay calls), compared with the profile of OUR scan of the
+// card. Two signals refuse (colour, the outlier flag, a gold/black metal
+// photo among the seller's others), one flags; a genuine back seen never
+// refuses. A profile is a fact about a photo, so it is stored — check_kind
+// 'material', hashed keys, no eBay data — and read in one query a view.
+// English cards with a TCGdex scan only: what was measured.
+const materialProfiles = new Map();   // itemId -> { gold, black, photoKey }
+const materialMissed = new Map();     // the store had nothing: not asked again for a minute
+const _materialRef = new Map();       // cardId -> Promise<{ gold, black } | null>
+const MATERIAL_MAX_PER_VIEW = 300, MATERIAL_REF_MS = 1500;
+function materialScanUrl(card) {
+  const src = String((card && (card.image_small || card.image_large)) || '');
+  return /^https:\/\/assets\.tcgdex\.net\/.+\.(?:png|jpg)$/.test(src) ? src.replace(/\.png$/, '.jpg') : null;
+}
+function materialApplies(card) { return /^en-/.test(String(card && card.api_card_id || '')) && !!materialScanUrl(card); }
+function materialRefOf(card) {
+  const cid = card.api_card_id;
+  if (_materialRef.has(cid)) return _materialRef.get(cid);
+  const p = stampcheck.checkMaterialScan(materialScanUrl(card))
+    .then(v => v && v.state === 'profiled' ? { gold: v.gold, black: v.black } : null).catch(() => null);
+  _materialRef.set(cid, p);
+  p.then(v => { if (!v) setTimeout(() => _materialRef.delete(cid), 10 * 60 * 1000); });   // retry a failed scan later
+  return p;
+}
+const materialPhotoOf = row => row && row.source === 'ebay' && row.itemId
+  ? stampcheck.photoUrl(row.imageUrl, stampcheck.MATERIAL_PHOTO_SIZE) : null;
+function materialProfileOf(row) {
+  const url = materialPhotoOf(row), p = url && materialProfiles.get(row.itemId);
+  return p && p.photoKey === stampcheck.photoKey(url) ? p : null;
+}
+async function loadMaterialProfiles(rows) {
+  if (!db) return;
+  const now = Date.now(), want = new Map();
+  for (const r of rows || []) {
+    if (!materialPhotoOf(r) || materialProfileOf(r) || now - (materialMissed.get(r.itemId) || 0) < 60000) continue;
+    want.set(stampcheck.itemKey(r.itemId), r.itemId);
+  }
+  if (!want.size) return;
+  let timer;
+  try {
+    await photoVerdictsTable();
+    const q = db.query(`SELECT item_key, photo_key, label, score FROM listing_photo_verdicts
+      WHERE check_kind = 'material' AND version = $2 AND item_key = ANY($1)`, [[...want.keys()], stampcheck.MATERIAL_VERSION]);
+    const got = await Promise.race([q, new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('timed out')), 2500); })]);
+    for (const x of got.rows) {
+      const id = want.get(x.item_key); if (!id) continue;
+      materialProfiles.set(id, { gold: Number(x.score), black: Number(x.label), photoKey: x.photo_key, stored: true });
+      want.delete(x.item_key);
+    }
+  } catch (e) { console.warn('[material] profiles not read:', e.message); }
+  finally { clearTimeout(timer); }
+  for (const id of want.values()) materialMissed.set(id, now);
+}
+function saveMaterialProfile(itemId, url, v) {
+  const prof = { gold: v.gold, black: v.black, photoKey: stampcheck.photoKey(url) };
+  materialProfiles.set(itemId, prof);
+  if (db) photoVerdictsTable().then(() => db.query(`INSERT INTO listing_photo_verdicts (item_key, check_kind, version, photo_key,
+      state, label, score) VALUES ($1,'material',$2,$3,'profiled',$4,$5)
+      ON CONFLICT (item_key, check_kind, version) DO UPDATE SET photo_key = EXCLUDED.photo_key,
+      label = EXCLUDED.label, score = EXCLUDED.score, checked_at = now()`,
+    [stampcheck.itemKey(itemId), stampcheck.MATERIAL_VERSION, prof.photoKey, String(v.black), v.gold]))
+    .catch(e => console.warn('[material] profile not stored:', e.message));
+}
+// After the answer: profile the rows that lack one, cheapest first, then
+// re-judge the view once with what landed. Zero eBay calls.
+const materialRunning = new Set();
+function materialFollowUp(card, requestedId, grade, printing, edition, rows) {
+  if (!materialApplies(card)) return;
+  const todo = (rows || []).filter(r => materialPhotoOf(r) && !materialProfileOf(r)).slice(0, MATERIAL_MAX_PER_VIEW);
+  const vkey = listingKey(card.api_card_id, viewCacheGrade(grade, printing, edition));
+  if (!todo.length || materialRunning.has(vkey)) return;
+  materialRunning.add(vkey);
+  (async () => {
+    await materialRefOf(card);
+    let landed = 0;
+    await Promise.all(todo.map(r => {
+      const url = materialPhotoOf(r);
+      return stampcheck.checkMaterialPhoto(r.imageUrl).then(v => {
+        if (v && v.state === 'profiled') { saveMaterialProfile(r.itemId, url, v); landed++; }
+      });
+    }));
+    const vs = viewStateGet(vkey);
+    if (landed && vs && vs.gathered.ebayState)
+      await rebuildView(card, requestedId, grade, printing, edition, vs, { noFetch: true, stamp: true, back: true, material: true });
+  })().catch(e => console.warn('[material] follow-up failed:', e.message))
+     .finally(() => materialRunning.delete(vkey));
+}
+
 // The rows a view checks without being asked (backcheck.autoRows: outlier-
 // flagged rows, and every row of the most-faked cards; at most 20 a view),
 // one after another, BACKGROUND, after the answer has gone. A row checked
@@ -2957,7 +3054,7 @@ async function gatherListings(card, grade, limit, opts) {
   const memo = {};
   const j = await judgeListings(card, grade, listings, opts, memo);
   const out = { listings: j.listings, sources, tookMs: Date.now() - t0, liveCount: j.liveCount,
-                outliers: j.outliers, stamp: j.stamp, stampPending: j.stampPending, back: j.back, ebayState, otherRows, judgeMemo: memo };
+                outliers: j.outliers, stamp: j.stamp, stampPending: j.stampPending, back: j.back, material: j.material, ebayState, otherRows, judgeMemo: memo };
   if (Object.keys(dryRuns).length) out.dryRun = dryRuns;
   return out;
 }
@@ -3112,6 +3209,49 @@ async function judgeListings(card, grade, listings, opts, memo) {
     timing.span('reprint-check', tReprint, timing.now(), { reprints: reprintCards.length });
   }
 
+  // ── Gold and black novelty cards (TASK T1, 2026-10-05) ──
+  // After the outlier check (its flag is one of the signals), before the
+  // sort. stampcheck.materialJudge: two signals refuse — counted in
+  // sources.ebay like any refusal — one flags the row and sorts it last; a
+  // genuine back seen never refuses. A row not yet profiled is SHOWN and
+  // counted in pending: a colour check is evidence, not a gate to wait on.
+  let materialReport = null;
+  if (materialApplies(card) && listings.some(l => l && l.source === 'ebay')) {
+    const mref = await Promise.race([materialRefOf(card), new Promise(r => setTimeout(() => r(null), MATERIAL_REF_MS))]);
+    await loadMaterialProfiles(listings);
+    materialReport = { applied: !!mref, version: stampcheck.MATERIAL_VERSION, threshold: stampcheck.MATERIAL_GOLD_EXCESS,
+      reference: mref, refused: 0, flagged: 0, pending: 0, refusedSample: [] };
+    if (!mref) materialReport.reason = 'our scan of this card has no colour profile yet';
+    else {
+      const kept = [];
+      for (const l of listings) {
+        if (!materialPhotoOf(l)) { kept.push(l); continue; }
+        const prof = materialProfileOf(l);
+        if (!prof) materialReport.pending++;
+        const bv = backVerdicts.get(backKey(l.itemId, card.api_card_id)) || null;
+        const m = stampcheck.materialJudge({ profile: prof, ref: mref, priceFlag: !!l.suspect, back: bv });
+        if (m.action === 'refuse') {
+          materialReport.refused++;
+          const refusal = { title: l.title, itemId: l.itemId, price: l.price, landed: l.landed, currency: 'USD',
+            url: l.url, imageUrl: l.imageUrl, marketplace: l.marketplace, source: 'ebay',
+            reason: 'looks like a gold/black novelty card: ' + m.signals.join('; ') };
+          if (materialReport.refusedSample.length < 12) materialReport.refusedSample.push(refusal);
+          (materialReport.refusedRows || (materialReport.refusedRows = [])).push(refusal);
+          continue;
+        }
+        if (m.action === 'flag' && !l.suspect) {
+          materialReport.flagged++;
+          kept.push(Object.assign({}, l, { suspect: 'counterfeit-likely',
+            suspectReason: 'may be a gold/black novelty card: ' + m.signals.join('; ')
+              + (m.genuineBack ? ' (a genuine back is in the seller’s photos)' : '') }));
+          continue;
+        }
+        kept.push(l);
+      }
+      listings = kept;
+    }
+  }
+
   // Cheapest LANDED cost first. Rows whose shipping the source did not state
   // sort on price alone and say so, rather than pretending shipping is zero.
   // Buyable first, then cheapest landed cost. An ended auction never
@@ -3123,7 +3263,7 @@ async function judgeListings(card, grade, listings, opts, memo) {
     (outlier.suspectRank(a) - outlier.suspectRank(b)) ||
     (Number(b.live) - Number(a.live)) || (a.landed - b.landed) || (a.price - b.price));
   return { listings, liveCount: listings.filter(l => l.live).length, outliers: judged.stats,
-           stamp: stampReport, stampPending, back: backReport };
+           stamp: stampReport, stampPending, back: backReport, material: materialReport };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3166,6 +3306,19 @@ function withBackRefusals(sources, back) {
   e.droppedSample = back.refusedSample.map(r => ({ title: r.title, itemId: r.itemId, reason: r.reason }))
     .concat(e.droppedSample || []).slice(0, 12);
   e.summary = (e.summary || '') + ` (${back.refused} by the card-back check)`;
+  return Object.assign({}, sources, { ebay: e });
+}
+
+// The novelty check's refusals are eBay refusals too (T1, 2026-10-05).
+function withMaterialRefusals(sources, material) {
+  if (!material || !material.refused || !sources || !sources.ebay || sources.ebay.status !== 'ok') return sources;
+  const e = Object.assign({}, sources.ebay);
+  e.materialRefused = material.refused;
+  e.count = Math.max(0, (e.count || 0) - material.refused);
+  e.rejected = (e.rejected || 0) + material.refused;
+  e.droppedSample = material.refusedSample.map(r => ({ title: r.title, itemId: r.itemId, reason: r.reason }))
+    .concat(e.droppedSample || []).slice(0, 12);
+  e.summary = (e.summary || '') + ` (${material.refused} by the gold/black novelty check)`;
   return Object.assign({}, sources, { ebay: e });
 }
 
@@ -3282,6 +3435,7 @@ function refusedRowsOf(sources, j) {
   };
   ((j.stamp && j.stamp.refusedRows) || []).forEach(r => add(r, 'photo'));
   ((j.back && j.back.refusedRows) || []).forEach(r => add(r, 'back'));
+  ((j.material && j.material.refusedRows) || []).forEach(r => add(r, 'photo'));
   for (const [id, s] of Object.entries(sources || {}))
     ((s && (s.refusedRows || s.droppedSample)) || []).forEach(r => add(Object.assign({ source: id }, r), 'title'));
   const total = Object.values(sources || {}).reduce((n, s) => n + ((s && s.rejected) || 0), 0);
@@ -3297,6 +3451,7 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
   const trusted = listings.filter(outlier.trustworthy);
   sources = withStampRefusals(sources, j.stamp);
   sources = withBackRefusals(sources, j.back);
+  sources = withMaterialRefusals(sources, j.material);
   const refused = refusedRowsOf(sources, j);
   sources = Object.fromEntries(Object.entries(sources || {}).map(([k, s]) => {
     if (!s || !s.refusedRows) return [k, s];
@@ -3349,6 +3504,7 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
     // many photos are still being checked (the page re-reads while > 0).
     stampGate: j.stamp ? Object.assign({}, j.stamp, { pool: stampcheck.poolState() }) : null,
     backCheck: j.back || null,
+    materialCheck: j.material ? Object.assign({}, j.material, { refusedRows: undefined }) : null,
     // What this grade is worth, measured from the listings that passed the
     // gate. Computed, not stored: this is a read endpoint.
     gradePrice: gp.aggregate(listings, { grade }),
@@ -3539,6 +3695,7 @@ async function rebuildView(card, requestedId, grade, printing, edition, vs, ropt
   listingCacheSet(card.api_card_id, viewCacheGrade(grade, printing, edition), payload, ts);
   if (!ropts.stamp) stampFollowUp(card, requestedId, grade, printing, edition, j.stampPending);
   if (!ropts.back) backFollowUp(card, requestedId, grade, printing, edition, payload.listings);
+  if (!ropts.material) materialFollowUp(card, requestedId, grade, printing, edition, payload.listings);
   return payload;
 }
 
@@ -3623,6 +3780,7 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   // checked after this answer goes, and the view is re-judged as they land.
   if (st) stampFollowUp(card, requestedId, grade, printing, edition, gathered.stampPending);
   if (st) backFollowUp(card, requestedId, grade, printing, edition, payload.listings);
+  if (st) materialFollowUp(card, requestedId, grade, printing, edition, payload.listings);
   return payload;
 }
 

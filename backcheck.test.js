@@ -80,7 +80,7 @@ ok('automatic runs are BACKGROUND (they yield at the soft stop)', /backCheckItem
 ok('another language\'s back is refused in judgeListings and counted as an eBay rejection',
    /v\.state === 'other-back'/.test(src) && /function withBackRefusals/.test(src) && /sources = withBackRefusals\(sources, j\.back\)/.test(src));
 ok('verdicts are stored as check_kind \'back\' with hashed keys — no title, price, URL or photo',
-   /VALUES \(\$1,'back',\$2,\$3,\$4,\$5,\$6,\$7,\$8\)/.test(src) && /stampcheck\.itemKey\(k\)/.test(src) && !/INSERT INTO listing_photo_verdicts[^;]*title/.test(src));
+   /VALUES \(\$1,'back',\$2,\$3,\$4,\$5,\$6,\$7,\$8(,\$9)?\)/.test(src) && /stampcheck\.itemKey\(k\)/.test(src) && !/INSERT INTO listing_photo_verdicts[^;]*title/.test(src));
 ok('back photos are scored in the stamp worker pool, not on the request thread', /stampcheck\.checkBackPhoto\(u\)/.test(src));
 const page = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
 ok('the page offers "Check card back" and shows "Back photo matches a genuine card"',

@@ -309,12 +309,12 @@ function judge(photo, checks, opts) {
 }
 
 // eBay's image CDN only, at the measured size. Returns null for anything else.
-function photoUrl(imageUrl) {
+function photoUrl(imageUrl, size) {
   let u;
   try { u = new URL(String(imageUrl || '')); } catch (e) { return null; }
   if (u.protocol !== 'https:' || u.hostname !== 'i.ebayimg.com') return null;
   if (!/\/s-l\d+\.(?:jpg|jpeg|webp|png)$/i.test(u.pathname)) return null;
-  u.pathname = u.pathname.replace(/\/s-l\d+\.(?:jpg|jpeg|webp|png)$/i, '/' + PHOTO_SIZE + '.jpg');
+  u.pathname = u.pathname.replace(/\/s-l\d+\.(?:jpg|jpeg|webp|png)$/i, '/' + (size || PHOTO_SIZE) + '.jpg');
   return u.toString();
 }
 
@@ -389,7 +389,8 @@ function finish(slot, verdict, kill) {
     cacheSet(job.itemId, v, job.url);
     // A back photo's scores are an input to backcheck's LISTING verdict,
     // which the server stores itself (check_kind 'back').
-    if (!v.retryable && !job.back) saveVerdict(job.itemId, job.url, v, job.cardId);
+    // A material profile is stored by the server (check_kind 'material').
+    if (!v.retryable && !job.back && !job.material) saveVerdict(job.itemId, job.url, v, job.cardId);
     _inflight.delete(job.itemId);
     job.resolve(v);
   }
@@ -406,7 +407,7 @@ async function runJob(slot, job) {
   const buf = Buffer.from(await r.arrayBuffer());
   slot.timer = setTimeout(() => finish(slot, { state: 'unreadable', retryable: true, scores: [],
     says: 'The photo check took too long and was stopped.' }, true), JOB_TIMEOUT_MS);
-  slot.w.postMessage({ jpeg: buf, reprints: job.reprints, back: !!job.back });
+  slot.w.postMessage({ jpeg: buf, reprints: job.reprints, back: !!job.back, material: !!job.material });
 }
 function pump() {
   while (_queue.length) {
@@ -462,6 +463,95 @@ function checkBackPhoto(imageUrl) {
   pump();
   return p;
 }
+// ── Gold and black novelty cards (TASK T1, 2026-10-05) ──
+// Mass-produced gold / black / silver metal copies of popular cards, titled
+// like the real card. Measured 2026-10-04 on 378 rows labelled by eye
+// (Shining Charizard 106, Magikarp & Wailord GX 57, Mewtwo ☆ 87, gold Mew ex
+// 118 as the genuine-gold control; PROGRESS 2026-10-05):
+//   * the photo's colour against OUR scan of the same card — never against a
+//     fixed colour: a Gold Star, an SV gold hyper rare and a black full art
+//     are real. Gold fraction of the centre 60%, photo minus scan.
+//   * a repeated photo across cards carries nothing here: 19,054 photos, the
+//     only template reused under 3+ cards was already refused by its title,
+//     and at Hamming 4 genuine cards of different sets collide. Not built.
+// Signals: COLOUR (gold excess > MATERIAL_GOLD_EXCESS), PRICE (the outlier
+// flag), METAL PHOTO (another of the seller's photos, not a genuine back, is
+// gold- or black-dominated beyond the scan — from the back check's getItem).
+// Two refuse, one flags; a genuine back seen never lets them refuse.
+// At 0.35: 53 of 95 metal refused, 0 of 186 genuine (the threshold was read
+// off that sample — 0.30 refused one genuine $3,111 Shining Charizard).
+const MATERIAL_VERSION = 'material-1';
+const MATERIAL_GOLD_EXCESS = 0.35;
+const MATERIAL_PHOTO_SIZE = 's-l225';   // the size the measurement used
+const SCAN_HOST = /^https:\/\/assets\.tcgdex\.net\/[^?#]+\.jpg$/;
+// Centre 60% of the frame (backgrounds and sleeves stay out). HSV gold:
+// hue 30-65°, s > 0.25, v > 0.35; near-black: v < 0.22.
+function colourProfile(img) {
+  const x0 = Math.round(img.w * 0.2), y0 = Math.round(img.h * 0.2), w = Math.round(img.w * 0.6), h = Math.round(img.h * 0.6);
+  let gold = 0, black = 0, n = 0;
+  for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) {
+    const i = (y * img.w + x) * 3, r = img.data[i] / 255, g = img.data[i + 1] / 255, b = img.data[i + 2] / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), s = mx ? (mx - mn) / mx : 0;
+    let hu = 0;
+    if (mx !== mn) {
+      if (mx === r) hu = 60 * (((g - b) / (mx - mn)) % 6);
+      else if (mx === g) hu = 60 * ((b - r) / (mx - mn) + 2);
+      else hu = 60 * ((r - g) / (mx - mn) + 4);
+    }
+    if (hu < 0) hu += 360;
+    if (hu >= 30 && hu <= 65 && s > 0.25 && mx > 0.35) gold++;
+    if (mx < 0.22) black++;
+    n++;
+  }
+  return { gold: n ? +(gold / n).toFixed(3) : 0, black: n ? +(black / n).toFixed(3) : 0 };
+}
+function queueMaterial(key, url) {
+  const hit = cacheGet(key, url);
+  if (hit) return Promise.resolve(hit.verdict);
+  if (_inflight.has(key)) return _inflight.get(key);
+  // Front of the queue: a colour profile costs milliseconds, and must not
+  // wait behind a page of stamp comparisons.
+  const p = new Promise(resolve => _queue.unshift({ itemId: key, url, reprints: [], material: true, resolve }));
+  _inflight.set(key, p);
+  pump();
+  return p;
+}
+// A listing's primary photo (eBay's CDN only). Zero eBay API calls.
+function checkMaterialPhoto(imageUrl) {
+  const url = photoUrl(imageUrl, MATERIAL_PHOTO_SIZE);
+  if (!url) return Promise.resolve({ state: 'unreadable' });
+  return queueMaterial('mat|' + url, url);
+}
+// OUR scan of the card (TCGdex's .jpg only).
+function checkMaterialScan(url) {
+  if (!SCAN_HOST.test(String(url || ''))) return Promise.resolve({ state: 'unreadable' });
+  return queueMaterial('scan|' + url, url);
+}
+// Is another of the seller's photos (not the first, not a genuine back of
+// either family) gold- or black-dominated beyond our scan? backScores: the
+// back check's per-photo results, which carry colourProfile since T1.
+function metalPhotoOf(backScores, ref) {
+  if (!ref || !Array.isArray(backScores)) return false;
+  return backScores.slice(1).some(x => x && x.gold != null && !x.seen &&
+    (x.gold - ref.gold > MATERIAL_GOLD_EXCESS || x.black - ref.black > MATERIAL_GOLD_EXCESS));
+}
+// The decision for one row. profile: the listing photo's colourProfile;
+// ref: our scan's; priceFlag: the outlier check flagged it; back: the stored
+// back verdict ({ state, metal }) or null. Returns { action, signals }.
+//   action 'refuse' — two signals and no genuine back seen
+//   action 'flag'   — one signal (or two with a genuine back seen)
+//   action 'none'
+function materialJudge({ profile, ref, priceFlag, back }) {
+  const signals = [];
+  if (profile && ref && profile.gold != null && profile.gold - ref.gold > MATERIAL_GOLD_EXCESS)
+    signals.push('photo far more gold than this card');
+  if (priceFlag) signals.push('priced far below this card');
+  if (back && back.metal) signals.push('another photo is gold/black metal');
+  const genuineBack = !!(back && back.state === 'genuine-back');
+  const action = signals.length >= 2 && !genuineBack ? 'refuse' : signals.length ? 'flag' : 'none';
+  return { action, signals, genuineBack };
+}
+
 function poolState() {
   return { store: _store ? Object.assign({ version: VERDICT_VERSION }, _storeStats) : null, workers: POOL_SIZE, running: _workers.filter(s => s.job).length, queued: _queue.length,
            cachedItems: _cache.size, checked: _stats.checked, failed: _stats.failed, cacheHits: _stats.cacheHits,
@@ -620,14 +710,19 @@ const wt = (() => { try { return require('worker_threads'); } catch (e) { return
 if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
   wt.parentPort.on('message', m => {
     let v;
-    try { v = m.back ? Object.assign({ state: 'scored' }, require('./backcheck.js').scorePhoto(decodeJpeg(Buffer.from(m.jpeg))))
-                     : judge(decodeJpeg(Buffer.from(m.jpeg)), m.reprints); }
+    try {
+      const img = decodeJpeg(Buffer.from(m.jpeg));
+      v = m.material ? Object.assign({ state: 'profiled' }, colourProfile(img))
+        : m.back ? Object.assign({ state: 'scored' }, require('./backcheck.js').scorePhoto(img), colourProfile(img))
+        : judge(img, m.reprints);
+    }
     catch (e) { v = { state: 'unreadable', says: 'The photo could not be decoded: ' + String(e && e.message || e).slice(0, 80), scores: [] }; }
     wt.parentPort.postMessage({ verdict: v });
   });
 }
 
-module.exports = { THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, crop, resize, rotate90, nccMax, bestScore,
+module.exports = { MATERIAL_VERSION, MATERIAL_GOLD_EXCESS, MATERIAL_PHOTO_SIZE, colourProfile, checkMaterialPhoto, checkMaterialScan, metalPhotoOf, materialJudge,
+                   THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, crop, resize, rotate90, nccMax, bestScore,
                    judge, checkItem, checkBackPhoto, gate, verdictKey, wholeScore, LOOKALIKE_MARGIN, SIBLING_MARGIN, SIBLING_HIDE_FRACTION, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
                    _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; },
                    _clearCache: () => { _cache.clear(); _missed.clear(); } };

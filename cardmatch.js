@@ -1171,7 +1171,8 @@ const NOT_BLACK_STAR = /\bmc\s*donald'?s?\b|\bhappy\s*meal\b|\btrick\s*or\s*trea
 //          'notThis' reads the title with the card's own name still in.
 const PRINTS_NO_NUMBER = {
   'en-miscp-001': { year: 2000,
-    notThis: /\b(?:details?|info(?:rmation)?|cover)\s+(?:promo\s+)?card\b|\binserts?\b|\bmetal\b|\bstainless\b/i,
+    // + 'Mewtwo': "PSA 8 2000 POKEMON GAME PROMO ANCIENT Mewtwo" passed the name check (graded, live 2026-10-06)
+    notThis: /\b(?:details?|info(?:rmation)?|cover)\s+(?:promo\s+)?card\b|\binserts?\b|\bmetal\b|\bstainless\b|\bmewtwo\b/i,
     notThisSays: 'the paper Ancient Mew details insert, or a metal replica' },
 };
 function printsNoNumber(card) {

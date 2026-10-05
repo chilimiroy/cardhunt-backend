@@ -134,6 +134,8 @@ for (const t of ['ANCIENT MEW DETAILS INSERT CARD - Pokemon Card - Promo - NM', 
                  'NEW Metal Pokémon Card Ancient Mew Promos Cards Gift for Kids Collectible Toy'])
   ok(!cm.verify(t, am, 'Raw').ok, 'refused (live, not the card): ' + t);
 ok(cm.verify('ANCIENT MEW 2000 POKEMON GAME PROMO 2000 MOVIE PSA 9 Q0895', am, 'PSA 9').ok, 'KEPT (live): a PSA 9 slab of the card');
+ok(cm.verify('2000 Pokemon Movie Promos Ancient Mew PSA 8 163700359', am, 'PSA 8').ok, 'KEPT (live): a PSA 8 slab of the card');
+ok(!cm.verify('PSA 8 2000 POKEMON GAME PROMO ANCIENT Mewtwo', am, 'PSA 8').ok, 'refused (live): Ancient Mewtwo is not Ancient Mew');
 ok(cm.promoOf(am) === null && cm.printsNoNumber(am) && cm.printsNoNumber(pk) === null, 'only the listed card is numberless');
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

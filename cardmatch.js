@@ -1288,8 +1288,26 @@ const SET_WRITTEN_AS = {
   // Futsal prints "002/005" and sellers write the card's own name ("Eevee
   // on the Ball 002/005 Promo"), not "Pokémon Futsal 2020": the set name
   // is not asked (QUERY_PAD3 pads the number). The gate needs the pair.
-  'fut2020': { ask: '', titles: [/\bfutsal\b/i] }
+  'fut2020': { ask: '', titles: [/\bfutsal\b/i] },
+  // T2, 2026-10-05 (marketprobe US / NOSET / NOCAT, titles=1): sellers write
+  // "Treecko 1/5 Promo Kids' WB Poke Card Creator", "Kids' WB! Poke Creator
+  // 1/5", "Poké Creator Contest 5/5" — never "Pack". Asked with "Pack", eBay
+  // US returned 0; without the set name, 3 (Treecko) and 1 kept (Pikachu).
+  'ex5.5':  { ask: 'Creator', titles: [/\bpok[eé]?\s*(?:card\s+)?creator\b/i, /\bkids'?\s*wb\b/i] },
+  // "Unown (A) A/28 - Holo - Unseen Forces": the Unown Collection is sold
+  // as Unseen Forces with a LETTER number, which no Unseen Forces (ex10)
+  // card has — the letter over /28 is what tells them apart. Asked with
+  // "Unown Collection": US 2 rows, 0 kept; without: 15.
+  'exu':    { ask: 'Unseen Forces', titles: [/\bunseen forces\b/i] }
 };
+// Sets where eBay itself has nothing — measured, so an empty panel there is
+// the right answer, not a broken search (T2, 2026-10-05). Re-measure before
+// adding a set: marketprobe asked with the set name, without it (NOSET) and
+// without the category (NOCAT), and all three must return 0.
+const NO_EBAY_MARKET = {
+  mfb: { measured: '2026-10-05', how: 'eBay US returned 0 listings for Bulbasaur 1/48 and Pikachu 17/48, asked with the set name, without it, and outside the cards category' }
+};
+function noEbayMarket(card) { return NO_EBAY_MARKET[setIdOf(card)] || null; }
 function titleNamesSetAlias(title, card) {
   const w = SET_WRITTEN_AS[setIdOf(card)];
   return !!(w && w.titles.some(re => re.test(title)));
@@ -2290,7 +2308,9 @@ function verifyCore(title, card, grade, opts) {
   // Not after a currency sign: "Champion's Path $74 PSA 10" states a PRICE,
   // and read as #74 it passed for Charizard VMAX #74 (T9, 2026-09-29; 0 of
   // 516 kept production titles carry a currency sign before a number).
-  const bareNum = new RegExp('(?:^|[^0-9/$€£¥])0*' + wantNum + '(?![0-9/])').test(t);
+  // Escaped (T2, 2026-10-05): the Unown Collection's "?" made "0*?" — any
+  // title passed as stating it, "Unown (A) A/28" included.
+  const bareNum = new RegExp('(?:^|[^0-9/$€£¥])0*' + String(wantNum).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![0-9/])').test(t);
   const setName = foldAccents(card.setName).toLowerCase()
                     .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
   const titleFlat = foldAccents(lower).replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');
@@ -2358,7 +2378,7 @@ function filterListings(listings, card, grade) {
 }
 
 const API = {
-  buildQuery, verify, filterListings, goldBeforeGold,
+  buildQuery, verify, filterListings, goldBeforeGold, NO_EBAY_MARKET, noEbayMarket,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
   qualifiersIn, sellerCondition, stripHitPoints,
   EBAY_CARD_CONDITION, EBAY_CONDITION_CODES, ebayConditionFilter, EBAY_SITE_ASPECTS, siteAspects,

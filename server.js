@@ -3589,6 +3589,16 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
       refused: Object.values(sources || {}).reduce((n, s) => n + ((s && s.editionRefused) || 0), 0)
     },
     count: listings.length,
+    // T2 (2026-10-05): why a panel is empty, so "eBay has nothing" and "we
+    // refused what it had" never look alike. 'none-returned': eBay answered
+    // 0 rows; 'all-refused': rows came back and the gate refused every one.
+    // noMarket: the set is measured as having no eBay listings at all.
+    market: (() => {
+      const e = sources && sources.ebay;
+      const state = !e || e.status !== 'ok' ? null
+        : !(e.scanned > 0) ? 'none-returned' : !listings.some(l => l.source === 'ebay') ? 'all-refused' : 'listed';
+      return { ebay: state, scanned: (e && e.scanned) || 0, noMarket: cm.noEbayMarket(card) };
+    })(),
     liveCount: j.liveCount,
     cheapest: trusted.length ? trusted[0].landed : null,
     cheapestLive: (trusted.find(l => l.live) || {}).landed ?? null,

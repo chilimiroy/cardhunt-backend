@@ -1,5 +1,84 @@
 # CardHunt — Progress Log
 
+## 2026-10-05 (late) — T1 genuine-back rule, deals on and off again, T2 empty-panel kinds, T5 trainer kits
+
+**eBay spend:** ~170 calls (4 raw views + 107 getItem for the measurement, 10
+views for the shelf, ~18 marketprobe, 46 T2/T5 views). Day at ~760 of 5,000.
+
+**T1 — require a genuine back, per card.** US page 1, raw, every eBay row
+back-checked (`/api/back`, stored) and every photo labelled by eye (contact
+sheets, zooms where unsure), blind to the verdict:
+
+| card | rows | metal | metal w/o genuine back | genuine | genuine hidden | decision |
+|---|---|---|---|---|---|---|
+| Shining Charizard neo4-107 | 35 | 22 | 22 | 13 | 0 | REQUIRE |
+| Base Charizard base1-4 | 67 | 6 | 6 | ~50 | 1 (doubtful, faded) | REQUIRE |
+| Magikarp & Wailord GX sm9-161 | 15 | 4 | 4 | 10 | 1 (11 photos, none of the back) | not required |
+| Pikachu VMAX swsh4-188 | 94 | 18 | 18 | 72 | 10 | not required |
+
+0 metal rows anywhere had a genuine back. M&W: with the 2026-10-04 labelled set
+(8 of 32 genuine without a back seen) it is ~21% of genuine hidden. Pikachu:
+14% of genuine hidden to remove 19% metal. Shipped (`7e80854`):
+`backcheck.REQUIRE_GENUINE_BACK` = Shining + Base Charizard, raw only; a
+no-claim row there is refused with its reason and listed in refused[].
+Live after deploy: Shining Charizard raw shows 13 rows, all genuine-back; 39
+refused by the rule, the gold $180.17 (v1|407260752181) among them.
+Not caught by the back, seen on Base Charizard: 6 genuine Charizard ex cards
+(gold 228/197, 199 SIR) sold under "Charizard 4/102" — kind D, genuine backs.
+
+**Deals — genuine back required, turned on, turned OFF again.** The rule
+(`deals.noGenuineBack`) and the candidate check (`backCandidates`, ≤2 getItem a
+raw view, background, `dealBackFollowUp`) shipped in `7e80854`. Live with 10
+views: the gold Shining Charizard was gone; 2 deals shown — #1 Base Charizard
+$208 vs $944 = a gold **Charizard ex 228/197** (genuine back; colour on our warm
+Base scan 0.244 so not above 0.40); #2 Pikachu VMAX $85 vs $169, genuine with a
+visible crease the title does not state. Off again (`dbc579f`). A genuine back
+says real, not THIS card. Also found: kept rows never carried `back.metal`, so
+the bar's metal test could not fire on the server path (fixed).
+
+**T2 — catalogue gaps.** marketprobe (US, US without the set name, US without
+the category, titles=1):
+
+| set | logo | images | links before | cause | after |
+|---|---|---|---|---|---|
+| My First Battle (mfb) | none (TCGdex none) | 0/34 (TCGdex none) | 0 | **eBay has nothing**: 0 rows in all three asks | page says so (`NO_EBAY_MARKET`) |
+| Poké Card Creator Pack (ex5.5) | none | 0/5 | 0 | asked "Pack"; titles say "Kids' WB Poke Card Creator" | asks "Creator": Pikachu 1 kept; Treecko 3 rows, all slabs |
+| Unown Collection (exu) | none | 0/28 | 0 | asked "Unown Collection"; titles say "Unseen Forces" | Unown A 0 -> 8 kept, G 0 -> 7 |
+| Unown "?" | — | — | 0 | number stored `%3F` (TCGdex localId); and "?" was a regex wildcard in the bare-number test (kept ANY title) | escape fixed; query still `%3F` until the row's number is '?' |
+| McDonald's 2023 / 2024 | none | 0/15, 0/15 | work (190, 193 kept) | pokemontcg.io mcd23/mcd24 logo + card images 404 (like mcd14/mcd17); TCGdex none | logo: mcd21/logo.png is the plain arches (2019, 2021 use it; 2022's is "Match Battle") — NOT written, see below |
+
+Empty panel now says which kind: `payload.market` none-returned / all-refused /
+listed, plus noMarket (`90ab24b`, emptymarket.test.js).
+
+**Not done — production DB writes refused by the session's permission
+classifier:** (1) `set_logo = mcd21/logo.png` on 2023sv/2024sv; (2) `number = '?'`
+on en-exu-%3F (id unchanged). Both small, backup first.
+
+**T3 — energy sets.** TCGdex English has exactly two energy SETS: sve (24) and
+mee (8); both are in our DB and listed (/api/sets/lang/en serves every set). Older
+eras print basic energies inside their main sets (EX 36 cards in 6 sets, XY 27,
+SM 18, DP 14, Base 12 ...; 49 in trainer kits). "Every era's energy sets" therefore
+means a UI grouping like T5, not data that exists — Roy's call. sve/mee samples
+were "choose your card" pickers (querygap B); their panel now reads all-refused.
+
+**T4 — Ancient Mew.** References to en-miscp-001: alerts 0, portfolio 0,
+price_history 12, listing_views 5. price_history is append-only, so moving the
+card under a basep id strands those 12 rows; keeping the id under set basep breaks
+{lang}-{set}-{number}. Rename "Wizards Black Star Promos" -> "WOTC Black Star
+Promos" is a set_name write. Both need the DB permission and a decision; the
+no-number query is not built.
+
+**T5 — Trainer Kits** (`742e707`): every kit holds all the cards TCGdex lists
+(SM Lycanroc: TCGdex 18 of 30). Live, 2 random cards per kit: 38 of 40 returned
+listings (HS Gyarados Croconaw, XY Bisharp Metal Energy: none-returned). One grid
+tile, 475 cards, chip per kit; opened in the browser.
+
+**Process slips:** a `| tail -1` hid deals.test failures in one commit (fixed
+`e910dd6`); `git stash`/`pop` rewrote working copies CRLF and refused.test's
+slicer failed — restored LF.
+
+---
+
 ## 2026-10-05 (night) — deals off, Evolutions lookalike pairs shipped, PNG references
 
 **Deals OFF** (`dc890ca`). Bar in `deals.notADeal`, each rule fails the

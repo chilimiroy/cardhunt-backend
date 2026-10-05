@@ -227,7 +227,10 @@ set names by set id (`SET_WRITTEN_AS`); auctions asked via `buyingOptions`;
 lettered numbers are their own card. Re-run `node querygap.js en` (~200
 tooling calls) after any change to `buildQuery` or a set's vocabulary.
 Open: raw titles with the pair and no set name are never fetched (unmeasured);
-Unown `%3F`, Ancient Mew (no number), ex5.5 and mfb (no listings).
+Ancient Mew (no number). Unown "?" stored as number `%3F` (TCGdex's localId) —
+the row needs number '?' (code is ready). mfb: eBay has nothing (`NO_EBAY_MARKET`);
+an empty panel says none-returned / all-refused / no market (`payload.market`).
+Trainer kits: ONE grid tile, filter by kit — UI only (`groupTrainerKits`).
 
 ## Open, and a decision rather than a fix
 (Full text: *Archive:* "Open, and a decision rather than a fix".)
@@ -292,6 +295,9 @@ Rules of the gate:
 - **Back: other family refuses, own family labels "matches a genuine card"
   (never "verified"), nothing found claims nothing.** Unchecked rows shown.
   Automatic ≤20 rows a view (outlier-flagged + `MOST_FAKED`), background.
+  **Per card, absence refuses** (`REQUIRE_GENUINE_BACK`, raw only): Shining
+  Charizard (22/22 metal, 0/13 genuine hidden), Base Charizard (6/6, 1 doubtful);
+  NOT Pikachu VMAX (10/72 genuine) or M&W GX (~21%). Measure both ways to add one.
 - **Settled, do not re-explore**: no eBay field (Set, Year, epid) separates a
   reprint from its original —
   *Archive:* "REPRINT vs ORIGINAL — settled, and the stamp (2026-10-02)". Metal Charizards on CC002 are kept (open).
@@ -430,13 +436,13 @@ schtasks /Run   /TN "CardHunt nightly refresh"
   on the home page, window stated; `coverage` says when a list is thin and
   why. 2026-10-05: 7d **0 pairs** (TCGdex nightly since ~09-28), 24h 250 of
   2,510 — the page shows 24 hours and says so. Re-check after 2026-10-06.
-- **Best deals — SWITCHED OFF 2026-10-05 (Roy)** (`deals.ENABLED`;
-  `/api/deals` answers `enabled:false` + reason, the page says so). Seen live:
-  at most 2 of 8 like-for-like. The bar (`deals.notADeal`) now also refuses
-  stated LP/MP/HP/DMG, a stated other printing/edition, pending or marked
-  photos. **Still not enough**: the #1 row, a gold metal Shining Charizard,
-  carries no mark anywhere (colour 0.059, no price flag, back no-claim) and
-  is still the pick — switch on only after that class is answered.
+- **Best deals — OFF** (`deals.ENABLED`; `/api/deals` answers `enabled:false`
+  + reason). Bar (`deals.notADeal`): stated LP/MP/HP/DMG, other printing/edition,
+  pending/marked photos refused, and **a genuine back required** (a view checks
+  ≤2 candidates' backs, `DEAL_BACK_MAX`, background). Turned on 2026-10-05: gold
+  Shining Charizard gone, but #1 was a gold Charizard ex 228/197 under Base
+  Charizard (genuine back) — a real card is not THIS card. Switch on only with
+  an "is this photo this card" answer (PROGRESS 2026-10-05 (late)).
 
 ## Near you (local card shops) — PLANNED, needs a real data source
 Honest empty state. **Do not fill it with anything a source did not return.**

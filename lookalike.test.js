@@ -23,7 +23,7 @@ console.log('\n  the pair and its templates');
 ok('cardmatch names the pair, both directions',
    cm.photoChecksOf({ cardId: PF }).some(c => c.kind === 'lookalike' && c.cardId === TH) &&
    cm.photoChecksOf({ cardId: TH }).some(c => c.kind === 'lookalike' && c.cardId === PF));
-ok('an ordinary card has no lookalike', cm.lookalikesOf({ cardId: 'en-base1-4' }).length === 0);
+ok('an ordinary card has no lookalike', cm.lookalikesOf({ cardId: 'en-base1-2' }).length === 0);
 ok('both whole-card templates are built from our scans', !!img(PF) && !!img(TH));
 
 // A "photo": the scan placed on a grey background with a margin, as a
@@ -90,6 +90,23 @@ for (const [ours, other, name] of [['en-ex13-103', 'en-xy12-51', 'Mewtwo ☆ / E
 }
 ok('shipped at the Mew pair\'s margin, not re-tuned on these two', sc.LOOKALIKE_MARGIN === 0.30);
 ok('the verdict version moved with the pairs (older verdicts never answer for them)', sc.VERDICT_VERSION === 'stamp-2');
+
+console.log('\n  Base Charizard and the gold Charizard ex 228 — ONE WAY (T1, 2026-10-06)');
+{
+  const BC = 'en-base1-4', G = 'en-sv03-228';
+  const onBC = cm.photoChecksOf({ cardId: BC, setId: 'base1', number: '4' }), look = onBC.find(c => c.kind === 'lookalike');
+  ok('checked on Base Charizard, against the 228, at its own margin 0.10', look && look.cardId === G && look.margin === 0.10);
+  ok('...alongside its reprint stamps (they are not displaced)', onBC.some(c => !c.kind || c.kind === 'reprint' || c.family));
+  ok('NEVER on the 228\'s own page: a genuine 228 reached 0.195 toward Base Charizard', cm.lookalikesOf({ cardId: G }).length === 0);
+  ok('the label names the illustration\'s other prints (twins reported together)', /215\/197/.test(look.label) && /SVP 056/.test(look.label));
+  ok('both whole-card templates are built', !!img(BC) && !!img(G));
+  let v3 = sc.judge(photoOf(img(G)), onBC);
+  ok('a gold 228 photo under Base Charizard is FOUND', v3.state === 'found' && v3.reprint === G, 'margin ' + ((v3.scores.find(s => s.lookalike) || {}).margin));
+  v3 = sc.judge(photoOf(img(BC)), onBC);
+  ok('a Base Charizard photo under Base Charizard is KEPT', v3.state !== 'found', 'margin ' + ((v3.scores.find(s => s.lookalike) || {}).margin));
+  v3 = sc.judge(photoOf(img(BC), { glare: true }), onBC);
+  ok('a GLARED Base Charizard photo is still kept', v3.state !== 'found', 'margin ' + ((v3.scores.find(s => s.lookalike) || {}).margin));
+}
 
 console.log('\n  the verdict belongs to the photo AND the card viewed');
 const item = 'v1|123456789012|0';

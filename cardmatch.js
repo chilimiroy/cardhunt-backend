@@ -1094,12 +1094,23 @@ const LOOKALIKES = [
   { a: 'en-ex13-103', b: 'en-xy12-51',
     labels: { 'en-ex13-103': 'Holon Phantoms Mewtwo ☆ 103/110', 'en-xy12-51': 'XY Evolutions Mewtwo 51/108' } },
   { a: 'en-ex3-90', b: 'en-xy12-72',
-    labels: { 'en-ex3-90': 'EX Dragon Dragonite ex 90/97', 'en-xy12-72': 'XY Evolutions Dragonite-EX 72/108' } }
+    labels: { 'en-ex3-90': 'EX Dragon Dragonite ex 90/97', 'en-xy12-72': 'XY Evolutions Dragonite-EX 72/108' } },
+  // ONE WAY (T1, 2026-10-06): checked on Base Charizard's page only. Gold
+  // Charizard ex 228/197 photos sat under "Charizard Base Set 4/102" titles
+  // on the live raw page (3 of 34 kept rows). From Base Charizard's side:
+  // 490 genuine photos (26 raw, 464 slabs) at most 0.04; at 0.10, 28 of 60
+  // gold 228 photos refused. The other way round a genuine 228 reached 0.195
+  // toward Base Charizard — no margin is safe both ways, so the 228's own
+  // page is never checked. The label names the illustration's other prints.
+  { a: 'en-base1-4', b: 'en-sv03-228', margin: 0.10, oneWay: true,
+    labels: { 'en-base1-4': 'Base Set Charizard 4/102',
+              'en-sv03-228': 'Charizard ex 228/197 (gold; the Obsidian Flames art also printed as 215/197 and SVP 056)' } }
 ];
 function lookalikesOf(card) {
   const id = String((card && (card.cardId || card.api_card_id || card.id)) || '');
   const out = [];
   for (const p of LOOKALIKES) {
+    if (p.oneWay && id !== p.a) continue;            // checked on the a side only
     const other = id === p.a ? p.b : id === p.b ? p.a : null;
     if (other) out.push(Object.assign({ cardId: other, kind: 'lookalike', ours: id, label: p.labels[other] },
                                       p.margin ? { margin: p.margin } : {}));

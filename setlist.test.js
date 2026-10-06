@@ -200,9 +200,10 @@ const fnSrc = name => {
 
   // A card with a database price must never come back as an estimate, and the
   // set listing and the card endpoint must agree about it.
-  let compared = 0, disagreed = 0, estimated = 0;
+  let compared = 0, disagreed = 0, estimated = 0, withheld = 0;
   for (const s of pick.slice(0, 10)) {
     const d = await get(`/api/sets/${encodeURIComponent(s.id)}/cards?lang=en&uiSetId=${encodeURIComponent(s.id)}`);
+    if (d.pricesWithheld) withheld++;
     const rows = (d.data || []).filter(c => c._priceIsReal && c._price > 0);
     if (!rows.length) continue;
     // the most valuable card in the set — where a collapse to an estimate costs most
@@ -216,8 +217,15 @@ const fnSrc = name => {
     if (ratio > 1.5) { disagreed++; problems.push(`${top.id}: $${top._price} vs $${c._price} (${ratio.toFixed(1)}x)`); }
     await sleep(90);
   }
-  ok(`set page and card page agree on price (${compared} cards)`, disagreed === 0, `${disagreed} disagreed`);
-  ok('a card with a database price never returns an estimate', estimated === 0, `${estimated} estimated`);
+  // Compared NOTHING is not agreement (2026-10-07): signed out, the door
+  // withholds every price, and this passed on "0 cards". Say so; and where
+  // prices were NOT withheld, comparing nothing is a failure.
+  if (compared === 0 && withheld > 0) {
+    console.log(`  SKIP  set page vs card page price agreement — prices withheld signed out (${withheld} sets); needs an approved token`);
+  } else {
+    ok(`set page and card page agree on price (${compared} cards)`, compared > 0 && disagreed === 0, compared ? `${disagreed} disagreed` : 'compared 0 cards');
+    ok('a card with a database price never returns an estimate', compared > 0 && estimated === 0, `${estimated} estimated`);
+  }
 
   console.log('\n4. THE FALLBACKS ANNOUNCE THEMSELVES');
 

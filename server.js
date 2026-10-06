@@ -1668,6 +1668,51 @@ function decideAccount(state) {
 app.post('/api/admin/users/:userId/approve', access.master, decideAccount('approved'));
 app.post('/api/admin/users/:userId/reject', access.master, decideAccount('rejected'));
 
+// ── One user's record, for masters (door task T2, 2026-10-07) ──────
+// Everything we already hold about one account, in one place, each row
+// with its date: user_access (email, id, first and last seen, state, who
+// decided and when), their alerts, their portfolio rows. READ-ONLY: it
+// shows; approve/reject stay where they are and nothing here edits a row.
+// Only what is listed — no token, IP, user agent or session history is
+// stored, and none is added to fill this view. What we do NOT record is
+// said as such: the anonymous browser ids claimed into an account (the
+// claim moves the alert rows; the old anon id is not kept).
+async function userRecord(req, res) {
+  const id = req.params.userId;
+  if (!UUID_RE.test(id)) return res.status(400).json({ error: 'not a user id' });
+  if (!db) return res.status(503).json({ error: 'database not configured' });
+  try {
+    const a = (await db.query(`SELECT u.user_id, u.email, u.state, u.first_signed_in_at, u.last_seen_at, u.decided_at, u.decided_by,
+        d.email AS decided_by_email FROM user_access u LEFT JOIN user_access d ON d.user_id = u.decided_by
+        WHERE u.user_id = $1`, [id])).rows[0];
+    if (!a) return res.status(404).json({ error: 'no such account (it has never signed in)' });
+    const role = roles.displayRole(a);
+    const alerts = (await db.query(`SELECT id, card_api_id, card_name, set_name, grade, alert_type, target_price, status,
+        created_at, triggered_at FROM alerts WHERE user_id = $1 ORDER BY created_at DESC`, [id])).rows;
+    const portfolio = (await db.query(`SELECT id, card_api_id, card_name, set_name, grade, quantity, purchase_price,
+        purchase_date, notes, created_at FROM portfolio WHERE user_id = $1 ORDER BY created_at DESC`, [id])).rows;
+    res.json({
+      account: { userId: a.user_id, email: a.email || null, emailNote: a.email ? null : 'awaiting first sign-in',
+                 firstSignedInAt: a.first_signed_in_at, lastSeenAt: a.last_seen_at },
+      // A master's role comes from CARDZON_MASTER_EMAILS: no decision, no date of one.
+      state: role === 'master'
+        ? { state: 'master', since: null, decidedBy: null, note: 'master by CARDZON_MASTER_EMAILS, not by approval' }
+        : { state: role, since: a.decided_at || a.first_signed_in_at, sinceIs: a.decided_at ? 'decided' : 'first sign-in',
+            decidedBy: a.decided_by_email || a.decided_by || null },
+      alerts: alerts.map(r => ({ id: Number(r.id), cardId: r.card_api_id, card: r.card_name, set: r.set_name || null, grade: r.grade || null,
+        target: { type: r.alert_type, price: r.target_price != null ? Number(r.target_price) : null },
+        state: r.status, createdAt: r.created_at, lastTriggeredAt: r.triggered_at || null })),
+      portfolio: portfolio.map(r => ({ id: Number(r.id), cardId: r.card_api_id, card: r.card_name, set: r.set_name || null,
+        grade: r.grade || null, quantity: r.quantity, purchasePrice: r.purchase_price != null ? Number(r.purchase_price) : null,
+        purchaseDate: r.purchase_date || null, notes: r.notes || null, createdAt: r.created_at })),
+      claimedBrowserIds: { recorded: false,
+        note: 'Not recorded. Claiming moves a browser\'s alerts onto the account; the anonymous id they were under is not kept, and nothing records when the claim happened.' },
+      generatedAt: new Date().toISOString()
+    });
+  } catch (err) { res.status(503).json({ error: 'could not read the record: ' + err.message }); }
+}
+app.get('/api/admin/users/:userId/record', access.master, userRecord);
+
 // GET /api/history/:cardId — measured, ungraded price observations, one
 // series per market.
 //

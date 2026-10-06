@@ -55,6 +55,7 @@ const ROUTES = [
   ['get', '/api/admin/users', 'master', null],
   ['post', '/api/admin/users/:userId/approve', 'master', null],
   ['post', '/api/admin/users/:userId/reject', 'master', null],
+  ['get', '/api/admin/users/:userId/record', 'master', null],
   ['get', '/api/history/:cardId', 'priced', null],
   ['get', '/api/listings-log', 'public', 'calls per card view, aggregated; listing_views holds no user id'],
   ['get', '/api/listings/:cardId', 'priced', null],
@@ -127,10 +128,17 @@ const uses = lines.map((l, i) => [l, i + 1]).filter(([l]) => /^app\.use\(/.test(
 ok('app.use: only the known middleware, no mounted router', uses.length === USES.length && uses.every(([l]) => USES.some(u => l.includes(u))),
    uses.map(([l, n]) => n + ': ' + l.slice(0, 50)).join(' | '));
 ok('no express.Router anywhere in server.js', !/express\.Router|Router\(\)/.test(S));
-// The one URL user id allowed is the TARGET of a master's decision.
+// The two URL user ids allowed are the TARGET of a master: a decision, and
+// the read-only record (T2, 2026-10-07). Both behind access.master.
 ok('every gated route takes the user from req.account, never the URL or body',
-   !/b\.user_id|req\.body\.user_id/.test(S) && (S.match(/req\.params\.userId/g) || []).length === 1
-   && /function decideAccount[\s\S]{0,80}const id = req\.params\.userId;/.test(S) && /\[req\.account\.userId, b\.card_api_id/.test(S));
+   !/b\.user_id|req\.body\.user_id/.test(S) && (S.match(/req\.params\.userId/g) || []).length === 2
+   && /function decideAccount[\s\S]{0,80}const id = req\.params\.userId;/.test(S) && /async function userRecord\(req, res\) \{\n  const id = req\.params\.userId;/.test(S)
+   && /app\.get\('\/api\/admin\/users\/:userId\/record', access\.master, userRecord\);/.test(S) && /\[req\.account\.userId, b\.card_api_id/.test(S));
+const rec = S.slice(S.indexOf('async function userRecord('), S.indexOf("app.get('/api/admin/users/:userId/record'"));
+ok('the record is read-only: SELECTs only, no INSERT / UPDATE / DELETE', /SELECT/.test(rec) && !/\b(INSERT|UPDATE|DELETE|TRUNCATE|ALTER)\b/.test(rec));
+ok('the record reads only the listed tables (user_access, alerts, portfolio) — no auth schema, no other source',
+   (rec.match(/FROM (\w+)/g) || []).every(f => /FROM (user_access|alerts|portfolio)$/.test(f)) && !/auth\./.test(rec.replace(/\/\/.*$/gm, '')) && !/listing_views|users\b(?!_)/.test(rec.replace(/user_access|\/\/.*$/gm, '')));
+ok('the record says the claimed browser ids are NOT recorded, rather than inventing them', /claimedBrowserIds: \{ recorded: false,/.test(rec));
 ok('ONE helper: access.js resolves the request; server.js builds no second check',
    (S.match(/auth\.verify\(/g) || []).length === 1);   // the one in /api/me
 
@@ -139,6 +147,9 @@ const pfn = name => { const i = H.indexOf('function ' + name + '('); return i < 
 ok('page: "Approve accounts" is offered only when /api/me said master', /AUTH\.role === 'master' \? '<button[^']*onclick="adminOpen\(\)">Approve accounts/.test(pfn('authRender')));
 ok('page: the masters’ list and each decision send the session token', /Authorization: 'Bearer ' \+ token/.test(pfn('adminLoad')) && /Authorization: 'Bearer ' \+ token/.test(pfn('adminDecide')));
 ok('page: reject says, before the click, what it does and that it can be undone', /cannot use the site[\s\S]{0,160}can be undone/.test(pfn('adminRender')));
+ok("page: every row in the masters' list offers its record; the record view sends the token and only GETs",
+   /recBtn\(u\) \+ buttons/.test(pfn('adminRender')) && /'\/record', \{ headers: \{ Authorization: 'Bearer ' \+ token \} \}/.test(pfn('adminRecord'))
+   && !/method: '(POST|PATCH|DELETE)'/.test(pfn('adminRecord')));
 console.log('\n  the alerts made before sign-in (anon ids)');
 const claim = S.slice(S.indexOf("app.post('/api/alerts/claim'"), S.indexOf('\n});', S.indexOf("app.post('/api/alerts/claim'")) + 4);
 ok('claim moves rows to the CALLER (req.account), only rows on the anon id sent', /SET user_id = \$1, updated_at = NOW\(\) WHERE user_id = \$2/.test(claim) && /\[req\.account\.userId, anonId\]/.test(claim));
@@ -316,6 +327,7 @@ async function ask(method, p, tok, body) {
   if (process.argv.includes('--db')) {
     console.log('\n  --db: claiming alerts made before sign-in, against Supabase');
     const db = require('./schemaguard').testPool();   // refuses schema changes
+    let subj = '00000000-0000-4000-8000-000000000000';   // the record test's throwaway account, removed in finally
     const who = crypto.randomUUID(), anon = 'anon-zz' + crypto.randomBytes(4).toString('hex'), other = 'anon-zy' + crypto.randomBytes(4).toString('hex');
     const tm = token(who, 'claimtest@example.com');
     const srv = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
@@ -340,9 +352,32 @@ async function ask(method, p, tok, body) {
       r = await ask('post', '/api/alerts/claim', null, { anonId: other });
       ok('no token: 401, and the row stays where it was', r.status === 401
          && (await db.query('SELECT user_id FROM alerts WHERE id = $1', [notMine])).rows[0].user_id === other);
+
+      console.log('\n  --db: one user\'s record (T2), a throwaway account');
+      subj = crypto.randomUUID();
+      await db.query(`INSERT INTO user_access (user_id, state, email, decided_by, decided_at) VALUES ($1, 'approved', 'record.test@example.com', $2, now())`, [subj, who]);
+      await db.query(`INSERT INTO alerts (user_id, card_api_id, card_name, alert_type, target_price, status) VALUES ($1, 'en-base1-4', 'Charizard', 'below', 250, 'deleted')`, [subj]);
+      await db.query(`INSERT INTO portfolio (user_id, card_api_id, card_name, grade, quantity, purchase_price) VALUES ($1, 'en-base1-4', 'Charizard', 'PSA 8', 1, 300)`, [subj]);
+      r = await ask('get', '/api/admin/users/' + subj + '/record', tm);
+      const b = r.body || {};
+      ok('record: 200 for a master', r.status === 200, r.status + ' ' + r.text.slice(0, 100));
+      ok('record: email, id, first and last seen', b.account && b.account.email === 'record.test@example.com' && b.account.userId === subj && !!b.account.firstSignedInAt && !!b.account.lastSeenAt);
+      ok('record: state approved, with its date', b.state && b.state.state === 'approved' && !!b.state.since && b.state.sinceIs === 'decided');
+      ok('record: their alert — card, target, state, created, last triggered (null = never)', b.alerts && b.alerts.length === 1 && b.alerts[0].card === 'Charizard'
+         && b.alerts[0].target.price === 250 && b.alerts[0].state === 'deleted' && !!b.alerts[0].createdAt && b.alerts[0].lastTriggeredAt === null, JSON.stringify(b.alerts));
+      ok('record: their portfolio row, with its date', b.portfolio && b.portfolio.length === 1 && b.portfolio[0].grade === 'PSA 8' && !!b.portfolio[0].createdAt, JSON.stringify(b.portfolio));
+      ok('record: claimed browser ids said to be NOT recorded', b.claimedBrowserIds && b.claimedBrowserIds.recorded === false);
+      ok('record: nothing beyond the listed fields (no token, IP, agent, session)', !/token|ip_?addr|user_?agent|session/i.test(JSON.stringify(Object.keys(b)) + JSON.stringify(Object.keys(b.account || {}))));
+      const before = JSON.stringify((await db.query('SELECT * FROM alerts WHERE user_id = $1', [subj])).rows);
+      await ask('get', '/api/admin/users/' + subj + '/record', tm);
+      ok('record: reading it changed nothing', JSON.stringify((await db.query('SELECT * FROM alerts WHERE user_id = $1', [subj])).rows) === before);
+      r = await ask('get', '/api/admin/users/99999999-9999-4999-8999-999999999999/record', tm);
+      ok('record: an id that never signed in -> 404', r.status === 404, r.text);
     } finally {
       srv.kill();
-      await db.query('DELETE FROM alerts WHERE user_id = ANY($1)', [[who, anon, other]]);
+      await db.query('DELETE FROM alerts WHERE user_id = ANY($1)', [[who, anon, other, subj]]);
+      await db.query('DELETE FROM portfolio WHERE user_id = $1', [subj]);
+      await db.query('DELETE FROM user_access WHERE user_id = $1::uuid', [subj]);
       await db.end();
     }
   }

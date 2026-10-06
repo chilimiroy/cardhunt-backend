@@ -110,7 +110,14 @@ ok('a reference of another version is not used (no two generations mixed)', refs
 ok('the version names the matcher width it was built for', refscans.REF_VERSION === 'ref-1-w' + sc.WHOLE_TW);
 ok('a new reference carries the current version', refscans.templateFromScan(Buffer.from(require('jpeg-js').encode({ width: 48, height: 66, data: Buffer.alloc(48 * 66 * 4, 128) }, 90).data)).version === refscans.REF_VERSION);
 ok('an unbuildable row is not a reference', refscans.entryOf({ state: 'unbuildable', reason: 'HTTP 404' }) === null);
-ok('a reference is built only from a JPEG', refscans.templateFromScan(Buffer.from('<html>')).reason === 'scan is not a JPEG');
+ok('a reference is built only from a JPEG or a PNG', refscans.templateFromScan(Buffer.from('<html>')).reason === 'scan is neither a JPEG nor a PNG');
+{ // pokemontcg.io / scrydex serve PNG only: decoded, transparency flattened onto white, the same 24-px template
+  const { PNG } = require('pngjs'); const p = new PNG({ width: 48, height: 66 });
+  for (let i = 0; i < p.data.length; i += 4) { p.data[i] = 200; p.data[i + 1] = 40; p.data[i + 2] = 40; p.data[i + 3] = i < 48 * 4 ? 0 : 255; }
+  const v = refscans.templateFromScan(PNG.sync.write(p));
+  ok('a PNG scan builds a reference (24 px, current version)', !v.reason && v.w === sc.WHOLE_TW && v.h === 33 && v.version === refscans.REF_VERSION, v.reason || v.w + 'x' + v.h);
+  ok('...its transparent corner flattened onto white, as a printed card shows', v.rgb && v.rgb[0] > 200 && v.rgb[1] > 130, v.rgb && [...v.rgb.slice(0, 3)].join(','));
+}
 
 console.log('\n  a sibling with no reference: NOT run, and said so');
 sc._clearCache();

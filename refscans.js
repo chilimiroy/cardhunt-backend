@@ -64,16 +64,24 @@ function ensureTable(db) {
 
 // The scan a reference is built from — the same rule wholeTemplateOf used:
 // TCGdex serves a .jpg beside each .png; anything else is fetched as given
-// and must decode as a JPEG.
+// and must decode as a JPEG or a PNG.
 function scanUrlOf(row) {
   const src = String((row && (row.image_large || row.image_small)) || '');
   return /^https:\/\/assets\.tcgdex\.net\/.+\.png$/.test(src) ? src.replace(/\.png$/, '.jpg') : src;
 }
 
-// JPEG bytes -> the stored template, or { reason } when it cannot be one.
+// Scan bytes -> the stored template, or { reason } when it cannot be one.
+// JPEG (TCGdex) or PNG (pokemontcg.io, scrydex: 86 sibling cards on
+// 2026-10-06 have only a PNG) through stampcheck.decodeImage, the one
+// decoder, which flattens PNG transparency onto white as a printed card
+// shows. Measured 2026-10-06 on the Alakazam EX fixture (18 photos, both
+// ways): PNG references keep every genuine photo and find every swap the
+// JPEG ones find, with margins ~1.2x wider in BOTH directions — real seller
+// photos under PNG references are not yet measured.
 function templateFromScan(buf) {
-  if (!(buf && buf[0] === 0xff && buf[1] === 0xd8)) return { reason: 'scan is not a JPEG' };
-  const img = stampcheck.decodeJpeg(buf);
+  const png = buf && buf[0] === 0x89 && buf[1] === 0x50, jpeg = buf && buf[0] === 0xff && buf[1] === 0xd8;
+  if (!png && !jpeg) return { reason: 'scan is neither a JPEG nor a PNG' };
+  const img = stampcheck.decodeImage(buf);
   const t96 = stampcheck.resize(img, 96, 96 * img.h / img.w);
   const t = stampcheck.resize(t96, stampcheck.WHOLE_TW, stampcheck.WHOLE_TW * t96.h / t96.w);
   return { version: REF_VERSION, tw: stampcheck.WHOLE_TW, w: t.w, h: t.h, rgb: Buffer.from(t.data) };

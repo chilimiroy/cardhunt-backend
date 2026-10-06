@@ -92,7 +92,8 @@ function hs256(payload, secret) {
      && /s\.integrity = SUPABASE_JS\.integrity/.test(fn('authLoadLib')));
   ok('offered only over http(s), never on the file:// fallback', /if \(!\/\^https\?:\$\/\.test\(location\.protocol\)\) return;/.test(fn('authInit')));
   ok('the button is hidden until sign-in is configured', /b\.style\.display = AUTH\.sb \? '' : 'none'/.test(fn('authButtons')) && /id="auth-btn" style="display:none"/.test(H) && /id="auth-btn2" style="display:none"/.test(H));
-  ok('nothing here ships roles or moves alerts yet (step 1 only)', !/CARDHUNT_MASTER_EMAILS/.test(S + H) && !/ch_user[\s\S]{0,80}AUTH\.user/.test(H));
+  // Step 2 (roles, gate, door, approval, RLS, alerts) is tested in roles / access / door / rls .test.js.
+  ok('the env name is CARDZON_MASTER_EMAILS, never CARDHUNT_', !/CARDHUNT_MASTER_EMAILS/.test(S + H));
 
   console.log('\n  auth.test.js — ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

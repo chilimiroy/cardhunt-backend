@@ -1561,6 +1561,27 @@ app.patch('/api/alerts/:id', access.approved, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Alerts made before sign-in existed are keyed on a browser's anon id
+// ('anon-' + 8 random characters, kept in that browser's localStorage as
+// ch_user). Nothing in the database ties one to an account. The only
+// evidence is possession: the browser that created them still holds the id
+// — the same secret that, under the old API, read and changed them. So the
+// page of an approved account sends its ch_user ONCE, and those rows move to
+// the account. An id nobody claims is left exactly as it is: not guessed,
+// not deleted. (T6 step 2, 2026-10-06: 8 alerts on 3 anon ids.)
+const ANON_ID_RE = /^anon-[a-z0-9]{4,16}$/;
+app.post('/api/alerts/claim', access.approved, async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'database not configured' });
+  const anonId = String((req.body && req.body.anonId) || '');
+  if (!ANON_ID_RE.test(anonId)) return res.status(400).json({ error: 'not an anonymous alerts id' });
+  try {
+    const r = await db.query(`UPDATE alerts SET user_id = $1, updated_at = NOW() WHERE user_id = $2 RETURNING id`,
+      [req.account.userId, anonId]);
+    console.log(`[alerts] claim: ${r.rowCount} alert(s) moved from ${anonId.slice(0, 7)}… to an account`);
+    res.json({ ok: true, moved: r.rowCount });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/portfolio', access.approved, async (req, res) => {
   if (!db) return res.status(503).json({ error: 'database not configured' });
   try {

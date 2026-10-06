@@ -43,6 +43,7 @@ const ROUTES = [
   ['post', '/api/alerts', 'approved', null],
   ['get', '/api/alerts/triggered', 'approved', null],
   ['patch', '/api/alerts/:id', 'approved', null],
+  ['post', '/api/alerts/claim', 'approved', null],
   ['get', '/api/portfolio', 'approved', null],
   ['post', '/api/portfolio', 'approved', null],
   ['get', '/api/admin/users', 'master', null],
@@ -129,6 +130,17 @@ const pfn = name => { const i = H.indexOf('function ' + name + '('); return i < 
 ok('page: "Approve accounts" is offered only when /api/me said master', /AUTH\.role === 'master' \? '<button[^']*onclick="adminOpen\(\)">Approve accounts/.test(pfn('authRender')));
 ok('page: the masters’ list and each decision send the session token', /Authorization: 'Bearer ' \+ token/.test(pfn('adminLoad')) && /Authorization: 'Bearer ' \+ token/.test(pfn('adminDecide')));
 ok('page: reject says, before the click, what it does and that it can be undone', /cannot use the site[\s\S]{0,160}can be undone/.test(pfn('adminRender')));
+console.log('\n  the alerts made before sign-in (anon ids)');
+const claim = S.slice(S.indexOf("app.post('/api/alerts/claim'"), S.indexOf('\n});', S.indexOf("app.post('/api/alerts/claim'")) + 4);
+ok('claim moves rows to the CALLER (req.account), only rows on the anon id sent', /SET user_id = \$1, updated_at = NOW\(\) WHERE user_id = \$2/.test(claim) && /\[req\.account\.userId, anonId\]/.test(claim));
+ok('claim accepts only the anon-id shape (not "anon", not a uuid, not another user)', /const ANON_ID_RE = \/\^anon-\[a-z0-9\]\{4,16\}\$\/;/.test(S) && /ANON_ID_RE\.test\(anonId\)/.test(claim));
+ok('claim never deletes', !/DELETE/.test(claim));
+const ANON_RE = /^anon-[a-z0-9]{4,16}$/;
+ok('the shape: the ids the page made pass; "anon", a uuid, SQL do not', ['anon-t0abc123', 'anon-5a9zz1xq'].every(x => ANON_RE.test(x))
+   && ['anon', 'anon-', '11111111-1111-4111-8111-111111111111', "anon-x' OR '1'='1", 'ANON-ABCDEFGH'].every(x => !ANON_RE.test(x)));
+ok('page: no new anon id is ever made', !/'anon-' \+ Math\.random/.test(H));
+ok('page: the claim runs only for a user past the door, and forgets the id only on the server’s answer',
+   /if \(user\) alertsClaim\(\);/.test(pfn('authCheck')) && /if \(r\.ok\) \{\s*try \{ localStorage\.removeItem\('ch_user'\)/.test(pfn('alertsClaim')));
 ok('page: the alerts calls send the token and no user id', /'\/api\/alerts', \{ headers: \{ Authorization: 'Bearer ' \+ token/.test(pfn('loadAlerts')) && !/user_id: CH_USER/.test(H));
 
 if (process.argv.includes('--table')) {
@@ -244,6 +256,45 @@ async function ask(method, p, tok, body) {
     r = await ask('get', '/api/alerts/anon-abc12345', null);
     ok('the old /api/alerts/:userId read is gone (404), not silently public', r.status === 404, String(r.status));
   } finally { server.kill(); try { fs.unlinkSync(preload); } catch (e) {} }
+
+  // --db: the claim against the real alerts table, as a throwaway master
+  // (a listed email — no user_access row is needed or made). One row on a
+  // throwaway anon id, status 'deleted' so nothing evaluates it, removed
+  // at the end whatever happened.
+  if (process.argv.includes('--db')) {
+    console.log('\n  --db: claiming alerts made before sign-in, against Supabase');
+    const { Pool } = require('pg');
+    const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const who = crypto.randomUUID(), anon = 'anon-zz' + crypto.randomBytes(4).toString('hex'), other = 'anon-zy' + crypto.randomBytes(4).toString('hex');
+    const tm = token(who, 'claimtest@example.com');
+    const srv = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
+      env: { ...process.env, PORT: String(PORT), EBAY_ENABLED: 'false', SUPABASE_URL: SUPA, SUPABASE_ANON_KEY: 'anon',
+             SUPABASE_JWT_SECRET: SECRET, CARDZON_MASTER_EMAILS: 'claimtest@example.com' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    srv.stdout.on('data', () => {}); srv.stderr.on('data', () => {});
+    try {
+      for (let i = 0; i < 100; i++) { try { await fetch(BASE + '/api/auth/config'); break; } catch (e) { await new Promise(r => setTimeout(r, 200)); } }
+      const mk = id => db.query(`INSERT INTO alerts (user_id, card_api_id, card_name, alert_type, target_price, status)
+        VALUES ($1, 'en-base1-4', 'access.test claim', 'below', 5, 'deleted') RETURNING id`, [id]).then(x => x.rows[0].id);
+      const mine = await mk(anon), notMine = await mk(other);
+      let r = await ask('post', '/api/alerts/claim', tm, { anonId: anon });
+      ok('claim: 200, moved 1', r.status === 200 && r.body.moved === 1, r.text);
+      let row = (await db.query('SELECT user_id FROM alerts WHERE id = $1', [mine])).rows[0];
+      ok('the row now belongs to the caller\'s user id', row && row.user_id === who, JSON.stringify(row));
+      row = (await db.query('SELECT user_id FROM alerts WHERE id = $1', [notMine])).rows[0];
+      ok('another anon id\'s row is untouched', row && row.user_id === other, JSON.stringify(row));
+      r = await ask('post', '/api/alerts/claim', tm, { anonId: anon });
+      ok('claiming again moves nothing (0), and refuses nothing', r.status === 200 && r.body.moved === 0, r.text);
+      r = await ask('post', '/api/alerts/claim', tm, { anonId: 'anon' });
+      ok('the shared private-window id "anon" is refused (400)', r.status === 400, r.text);
+      r = await ask('post', '/api/alerts/claim', null, { anonId: other });
+      ok('no token: 401, and the row stays where it was', r.status === 401
+         && (await db.query('SELECT user_id FROM alerts WHERE id = $1', [notMine])).rows[0].user_id === other);
+    } finally {
+      srv.kill();
+      await db.query('DELETE FROM alerts WHERE user_id = ANY($1)', [[who, anon, other]]);
+      await db.end();
+    }
+  }
 
   console.log('\n  access.test.js — ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

@@ -121,8 +121,9 @@ ok('...and says local shops are coming', /Local card shops are coming/.test(bml)
 
 console.log('\n  sweep — numbers no source produced');
 const randoms = (code.match(/Math\.random\(\)/g) || []).length;
-ok('Math.random() only makes the anonymous user id', randoms === 1 && /'anon-' \+ Math\.random\(\)/.test(code),
-  randoms + ' calls');
+// It made the anonymous alerts id; since T6 step 2 (2026-10-06) alerts
+// belong to an account and no anon id is made, so the page has none at all.
+ok('Math.random() is not called anywhere in the page', randoms === 0, randoms + ' calls');
 ok('no "Avg savings found"', !/alert-stat-savings|Avg savings/.test(code));
 ok('buildMockListings holds no marketplace price multipliers', !/pct:\s*[0-9.]+/.test(bml) && !/price\*\(row/.test(bml));
 ok('the embedded Ascended Heroes list carries no typed-in prices',

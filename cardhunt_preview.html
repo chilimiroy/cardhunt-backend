@@ -5007,16 +5007,31 @@ let ALERTS_ERROR  = null;       // set when it answered with a failure
 // takes the user from the token. Signed out is not an error — it is said.
 let ALERTS_NEED   = null;       // 'sign-in' when there is no session
 
-// There is no sign-in, so there is no server-side identity. A stable local
-// id makes the alerts REAL and persistent for this browser without
-// pretending someone is logged in. It is generated once and kept.
-const CH_USER = (function () {
+// Before sign-in existed, this browser's alerts were keyed on a local id
+// ('anon-' + 8 characters in localStorage ch_user). Alerts now belong to an
+// account (T6 step 2), and no new id is made. An id this browser still
+// holds is sent ONCE, by an approved account, to move its old alerts to
+// that account (alertsClaim); then it is forgotten.
+function alertsAnonId(){ try { return localStorage.getItem('ch_user'); } catch (e) { return null; } }
+var ALERTS_CLAIMING = false;
+async function alertsClaim(){
+  var anon = alertsAnonId();
+  if (!anon || ALERTS_CLAIMING) return;
+  ALERTS_CLAIMING = true;
   try {
-    let u = localStorage.getItem('ch_user');
-    if (!u) { u = 'anon-' + Math.random().toString(36).slice(2, 10); localStorage.setItem('ch_user', u); }
-    return u;
-  } catch (e) { return 'anon'; }   // private window: alerts are per-session
-})();
+    var token = await authToken();
+    var r = await fetch(BACKEND + '/api/alerts/claim', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ anonId: anon }) });
+    var j = await r.json();
+    // Only once the server has answered: kept on any failure, tried next sign-in.
+    if (r.ok) {
+      try { localStorage.removeItem('ch_user'); } catch (e) {}
+      if (j.moved) alertToast(j.moved + (j.moved === 1 ? ' alert' : ' alerts') + ' made in this browser before sign-in now belong to your account.');
+      loadAlerts();
+    } else if (r.status === 400) { try { localStorage.removeItem('ch_user'); } catch (e) {} }   // not an id the server knows how to move
+  } catch (e) { console.warn('[alerts] claim', e && e.message); }
+  ALERTS_CLAIMING = false;
+}
 
 // Map an API row onto the shape this page already renders.
 function alertFromApi(r) {
@@ -6669,6 +6684,7 @@ async function authCheck(session){
   doorSet(door, email);
   authButtons(); authRender();
   if (typeof loadAlerts === 'function' && ALERTS_LOADED) loadAlerts();   // the account changed: re-read its alerts
+  if (user) alertsClaim();                  // approved (no door): move this browser's pre-sign-in alerts, once
 }
 async function authGoogle(){
   if (!AUTH.sb) return;
@@ -7166,6 +7182,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-f68c278-t6approve &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-180e3dd-t6alerts &middot; click to hide</div>
 </body>
 </html>

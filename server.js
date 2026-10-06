@@ -575,6 +575,13 @@ app.get('/api/db/check', async (req, res) => {
     out.checks.postgres = String(v.rows[0].version).split(' ').slice(0,2).join(' ');
   } catch (e) { return res.json({ ok: false, reason: e.message }); }
 
+  // T6 step 2: RLS is on for every table (migration-rls.sql). The server
+  // sees everything only because its role bypasses RLS — say which role.
+  try {
+    const r = await db.query('SELECT current_user AS role, rolbypassrls AS "bypassesRls" FROM pg_roles WHERE rolname = current_user');
+    out.checks.role = r.rows[0] || null;
+  } catch (e) { out.checks.role = 'ERROR ' + e.message; }
+
   try {
     const t = await db.query(`
       SELECT table_name FROM information_schema.tables

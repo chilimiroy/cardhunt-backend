@@ -1,5 +1,37 @@
 # CardHunt — Progress Log
 
+## 2026-10-08 — Other-language exclusion measured on five cards: neither route ships
+
+marketprobe, EBAY_US, Raw NM, titles=1, sort=price, 75 x up to 3 pages;
+53 tooling calls (243 -> 296 of 300), 2026-10-07 23:2x UTC. The gate unchanged
+throughout; "kept" = passed it.
+
+| card | none: total/kept | words: total/kept | aspect: total/kept | kept-before LOST, words | LOST, aspect |
+|---|---|---|---|---|---|
+| Mew ex sv03.5-151 | 1,297 / 11 | 515 / 214 | 853 / 182 | 4 of 11 | 0 of 11 |
+| Charizard ex sv03.5-199 | 321 / 151 | 220 / 145 (not capped) | 299 / 160 | 41 of 130 | 9 of 130 |
+| Pikachu sv03.5-025 | 2,481 / 150 | 1,588 / 170 | 1,971 / 160 | 40 of 112 | 3 of 112 |
+| Charizard xy12-11 (EN only) | 784 / 132 | 394 / 141 | 735 / 140 | 51 of 130 | 9 of 130 |
+| Pikachu on the Ball fut2020-1 (EN only) | 42 / 7 | 31 / 6 | 41 / 7 | 1 of 7 | 0 of 7 |
+
+- "LOST" = kept under none, absent under the mode. Results come cheapest first
+  and an exclusion only removes items, so a row kept inside the none window
+  stays inside it unless excluded. Every lost title is plainly English and NONE
+  contains an excluded word: eBay's `-term` matches beyond the title (which
+  field is unconfirmed — item specifics such as a country of manufacture are
+  the likely one). On Charizard ex the words probe was not capped (219 of 220
+  scanned), so its 41 are gone from eBay's answer entirely.
+- Recovery is real (Mew 11 -> 214 words / 182 aspect; foreign refusals 209 ->
+  0 words, 36 aspect), but both modes drop genuine English listings, including
+  on English-only sets where there is nothing to exclude. Per the rule set
+  before measuring, aspect is ruled out by its 21 lost (0+9+3+9+0 of 390),
+  words by its 137.
+- `?lang=notspecified` (Language:{Not Specified}) returned totals identical to
+  none on all five: eBay ignores the value; those five probes measured nothing.
+- Cap: still hit by every 151 / Evolutions probe in every mode (225 of 515 to
+  2,481). Whether to page further is a quota decision.
+- Production unchanged: LANG_EXCLUDE_DEFAULT = 'none'.
+
 ## 2026-10-07 (night) — fcfade6 red on a clean checkout; node_modules deleted through a junction
 
 - `fcfade6` (other-language exclusion, default off) left ebaypaging,

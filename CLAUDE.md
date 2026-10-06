@@ -720,6 +720,16 @@ needs its own vocabulary and aspect names. *Archive:* "Never substitute across l
 a number sellers write two ways; every link through `cardmatch.buildQuery`.
 *Archive:* "Ask a question the marketplace can answer", "English listings name the set; they never state its code", "A deep link is not a result, and must not be dressed as one"; restored from `CLAUDE.md.bak-20260803`: "English marketplaces can't match Japanese names"
 
+**A number pair shared across languages pulls the foreign printings into an
+English query** (Mew ex 151/165 = en/ja SV2a/ko: 208 of 225 scanned were
+foreign, every refusal right; sort=price puts them first). **Neither exclusion
+is safe, measured both ways on 5 cards**: eBay `-term` matches beyond the title
+(dropped 4/11, 41/130, 40/112, 51/130, 1/7 genuine English rows with no excluded
+word — 51 on English-only Evolutions); `Language:{English}` dropped 0, 9, 3, 9,
+0; `Language:{Not Specified}` is not a filterable value (eBay ignores it).
+Production asks with no exclusion (`LANG_EXCLUDE_DEFAULT = 'none'`)
+(PROGRESS 2026-10-08).
+
 **Measure the question across the catalogue, not the instance**
 (`querygap.js`); one symbol (`δ`) can empty a search. (PROGRESS 2026-10-04)
 

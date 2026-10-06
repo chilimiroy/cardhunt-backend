@@ -277,7 +277,7 @@ photo here, ~1.2-1.3 s on Render. A timeout is retryable, never a verdict.
 |---|---|---|---|
 | 30th / Celebrations reprint | stamp template from OUR scan, 0.70 + title words + price band | 55 originals (`30th-c-020` no stamp) | 92.5% of reprint photos; 2026-10-06: 186/186 refusals were reprints; 0/491 genuine Base Charizard (max 0.613); a visible 30th stamp missed at 0.68 |
 | a different card listed under ours, both scans held | lookalike, per-pair margin (`LOOKALIKES`) | bubble Mew ↔ 30th Mew (0.40); Mewtwo ☆ and Dragonite ex ↔ their Evolutions cards (0.30); Base Charizard ← gold Charizard ex 228 (**one way**, 0.10) | 2026-10-06, both ways: Mew 113/178 at 0.40 (a genuine binder photo hit 0.352); Evolutions 22/22 refusals right; 228 28/60, 0/491 genuine |
-| same-name card of the same set | sibling, margin 0.40 | 6,891 English cards | 7/11 swaps, 0/~1,470 genuine |
+| same-name card of the same set | sibling, margin 0.40 | 6,962 English cards (2026-10-06) | JPEG refs: 7/11 swaps, 0/~1,470 genuine. **PNG refs (86 cards): ONE direction only** — 0/111 genuine refused, no swap seen; catching untested, NOT equivalent to JPEG |
 | named replica | title words | all | 0/896 right titles refused |
 | implausible price | outlier (flag) | ≥5 priced or current stored price | 0/864 right flagged |
 | other-language copy | title; Japanese-family **back** | all / on demand, flagged rows, `MOST_FAKED` | back 11/12 JA, 0/52 EN |
@@ -323,6 +323,12 @@ Rules of the gate:
   reached the shortlist 1 of 21 (gold 228: rank ~12,000); the 228 lead shipped as a one-way pair.
   **OCR of name and number — CLOSED** (PROGRESS 2026-10-06 (later): "T1 — OCR"):
   number read 1/113 at s-l500, 19% at s-l1600, **0/38 on the different-card photos**.
+- **Sibling references are stored, not fetched** (`refscans.js`, versioned).
+  "Unbuildable" is a MOVING set — 78 -> 136 during the first backfill (PNG
+  67 -> 86, no URL 10 -> 48, 404 1 -> 2): re-count with `node refbuild.js
+  --dry`, never quote it; `--retry-unbuildable` after a decoder change.
+  A check not run is reported (`stampGate.notRun`), on the page too
+  (PROGRESS 2026-10-06 (late night)).
 - **The cheap route for a recurring wrong card is a new `LOOKALIKES` pair,
   measured first.**
 

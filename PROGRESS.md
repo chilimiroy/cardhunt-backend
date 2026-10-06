@@ -1,5 +1,60 @@
 # CardHunt — Progress Log
 
+## 2026-10-06 (late night) — Speed: the card page waited on our own reference scans
+
+The rule this work enforces: **a visitor's request never waits on a
+third-party host**, whatever that host's speed on a given day.
+
+### Measured first (TASK-speed.md, Chrome against Render, `?debug=1`)
+- Card page cold: Charizard ex sv03.5-199 server 6,314 ms, of which 4.1 s
+  (65%) fetching and decoding our own scans of the card and its same-name
+  siblings (`photoChecksFor` -> `wholeTemplateOf`); Mew ex sv03.5-151 3.8 s of
+  5,857 ms. eBay itself 1.2-1.5 s. `SIBLING_BUILD_MS` (3 s) overran by ~1 s:
+  the synchronous JPEG decode blocks the timer.
+- Set page cold: data in 0.4-0.5 s on an 8-10 KB payload; >90% of the visible
+  wait is thumbnails from assets.tcgdex.net (3.6-20 s each). Not yet fixed (T4).
+- Warm card page: 423 ms (15-minute view cache).
+
+### T1 — is the sibling check actually running? (20 cold cards, 20 sets)
+- Build timeout fired 0/20 that afternoon; references built 26/26.
+- Sibling VERDICTS in the visitor's answer: 0 of 969 rows. First verdict
+  ~12 min after the views; 600/969 (62%) by +20 min. Cause: up to 300
+  colour-profile jobs per cold view go to the FRONT of the one photo worker
+  (`stampcheck.js` queueMaterial, `5160962`); queue 1,749 deep; 984 profiles
+  ran before the first sibling job. Not changed — a decision for Roy.
+- Stored-verdict hits on cold cards: 0/969 (new listings; expected).
+- A timed-out or failed scan used to drop the sibling check with no trace.
+
+### What shipped (local, held until the roles session pushes)
+`1f3651d` references built ahead (`refbuild.js` -> `card_reference_scans`,
+24-px template, 600/600 + 18/18 scores identical to the 96-px one) ·
+`61d6a6e` photo-job time split in `poolState` (measurement only) ·
+`feb5788` `version` column (`ref-1-w24`; 2,806 rows stamped after checking
+all were 24x33) · `d935f9f` live fallback for unbuilt cards, exactly the old
+path, failures now reported · `29ebecd` PNG scans decoded · `aa1c831` page:
+"Not checked yet", and a check that could not run is named.
+- Storage: Supabase Postgres, ~2.9 KB a row with overhead, ~20 MB for 6,962;
+  database 148 MB (price_history 62 MB / 172,239 rows, cards 55 MB, verdicts
+  10 MB / 32,013 rows).
+- Backfill: resumable by construction (a hard kill lost nothing: 17 stored,
+  restart at 6,780 - 17). 0.3-0.5 scans/s, slowing to 0.12/s with timeouts;
+  paused when free RAM on the Windows machine fell under 1 GB.
+- Unbuildable is a moving set: 78 -> 136 as the backfill went on (PNG 67 ->
+  86, no scan URL 10 -> 48, HTTP 404 1 -> 2).
+
+### PNG references — measured in ONE direction only
+- Alakazam EX fixture, 18 synthetic photos: every genuine kept, every swap
+  found; margins ~1.2x wider both ways than with JPEG references.
+- Real eBay photos of sm3.5-39, ecard3-H01, cel25-25: 0/111 refused, highest
+  margin 0.175. **No swap among them: the catching direction on PNG is
+  untested. Not equivalent to JPEG.**
+
+### Open
+T3 re-measurement and the two queue questions (what the 300 colour profiles
+per view are for; is the worker CPU-bound on Render) wait on the push. Then
+`node refbuild.js --retry-unbuildable`, reporting what comes back. T4
+(thumbnails through our own cache) after T3 is confirmed.
+
 ## 2026-10-06 (night) — T6 step 2: roles, the gate, the closed door, approval, RLS, alerts
 
 Six commits: `3fee684` roles · `6af3bc6` gate · `f68c278` door · `a608e75`

@@ -1,5 +1,33 @@
 # CardHunt — Progress Log
 
+## 2026-10-07 — Security follow-up (TASK-security-followup.md): tooling key, emails, schema guard, live RLS
+
+- **T1, tooling key** (`5585d39`, rename `65d4fff`): the seven `/api/ebay/*`
+  probes and `quota?probe=1` need `X-CardHunt-Key` = env `CARDZON_TOOLING_KEY`,
+  checked on the route line before cache/token/quota. Deployed 2026-10-07: all 8
+  -> 401 with no key, wrong key -> 401, ledger read 200; tooling count 238/300
+  before and after (0 spent). `toolingkey.test.js` under costmeter: 24 refusals,
+  0 eBay HTTP; the right key spends 3.
+- **T2, auth.users "0"**: DATABASE_URL ref = SUPABASE_URL ref (`opztouqaetxyfyhcwvwa`);
+  `auth.users` counted 2 from DATABASE_URL (postgres, BYPASSRLS) — the 0 did not
+  reproduce; nothing granted. Masters' list now reads `user_access.email`,
+  written from the verified token at sign-in (`5842293`). After deploy: 2 of 3
+  rows captured on sign-in, 1 awaiting its next sign-in.
+- **Tests cannot change the schema** (`aac5992`): `roles.test.js --db` had added
+  `user_access.email` to production via first-use migration. `schemaguard.js`
+  refuses DDL on every test connection before sending; 14 db tests moved to it.
+- **T3, RLS over a real session** (Roy's token, run by Roy): read/update/delete
+  of another user's alert matched 0 rows, insert-as-other 403 `42501`,
+  self-approval 403 `42501` permission denied. Identity is the token's sub
+  (PostgREST reads it from the JWT; 403 vs anon's 401). Not shown: a positive
+  read of the token's own rows over REST.
+- **T4**: deployed `/api/deals` -> `enabled:false`. Signed-out `POST /api/alerts`
+  -> 401. Of the "8 alerts on 3 anon ids", 5 were claimed by account
+  2fb0f327 on 2026-10-06; 3 remain on 1 anon id (1 active, evaluated nightly).
+- **Decided 2026-10-07 (Roy):** the unclaimed active alert keeps being
+  evaluated; signed-out visitors stay unable to create alerts (anonymous
+  alerts are what created the orphans).
+
 ## 2026-10-06 (late night) — Speed: the card page waited on our own reference scans
 
 The rule this work enforces: **a visitor's request never waits on a

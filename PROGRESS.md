@@ -1,5 +1,47 @@
 # CardHunt — Progress Log
 
+## 2026-10-07 (later) — The door (catalogue public, prices approved-only) and the per-user record
+
+Notes here only: CLAUDE.md was being compressed by the speed session.
+
+- **Master display** (`68a58a7`, pushed): `roles.displayRole` — a listed email is
+  master whatever `user_access.state` says; the masters' list files masters under
+  Masters only (the page never drew that section), and approve/reject on another
+  master is 409. Nothing writes 'master' to the state column.
+- **The door** (`b24a9ca`): `access.priced` on 11 routes (price, history,
+  listings, graded, market, trending, deals, cert, photos, stamp, back) — no token
+  401 `{"error":"sign-in required","reason":"no token"}`, pending/rejected 403;
+  the tooling key passes (audit scripts send it), never as a user.
+  `access.optional` on the catalogue (sets, set cards, card, search, sets/lang,
+  diagnostic): `pricegate.strip` removes every price/listing/link key for anyone
+  not approved; private,no-store + Vary Authorization; search does not chain into
+  listings for them (no eBay call). `pricegate.test.js --db`: none of the master's
+  price numbers reach anonymous or pending under any key, 10 routes.
+- **The page**: prices start closed; one note where each price block was; no dash,
+  $0 or estimate (`getBase` and the page's own `mockP` return nothing while
+  closed — the set page had shown mockP estimates and pokemontcg.io prices fetched
+  by the browser, which no server gate can reach). Pending/rejected browse the
+  catalogue; their waiting screen is in the account panel. Chrome, local server,
+  signed out: home, Pokémon, sets, set page, results, card pages — no currency
+  figure; no priced endpoint called. **The approved path was not seen in a
+  browser** (no sign-in locally) — check on /app after deploy.
+- **Per-user record** (`505c879`): `/api/admin/users/:id/record`, master,
+  read-only; approved non-master -> 403 `{"error":"masters only","state":"approved"}`.
+  **Claimed browser ids are not recorded** (the claim overwrites alerts.user_id;
+  no anon id, no date) — the record says so; nothing new recorded to fill it.
+- **A data-deletion request would touch:** `user_access` (the row; other rows'
+  `decided_by` may point at a deleted master), `alerts` and `portfolio` (by
+  user_id), legacy `users` (0 rows, nothing writes it), and the Supabase Auth
+  account itself (auth schema, via Supabase's admin API — not our tables).
+  No user column in `listing_views`, `listing_photo_verdicts`, `price_history`.
+- **Contradictions found:** `/api/trending` was LIVE (home movers, Pokémon
+  trending), not off — gated now; `/api/deals` was off (`enabled:false`), gated
+  now. `fcfade6` (language exclusion, other session) fails ebaypaging (CRASH
+  languageExclusionFor is not defined), gradefilter and selector on a clean HEAD.
+  `/api/sets` proxies pokemontcg.io, which 500s intermittently.
+- Left public, said: `/` and `/api/db/check` (counts of price records, not
+  prices), `/api/listings-log` (calls per view, no price or link).
+
 ## 2026-10-07 — Security follow-up (TASK-security-followup.md): tooling key, emails, schema guard, live RLS
 
 - **T1, tooling key** (`5585d39`, rename `65d4fff`): the seven `/api/ebay/*`

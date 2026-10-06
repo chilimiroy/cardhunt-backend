@@ -755,6 +755,11 @@ dormant branch rather than zero it. *Archive:* "The listings panel has had two w
 **No number on screen that a source did not produce**; claim nothing before
 the server accepts it (`nofabricated.test.js`). *Archive:* "The page was still inventing numbers where nobody looked — found 2026-09-24", "Invented data, the fourth sweep (2026-09-28, TASK T7)", "A UI that writes only to itself"
 
+**No price is computed in the page or fetched by the browser from a third
+party** — no server gate can reach either (the set page showed `mockP`
+estimates and pokemontcg.io prices to signed-out visitors; `door.test.js`).
+(PROGRESS 2026-10-07 (later))
+
 **A price says when it was measured — on every screen**, decided once
 (`pricequality.js`), drawn by one function. (PROGRESS 2026-10-02)
 

@@ -39,6 +39,11 @@ Notes here only: CLAUDE.md was being compressed by the speed session.
   now. `fcfade6` (language exclusion, other session) fails ebaypaging (CRASH
   languageExclusionFor is not defined), gradefilter and selector on a clean HEAD.
   `/api/sets` proxies pokemontcg.io, which 500s intermittently.
+- **The tooling key is now a bearer token for the whole product** (Roy, 2026-10-07):
+  `CARDZON_TOOLING_KEY` opens every priced route, not just the probes — accepted
+  because the audit scripts need it. It must never enter the repo, a log, or a
+  shared machine. Lost or exposed: rotate it on Render AND in the local
+  environment (both, same value), then confirm a probe with the old key -> 401.
 - Left public, said: `/` and `/api/db/check` (counts of price records, not
   prices), `/api/listings-log` (calls per view, no price or link).
 

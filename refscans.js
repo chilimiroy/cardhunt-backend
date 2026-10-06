@@ -25,14 +25,27 @@
 
 const stampcheck = require('./stampcheck');
 
+// How a stored reference was derived. Like VERDICT_VERSION: change it when
+// the derivation changes (the resize, the matcher width, the source rule)
+// and every older row stops being used and is rebuilt by refbuild.js,
+// instead of two generations being compared side by side unnoticed.
+//   ref-1-w24: the scan area-resized to 96 px wide, then to WHOLE_TW (24).
+const REF_VERSION = 'ref-1-w' + stampcheck.WHOLE_TW;
+
 const TABLE_SQL = `CREATE TABLE IF NOT EXISTS card_reference_scans (
   card_id text PRIMARY KEY,
   scan_url text NOT NULL,
   state text NOT NULL,              -- 'built' | 'unbuildable'
   reason text,                      -- why unbuildable
+  version text,                     -- REF_VERSION of a built row
   tw int, w int, h int,             -- tw: the matcher width it was built for
   rgb bytea,
   built_at timestamptz NOT NULL DEFAULT now())`;
+// A table made before the version column gains it (rows without one are
+// not used until rebuilt; migration-reference-scans.sql stamped the first
+// generation, built by exactly this derivation, as ref-1-w24).
+const MIGRATE_SQL = [
+  'ALTER TABLE card_reference_scans ADD COLUMN IF NOT EXISTS version text'];
 // Catalogue bookkeeping, like listing_photo_verdicts (migration-rls.sql):
 // RLS on with no policy, so the public anon key reads and writes nothing;
 // the server and the tools run as postgres and bypass it.
@@ -44,6 +57,7 @@ let _ready = null;
 function ensureTable(db) {
   return _ready || (_ready = (async () => {
     await db.query(TABLE_SQL);
+    for (const s of MIGRATE_SQL) await db.query(s);
     for (const s of RLS_SQL) await db.query(s).catch(() => {});   // roles absent outside Supabase
   })().catch(e => { _ready = null; throw e; }));
 }
@@ -62,14 +76,14 @@ function templateFromScan(buf) {
   const img = stampcheck.decodeJpeg(buf);
   const t96 = stampcheck.resize(img, 96, 96 * img.h / img.w);
   const t = stampcheck.resize(t96, stampcheck.WHOLE_TW, stampcheck.WHOLE_TW * t96.h / t96.w);
-  return { tw: stampcheck.WHOLE_TW, w: t.w, h: t.h, rgb: Buffer.from(t.data) };
+  return { version: REF_VERSION, tw: stampcheck.WHOLE_TW, w: t.w, h: t.h, rgb: Buffer.from(t.data) };
 }
 
-// A stored row -> the `wholes` entry stampcheck reads, or null. A row built
-// for another matcher width is not this matcher's template.
+// A stored row -> the `wholes` entry stampcheck reads, or null. A row of
+// another REF_VERSION is not this matcher's template.
 function entryOf(row) {
-  if (!row || row.state !== 'built' || row.tw !== stampcheck.WHOLE_TW || !row.rgb) return null;
+  if (!row || row.state !== 'built' || row.version !== REF_VERSION || !row.rgb) return null;
   return { scan: row.scan_url, w: row.w, h: row.h, rgb: Buffer.from(row.rgb).toString('base64') };
 }
 
-module.exports = { TABLE_SQL, RLS_SQL, ensureTable, scanUrlOf, templateFromScan, entryOf };
+module.exports = { REF_VERSION, TABLE_SQL, MIGRATE_SQL, RLS_SQL, ensureTable, scanUrlOf, templateFromScan, entryOf };

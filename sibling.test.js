@@ -97,7 +97,7 @@ console.log('\n  references built ahead of time (speed T2, 2026-10-06)');
 // then resized to WHOLE_TW exactly as wholeScore does. Same verdicts.
 const refscans = require('./refscans.js');
 const t24 = id => { const t = img(id), s = sc.resize(t, sc.WHOLE_TW, sc.WHOLE_TW * t.h / t.w);
-  return refscans.entryOf({ state: 'built', tw: sc.WHOLE_TW, w: s.w, h: s.h, rgb: Buffer.from(s.data), scan_url: 'fixture' }); };
+  return refscans.entryOf({ state: 'built', version: refscans.REF_VERSION, w: s.w, h: s.h, rgb: Buffer.from(s.data), scan_url: 'fixture' }); };
 const checks24 = ours => checksFor(ours).map(c => Object.assign({}, c, { wholes: { [ours]: t24(ours), [c.cardId]: t24(c.cardId) } }));
 let same = 0, all = 0;
 for (const p of [A25, A117, A125]) for (const ours of [A25, A117, A125]) for (const glare of [false, true]) {
@@ -105,7 +105,10 @@ for (const p of [A25, A117, A125]) for (const ours of [A25, A117, A125]) for (co
   all++; if (JSON.stringify(a) === JSON.stringify(b)) same++;
 }
 ok('a stored 24-px reference gives the IDENTICAL verdict and scores as the 96-px one', same === all, same + '/' + all);
-ok('a reference built for another matcher width is not used', refscans.entryOf({ state: 'built', tw: 96, w: 96, h: 132, rgb: Buffer.alloc(9) }) === null);
+ok('a reference of another version is not used (no two generations mixed)', refscans.entryOf({ state: 'built', version: 'ref-0', w: 24, h: 33, rgb: Buffer.alloc(2376) }) === null
+   && refscans.entryOf({ state: 'built', w: 24, h: 33, rgb: Buffer.alloc(2376) }) === null);
+ok('the version names the matcher width it was built for', refscans.REF_VERSION === 'ref-1-w' + sc.WHOLE_TW);
+ok('a new reference carries the current version', refscans.templateFromScan(Buffer.from(require('jpeg-js').encode({ width: 48, height: 66, data: Buffer.alloc(48 * 66 * 4, 128) }, 90).data)).version === refscans.REF_VERSION);
 ok('an unbuildable row is not a reference', refscans.entryOf({ state: 'unbuildable', reason: 'HTTP 404' }) === null);
 ok('a reference is built only from a JPEG', refscans.templateFromScan(Buffer.from('<html>')).reason === 'scan is not a JPEG');
 

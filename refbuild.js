@@ -4,7 +4,7 @@
 //   node refbuild.js --dry                 how many are missing, and the size
 //   node refbuild.js [--max=N] [--set=X]   build the missing ones
 //   node refbuild.js --retry-unbuildable   ask again for ones recorded unbuildable
-//   node refbuild.js --rebuild             also rows built for another matcher width
+//   (a built row of another REF_VERSION is rebuilt on every run, no flag needed)
 //   options: --concurrency=2 (default)
 //
 // Resumable by construction: every run selects only the cards with no usable
@@ -38,7 +38,7 @@ const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectU
 async function missing() {
   const states = ["rs.card_id IS NULL"];
   if (has('retry-unbuildable')) states.push("rs.state = 'unbuildable'");
-  if (has('rebuild')) states.push(`(rs.state = 'built' AND rs.tw IS DISTINCT FROM ${stampcheck.WHOLE_TW})`);
+  states.push(`(rs.state = 'built' AND rs.version IS DISTINCT FROM '${refscans.REF_VERSION}')`);
   const r = await db.query(`
     WITH named AS (
       SELECT c.set_api_id, lower(c.name) AS n FROM cards c
@@ -60,11 +60,11 @@ async function counts() {
 }
 
 function save(id, url, v) {
-  return db.query(`INSERT INTO card_reference_scans (card_id, scan_url, state, reason, tw, w, h, rgb, built_at)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8, now())
+  return db.query(`INSERT INTO card_reference_scans (card_id, scan_url, state, reason, version, tw, w, h, rgb, built_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
     ON CONFLICT (card_id) DO UPDATE SET scan_url = EXCLUDED.scan_url, state = EXCLUDED.state, reason = EXCLUDED.reason,
-      tw = EXCLUDED.tw, w = EXCLUDED.w, h = EXCLUDED.h, rgb = EXCLUDED.rgb, built_at = now()`,
-    [id, url, v.reason ? 'unbuildable' : 'built', v.reason || null, v.tw || null, v.w || null, v.h || null, v.rgb || null]);
+      version = EXCLUDED.version, tw = EXCLUDED.tw, w = EXCLUDED.w, h = EXCLUDED.h, rgb = EXCLUDED.rgb, built_at = now()`,
+    [id, url, v.reason ? 'unbuildable' : 'built', v.reason || null, v.version || null, v.tw || null, v.w || null, v.h || null, v.rgb || null]);
 }
 
 // One card: { built } | { unbuildable } | { transient } — only the first two are stored.

@@ -3573,7 +3573,7 @@ function referenceWhy(row, whose) {
   whose = whose || 'that card';
   if (!row || !row.ref_state) return 'no reference scan of ' + whose + ' stored yet (node refbuild.js)';
   if (row.ref_state === 'unbuildable') return 'the reference scan of ' + whose + ' could not be built: ' + (row.ref_reason || 'unknown');
-  return 'the reference scan of ' + whose + ' was built for another matcher width (node refbuild.js --rebuild)';
+  return 'the reference scan of ' + whose + ' is an older version (' + (row.version || 'none') + '; node refbuild.js rebuilds it)';
 }
 async function siblingRowsOf(card) {
   const cid = card.api_card_id, hit = _siblingRows.get(cid);
@@ -3581,13 +3581,13 @@ async function siblingRowsOf(card) {
   await refscans.ensureTable(db);
   const r = await db.query(
     `SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_total,
-            rs.state AS ref_state, rs.reason AS ref_reason, rs.scan_url, rs.tw, rs.w, rs.h, rs.rgb
+            rs.state AS ref_state, rs.reason AS ref_reason, rs.scan_url, rs.version, rs.w, rs.h, rs.rgb
        FROM cards c JOIN cards me ON me.api_card_id = $1
        LEFT JOIN card_reference_scans rs ON rs.card_id = c.api_card_id
       WHERE c.set_api_id = me.set_api_id AND lower(c.name) = lower(me.name)
         AND c.api_card_id LIKE 'en-%' AND ${digital.visibleSql('c')}`, [cid]);
   const rows = r.rows.length > 1 ? r.rows.map(x => {
-    const tpl = refscans.entryOf({ state: x.ref_state, tw: x.tw, w: x.w, h: x.h, rgb: x.rgb, scan_url: x.scan_url });
+    const tpl = refscans.entryOf({ state: x.ref_state, version: x.version, w: x.w, h: x.h, rgb: x.rgb, scan_url: x.scan_url });
     delete x.rgb;
     return Object.assign(x, { tpl });
   }) : [];

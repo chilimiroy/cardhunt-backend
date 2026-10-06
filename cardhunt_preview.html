@@ -4984,6 +4984,9 @@ function handleAcKey(e,dropId){
 let ALERTS = [];
 let ALERTS_LOADED = false;      // false until the API has actually answered
 let ALERTS_ERROR  = null;       // set when it answered with a failure
+// T6 step 2: alerts belong to a signed-in, approved account; the server
+// takes the user from the token. Signed out is not an error — it is said.
+let ALERTS_NEED   = null;       // 'sign-in' when there is no session
 
 // There is no sign-in, so there is no server-side identity. A stable local
 // id makes the alerts REAL and persistent for this browser without
@@ -5025,9 +5028,13 @@ function alertFromApi(r) {
 }
 
 async function loadAlerts() {
-  try {
-    const r = await fetch(BACKEND + '/api/alerts/' + encodeURIComponent(CH_USER));
-    if (!r.ok) throw new Error('HTTP ' + r.status);
+  await AUTH.ready;
+  const token = AUTH.user ? await authToken() : null;
+  ALERTS_NEED = token ? null : 'sign-in';
+  if (!token) { ALERTS = []; ALERTS_ERROR = null; }
+  else try {
+    const r = await fetch(BACKEND + '/api/alerts', { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error('HTTP ' + r.status + (j.error ? ' — ' + j.error : '')); }
     const rows = await r.json();
     ALERTS = (Array.isArray(rows) ? rows : []).map(alertFromApi);
     ALERTS_ERROR = null;
@@ -5663,6 +5670,13 @@ function updateAlertsBar() {
       + '<div class="sk" style="width:172px;height:300px;flex-shrink:0"></div>';
     return;
   }
+  if (ALERTS_NEED === 'sign-in') {
+    bar.innerHTML = '<div style="padding:16px;border:1px dashed var(--bd);border-radius:var(--r);'
+      + 'color:var(--mu);font-size:12px;min-width:280px">Price alerts are kept in your account. '
+      + (AUTH.sb ? '<a href="#" onclick="authOpen();return false">Sign in</a> to create and see them.'
+                 : 'Sign-in is not available on this copy of the page.') + '</div>';
+    return;
+  }
   if (ALERTS_ERROR) {
     bar.innerHTML = '<div style="padding:16px;border:1px dashed var(--re);border-radius:var(--r);'
       + 'color:var(--mu);font-size:12px;min-width:280px">Could not load your alerts &mdash; '
@@ -5869,9 +5883,11 @@ function updateAlertStats(){
 // never a second source of truth.
 async function patchAlert(id, status) {
   try {
+    const token = await authToken();
+    if (!token) throw new Error('you are signed out');
     const r = await fetch(BACKEND + '/api/alerts/' + encodeURIComponent(id), {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify({ status: status })
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -5996,8 +6012,10 @@ async function saveAlert(){
   //
   // Nothing is claimed before the server has accepted it.
   const cardName = alertCardTarget.name;
+  // The server takes the account from the token; the page sends no user id.
+  const token = await authToken();
+  if (!token) { closeAddAlertModal(); authSay('Sign in to create a price alert.'); authOpen(); return; }
   const payload = {
-    user_id: CH_USER,
     card_api_id: alertCardTarget.id,
     card_name: cardName,
     card_img: (alertCardTarget.images && (alertCardTarget.images.small || alertCardTarget.images.large)) || '',
@@ -6016,7 +6034,7 @@ async function saveAlert(){
   try {
     const r = await fetch(BACKEND + '/api/alerts', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
       body: JSON.stringify(payload)
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -6474,6 +6492,15 @@ document.addEventListener('DOMContentLoaded', function(){ if (currentLang() === 
 // lesson of the old disabled login). Offered only over http(s): Google cannot
 // return to a file:// page. No roles, approval or alert move in this step.
 var AUTH = { cfg: null, sb: null, user: null, notice: null, seq: 0 };
+// Settled once authInit has finished, on EVERY path (signed in, signed out,
+// sign-in unavailable): what reads AUTH.user waits for it.
+AUTH.ready = new Promise(function (res) { AUTH._ready = res; });
+// The session's current access token (Supabase refreshes it), or null.
+async function authToken(){
+  if (!AUTH.sb) return null;
+  try { var s = await AUTH.sb.auth.getSession(); return (s.data && s.data.session && s.data.session.access_token) || null; }
+  catch (e) { return null; }
+}
 var SUPABASE_JS = { src: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js',
                     integrity: 'sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok' };
 function authLoadLib(){
@@ -6529,6 +6556,7 @@ async function authCheck(session){
   if (mine !== AUTH.seq) return;            // a newer check is in flight
   AUTH.user = user;
   authButtons(); authRender();
+  if (typeof loadAlerts === 'function' && ALERTS_LOADED) loadAlerts();   // the account changed: re-read its alerts
 }
 async function authGoogle(){
   if (!AUTH.sb) return;
@@ -6569,7 +6597,7 @@ async function authInit(){
   if (/[?&#](code|error|error_description)=/.test(location.href)) history.replaceState(null, '', authRedirect());
   if (AUTH.notice) authOpen();
 }
-document.addEventListener('DOMContentLoaded', function(){ authInit(); });
+document.addEventListener('DOMContentLoaded', function(){ authInit().catch(function (e) { console.warn('[auth]', e && e.message); }).then(function () { AUTH._ready(); }); });
 
 function fmtCurrency(usd){
   if(!usd) return CURRENCY_SYMBOLS[currentCurrency]+'0';
@@ -7017,6 +7045,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-716a315-t6signin &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-3fee684-t6gate &middot; click to hide</div>
 </body>
 </html>

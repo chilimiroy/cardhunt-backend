@@ -1487,18 +1487,28 @@ async function getEbayToken() {
 // _price / _source), because "Charizard hit $400" is not actionable
 // without the link to the $400 copy. `node ingest.js alerts` does the
 // evaluating; see T3 in CLAUDE.md.
+//
+// T6 step 2 (2026-10-06): every route here is gated by access.js and takes
+// the user id from the VERIFIED TOKEN (req.account.userId) — never from the
+// URL or the body. They used to take /:userId from the URL, so anyone who
+// knew (or guessed) a browser's anon id could read and change its alerts.
+// A row that is not the caller's is not found, not refused: the answer does
+// not say whether someone else's id exists.
 // ══════════════════════════════════════════════════════════════
-app.get('/api/alerts/:userId', async (req, res) => {
-  if (!db) return res.json([]);
+const access = require('./access');
+const ALERT_STATUSES = ['active', 'paused', 'deleted'];
+
+app.get('/api/alerts', access.approved, async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'database not configured' });
   try {
     const rows = await db.query(
       "SELECT * FROM alerts WHERE user_id=$1 AND status<>'deleted' ORDER BY created_at DESC",
-      [req.params.userId]);
+      [req.account.userId]);
     res.json(rows.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/alerts', async (req, res) => {
+app.post('/api/alerts', access.approved, async (req, res) => {
   if (!db) return res.status(503).json({ error: 'database not configured' });
   try {
     const b = req.body || {};
@@ -1510,24 +1520,15 @@ app.post('/api/alerts', async (req, res) => {
       INSERT INTO alerts (user_id,card_api_id,card_name,card_img,set_name,grade,
         alert_type,target_price,marketplace,notify,status)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'active') RETURNING *`,
-      [b.user_id, b.card_api_id, b.card_name, b.card_img, b.set_name,
+      [req.account.userId, b.card_api_id, b.card_name, b.card_img, b.set_name,
        b.grade, b.alert_type, b.target_price, b.marketplace, b.notify]);
     res.json(row.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.patch('/api/alerts/:id', async (req, res) => {
-  if (!db) return res.status(503).json({ error: 'database not configured' });
-  try {
-    await db.query('UPDATE alerts SET status=$1,updated_at=NOW() WHERE id=$2',
-      [req.body.status, req.params.id]);
-    res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
 // Everything that has fired, newest first — what the bell badge reads.
-app.get('/api/alerts/:userId/triggered', async (req, res) => {
-  if (!db) return res.json([]);
+app.get('/api/alerts/triggered', access.approved, async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'database not configured' });
   try {
     const rows = await db.query(`
       SELECT id, card_api_id, card_name, card_img, set_name, grade, alert_type,
@@ -1535,21 +1536,34 @@ app.get('/api/alerts/:userId/triggered', async (req, res) => {
              triggered_title, triggered_at, trigger_count
       FROM alerts
       WHERE user_id=$1 AND status='triggered'
-      ORDER BY triggered_at DESC NULLS LAST`, [req.params.userId]);
+      ORDER BY triggered_at DESC NULLS LAST`, [req.account.userId]);
     res.json(rows.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/api/portfolio/:userId', async (req, res) => {
-  if (!db) return res.json([]);
+app.patch('/api/alerts/:id', access.approved, async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'database not configured' });
+  const status = req.body && req.body.status;
+  if (!ALERT_STATUSES.includes(status))
+    return res.status(400).json({ error: 'status must be one of ' + ALERT_STATUSES.join(', ') });
+  try {
+    const r = await db.query('UPDATE alerts SET status=$1,updated_at=NOW() WHERE id=$2 AND user_id=$3',
+      [status, req.params.id, req.account.userId]);
+    if (!r.rowCount) return res.status(404).json({ error: 'no such alert' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/portfolio', access.approved, async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'database not configured' });
   try {
     const rows = await db.query('SELECT * FROM portfolio WHERE user_id=$1 ORDER BY created_at DESC',
-      [req.params.userId]);
+      [req.account.userId]);
     res.json(rows.rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.post('/api/portfolio', async (req, res) => {
+app.post('/api/portfolio', access.approved, async (req, res) => {
   if (!db) return res.status(503).json({ error: 'database not configured' });
   try {
     const b = req.body || {};
@@ -1557,7 +1571,7 @@ app.post('/api/portfolio', async (req, res) => {
     const row = await db.query(`
       INSERT INTO portfolio (user_id,card_api_id,card_name,card_img,set_name,grade,quantity,purchase_price)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [b.user_id, b.card_api_id, b.card_name, b.card_img, b.set_name,
+      [req.account.userId, b.card_api_id, b.card_name, b.card_img, b.set_name,
        b.grade, b.quantity || 1, b.purchase_price || 0]);
     res.json(row.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }

@@ -463,7 +463,11 @@ paint. One exact-text table (`LANG_JA`): a node is translated only when its WHOL
 text is a key — **never card data** (`i18n.test.js --db`: no key is any of 11,324
 names/sets/rarities). Not yet: ~90 sentences the page builds, server explanations.
 
-## Accounts — DECIDED, waiting on Roy (T6)
+## Accounts — step 1 SHIPPED 2026-10-06: Google + emailed link (T6)
+`auth.js` verifies the Supabase token on the server — **ES256 via the project's
+JWKS** (this project's signing key; the legacy `SUPABASE_JWT_SECRET` only for HS256
+tokens), iss/aud/exp/sub checked. `/api/me` is the ONLY source of the signed-in
+state; no password field (`auth.test.js`). Not yet: roles, approval, alerts off `anon-`.
 **Supabase Auth's `auth` schema, not a second project** (2026-10-06): emails and
 password hashes live there, our tables hold a user id; a second project = two
 connections, two backups, no user↔alerts join. Roles by row-level security, never

@@ -1,5 +1,24 @@
 # CardHunt — Progress Log
 
+## 2026-10-06 (evening) — T6 step 1: Google and email sign-in
+
+- **The key, measured:** <SUPABASE_URL>/auth/v1/.well-known/jwks.json publishes
+  one ES256 key — user tokens are signed with it, not the legacy HS256
+  secret. A server checking SUPABASE_JWT_SECRET alone would have refused
+  every real sign-in. auth.js accepts ES256 (JWKS) and HS256 (secret), each
+  for its own algorithm; no new dependency (node crypto).
+- Email is a one-time link (signInWithOtp), not a password: the page has no
+  password field, so nofabricated.test.js's guard stands unchanged.
+- Deployed (build 716a315-t6signin): /api/auth/config enabled; Supabase
+  settings say google on, email on, autoconfirm off (confirmation on);
+  supabase-js 2.117.2 loaded under its integrity hash; "Continue with
+  Google" reached Google's account chooser with redirect_uri = the Supabase
+  callback and redirect_to = /app — no redirect_uri_mismatch. Not completed:
+  the session cannot sign in to Google or send mail on Roy's behalf — the
+  end-to-end sign-in is Roy's.
+- package-lock.json committed by Roy (716a315): Render had resolved
+  dependencies fresh every build (its audit found 4, local 0).
+
 ## 2026-10-06 (later) — T0 the empty panels (pairs and stamps), Mew pair 0.40; T2 SQL landed; T3 Unown "!"; T4 cello slab; T5 language started; T1 OCR measured, 228 pair shipped one-way
 
 **eBay spend:** ~240 tooling calls (300 allowance): 54 + 20 reprint originals

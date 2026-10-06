@@ -139,8 +139,15 @@ ok('siblings: same set, same name, English, Pocket hidden', /lower\(c\.name\) = 
    && /c\.api_card_id LIKE 'en-%' AND \$\{digital\.visibleSql\('c'\)\}/.test(server));
 ok('templates from a fetched JPEG, never assumed (refscans.js)', /buf\[0\] === 0xff && buf\[1\] === 0xd8/.test(fs.readFileSync(__dirname + '/refscans.js', 'utf8')));
 const sibBlock = server.slice(server.indexOf('// ── Same-name siblings in the set'), server.indexOf('function stampFollowUp('));
-ok('the request reads stored references and fetches no scan', sibBlock.length > 500 && /card_reference_scans/.test(sibBlock)
-   && !/fetch\(/.test(sibBlock) && !/decodeJpeg/.test(sibBlock));
+const liveFn = sibBlock.slice(sibBlock.indexOf('function liveTemplateOf('), sibBlock.indexOf('async function withLiveFallback('));
+ok('the request reads stored references; a scan is fetched ONLY by the live fallback', sibBlock.length > 500 && /card_reference_scans/.test(sibBlock)
+   && liveFn.length > 200 && (sibBlock.match(/fetch\(/g) || []).length === 1 && /fetch\(/.test(liveFn) && !/decodeJpeg/.test(sibBlock));
+ok('the live fallback is bounded as before (SIBLING_BUILD_MS = 3000), on the fetch and on the whole build',
+   /const SIBLING_BUILD_MS = 3000;/.test(sibBlock) && /AbortSignal\.timeout\(SIBLING_BUILD_MS\)/.test(liveFn)
+   && /setTimeout\(\(\) => res\(null\), SIBLING_BUILD_MS\)/.test(sibBlock));
+ok('...only for cards with no stored reference that were never recorded unbuildable', /!r\.tpl && r\.ref_state !== 'unbuildable'/.test(sibBlock));
+ok('...never writes the table (refbuild.js is the one writer)', !/INSERT INTO card_reference_scans/.test(sibBlock));
+ok('...and a live build that fails is reported with its reason, never dropped', /liveFailed/.test(sibBlock) && /row\.liveFailed/.test(sibBlock));
 ok('a missing reference is reported (notRun), never dropped', /notRun\.push\(/.test(sibBlock) && /notRun: stampNotRun/.test(server));
 ok('the page labels a row still being compared', /'pending':\s+'Photo being compared'/.test(page));
 ok('the page says what the check does NOT catch', /not every wrong card/.test(page));

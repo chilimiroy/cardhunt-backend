@@ -3571,6 +3571,7 @@ const SIBLING_TTL_MS = 6 * 3600 * 1000, SIBLING_MISS_MS = 10 * 60 * 1000, SIBLIN
 const _siblingRows = new Map();   // cardId -> { at, ttl, rows }
 function referenceWhy(row, whose) {
   whose = whose || 'that card';
+  if (row && row.liveFailed) return 'no reference scan of ' + whose + ' stored yet, and the live build failed (' + row.liveFailed + ')';
   if (!row || !row.ref_state) return 'no reference scan of ' + whose + ' stored yet (node refbuild.js)';
   if (row.ref_state === 'unbuildable') return 'the reference scan of ' + whose + ' could not be built: ' + (row.ref_reason || 'unknown');
   return 'the reference scan of ' + whose + ' is an older version (' + (row.version || 'none') + '; node refbuild.js rebuilds it)';
@@ -3580,7 +3581,7 @@ async function siblingRowsOf(card) {
   if (hit && Date.now() - hit.at < hit.ttl) return hit.rows;
   await refscans.ensureTable(db);
   const r = await db.query(
-    `SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_total,
+    `SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_total, c.image_large, c.image_small,
             rs.state AS ref_state, rs.reason AS ref_reason, rs.scan_url, rs.version, rs.w, rs.h, rs.rgb
        FROM cards c JOIN cards me ON me.api_card_id = $1
        LEFT JOIN card_reference_scans rs ON rs.card_id = c.api_card_id
@@ -3605,6 +3606,51 @@ async function siblingRowsOf(card) {
 // sibling is in it, and a verdict made without the comparison must not be
 // stored as one made with it.
 const withNotRun = (checks, notRun) => { checks.notRun = notRun; return checks; };
+// The live fallback (2026-10-06): a card whose reference is not stored YET
+// (the backfill is still running, or the set was ingested since) is built
+// during the request exactly as before refbuild.js existed — fetched with
+// SIBLING_BUILD_MS, decoded, the same 24-px template — so deploying never
+// switches a sibling check off. Stored cards never reach this path; it
+// shrinks as the backfill fills and is removed once every card is stored.
+// A card the backfill recorded 'unbuildable' is not fetched again here: it
+// is reported as not run. Not written to the table: refbuild.js is the one
+// writer.
+const SIBLING_BUILD_MS = 3000;
+const _liveTpl = new Map();       // cardId -> Promise<{ tpl } | { why }>
+function liveTemplateOf(row) {
+  const id = row.api_card_id;
+  if (_liveTpl.has(id)) return _liveTpl.get(id);
+  const url = refscans.scanUrlOf(row);
+  const p = (async () => {
+    if (!/^https:\/\//.test(url)) return { why: 'no scan URL' };
+    const r = await fetch(url, { signal: AbortSignal.timeout(SIBLING_BUILD_MS) });
+    if (!r.ok) return { why: 'scan host answered HTTP ' + r.status };
+    const v = refscans.templateFromScan(Buffer.from(await r.arrayBuffer()));
+    return v.reason ? { why: v.reason } : { tpl: refscans.entryOf(Object.assign({ state: 'built', scan_url: url }, v)) };
+  })().catch(e => ({ why: e && e.name === 'TimeoutError'
+    ? 'scan not downloaded within ' + SIBLING_BUILD_MS / 1000 + ' s' : 'scan fetch failed: ' + String(e && e.message || e).slice(0, 60) }));
+  _liveTpl.set(id, p);
+  p.then(v => { if (!v.tpl) setTimeout(() => _liveTpl.delete(id), 10 * 60 * 1000); });   // retry a failed scan later
+  while (_liveTpl.size > SIBLING_CACHE_MAX) _liveTpl.delete(_liveTpl.keys().next().value);
+  return p;
+}
+// Fill in, from the live fallback, every row with no stored reference that
+// was never recorded unbuildable. Bounded as before: a scan not built in
+// SIBLING_BUILD_MS leaves its sibling reported as not run.
+async function withLiveFallback(rows) {
+  const need = rows.filter(r => !r.tpl && r.ref_state !== 'unbuildable');
+  if (!need.length) return rows;
+  const built = await Promise.race([
+    Promise.all(need.map(async r => Object.assign({ r }, await liveTemplateOf(r)))),
+    new Promise(res => setTimeout(() => res(null), SIBLING_BUILD_MS))]);
+  const live = new Map((built || []).map(b => [b.r.api_card_id, b]));
+  return rows.map(r => {
+    if (r.tpl || r.ref_state === 'unbuildable') return r;
+    const b = live.get(r.api_card_id);
+    return b && b.tpl ? Object.assign({}, r, { tpl: b.tpl, live: true })
+      : Object.assign({}, r, { liveFailed: b ? b.why : 'not built within ' + SIBLING_BUILD_MS / 1000 + ' s' });
+  });
+}
 async function photoChecksFor(card) {
   const base = cm.photoChecksOf(card);
   const cid = String(card.api_card_id || '');
@@ -3617,6 +3663,7 @@ async function photoChecksFor(card) {
       why: 'sibling lookup failed: ' + String(e.message || e).slice(0, 120) }]);
   }
   if (!rows.length) return withNotRun(base, []);
+  rows = await withLiveFallback(rows);
   const mine = rows.find(r => r.api_card_id === cid);
   const ready = [], notRun = [];
   for (const b of rows) {

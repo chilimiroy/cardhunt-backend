@@ -53,9 +53,23 @@ const RLS_SQL = [
   'ALTER TABLE card_reference_scans ENABLE ROW LEVEL SECURITY',
   'REVOKE TRUNCATE ON card_reference_scans FROM anon, authenticated'];
 
+// First use: create / migrate the table — only on an unguarded pool
+// (schemaguard.js, as roles.pgStore). A guarded pool (a test booting the
+// server against the real database) never sends DDL: it CHECKS the table has
+// every column this code reads and refuses, naming what is missing.
+const COLUMNS = ['card_id', 'scan_url', 'state', 'reason', 'version', 'tw', 'w', 'h', 'rgb', 'built_at'];
 let _ready = null;
 function ensureTable(db) {
+  const migrate = !require('./schemaguard').isGuarded(db);
   return _ready || (_ready = (async () => {
+    if (!migrate) {
+      const r = await db.query(`SELECT column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'card_reference_scans'`);
+      const have = new Set(r.rows.map(x => x.column_name)), missing = COLUMNS.filter(c => !have.has(c));
+      if (missing.length) throw new Error('card_reference_scans is missing ' + missing.join(', ')
+        + ' — the server\'s first-use migration or migration-reference-scans.sql adds it; a guarded pool does not');
+      return;
+    }
     await db.query(TABLE_SQL);
     for (const s of MIGRATE_SQL) await db.query(s);
     for (const s of RLS_SQL) await db.query(s).catch(() => {});   // roles absent outside Supabase

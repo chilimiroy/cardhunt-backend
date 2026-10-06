@@ -728,7 +728,7 @@ is safe, measured both ways on 5 cards**: eBay `-term` matches beyond the title
 word — 51 on English-only Evolutions); `Language:{English}` dropped 0, 9, 3, 9,
 0; `Language:{Not Specified}` is not a filterable value (eBay ignores it).
 Production asks with no exclusion (`LANG_EXCLUDE_DEFAULT = 'none'`)
-(PROGRESS 2026-10-08).
+(PROGRESS 2026-10-07 (language exclusion)).
 
 **Measure the question across the catalogue, not the instance**
 (`querygap.js`); one symbol (`δ`) can empty a search. (PROGRESS 2026-10-04)

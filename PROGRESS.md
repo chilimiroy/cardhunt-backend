@@ -1,6 +1,6 @@
 # CardHunt — Progress Log
 
-## 2026-10-08 — Other-language exclusion measured on five cards: neither route ships
+## 2026-10-07 (language exclusion) — measured on five cards: neither route ships as a replacement
 
 marketprobe, EBAY_US, Raw NM, titles=1, sort=price, 75 x up to 3 pages;
 53 tooling calls (243 -> 296 of 300), 2026-10-07 23:2x UTC. The gate unchanged

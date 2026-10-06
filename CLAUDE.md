@@ -329,6 +329,9 @@ Rules of the gate:
   --dry`, never quote it; `--retry-unbuildable` after a decoder change.
   A check not run is reported (`stampGate.notRun`), on the page too
   (PROGRESS 2026-10-06 (late night)).
+- **HARD LIMIT: one sibling worker.** Render gives 0.15 core (cgroup, 2026-10-07);
+  a compare is CPU (68 ms -> ~450 ms wall). Faster cold sibling coverage means a
+  paid Render tier, not code. Colour downloads overlap (5 lanes) — not CPU.
 - **The cheap route for a recurring wrong card is a new `LOOKALIKES` pair,
   measured first.**
 

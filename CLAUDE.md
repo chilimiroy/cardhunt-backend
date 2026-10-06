@@ -554,7 +554,7 @@ node ebayratecheck.js                      # ask eBay the REAL limit (needs keys
 node ebayprobe.js en-swsh3.5-74 "PSA 10"   # credentials -> token -> search -> gate
 node yahoogate.js ja-SV2a-201              # Yahoo gate, live (LOCAL ONLY)
 curl '<host>/api/ebay/quota'             # spend so far (open); ?probe=1 needs the key
-node toolingkey.js /api/ebay/quota?probe=1   # the 7 /api/ebay/* probes: X-CardHunt-Key from env CARDHUNT_TOOLING_KEY
+node toolingkey.js /api/ebay/quota?probe=1   # the 7 /api/ebay/* probes: X-CardHunt-Key from env CARDZON_TOOLING_KEY
 curl '<host>/ebay/status?probe=1'          # does eBay ACCEPT the credentials
 curl '<host>/api/listings/en-swsh3.5-74?grade=PSA%2010&dryRun=1'   # spends nothing
 node -r ./costmeter.js server.js           # what an action costs; read costmeter.out.json

@@ -7,7 +7,7 @@
 // sign-in is the wrong lock — the scripts that drive them hold no token —
 // so they take a shared secret instead:
 //
-//   env   CARDHUNT_TOOLING_KEY   on Render, and in the local environment
+//   env   CARDZON_TOOLING_KEY   on Render, and in the local environment
 //   head  X-CardHunt-Key         sent by the caller; never a query param
 //                                (a URL lands in access logs and history)
 //
@@ -25,7 +25,7 @@
 'use strict';
 const crypto = require('crypto');
 
-const ENV = 'CARDHUNT_TOOLING_KEY';
+const ENV = 'CARDZON_TOOLING_KEY';
 const HEADER = 'x-cardhunt-key';
 const MIN_LENGTH = 24;
 

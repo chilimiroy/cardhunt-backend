@@ -397,7 +397,13 @@ function finish(slot, verdict, kill) {
   const job = slot.job;
   clearTimeout(slot.timer); slot.timer = null; slot.job = null;
   if (kill) { const i = _workers.indexOf(slot); if (i >= 0) _workers.splice(i, 1); slot.w.terminate().catch(() => {}); }
-  if (job) {
+  if (job) settle(job, verdict);
+  pump();
+}
+// A job's verdict, wherever it ended — in a worker, or (a colour profile
+// whose download failed) before reaching one.
+function settle(job, verdict) {
+  {
     const v = Object.assign({}, verdict, { tookMs: Date.now() - job.t0 });
     if (v.retryable) _stats.failed++; else { _stats.checked++; _stats.msTotal += v.tookMs; }
     if (job.fetchMs != null && verdict && verdict.workMs) timeSplit(job, verdict);
@@ -409,9 +415,17 @@ function finish(slot, verdict, kill) {
     _inflight.delete(job.itemId);
     job.resolve(v);
   }
-  pump();
 }
 async function runJob(slot, job) {
+  // A colour profile arrives already downloaded (fetchMaterial): straight
+  // to the worker, which holds the slot for milliseconds, not a download.
+  if (job.buf) {
+    slot.timer = setTimeout(() => finish(slot, { state: 'unreadable', retryable: true, scores: [],
+      says: 'The photo check took too long and was stopped.' }, true), JOB_TIMEOUT_MS);
+    const buf = job.buf; job.buf = null;
+    slot.w.postMessage({ jpeg: buf, reprints: job.reprints, back: !!job.back, material: !!job.material });
+    return;
+  }
   job.t0 = Date.now();
   let r = null;
   try { r = await _fetch(job.url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }); } catch (e) { r = null; }
@@ -542,12 +556,63 @@ function queueMaterial(key, url) {
   const hit = cacheGet(key, url);
   if (hit) return Promise.resolve(hit.verdict);
   if (_inflight.has(key)) return _inflight.get(key);
-  // Front of the queue: a colour profile costs milliseconds, and must not
-  // wait behind a page of stamp comparisons.
-  const p = new Promise(resolve => _queue.unshift({ itemId: key, url, reprints: [], material: true, resolve }));
+  const p = new Promise(resolve => _matFetchQueue.push({ itemId: key, url, reprints: [], material: true, resolve }));
   _inflight.set(key, p);
-  pump();
+  pumpMaterialFetch();
   return p;
+}
+// ── Colour profiles: downloads overlapped (speed, 2026-10-07) ──
+// Measured on Render (poolState split, 101 jobs): a colour job was 136 ms of
+// download and 22 ms of work, 7 ms of it CPU — 86% waiting on eBay's CDN
+// while holding the one worker. So the download runs here, in
+// MATERIAL_FETCH_LANES lanes (default 5, at most 6), OFF the worker; only
+// the decode reaches the worker queue — at its FRONT, as before (5160962):
+// it costs milliseconds and must not wait behind a page of comparisons.
+// Every row is still profiled; nothing is skipped. A network error, a
+// timeout, 429 or 5xx pauses every lane, doubling from 2 s to 60 s; a
+// success resets it. The failed row gets the same retryable verdict as before.
+const MATERIAL_FETCH_LANES = Math.max(1, Math.min(6, parseInt(process.env.MATERIAL_FETCH_LANES, 10) || 5));
+const MATERIAL_PAUSE_MIN = 2000, MATERIAL_PAUSE_MAX = 60000;
+const _matFetchQueue = [];
+const _mat = { fetching: 0, pause: 0, pausedUntil: 0, timer: null, backoffs: 0 };
+function pumpMaterialFetch() {
+  while (_mat.fetching < MATERIAL_FETCH_LANES && _matFetchQueue.length) {
+    const wait = _mat.pausedUntil - Date.now();
+    if (wait > 0) {
+      // Not unref'd: it exists only while jobs wait, and a caller awaiting
+      // them must not see the process end with their promises unsettled.
+      if (!_mat.timer) _mat.timer = setTimeout(() => { _mat.timer = null; pumpMaterialFetch(); }, wait);
+      return;
+    }
+    const job = _matFetchQueue.shift();
+    _mat.fetching++;
+    fetchMaterial(job).catch(e => settle(job, { state: 'unreadable', retryable: true, scores: [],
+      says: 'The photo check failed: ' + String(e && e.message || e).slice(0, 80) }))
+      .finally(() => { _mat.fetching--; pumpMaterialFetch(); });
+  }
+}
+function materialBackoff() {
+  _mat.pause = Math.min(MATERIAL_PAUSE_MAX, _mat.pause ? _mat.pause * 2 : MATERIAL_PAUSE_MIN);
+  _mat.pausedUntil = Date.now() + _mat.pause; _mat.backoffs++;
+}
+async function fetchMaterial(job) {
+  job.t0 = Date.now();
+  let r = null, buf = null;
+  try { r = await _fetch(job.url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }); } catch (e) { r = null; }
+  if (r && r.ok) { try { buf = Buffer.from(await r.arrayBuffer()); } catch (e) { buf = null; } }
+  if (!buf) {
+    if (!r || r.ok || r.status === 429 || r.status >= 500) materialBackoff();   // the host is struggling, not the photo
+    return settle(job, { state: 'unreadable', retryable: true, scores: [],
+      says: 'eBay’s image server did not return the photo' + (r ? ' (HTTP ' + r.status + ')' : '') + '.' });
+  }
+  _mat.pause = 0;
+  const type = (r.headers && r.headers.get('content-type')) || '';
+  // eBay photos are JPEG; only OUR scan may be a PNG (pokemontcg.io art).
+  if (!/jpe?g/i.test(type) && !(PNG_SCAN_HOST.test(job.url) && /png/i.test(type)))
+    return settle(job, { state: 'unreadable', scores: [], says: 'The photo is not a JPEG (' + type.slice(0, 30) + ').' });
+  job.buf = buf; job.fetchMs = Date.now() - job.t0;
+  _queue.unshift(job);
+  pump();
 }
 // A listing's primary photo (eBay's CDN only). Zero eBay API calls.
 function checkMaterialPhoto(imageUrl) {
@@ -608,7 +673,9 @@ function poolState() {
     workMs: Math.round(s.workMs / s.n), decodeMs: Math.round(s.decodeMs / s.n), cpuMs: Math.round(s.cpuMs / s.n) };
   return { store: _store ? Object.assign({ version: VERDICT_VERSION }, _storeStats) : null, workers: POOL_SIZE, running: _workers.filter(s => s.job).length, queued: _queue.length,
            cachedItems: _cache.size, checked: _stats.checked, failed: _stats.failed, cacheHits: _stats.cacheHits,
-           meanMs: _stats.checked ? Math.round(_stats.msTotal / _stats.checked) : null, split, host: cpuQuota() };
+           meanMs: _stats.checked ? Math.round(_stats.msTotal / _stats.checked) : null, split, host: cpuQuota(),
+           materialFetch: { lanes: MATERIAL_FETCH_LANES, fetching: _mat.fetching, queued: _matFetchQueue.length,
+             backoffs: _mat.backoffs, pausedForMs: Math.max(0, _mat.pausedUntil - Date.now()) } };
 }
 
 // ── Verdicts in the database (TASK T2, 2026-10-03) ──

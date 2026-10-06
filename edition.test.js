@@ -188,7 +188,7 @@ if (fs.existsSync(__dirname + '/ingest.js')) {
     console.log('\n7. THE REAL TABLE (--db)');
     let Pool; try { Pool = require('pg').Pool; } catch (e) { console.log('  (skipped — pg not installed)'); }
     if (Pool && process.env.DATABASE_URL) {
-      const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+      const db = require('./schemaguard').testPool();   // refuses schema changes
       try {
         const REAL = `ph.grade IS NULL AND ph.source NOT LIKE 'estimate%' AND ph.price_usd > 0`;
         const r = await db.query(`SELECT count(*)::int AS n FROM (

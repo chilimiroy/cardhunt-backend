@@ -265,12 +265,11 @@ async function ask(method, p, tok, body) {
   // at the end whatever happened.
   if (process.argv.includes('--db')) {
     console.log('\n  --db: claiming alerts made before sign-in, against Supabase');
-    const { Pool } = require('pg');
-    const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const db = require('./schemaguard').testPool();   // refuses schema changes
     const who = crypto.randomUUID(), anon = 'anon-zz' + crypto.randomBytes(4).toString('hex'), other = 'anon-zy' + crypto.randomBytes(4).toString('hex');
     const tm = token(who, 'claimtest@example.com');
     const srv = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
-      env: { ...process.env, PORT: String(PORT), EBAY_ENABLED: 'false', SUPABASE_URL: SUPA, SUPABASE_ANON_KEY: 'anon',
+      env: { ...process.env, PORT: String(PORT), EBAY_ENABLED: 'false', SUPABASE_URL: SUPA, SUPABASE_ANON_KEY: 'anon', CARDZON_SCHEMA_GUARD: '1',
              SUPABASE_JWT_SECRET: SECRET, CARDZON_MASTER_EMAILS: 'claimtest@example.com' }, stdio: ['ignore', 'pipe', 'pipe'] });
     srv.stdout.on('data', () => {}); srv.stderr.on('data', () => {});
     try {

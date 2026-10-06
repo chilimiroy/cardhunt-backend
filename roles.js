@@ -64,9 +64,24 @@ let _store = null;
 function setStore(s) { _store = s; }
 function store() { return _store; }
 
-function pgStore(db) {
+// { migrate: true } is the server's first-use migration, and only the
+// server passes it (on an unguarded pool — schemaguard.js). Anyone else
+// gets a store that CHECKS the table has the shape this code needs and
+// refuses to run on one that does not; it never creates or alters it.
+const USER_ACCESS_COLUMNS = ['user_id', 'state', 'first_signed_in_at', 'last_seen_at', 'decided_by', 'decided_at', 'email'];
+function pgStore(db, opts) {
+  const migrate = !!(opts && opts.migrate) && !require('./schemaguard').isGuarded(db);
   let ready = null;
-  const table = () => ready || (ready = db.query(USER_ACCESS_SQL).then(() => db.query(USER_ACCESS_EMAIL_SQL)).catch(e => { ready = null; throw e; }));
+  const verify = () => db.query(`SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'user_access'`).then(r => {
+    const have = new Set(r.rows.map(x => x.column_name));
+    const missing = USER_ACCESS_COLUMNS.filter(c => !have.has(c));
+    if (missing.length) throw new Error('user_access is missing ' + missing.join(', ')
+      + ' — the server\'s first-use migration or migration-user-access.sql adds it; this store does not');
+  });
+  const table = () => ready || (ready = (migrate
+    ? db.query(USER_ACCESS_SQL).then(() => db.query(USER_ACCESS_EMAIL_SQL))
+    : verify()).catch(e => { ready = null; throw e; }));
   return {
     async get(userId) {
       await table();
@@ -114,5 +129,5 @@ async function roleFor(user) {
   return { role: state, state };
 }
 
-module.exports = { masterEmails, isMasterEmail, roleFor, setStore, store, pgStore, emailOf,
+module.exports = { masterEmails, isMasterEmail, roleFor, setStore, store, pgStore, emailOf, USER_ACCESS_COLUMNS,
                    USER_ACCESS_SQL, USER_ACCESS_EMAIL_SQL, STORED_STATES };

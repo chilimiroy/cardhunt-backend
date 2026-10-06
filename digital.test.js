@@ -109,8 +109,7 @@ ok(/if \(bd\.hidden\)/.test(page), 'the set page stops on hidden instead of tryi
     console.log('  (DATABASE_URL not set — database section skipped)');
     return done();
   }
-  const { Pool } = require('pg');
-  const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  const db = require('./schemaguard').testPool();   // refuses schema changes
   try {
     const r = await db.query(`
       SELECT set_api_id, MAX(set_series) AS series, COUNT(*)::int AS n,

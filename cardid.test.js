@@ -102,8 +102,7 @@ ok(tcgdexLocalId('24a') === '24a' && tcgdexLocalId('H01') === 'H01' && tcgdexLoc
 // ── the database ──
 (async () => {
   if (!process.env.DATABASE_URL) { console.log('  (DATABASE_URL not set — database section skipped)'); return done(); }
-  const { Pool } = require('pg');
-  const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  const db = require('./schemaguard').testPool();   // refuses schema changes
   try {
     for (const t of ['cards', 'alerts', 'portfolio']) {
       const q = await db.query(`SELECT ${t === 'cards' ? 'api_card_id' : 'card_api_id'} AS id FROM ${t}

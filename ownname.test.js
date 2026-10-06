@@ -90,8 +90,7 @@ for (const [c, t] of REFUSE) check('REFUSE ' + t, !!lotReason(t, c), 'kept');
 
 (async () => {
   if (process.argv.includes('--db')) {
-    const { Pool } = require('pg');
-    const p = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const p = require('./schemaguard').testPool();   // refuses schema changes
     const r = await p.query(`SELECT api_card_id, name, number, set_api_id, set_name, set_total, set_release
       FROM cards WHERE api_card_id LIKE 'en-%' AND COALESCE(set_series,'') <> 'Pokémon TCG Pocket'`);
     let refused = [];

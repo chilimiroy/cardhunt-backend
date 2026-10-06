@@ -209,7 +209,7 @@ async function catalogue() {
   console.log('\n5. THE TABLE AGREES WITH THE CATALOGUE\n');
   if (!process.env.DATABASE_URL) { console.log('  (skipped — DATABASE_URL not set; section 5 did NOT run)'); return; }
   let Pool; try { Pool = require('pg').Pool; } catch (e) { console.log('  (skipped — pg not installed)'); return; }
-  const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  const db = require('./schemaguard').testPool();   // refuses schema changes
   const norm = s => String(s || '').toLowerCase().replace(/\s*(lv\.?x|δ|☆|★)\s*/g, ' ')
     .replace(/-(ex|gx)\b/g, ' $1').replace(/[^a-z0-9&]+/g, ' ').replace(/\s+/g, ' ').trim()
     .replace(/impostor/, 'imposter').replace(/^_+/, '');

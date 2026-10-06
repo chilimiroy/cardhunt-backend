@@ -116,8 +116,7 @@ console.log('\n  every screen that shows a headline is wired');
 (async () => {
   if (DB) {
     console.log('\n  --db: annotate() on real rows (measured 2026-10-02)');
-    const { Client } = require('pg');
-    const db = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const db = require('./schemaguard').testClient();   // refuses schema changes
     await db.connect();
     try {
       const printsql = require('./printsql');

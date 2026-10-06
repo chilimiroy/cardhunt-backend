@@ -30,8 +30,7 @@ ok('one transaction', /^\s*BEGIN;/m.test(M) && /COMMIT;\s*$/.test(M));
 
 (async () => {
   if (process.argv.includes('--db')) {
-    const { Pool } = require('pg');
-    const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const db = require('./schemaguard').testPool();   // refuses schema changes
     try {
       console.log('\n  --db: Supabase as it is');
       const t = await db.query(`SELECT c.relname, c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace

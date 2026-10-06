@@ -217,8 +217,7 @@ console.log('\n  4. All changes nothing');
 (async () => {
   if (process.argv.includes('--db')) {
     console.log('\n  --db: stored printings for the spot-check cards');
-    const { Pool } = require('pg');
-    const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const db = require('./schemaguard').testPool();   // refuses schema changes
     const ids = { 'en-ecard1-1': ['holo', 'reverse'], 'en-ecard1-33': ['normal', 'reverse'],
                   'en-sv03.5-199': ['holo'], 'en-sv08.5-001': ['normal', 'reverse', 'reverse-pokeball', 'reverse-masterball'],
                   'ja-SV2a-001': ['normal', 'reverse-pokeball', 'reverse-masterball'] };

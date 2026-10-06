@@ -119,14 +119,17 @@ function requestOrigin(req) {
 app.use((req, res, next) => ebay0.withOrigin(requestOrigin(req), () => next()));
 
 // ── DATABASE (Supabase) ───────────────────────────────────────
-const db = process.env.DATABASE_URL ? new Pool({
+// A test that boots this server against the real database sets
+// CARDZON_SCHEMA_GUARD=1: the pool then refuses schema changes, the
+// first-use migrations below included (schemaguard.js).
+const db = process.env.DATABASE_URL ? require('./schemaguard').fromEnv(new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
-}) : null;
+})) : null;
 timing.instrumentPool(db);
 // Approval state lives here (user_access, roles.js). With no database there
 // is no store, and every non-master is refused — closed, never assumed.
-if (db) roles.setStore(roles.pgStore(db));
+if (db) roles.setStore(roles.pgStore(db, { migrate: true }));   // the server's first-use migration
 
 // ── Photo verdicts, kept (TASK T2, 2026-10-03) ────────────────
 // The stamp gate's verdicts outlive a restart: a photo never changes under

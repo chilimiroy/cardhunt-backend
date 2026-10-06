@@ -119,9 +119,8 @@ function slice(src, start) {
   // Inside a transaction that is always rolled back: insert a Cardmarket
   // second reading dated now for a real card, run the headline pick, compare.
   if (process.argv.includes('--db') && process.env.DATABASE_URL) {
-    const { Client } = require('pg');
     const ps = require('./printsql.js');
-    const c = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const c = require('./schemaguard').testClient();   // refuses schema changes
     await c.connect();
     const head = id => c.query(`SELECT ph.price_usd::float p, ph.source FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
       WHERE ph.card_api_id = $1 AND ph.grade IS NULL AND ph.source NOT LIKE 'estimate%' AND ph.price_usd > 0

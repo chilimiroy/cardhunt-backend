@@ -189,12 +189,11 @@ const RESOLVE_CASES = [
 const CONFIDENT_GAP = 40;
 
 async function runResolve() {
-  const { Pool } = require('pg');
   if (!process.env.DATABASE_URL) {
     console.log('\n  (skipping resolution — DATABASE_URL not set)\n');
     return;
   }
-  const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  const db = require('./schemaguard').testPool();   // refuses schema changes
   console.log(`\n${'='.repeat(70)}`);
   console.log('  RESOLVE — identity against the real database');
   console.log(`${'='.repeat(70)}\n`);

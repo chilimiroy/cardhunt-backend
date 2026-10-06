@@ -479,6 +479,7 @@ signed-in state AND the role. `user_access.email` is captured from the verified 
   only, write nothing — every write goes through the server. A new table needs RLS
   (`rls.test.js --db` fails). Proof: `node rlsprobe.js [--token=<jwt>]`.
 - Pre-sign-in alerts move only when their browser claims its `ch_user` id.
+- **Tests cannot change the schema**: every test connects via `schemaguard.testPool()/testClient()` (refuses DDL before sending); schema comes from the server's first-use migration or a `migration-*.sql` Roy runs (`schemaguard.test.js`).
 (PROGRESS 2026-10-06 (night).)
 
 ## Near you (local card shops) — PLANNED, needs a real data source

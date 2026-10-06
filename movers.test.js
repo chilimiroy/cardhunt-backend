@@ -66,8 +66,7 @@ ok(/coverage\.note/.test(mv) && page.includes('id="movers-note"'), 'a thin list 
 
 if (process.argv.includes('--db')) {
   (async () => {
-    const { Pool } = require('pg');
-    const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const db = require('./schemaguard').testPool();   // refuses schema changes
     for (const w of ['24h', '7d']) {
       const r = await db.query(tr.moverSql(tr.parseParams({ sort: 'gain-pct', window: w })));
       ok(r.rows.every(x => /^tcgdex_tcgplayer_/.test(x.price_source)), w + ': every pair is TCGdex at the current end (' + r.rows.length + ' pairs)');

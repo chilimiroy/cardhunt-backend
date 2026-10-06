@@ -90,8 +90,7 @@ function memoryStore(seed) {
 
   if (process.argv.includes('--db')) {
     console.log('\n  --db: user_access in Supabase');
-    const { Pool } = require('pg');
-    const db = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const db = require('./schemaguard').testPool();   // refuses schema changes
     try {
       const c = await db.query(`SELECT column_name, data_type FROM information_schema.columns
         WHERE table_schema='public' AND table_name='user_access' ORDER BY ordinal_position`);

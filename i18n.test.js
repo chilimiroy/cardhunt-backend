@@ -60,8 +60,7 @@ ok('the theme toggle is untouched, before currency', H.indexOf('id="theme-btn"')
 (async () => {
   if (process.argv.includes('--db')) {
     console.log('\n  against the catalogue (--db)');
-    const { Client } = require('pg');
-    const c = new Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const c = require('./schemaguard').testClient();   // refuses schema changes
     await c.connect();
     const r = await c.query(`select distinct v from (select name v from cards union select name_en from cards union select set_name from cards
                              union select set_name_en from cards union select rarity from cards) x where v is not null`);

@@ -15,6 +15,10 @@
 <script>
 (function(){try{var t=localStorage.getItem('ch_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
 (function(){try{if(localStorage.getItem('ch_lang')==='ja')document.documentElement.setAttribute('lang','ja');}catch(e){}})();
+// The closed door (T6 step 2): a browser holding a sign-in session shows
+// NOTHING until the server (/api/me) says the account is approved. No
+// session, no door: anonymous visitors browse exactly as before.
+(function(){try{if(!/^https?:$/.test(location.protocol))return;if(/[?&]code=/.test(location.search)){document.documentElement.classList.add('ch-door');return;}for(var i=0;i<localStorage.length;i++)if(/^sb-.+-auth-token$/.test(localStorage.key(i))){document.documentElement.classList.add('ch-door');return;}}catch(e){}})();
 </script>
 
 <!-- ══ FONTS — LOADED WITHOUT BLOCKING THE FIRST PAINT ══
@@ -553,9 +557,24 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .eq-d div{display:flex;justify-content:space-between;gap:12px}
 .lq-pause{padding:12px 14px;margin:0 0 12px;border-radius:10px;border:1px solid var(--crit);background:var(--crit-soft);font-size:12px;line-height:1.6;color:var(--ink)}
 .lq-pause strong{color:var(--crit)}
+/* ══ THE CLOSED DOOR (T6 step 2) ══ a signed-in account that is not
+   approved sees this and nothing else. html.ch-door is set by the head
+   script while a session is being checked, and by doorSet() after. */
+#door { display: none; }
+html.ch-door body > *:not(#door) { display: none !important; }
+html.ch-door #door { display: flex; min-height: 100vh; align-items: center; justify-content: center;
+  padding: 24px 16px; box-sizing: border-box; background: var(--bg); color: var(--tx); }
+#door .door-box { max-width: 420px; width: 100%; background: var(--w); border: 1px solid var(--bd);
+  border-radius: var(--r); padding: 28px 24px; text-align: center; }
+#door .door-title { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+#door .door-text { font-size: 14px; color: var(--mu); margin-bottom: 20px; line-height: 1.5; }
 </style>
 </head>
 <body>
+<div id="door" aria-live="polite"><div class="door-box" id="door-box">
+  <div class="door-title">Checking your account…</div>
+  <div class="door-text">One moment.</div>
+</div></div>
 <!-- ══ LOGIN ══ -->
 <!-- ══ HOME ══ -->
 <div id="screen-home" class="screen on">
@@ -6496,6 +6515,33 @@ var AUTH = { cfg: null, sb: null, user: null, notice: null, seq: 0 };
 // sign-in unavailable): what reads AUTH.user waits for it.
 AUTH.ready = new Promise(function (res) { AUTH._ready = res; });
 // The session's current access token (Supabase refreshes it), or null.
+// ── The closed door ─────────────────────────────────────────────
+// kind: null (open) | 'checking' | 'pending' | 'rejected' | 'unconfirmed'.
+// Decided only from /api/me's answer. A session the server could not
+// confirm (unreachable, 503, the library or config not loading) is
+// 'unconfirmed' — CLOSED, never open.
+var DOOR = { kind: document.documentElement.classList.contains('ch-door') ? 'checking' : null, email: null };
+function doorSet(kind, email){
+  DOOR.kind = kind || null; DOOR.email = email || null;
+  document.documentElement.classList.toggle('ch-door', !!DOOR.kind);
+  var box = document.getElementById('door-box'); if (!box || !DOOR.kind) return;
+  var who = DOOR.email ? '<div class="door-text" style="margin-bottom:6px"><b>' + liveEsc(DOOR.email) + '</b></div>' : '';
+  var t = { checking: ['Checking your account…', 'One moment.'],
+            pending: ['Awaiting approval', 'Your account has been created and is waiting for a CardHunt administrator to approve it. You will have access once it is approved.'],
+            rejected: ['Not approved', 'This account was not approved for access to CardHunt.'],
+            unconfirmed: ['Could not confirm your account', 'The server did not answer, so your access could not be checked. Nothing is shown until it can be.'] }[DOOR.kind];
+  box.innerHTML = '<div class="door-title">' + t[0] + '</div>' + who + '<div class="door-text">' + t[1] + '</div>'
+    + (DOOR.kind === 'unconfirmed' ? '<button class="btn" style="margin-right:8px" onclick="location.reload()">Try again</button>' : '')
+    + (DOOR.kind === 'checking' ? '' : '<button class="btn" onclick="doorSignOut()">Sign out</button>');
+}
+// Sign out from the door — also when the sign-in library never loaded:
+// the stored session is removed and the page reloads signed out.
+async function doorSignOut(){
+  if (AUTH.sb) { try { await AUTH.sb.auth.signOut(); } catch (e) {} }
+  try { for (var i = localStorage.length - 1; i >= 0; i--) { var k = localStorage.key(i); if (/^sb-.+-auth-token/.test(k)) localStorage.removeItem(k); } } catch (e) {}
+  location.reload();
+}
+function authRole(role){ return role === 'master' || role === 'approved' ? null : (role === 'pending' || role === 'rejected' ? role : 'unconfirmed'); }
 async function authToken(){
   if (!AUTH.sb) return null;
   try { var s = await AUTH.sb.auth.getSession(); return (s.data && s.data.session && s.data.session.access_token) || null; }
@@ -6544,17 +6590,22 @@ function authOpen(){ authRender(); openM('auth-overlay'); }
 function authSay(text, bad){ AUTH.notice = text ? { text: text, bad: !!bad } : null; authRender(); }
 // The only writer of AUTH.user: the server's verdict on the session's token.
 async function authCheck(session){
-  var mine = ++AUTH.seq, user = null;
+  var mine = ++AUTH.seq, user = null, role = null, door = null, email = null;
   if (session && session.access_token) {
     try {
       var r = await fetch(BACKEND + '/api/me', { headers: { Authorization: 'Bearer ' + session.access_token } });
       var j = await r.json();
+      email = (j.user && j.user.email) || null;
       if (r.ok && j.signedIn) user = j.user;
+      else if (j.signedIn) door = 'unconfirmed';   // 503: signed in, approval state unreadable
       else authSay('Sign-in was not accepted by the server: ' + (j.reason || ('HTTP ' + r.status)) + '.', true);
-    } catch (e) { authSay('Could not reach the server to confirm the sign-in.', true); }
+      if (user) { role = j.role; door = authRole(role); }
+    } catch (e) { door = 'unconfirmed'; authSay('Could not reach the server to confirm the sign-in.', true); }
   }
   if (mine !== AUTH.seq) return;            // a newer check is in flight
-  AUTH.user = user;
+  if (door) { user = null; role = null; }  // not approved: no signed-in state behind the door
+  AUTH.user = user; AUTH.role = role;
+  doorSet(door, email);
   authButtons(); authRender();
   if (typeof loadAlerts === 'function' && ALERTS_LOADED) loadAlerts();   // the account changed: re-read its alerts
 }
@@ -6582,12 +6633,14 @@ async function authSignOut(){
 }
 async function authInit(){
   if (!/^https?:$/.test(location.protocol)) return;
-  try { AUTH.cfg = await fetch(BACKEND + '/api/auth/config').then(function (r) { return r.json(); }); } catch (e) { return; }
-  if (!AUTH.cfg || !AUTH.cfg.enabled) return;
+  // A held session that cannot be checked is not let in (fail closed).
+  var closed = function () { if (DOOR.kind) doorSet('unconfirmed'); };
+  try { AUTH.cfg = await fetch(BACKEND + '/api/auth/config').then(function (r) { return r.json(); }); } catch (e) { return closed(); }
+  if (!AUTH.cfg || !AUTH.cfg.enabled) return closed();
   // An error Supabase sent back on the redirect (?error_description=…) is said, then removed from the address.
   var q = new URLSearchParams(location.search + '&' + location.hash.replace(/^#/, ''));
   if (q.get('error_description')) AUTH.notice = { text: q.get('error_description'), bad: true };
-  try { await authLoadLib(); } catch (e) { console.warn('[auth]', e.message); return; }
+  try { await authLoadLib(); } catch (e) { console.warn('[auth]', e.message); return closed(); }
   AUTH.sb = window.supabase.createClient(AUTH.cfg.url, AUTH.cfg.anonKey,
     { auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
   authButtons();
@@ -7045,6 +7098,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-3fee684-t6gate &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-6af3bc6-t6door &middot; click to hide</div>
 </body>
 </html>

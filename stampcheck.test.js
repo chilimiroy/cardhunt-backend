@@ -110,8 +110,16 @@ ok('stamp FOUND -> the row is refused (not in the list)', !byId(1));
 ok('...counted, with its reason and the reprint named', g.report.refused === 1 && g.report.refusedSample[0].itemId === 'v1|1|0' && /30th Celebration/.test(g.report.refusedSample[0].reason));
 ok('no stamp visible -> KEPT, marked not-visible', byId(2) && byId(2).stamp.state === 'not-visible');
 ok('unreadable -> KEPT, marked unreadable', byId(3) && byId(3).stamp.state === 'unreadable');
-ok('not yet checked -> HIDDEN (T2: never shown, then taken away), handed back to check', !byId(4) && g.pending.length === 1 && g.pending[0].itemId === 'v1|4|0');
-ok('...and no row anywhere is marked pending', !g.listings.some(l => l.stamp && l.stamp.state === 'pending'));
+ok('not yet checked, no stored price -> SHOWN marked pending (T0 2026-10-06: an absent row is invisible), handed back to check',
+   byId(4) && byId(4).stamp.state === 'pending' && byId(4).stamp.kind === 'stamp' && g.pending.length === 1 && g.pending[0].itemId === 'v1|4|0');
+ok('...and only that row is marked pending', g.listings.filter(l => l.stamp && l.stamp.state === 'pending').length === 1);
+{
+  const gh = sc.gate(rowsIn, LUG, { hideBelow: 300 * sc.SIBLING_HIDE_FRACTION });
+  ok('not yet checked, priced below ~55% of a current price ($100 under $300) -> HIDDEN until checked',
+     !gh.listings.some(l => l.itemId === 'v1|4|0') && gh.pending.length === 1 && gh.report.pendingShown === 0);
+  const gs = sc.gate([row(4, { price: 290, landed: 290 })], LUG, { hideBelow: 300 * sc.SIBLING_HIDE_FRACTION });
+  ok('...priced like the card ($290) -> SHOWN while checked', gs.listings.length === 1 && gs.report.pendingShown === 1);
+}
 ok('no photo -> KEPT, unreadable (never pending forever)', byId(5) && byId(5).stamp.state === 'unreadable');
 ok('a non-eBay row passes untouched', g.listings.some(l => l.source === 'yuyutei' && !l.stamp));
 ok('counts add up: 1 refused, 1 not visible, 2 unreadable, 1 pending', g.report.refused === 1 && g.report.notVisible === 1 && g.report.unreadable === 2 && g.report.pending === 1, JSON.stringify(g.report));
@@ -198,15 +206,16 @@ async function storeTests() {
   const ga = sc.gate(after, LUG), has = id => ga.listings.some(l => l.itemId === 'v1|' + id + '|0');
   ok('a stored "found" refuses at once — the reprint is never shown', !has(91) && ga.report.refused === 1);
   ok('a stored "not visible" is shown at once (no pending)', has(92));
-  ok('a stored verdict for a DIFFERENT photo is not used: hidden, checked again', !has(93) && ga.pending.some(p => p.itemId === 'v1|93|0'));
-  ok('a verdict from an older matcher version is not used', !has(94) && ga.pending.some(p => p.itemId === 'v1|94|0'));
-  ok('an item never checked is hidden and handed back', !has(95) && ga.report.pending === 3, JSON.stringify(ga.report));
+  const pend = id => ga.listings.some(l => l.itemId === 'v1|' + id + '|0' && l.stamp && l.stamp.state === 'pending');
+  ok('a stored verdict for a DIFFERENT photo is not used: pending, checked again', pend(93) && ga.pending.some(p => p.itemId === 'v1|93|0'));
+  ok('a verdict from an older matcher version is not used', pend(94) && ga.pending.some(p => p.itemId === 'v1|94|0'));
+  ok('an item never checked is pending and handed back', pend(95) && ga.report.pending === 3, JSON.stringify(ga.report));
   const L1 = loads.length; await sc.loadVerdicts(after);
   ok('items the store lacks are not asked about again at once (each rebuild would)', loads.length === L1);
   sc._clearCache(); slow = true;
   const t0 = Date.now(), ls = await sc.loadVerdicts([row(96)]);
   ok('a slow database is bounded: the view does not wait on it', ls.error === true && Date.now() - t0 < 3500, (Date.now() - t0) + ' ms');
-  ok('...and its rows stay hidden, never shown unchecked', sc.gate([row(96)], LUG).listings.length === 0);
+  ok('...and its rows are pending, never judged without a verdict', sc.gate([row(96)], LUG).listings.every(l => l.stamp && l.stamp.state === 'pending'));
   slow = false; sc.setStore(null); sc._clearCache();
   ok('no store: loadVerdicts is a no-op and the gate still works', (await sc.loadVerdicts([row(97)])).asked === 0 && sc.gate([row(97)], LUG).report.pending === 1);
 }
@@ -256,11 +265,13 @@ ok('a row shows the server\'s stamp state (l.stamp)', /var st = l && l\.stamp;/.
 // since T0 2026-10-06 a held lookalike pair too) — never for a stamp check.
 ok('chips: not visible / unreadable — no "found" (refused); "pending" only as a comparison check',
    /STAMP_CHIP = \{[^}]*'pending':\s+'Photo being compared'/.test(H)
-   && /state: 'pending', kind: onlySiblings \? 'sibling' : 'lookalike'/.test(fs.readFileSync(__dirname + '/stampcheck.js', 'utf8'))
+   && /state: 'pending', kind: report\.kind/.test(fs.readFileSync(__dirname + '/stampcheck.js', 'utf8'))
    && (fs.readFileSync(__dirname + '/stampcheck.js', 'utf8').match(/state: 'pending'/g) || []).length === 1 &&/'not-visible':\s*'No stamp visible — not proof'/.test(H) && /'unreadable':/.test(H) && !/STAMP_CHIP = \{[^}]*'found'/.test(H));
 ok('nothing on the page calls a stamp result "verified" or "original"', !/STAMP_CHIP[\s\S]{0,400}(verified|genuine original)/i.test(H));
 ok('the panel says how many the stamp check refused', /liveStampNote\(d\)/.test(fn('excludedNote')) && /refused &mdash; the seller&rsquo;s photo shows the/.test(fn('liveStampNote')));
-ok('the panel says how many are shown and how many still being checked', /still being checked for the stamp/.test(fn('liveStampNote')));
+ok('the panel says how many are shown and how many still being checked',
+   /liveStampPending\(g, 'still being checked for the ' \+ liveEsc\(names\) \+ ' stamp'\)/.test(fn('liveStampNote'))
+   && /shown meanwhile/.test(fn('liveStampPending')) && /hidden until checked/.test(fn('liveStampPending')));
 ok('every row hidden behind its check is not called "No listing matched"', /pause \|\| stampWaiting \? ''/.test(H) && /var stampWaiting = !!\(d && d\.stampGate && d\.stampGate\.pending > 0\)/.test(H));
 ok('the panel re-reads while photos are pending, with ?poll=1', /stampGate\.pending > 0/.test(fn('scheduleStampPoll')) && /poll: true/.test(fn('scheduleStampPoll')) && /scheduleStampPoll\(card, grade, d\)/.test(H));
 ok('the stamp line sits inside the row\'s own line (one writer)', /\+ stampLine\(l\)/.test(fn('certLine')));

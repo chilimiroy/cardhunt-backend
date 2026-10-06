@@ -683,6 +683,10 @@ async function loadVerdicts(rows, checks) {
 // every unchecked row emptied whole panels — Evolutions Mewtwo 0 of 190 and
 // Dragonite-EX 0 of 192 shown, bubble Mew CGC 10 0 of 32 — for as long as
 // the photo queue took. An absent row is invisible; a pending one is labelled.
+// T0 (2026-10-06), stamps too: on a cold open 49 of the 54 reprint originals
+// showed NO listings (Base Pikachu 0 of 177, Brilliant Stars Charizard 0 of
+// 190) while their photos queued. Every kind of check now uses the price rule;
+// a Celebrations reprint sells far below its original and stays hidden.
 const SIBLING_HIDE_FRACTION = 0.55;
 function gate(rows, reprints, opts) {
   opts = opts || {};
@@ -701,9 +705,9 @@ function gate(rows, reprints, opts) {
   const onlyLook = usable.every(isLookalike);
   report.kind = onlyLook ? 'lookalike' : usable.some(isLookalike) ? 'both' : 'stamp';
   const onlySiblings = usable.every(isSibling);
-  const hideBelow = onlyLook ? (opts.hideBelow > 0 ? opts.hideBelow : null) : Infinity;
+  const hideBelow = opts.hideBelow > 0 ? opts.hideBelow : null;
   if (onlySiblings) report.kind = 'sibling';
-  if (onlyLook) { report.hideBelow = hideBelow; report.pendingShown = 0; }
+  report.hideBelow = hideBelow; report.pendingShown = 0;
   const out = [], pending = [];
   for (const row of rows) {
     if (!row || row.source !== 'ebay' || !row.itemId) { out.push(row); continue; }
@@ -713,11 +717,12 @@ function gate(rows, reprints, opts) {
     if (!hit) {
       report.pending++; pending.push(row);
       const price = Number(row.landed != null ? row.landed : row.price);
-      if (hideBelow !== Infinity && !(hideBelow != null && price > 0 && price < hideBelow)) {
+      if (!(hideBelow != null && price > 0 && price < hideBelow)) {
         report.pendingShown++;
-        out.push(Object.assign({}, row, { stamp: { state: 'pending', kind: onlySiblings ? 'sibling' : 'lookalike',
+        out.push(Object.assign({}, row, { stamp: { state: 'pending', kind: report.kind,
           says: onlySiblings ? 'Photo not yet compared with the other cards of this name in the set.'
-                             : 'Photo not yet compared with the card it is most often confused with.' } }));
+              : onlyLook ? 'Photo not yet compared with the card it is most often confused with.'
+              : 'Photo not yet checked for a reprint’s stamp.' } }));
       }
       continue;
     }

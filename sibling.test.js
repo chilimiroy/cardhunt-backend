@@ -79,7 +79,8 @@ ok('no stored price: NOTHING is hidden (no baseline, as outlier.js)', g.listings
 const stampToo = checksFor(A125).concat([{ cardId: 'en-30th-c-029', family: { label: '30th' } }]);
 sc._setTemplates(Object.assign({}, sc.templates(), { templates: Object.assign({}, sc.templates().templates, { 'en-30th-c-029': sc.templates().templates['en-30th-c-029'] || { w: 4, h: 4, rgb: '' } }) }));
 g = sc.gate(rows, stampToo, { hideBelow });
-ok('with a stamp check too, unchecked is HIDDEN as before', g.listings.length === 0 && g.pending.length === 4);
+ok('with a stamp check too, the same price rule (T0 2026-10-06): cheap hidden, the rest shown while checked',
+   g.listings.length === 2 && g.pending.length === 4);
 sc._setTemplates(null);
 
 console.log('\n  a verdict that lands');

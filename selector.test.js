@@ -352,7 +352,10 @@ ok('"Not Specified" is never sent — eBay ignores it',
   // variable; both links of the chain must hold for condition to reach eBay.
   ok('sourceEbay sends the aspect_filter',
     /const aspectFilter = condFilter \? condFilter\.aspectFilter :/.test(srv) &&
-    /aspect_filter=' \+ encodeURIComponent\(aspectFilter\)/.test(srv));
+    // aspectAsk = aspectFilter, plus the language aspect only when that
+    // exclusion is on (2026-10-07) — the condition still reaches eBay.
+    /const aspectAsk = langEx\.aspect \? \(aspectFilter \? aspectFilter \+ ',' \+ langEx\.aspect : [^)]*\) : aspectFilter;/.test(srv) &&
+    /aspect_filter=' \+ encodeURIComponent\(aspectAsk\)/.test(srv));
   const norm = srv.slice(srv.indexOf('function normaliseListing('), srv.indexOf('function normaliseListing(') + 6000);
   ok('normaliseListing carries conditionSource — a fixed shape drops what it does not name',
     /conditionSource: o\.conditionSource/.test(norm));

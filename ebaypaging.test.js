@@ -42,6 +42,14 @@ const fnEbay = slice('async function sourceEbay(');
 const fnMatch = slice('function gateLanguage(') + slice('function printingsOf(') + slice('function ebayMatchCard(')
   + slice('function printingReport(');
 const fnNorm = slice('function normaliseListing(');
+// languageExclusionFor and its two constants (2026-10-07): sourceEbay asks it
+// what an English card's request leaves out. Top level in server.js, so the
+// deployed module always has it; this extraction must carry it too — without
+// it the run crashed here with "languageExclusionFor is not defined".
+const fnLang = (src.match(/\nconst LANG_EXCLUDE_DEFAULT = [^\n]*\nconst LANG_ASPECT_SITES = [^\n]*/) || [''])[0]
+  + '\n' + slice('function languageExclusionFor(');
+ok(/const LANG_EXCLUDE_DEFAULT = 'none';/.test(fnLang) && /function languageExclusionFor\(/.test(fnLang),
+   'the language exclusion (default and helper) is extracted with sourceEbay');
 ok(!/\nasync function |\nfunction /.test(fnEbay.slice(1)), 'the sourceEbay slice holds one function');
 
 // The constants block, EBAY_MAX_PAGES through ebaySite: the page size, the
@@ -81,7 +89,8 @@ function build(total, opts = {}) {
       const limit = +u.searchParams.get('limit');
       const offset = +(u.searchParams.get('offset') || 0);
       const mp = (req.meta && req.meta.marketplace) || 'EBAY_US';
-      calls.push({ offset, limit, mp, background: !!req.background });
+      calls.push({ offset, limit, mp, background: !!req.background, q: u.searchParams.get('q'),
+                   aspect: u.searchParams.get('aspect_filter') });
       if (req.dryRun) return { dryRun: true, request: req.url };
       const site = sites[mp];
       if (!site) return { ok: false, reason: 'HTTP 409 marketplace not supported' };
@@ -103,7 +112,7 @@ function build(total, opts = {}) {
     }
   };
   const factory = new Function('ebay', 'cm', 'lp', 'jpf', 'db', 'getEbayTokenDetailed', 'timing', 'fx',
-    `${consts}\n${fnMatch}\n${fnNorm}\n${fnEbay}\n${fnSites}\n` +
+    `${consts}\n${fnLang}\n${fnMatch}\n${fnNorm}\n${fnEbay}\n${fnSites}\n` +
     'return { sourceEbay, sourceEbayAll, ebayLoadMore, ebayStateResult, listingsProgress, EBAY_SITES };');
   const mod = factory(ebay, cm, lp, jpf, null, async () => ({ token: 't' }), require('./timing'), fx);
   return { calls, ...mod };
@@ -131,6 +140,10 @@ async function fullView(b) {
     const b = build(40);
     const r = await run(b, CARD, 'PSA 10', 25);
     ok(b.calls.length === 1, `40 on eBay -> 1 call (got ${b.calls.length})`);
+    // LANG_EXCLUDE_DEFAULT = 'none' (2026-10-07): until the exclusion is
+    // measured, the request a page sends is exactly what it was.
+    ok(b.calls.every(c => c.q && !/(^| )-/.test(c.q) && !/Language/.test(c.aspect || '')),
+       'the default request carries no language exclusion (q: ' + (b.calls[0] && b.calls[0].q) + ')');
     ok(r.pages.fetched === 1 && r.pages.truncated === false && r.pages.stoppedAtCap === false && r.pages.exhausted === true,
        'a complete single page is not truncated: ' + JSON.stringify(r.pages));
     ok(r.scanned === 40 && r.kept === 40, `every row reached the gate and passed it (${r.kept}/${r.scanned})`);

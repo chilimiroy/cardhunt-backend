@@ -162,7 +162,10 @@ ok(/const condFilter = cm\.ebayConditionFilter\(grade, opts\.marketplace \|\| 'E
      'US condition filter unchanged');
 }
 ok(/cm\.verify\(title, matchCard, grade, gateOpts\)/.test(server), 'the gate receives the structured grade');
-ok(/aspectFilter \? '&aspect_filter='/.test(server), 'the filter reaches the request');
+// Since 2026-10-07 the request sends aspectAsk: aspectFilter, plus the
+// language aspect only when that exclusion is on — both links must hold.
+ok(/const aspectAsk = langEx\.aspect \? \(aspectFilter \? aspectFilter \+ ',' \+ langEx\.aspect : 'categoryId:183454,' \+ langEx\.aspect\) : aspectFilter;/.test(server)
+   && /aspectAsk \? '&aspect_filter=' \+ encodeURIComponent\(aspectAsk\)/.test(server), 'the filter reaches the request');
 ok(/gradeSource: v\.gradeSource \|\| null/.test(server) && /gradeSource: o\.gradeSource \|\| null/.test(server), 'rows carry gradeSource');
 ok(/refusedOnDisagreement/.test(server) && /keptOnEbayFieldAlone/.test(server), 'the source block reports both effects');
 const page = fs.readFileSync('cardhunt_preview.html', 'utf8');

@@ -1,5 +1,73 @@
 # CardHunt — Progress Log
 
+## 2026-10-06 (night) — T6 step 2: roles, the gate, the closed door, approval, RLS, alerts
+
+Six commits: `3fee684` roles · `6af3bc6` gate · `f68c278` door · `a608e75`
+approval · `180e3dd` RLS · `f842ab7` alerts. Pushed; see "Deploy" below.
+
+### Found: RLS was off on every table, and the anon key could write all of them
+Before `migration-rls.sql`: `relrowsecurity = false` on all 12 public tables;
+`anon` and `authenticated` held INSERT/UPDATE/DELETE/TRUNCATE on each. The anon
+key is public (served by `/api/auth/config` so the page can start a sign-in).
+With that key alone, over PostgREST (`node rlsprobe.js`, before):
+- `GET alerts` -> 206, `Content-Range 0-0/8` (every alert); `GET cards` -> 0-0/46512.
+- B's alert: `PATCH` -> 200 with the row changed; `DELETE` -> 200 with the row.
+- `POST user_access {state:'approved'}` -> **201** — self-approval, once the table existed.
+- `PATCH cards` (written back with its own name) -> 200, row returned.
+Test rows removed after; en-base1-4 still "Charizard"; alerts back to 8.
+
+### RLS — after (`rlsprobe.js`, applied 2026-10-06)
+User tables: SELECT own rows (auth.uid()), no write policy (a write policy on the
+id alone would let a PENDING user write round the door). user_access writes
+revoked; catalogue tables RLS on with no policy; TRUNCATE revoked everywhere.
+In the database, as PostgREST runs user A's request (role authenticated, sub=A):
+- read B's alert -> `SELECT 0`; update B's -> `UPDATE 0`; insert as B ->
+  `ERROR 42501: new row violates row-level security policy for table "alerts"`;
+  delete B's -> `DELETE 0`; A approving A -> `ERROR 42501: permission denied for
+  table user_access`; A reads A's own -> 1 row (rls.test.js --db).
+Over PostgREST, anon key alone: GET -> 200 `[]`; PATCH -> 200 `[]`; POST -> 401
+`{"code":"42501",...,"message":"new row violates row-level security policy for
+table \"alerts\""}`; DELETE -> 200 `[]`; POST user_access -> 401 42501 permission
+denied; PATCH cards -> 200 `[]`. B's row unchanged (target_price 100.00).
+**Not run: the same over PostgREST with a REAL user session** — no session token
+is available to the session; `node rlsprobe.js --token=<access token>` does it.
+The server's role: deployed `/api/db/check` read en-base1-4 straight after the
+migration, so its role bypasses RLS (local: `postgres`, rolbypassrls true).
+
+### The gate (`access.js`) — every route classified
+53 routes: 10 gated (7 approved, 3 master), 43 public with a reason
+(`node access.test.js --table`). Old `/api/alerts/:userId` and
+`/api/portfolio/:userId` took the user from the URL: anyone with a browser's
+anon id could read and change its alerts. Gone (404). A loop-generated route
+was written while building approval and caught by the "every app.METHOD( is a
+readable declaration" check before commit.
+
+### Approval
+Approved non-master `POST /api/admin/users/<id>/approve` -> `403 {"error":"masters
+only","state":"approved"}`; pending approving themselves -> `403 approval pending`
+(access.test.js, live server, memory store). Reject is reversible ("Not approved"
+list); the page says so before the click.
+
+### Alerts (T6)
+8 alerts on 3 anon ids (3 / 4 / 1). Migrated 0, deleted 0, all 8 untouched:
+nothing ties an anon id to an account. Each moves when the browser holding its
+`ch_user` signs in approved (`POST /api/alerts/claim`); an id never claimed stays.
+
+### Checked in a browser (local server, test tokens, memory store)
+Signed out: no door, home shown, alerts bar "Sign in to create and see them".
+Pending session: only `#door` visible ("Awaiting approval", the email, Sign
+out); Sign out cleared the session and reopened the site. Master: open,
+"Approve accounts" listed and approved a pending account.
+
+### Open
+- `select count(*) from auth.users` returned **0** from DATABASE_URL (same project
+  ref as SUPABASE_URL) although Roy signed in twice. The masters' list reads
+  emails from auth.users: if it stays 0, it shows "email not readable". Roy: check
+  Authentication -> Users in the dashboard.
+- `/api/ebay/*` tooling probes are public and spend the 300/day tooling quota.
+- An address with no mailbox in the master list is claimable by whoever first
+  controls that mailbox — keep cardzon.com's mail under Roy's control.
+
 ## 2026-10-06 (evening) — T6 step 1: Google and email sign-in
 
 - **The key, measured:** <SUPABASE_URL>/auth/v1/.well-known/jwks.json publishes

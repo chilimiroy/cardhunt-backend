@@ -463,15 +463,22 @@ paint. One exact-text table (`LANG_JA`): a node is translated only when its WHOL
 text is a key — **never card data** (`i18n.test.js --db`: no key is any of 11,324
 names/sets/rarities). Not yet: ~90 sentences the page builds, server explanations.
 
-## Accounts — step 1 SHIPPED 2026-10-06: Google + emailed link (T6)
-`auth.js` verifies the Supabase token on the server — **ES256 via the project's
-JWKS** (this project's signing key; the legacy `SUPABASE_JWT_SECRET` only for HS256
-tokens), iss/aud/exp/sub checked. `/api/me` is the ONLY source of the signed-in
-state; no password field (`auth.test.js`). Not yet: roles, approval, alerts off `anon-`.
-**Supabase Auth's `auth` schema, not a second project** (2026-10-06): emails and
-password hashes live there, our tables hold a user id; a second project = two
-connections, two backups, no user↔alerts join. Roles by row-level security, never
-a hidden button. Build Google + email sign-in only after Roy confirms his 3 steps.
+## Accounts — step 1 (sign-in) and step 2 (roles) SHIPPED 2026-10-06 (T6)
+`auth.js` verifies the token: **ES256 via the project's JWKS** (legacy
+`SUPABASE_JWT_SECRET` only for HS256). `/api/me` is the ONLY source of the
+signed-in state AND the role. Emails live in Supabase's `auth` schema, never ours.
+- **master** = token email in `CARDZON_MASTER_EMAILS` (Render env, read per request,
+  never stored; `roy@cardzon.com` has no mailbox yet — intentional). approved /
+  pending / rejected in `user_access`, keyed on the auth user id (`roles.js`).
+- **ONE gate, `access.js`**, named on each protected route's own line; 401 / 403
+  pending|rejected / 403 masters only / 503 fail-closed. `access.test.js` fails on an
+  unclassified route (public needs a reason) — add every new route there.
+- Pending/rejected: the closed door (`door.test.js`); a signed-out visitor browses.
+- **RLS ON for every public table** (`migration-rls.sql`); API roles read own rows
+  only, write nothing — every write goes through the server. A new table needs RLS
+  (`rls.test.js --db` fails). Proof: `node rlsprobe.js [--token=<jwt>]`.
+- Pre-sign-in alerts move only when their browser claims its `ch_user` id.
+(PROGRESS 2026-10-06 (night).)
 
 ## Near you (local card shops) — PLANNED, needs a real data source
 Honest empty state. **Do not fill it with anything a source did not return.**

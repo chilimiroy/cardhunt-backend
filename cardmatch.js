@@ -1078,7 +1078,11 @@ function familyNamedBy(title, card) {
 // A reduction (~25%), shipped at the Mew pair's margin — not re-tuned on
 // these two cards: the genuine sample (36 rows) is too thin to go lower.
 const LOOKALIKES = [
-  { a: 'en-sv04.5-232', b: 'en-30th-152',
+  // margin 0.40 (T0, 2026-10-06): at the shared 0.30 a genuine bubble Mew in a
+  // dim binder photo scored 0.352 and was refused; 0.40 keeps it and still
+  // refuses 113 of 178 30th photos. The Evolutions pairs stay at 0.30 — all
+  // 22 of their refusals looked at, all Evolutions cards.
+  { a: 'en-sv04.5-232', b: 'en-30th-152', margin: 0.40,
     labels: { 'en-sv04.5-232': 'Paldean Fates Mew ex 232/091', 'en-30th-152': '30th Celebration Mew ex 152/128' } },
   { a: 'en-ex13-103', b: 'en-xy12-51',
     labels: { 'en-ex13-103': 'Holon Phantoms Mewtwo ☆ 103/110', 'en-xy12-51': 'XY Evolutions Mewtwo 51/108' } },
@@ -1090,7 +1094,8 @@ function lookalikesOf(card) {
   const out = [];
   for (const p of LOOKALIKES) {
     const other = id === p.a ? p.b : id === p.b ? p.a : null;
-    if (other) out.push({ cardId: other, kind: 'lookalike', ours: id, label: p.labels[other] });
+    if (other) out.push(Object.assign({ cardId: other, kind: 'lookalike', ours: id, label: p.labels[other] },
+                                      p.margin ? { margin: p.margin } : {}));
   }
   return out;
 }

@@ -53,6 +53,25 @@ ok('a 30th Mew photo under the 30th card is KEPT', v.state !== 'found', 'margin 
 v = sc.judge(photoOf(img(PF)), onTH);
 ok('a bubble Mew photo under the 30th card is FOUND', v.state === 'found', 'margin ' + (v.scores[0] || {}).margin);
 ok('the shared margin is the measured 0.30', sc.LOOKALIKE_MARGIN === 0.30);
+// T0 (2026-10-06): a genuine bubble Mew (dim binder photo) scored 0.352 and was
+// refused at 0.30. Not reproducible on a scan (NCC ignores a linear dimming) and
+// never an eBay photo in a fixture — so the number is pinned here, and the
+// measurement is in PROGRESS: 0.40 keeps it, still refuses 113 of 178 30th photos.
+ok('the Mew pair carries its own margin, 0.40, both directions',
+   onPF.find(c => c.kind === 'lookalike').margin === 0.40 && onTH.find(c => c.kind === 'lookalike').margin === 0.40);
+ok('the Evolutions pairs carry none (the shared 0.30)',
+   ['en-ex13-103', 'en-xy12-51', 'en-ex3-90', 'en-xy12-72'].every(id => cm.lookalikesOf({ cardId: id })[0].margin === undefined));
+{
+  // A photo that lands between 0.30 and 0.40 under the Mew pair is KEPT; the
+  // same score under a 0.30 pair is refused. Driven through judge itself: a
+  // pair whose "other" side is our card's own scan scores margin 0.
+  const self = [{ cardId: PF, kind: 'lookalike', ours: PF, label: 'x' }];
+  ok('judge reads the pair\'s margin (a margin-0 photo is kept at any margin)',
+     sc.judge(photoOf(img(PF)), self.map(c => Object.assign({}, c, { margin: 0.40 }))).state !== 'found');
+  ok('...and a pair margin of 0 or below would refuse it — the field is what judge compares',
+     sc.judge(photoOf(img(PF)), self.map(c => Object.assign({}, c, { margin: -0.01 }))).state === 'found');
+}
+
 console.log('\n  the cross-set pairs (2026-10-05): ex-era cards listed with Evolutions photos');
 for (const [ours, other, name] of [['en-ex13-103', 'en-xy12-51', 'Mewtwo ☆ / Evolutions Mewtwo'],
                                    ['en-ex3-90', 'en-xy12-72', 'Dragonite ex / Evolutions Dragonite-EX']]) {
@@ -74,7 +93,10 @@ ok('the verdict version moved with the pairs (older verdicts never answer for th
 
 console.log('\n  the verdict belongs to the photo AND the card viewed');
 const item = 'v1|123456789012|0';
-ok('a lookalike verdict is keyed on item + our card', sc.verdictKey(item, onPF) === item + '@' + PF && sc.verdictKey(item, onTH) === item + '@' + TH);
+ok('a lookalike verdict is keyed on item + our card + the pair\'s own margin',
+   sc.verdictKey(item, onPF) === item + '@' + PF + '~m0.4' && sc.verdictKey(item, onTH) === item + '@' + TH + '~m0.4');
+ok('a pair on the shared margin keeps its old key (Evolutions verdicts still read)',
+   sc.verdictKey(item, cm.photoChecksOf({ cardId: 'en-ex13-103' })) === item + '@en-ex13-103');
 ok('a stamp-only verdict keeps its old key (stored verdicts still read)',
    sc.verdictKey(item, cm.reprintCardsOf({ cardId: 'en-ecard2-149', number: '149' })) === item);
 

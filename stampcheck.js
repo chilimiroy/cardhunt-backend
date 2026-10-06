@@ -291,7 +291,7 @@ function judge(photo, checks, opts) {
     const ours = wholeScore(photo, wholeImage(lc.ours, lc)), other = wholeScore(photo, wholeImage(lc.cardId, lc));
     const margin = +(other - ours).toFixed(3);
     scores.push({ lookalike: lc.cardId, label: lc.label, checked: true, ours: +ours.toFixed(3), other: +other.toFixed(3), margin });
-    if (margin >= (isSibling(lc) ? SIBLING_MARGIN : LOOKALIKE_MARGIN)) return { state: 'found', kind: 'lookalike', reprint: lc.cardId, label: lc.label,
+    if (margin >= (isSibling(lc) ? SIBLING_MARGIN : (lc.margin || LOOKALIKE_MARGIN))) return { state: 'found', kind: 'lookalike', reprint: lc.cardId, label: lc.label,
       says: `The seller's photo matches ${lc.label} better than this card — a different card listed under this one.`, scores };
   }
   for (const rc of reprints) {
@@ -449,7 +449,10 @@ function verdictKey(itemId, checks) {
   const lc = (checks || []).find(isLookalike);
   // '+s': the verdict includes the sibling comparison. A verdict made before
   // siblings existed (bubble Mew's pair alone) is not that answer.
-  return lc ? itemId + '@' + lc.ours + ((checks || []).some(isSibling) ? '+s' : '') : itemId;
+  // '~m0.4': a pair with its own margin (T0, 2026-10-06). A verdict reached
+  // at the shared 0.30 is not that pair's answer — it is asked again.
+  return lc ? itemId + '@' + lc.ours + ((checks || []).some(isSibling) ? '+s' : '')
+            + (lc.margin ? '~m' + lc.margin : '') : itemId;
 }
 function checkItem(itemId, imageUrl, reprints, cardId) {
   const url = photoUrl(imageUrl);

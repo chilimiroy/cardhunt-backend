@@ -697,8 +697,20 @@ function gate(rows, reprints, opts) {
     reprints: (reprints || []).map(r => ({ cardId: r.cardId, kind: r.kind || 'reprint',
       template: isLookalike(r) ? lookalikeReady(r) : !!T[r.cardId],
       label: r.label || (T[r.cardId] && T[r.cardId].label) || (r.family && r.family.label) || r.cardId })) };
+  // Checks the caller could NOT run (speed T2, 2026-10-06): a same-name
+  // sibling with no stored reference scan. They are not in `reprints` — the
+  // verdict key must not claim a comparison that was not made — so they are
+  // named here: not run is an unknown, never a pass.
+  const notRun = (opts.notRun || []).map(r => ({ cardId: r.cardId, kind: r.kind || 'sibling', label: r.label || r.cardId, why: r.why }));
+  if (notRun.length) {
+    report.notRun = notRun;
+    for (const r of notRun) report.reprints.push(Object.assign({ template: false, notRun: true }, r));
+  }
+  const notRunText = notRun.length ? notRun.length + ' photo check' + (notRun.length > 1 ? 's' : '') + ' NOT run ('
+    + notRun.map(r => r.label + ': ' + r.why).join('; ') + ')' : '';
   if (!usable.length) {
-    report.reason = reprints && reprints.length ? 'no photo template built for this card’s reprint or lookalike' : 'no known reprint';
+    report.reason = notRun.length ? notRunText
+      : reprints && reprints.length ? 'no photo template built for this card’s reprint or lookalike' : 'no known reprint';
     return { listings: rows, report, pending: [] };
   }
   report.applied = true;
@@ -747,7 +759,8 @@ function gate(rows, reprints, opts) {
                                               : ' refused (the seller’s photo shows a reprint’s stamp or another card), ')
     + report.notVisible + (onlyLook ? ' not clearly the other card, ' : ' no stamp visible, ') + report.unreadable + ' unreadable'
     + (report.pending ? ', ' + (report.pending - (report.pendingShown || 0)) + ' hidden until checked'
-                        + (report.pendingShown ? ', ' + report.pendingShown + ' shown while checked' : '') : '');
+                        + (report.pendingShown ? ', ' + report.pendingShown + ' shown while checked' : '') : '')
+    + (notRunText ? '; ' + notRunText : '');
   return { listings: out, report, pending };
 }
 
@@ -769,6 +782,6 @@ if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
 
 module.exports = { MATERIAL_VERSION, MATERIAL_GOLD_EXCESS, MATERIAL_PHOTO_SIZE, colourProfile, checkMaterialPhoto, checkMaterialScan, metalPhotoOf, materialJudge,
                    THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, decodeImage, PNG_SCAN_HOST, crop, resize, rotate90, nccMax, bestScore,
-                   judge, checkItem, checkBackPhoto, gate, verdictKey, wholeScore, LOOKALIKE_MARGIN, SIBLING_MARGIN, SIBLING_HIDE_FRACTION, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
+                   judge, checkItem, checkBackPhoto, gate, verdictKey, wholeScore, WHOLE_TW: WHOLE.maxTw, LOOKALIKE_MARGIN, SIBLING_MARGIN, SIBLING_HIDE_FRACTION, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
                    _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; },
                    _clearCache: () => { _cache.clear(); _missed.clear(); } };

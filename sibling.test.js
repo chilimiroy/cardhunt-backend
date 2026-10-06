@@ -92,6 +92,39 @@ g = sc.gate([r1], checksFor(A125), { hideBelow });
 ok('a FOUND sibling refuses the row, with its reason', g.listings.length === 0 && g.report.refused === 1
    && /matches Alakazam EX #25\/124, not this card/.test(g.report.refusedSample[0].reason));
 
+console.log('\n  references built ahead of time (speed T2, 2026-10-06)');
+// The stored reference is the template the matcher actually compares: 96 px,
+// then resized to WHOLE_TW exactly as wholeScore does. Same verdicts.
+const refscans = require('./refscans.js');
+const t24 = id => { const t = img(id), s = sc.resize(t, sc.WHOLE_TW, sc.WHOLE_TW * t.h / t.w);
+  return refscans.entryOf({ state: 'built', tw: sc.WHOLE_TW, w: s.w, h: s.h, rgb: Buffer.from(s.data), scan_url: 'fixture' }); };
+const checks24 = ours => checksFor(ours).map(c => Object.assign({}, c, { wholes: { [ours]: t24(ours), [c.cardId]: t24(c.cardId) } }));
+let same = 0, all = 0;
+for (const p of [A25, A117, A125]) for (const ours of [A25, A117, A125]) for (const glare of [false, true]) {
+  const ph = photoOf(img(p), { glare }), a = sc.judge(ph, checksFor(ours)), b = sc.judge(ph, checks24(ours));
+  all++; if (JSON.stringify(a) === JSON.stringify(b)) same++;
+}
+ok('a stored 24-px reference gives the IDENTICAL verdict and scores as the 96-px one', same === all, same + '/' + all);
+ok('a reference built for another matcher width is not used', refscans.entryOf({ state: 'built', tw: 96, w: 96, h: 132, rgb: Buffer.alloc(9) }) === null);
+ok('an unbuildable row is not a reference', refscans.entryOf({ state: 'unbuildable', reason: 'HTTP 404' }) === null);
+ok('a reference is built only from a JPEG', refscans.templateFromScan(Buffer.from('<html>')).reason === 'scan is not a JPEG');
+
+console.log('\n  a sibling with no reference: NOT run, and said so');
+sc._clearCache();
+const missingSib = [{ cardId: A117, label: 'Alakazam EX #117/124', why: 'no reference scan stored yet (node refbuild.js)' }];
+g = sc.gate(rows, [], { hideBelow, notRun: missingSib });
+ok('no check could run: rows are unchanged, the gate is NOT applied', g.listings.length === 4 && !g.report.applied && g.pending.length === 0);
+ok('...and the report names what was not run, and why', g.report.notRun && g.report.notRun.length === 1
+   && /NOT run/.test(g.report.reason) && /no reference scan stored/.test(g.report.reason));
+ok('...listed among the checks as no template, not run', g.report.reprints.some(r => r.cardId === A117 && r.template === false && r.notRun === true));
+const half = checksFor(A125).filter(c => c.cardId === A25);
+g = sc.gate(rows, half, { hideBelow, notRun: missingSib });
+ok('one sibling ready, one missing: the ready one runs, the missing one is named', g.report.applied
+   && (g.report.notRun || []).length === 1 && /NOT run/.test(g.report.summary));
+ok('the verdict key does not claim a comparison that did not run', sc.verdictKey(item, []) === item);
+g = sc.gate(rows, checksFor(A125), { hideBelow });
+ok('with every reference present nothing is reported as not run', !g.report.notRun && !/NOT run/.test(g.report.summary));
+
 console.log('\n  wired: server and page');
 const server = fs.readFileSync(__dirname + '/server.js', 'utf8');
 const page = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
@@ -101,7 +134,11 @@ ok('the follow-up and /api/stamp ask it too', /photoChecksFor\(card\)\.then\(rep
 ok('the hide line is current + raw only', /mref && mref\.current && jpf\.isRawGrade\(grade\) \? mref\.price \* stampcheck\.SIBLING_HIDE_FRACTION : null/.test(server));
 ok('siblings: same set, same name, English, Pocket hidden', /lower\(c\.name\) = lower\(me\.name\)/.test(server)
    && /c\.api_card_id LIKE 'en-%' AND \$\{digital\.visibleSql\('c'\)\}/.test(server));
-ok('templates from a fetched JPEG, never assumed', /buf\[0\] === 0xff && buf\[1\] === 0xd8/.test(server));
+ok('templates from a fetched JPEG, never assumed (refscans.js)', /buf\[0\] === 0xff && buf\[1\] === 0xd8/.test(fs.readFileSync(__dirname + '/refscans.js', 'utf8')));
+const sibBlock = server.slice(server.indexOf('// ── Same-name siblings in the set'), server.indexOf('function stampFollowUp('));
+ok('the request reads stored references and fetches no scan', sibBlock.length > 500 && /card_reference_scans/.test(sibBlock)
+   && !/fetch\(/.test(sibBlock) && !/decodeJpeg/.test(sibBlock));
+ok('a missing reference is reported (notRun), never dropped', /notRun\.push\(/.test(sibBlock) && /notRun: stampNotRun/.test(server));
 ok('the page labels a row still being compared', /'pending':\s+'Photo being compared'/.test(page));
 ok('the page says what the check does NOT catch', /not every wrong card/.test(page));
 

@@ -70,6 +70,7 @@ Shared, never copied — every duplicated implementation here has drifted.
 | `digital.js` | TCG Pocket hidden by SERIES at every read |
 | `certcheck.js` | cert number + photos from ONE shared getItem (15 min); PSA half NOT built |
 | `stampcheck.js` | photo checks on eBay's CDN (0 API calls), one worker pool, verdicts stored: reprint **stamp** (55 originals), **lookalike** pairs, same-name **siblings**; templates in `stamps.json` from OUR scans |
+| `refscans.js` | the sibling check's references, built AHEAD by `refbuild.js` into `card_reference_scans` (24 px, identical scores): a visitor's request never waits on a third-party host; missing = `notRun`, reported, never a pass |
 | `backcheck.js` | card BACK: other family's back refuses, own back labels, nothing found claims nothing |
 | `stampcheck.js` (material) | gold/black NOVELTY card? photo colour vs OUR scan + outlier flag + a metal photo among the seller's others: two refuse, one flags, a genuine back never refuses (`materialJudge`, 0.40) |
 | `deals.js` | best deals: cheapest trusted Buy It Now vs a current measured price, from cached views only |
@@ -527,6 +528,7 @@ node ingest.js setgap <lang> [--fix]                # sets missing vs TCGdex
 node ingest.js cardgap <lang> [--fix] [--set=X]     # cards missing INSIDE held sets; insert-only
 node ingest.js lmingest <lang> [set]                # sets TCGdex lacks, via Limitless
 node ingest.js names <lang>                         # English card names
+node refbuild.js [--dry] [--set=X]                  # sibling references; resumable; after ANY English ingest
 node ingest.js pokedex                              # JP/CN -> EN dictionary
 
 # prices

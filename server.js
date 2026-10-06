@@ -74,6 +74,7 @@ app.get('/api/me', async (req, res) => {
 });
 
 const stampcheck = require('./stampcheck');
+const refscans = require('./refscans');      // our own reference scans, built ahead of time
 const backcheck = require('./backcheck.js');   // TASK T3: the card back
 timing.instrumentFetch();
 app.use((req, res, next) => {
@@ -3314,11 +3315,12 @@ async function judgeListings(card, grade, listings, opts, memo) {
   // an unchecked row is hidden only below SIBLING_HIDE_FRACTION of the card's
   // current raw price; with no such price nothing is hidden.
   const stampReprints = opts.noReprintCheck ? [] : await photoChecksFor(card);
-  if (stampReprints.length) {
-    await stampcheck.loadVerdicts(listings, stampReprints);
+  const stampNotRun = stampReprints.notRun || [];
+  if (stampReprints.length || stampNotRun.length) {
+    if (stampReprints.length) await stampcheck.loadVerdicts(listings, stampReprints);
     const mref = await marketRefOf(card, memo);
     const hideBelow = mref && mref.current && jpf.isRawGrade(grade) ? mref.price * stampcheck.SIBLING_HIDE_FRACTION : null;
-    const sg = timing.timeSync('stamp-gate', () => stampcheck.gate(listings, stampReprints, { hideBelow }));
+    const sg = timing.timeSync('stamp-gate', () => stampcheck.gate(listings, stampReprints, { hideBelow, notRun: stampNotRun }));
     listings = sg.listings; stampReport = sg.report; stampPending = sg.pending;
   }
   // The card back (T3): verdicts already known are applied — another
@@ -3557,68 +3559,74 @@ const STAMP_REBUILD_MS = 1500;
 // ── Same-name siblings in the set (T1, 2026-10-04; stampcheck.SIBLING_MARGIN) ──
 // Every other English card of this name in this set is a photo check of its
 // own: Alakazam EX #125/124 listings were photos of #117 and #25 titled
-// "125/124". Found by a query (6,891 English cards have one), compared from
-// OUR scans, templates built here at runtime — fetched, never assumed: TCGdex
-// serves a .jpg beside each .png (jpeg-js is a dependency, pngjs is not), and
-// anything that does not decode as a JPEG leaves that sibling unchecked.
-// Building is bounded (SIBLING_BUILD_MS): a slow scan host leaves the view
-// without the sibling check rather than holding the answer. Zero eBay calls.
-const SIBLING_TTL_MS = 6 * 3600 * 1000, SIBLING_BUILD_MS = 3000;
-const _siblingRows = new Map();   // cardId -> { at, rows }
-const _wholeTpl = new Map();      // cardId -> Promise<template entry | null>
+// "125/124". Found by a query (7,943 English cards have one, 2026-10-06),
+// compared from OUR scans. Each card's comparison template is built AHEAD of
+// time by refbuild.js and read here from card_reference_scans (refscans.js,
+// speed T2 2026-10-06): a visitor's request never waits on a third-party
+// host. A card whose reference is not stored, or could not be built, is left
+// out of the comparison AND named as not run (gate opts.notRun) — an
+// unknown, never a pass. Zero eBay calls, zero image fetches.
+const SIBLING_TTL_MS = 6 * 3600 * 1000, SIBLING_MISS_MS = 10 * 60 * 1000, SIBLING_CACHE_MAX = 2000;
+const _siblingRows = new Map();   // cardId -> { at, ttl, rows }
+function referenceWhy(row, whose) {
+  whose = whose || 'that card';
+  if (!row || !row.ref_state) return 'no reference scan of ' + whose + ' stored yet (node refbuild.js)';
+  if (row.ref_state === 'unbuildable') return 'the reference scan of ' + whose + ' could not be built: ' + (row.ref_reason || 'unknown');
+  return 'the reference scan of ' + whose + ' was built for another matcher width (node refbuild.js --rebuild)';
+}
 async function siblingRowsOf(card) {
   const cid = card.api_card_id, hit = _siblingRows.get(cid);
-  if (hit && Date.now() - hit.at < SIBLING_TTL_MS) return hit.rows;
+  if (hit && Date.now() - hit.at < hit.ttl) return hit.rows;
+  await refscans.ensureTable(db);
   const r = await db.query(
-    `SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_total, c.image_large, c.image_small
+    `SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_total,
+            rs.state AS ref_state, rs.reason AS ref_reason, rs.scan_url, rs.tw, rs.w, rs.h, rs.rgb
        FROM cards c JOIN cards me ON me.api_card_id = $1
+       LEFT JOIN card_reference_scans rs ON rs.card_id = c.api_card_id
       WHERE c.set_api_id = me.set_api_id AND lower(c.name) = lower(me.name)
         AND c.api_card_id LIKE 'en-%' AND ${digital.visibleSql('c')}`, [cid]);
-  const rows = r.rows.length > 1 ? r.rows : [];
-  _siblingRows.set(cid, { at: Date.now(), rows });
+  const rows = r.rows.length > 1 ? r.rows.map(x => {
+    const tpl = refscans.entryOf({ state: x.ref_state, tw: x.tw, w: x.w, h: x.h, rgb: x.rgb, scan_url: x.scan_url });
+    delete x.rgb;
+    return Object.assign(x, { tpl });
+  }) : [];
+  // Complete: kept 6 h. A reference missing: asked again in 10 minutes, so
+  // a backfill reaches the page without a restart.
+  _siblingRows.set(cid, { at: Date.now(), ttl: rows.every(x => x.tpl) ? SIBLING_TTL_MS : SIBLING_MISS_MS, rows });
+  while (_siblingRows.size > SIBLING_CACHE_MAX) _siblingRows.delete(_siblingRows.keys().next().value);
   return rows;
 }
-function wholeTemplateOf(row) {
-  const id = row.api_card_id;
-  if (_wholeTpl.has(id)) return _wholeTpl.get(id);
-  const src = String(row.image_large || row.image_small || '');
-  const url = /^https:\/\/assets\.tcgdex\.net\/.+\.png$/.test(src) ? src.replace(/\.png$/, '.jpg') : src;
-  const p = (async () => {
-    if (!/^https:\/\//.test(url)) return null;
-    const r = await fetch(url, { signal: AbortSignal.timeout(SIBLING_BUILD_MS) });
-    if (!r.ok) return null;
-    const buf = Buffer.from(await r.arrayBuffer());
-    if (!(buf[0] === 0xff && buf[1] === 0xd8)) return null;
-    const img = stampcheck.decodeJpeg(buf);
-    const t = stampcheck.resize(img, 96, 96 * img.h / img.w);
-    return { scan: url, w: t.w, h: t.h, rgb: Buffer.from(t.data).toString('base64') };
-  })().catch(() => null);
-  _wholeTpl.set(id, p);
-  p.then(v => { if (!v) setTimeout(() => _wholeTpl.delete(id), 10 * 60 * 1000); });   // retry a failed scan later
-  return p;
-}
 // Every photo check of this card: reprints' stamps, held lookalike pairs
-// (cardmatch.photoChecksOf), then its same-name siblings when their scans
-// are ready. One definition for the gate, the follow-up and /api/stamp.
+// (cardmatch.photoChecksOf), then its same-name siblings whose references
+// are stored. One definition for the gate, the follow-up and /api/stamp.
+// The checks that could not run ride on the array as `.notRun` — kept OUT of
+// the list itself, because stampcheck.verdictKey marks a verdict '+s' when a
+// sibling is in it, and a verdict made without the comparison must not be
+// stored as one made with it.
+const withNotRun = (checks, notRun) => { checks.notRun = notRun; return checks; };
 async function photoChecksFor(card) {
   const base = cm.photoChecksOf(card);
   const cid = String(card.api_card_id || '');
-  if (!db || !/^en-/.test(cid)) return base;
-  try {
-    const rows = await siblingRowsOf(card);
-    if (!rows.length) return base;
-    const built = await Promise.race([
-      Promise.all(rows.map(async row => ({ row, tpl: await wholeTemplateOf(row) }))),
-      new Promise(res => setTimeout(() => res(null), SIBLING_BUILD_MS))]);
-    if (!built) return base;
-    const mine = built.find(b => b.row.api_card_id === cid);
-    if (!mine || !mine.tpl) return base;
-    const sibs = built.filter(b => b.row.api_card_id !== cid && b.tpl).map(b => ({
-      cardId: b.row.api_card_id, kind: 'sibling', ours: cid,
-      label: `${b.row.name} #${b.row.number}${b.row.set_total ? '/' + b.row.set_total : ''}${b.row.rarity ? ' (' + b.row.rarity + ')' : ''}`,
-      wholes: { [cid]: mine.tpl, [b.row.api_card_id]: b.tpl } }));
-    return base.concat(sibs);
-  } catch (e) { console.warn('[sibling] checks not built:', e.message); return base; }
+  if (!db || !/^en-/.test(cid)) return withNotRun(base, []);
+  let rows;
+  try { rows = await siblingRowsOf(card); }
+  catch (e) {
+    console.warn('[sibling] references not read:', e.message);
+    return withNotRun(base, [{ cardId: cid, label: 'same-name cards in this set',
+      why: 'sibling lookup failed: ' + String(e.message || e).slice(0, 120) }]);
+  }
+  if (!rows.length) return withNotRun(base, []);
+  const mine = rows.find(r => r.api_card_id === cid);
+  const ready = [], notRun = [];
+  for (const b of rows) {
+    if (b.api_card_id === cid) continue;
+    const label = `${b.name} #${b.number}${b.set_total ? '/' + b.set_total : ''}${b.rarity ? ' (' + b.rarity + ')' : ''}`;
+    if (!mine || !mine.tpl) { notRun.push({ cardId: b.api_card_id, label, why: referenceWhy(mine, 'this card') }); continue; }
+    if (!b.tpl) { notRun.push({ cardId: b.api_card_id, label, why: referenceWhy(b) }); continue; }
+    ready.push({ cardId: b.api_card_id, kind: 'sibling', ours: cid, label,
+      wholes: { [cid]: mine.tpl, [b.api_card_id]: b.tpl } });
+  }
+  return withNotRun(base.concat(ready), notRun);
 }
 
 function stampFollowUp(card, requestedId, grade, printing, edition, pendingRows) {
@@ -5459,7 +5467,9 @@ app.get('/api/stamp/:cardId', async (req, res) => {
     const card = await resolveListingCard(cardId);
     if (!card) return res.status(404).json(Object.assign(base, { error: 'card not in catalogue' }));
     const reprints = await photoChecksFor(card);
-    if (!reprints.length) return res.status(400).json(Object.assign(base, { error: 'no known reprint, lookalike or same-name card in its set — there is nothing to look for' }));
+    if (!reprints.length) return res.status(400).json(Object.assign(base, (reprints.notRun || []).length
+      ? { error: 'no photo check can run for this card yet', notRun: reprints.notRun }
+      : { error: 'no known reprint, lookalike or same-name card in its set — there is nothing to look for' }));
     const row = cachedListingRow([cardId, card.api_card_id].filter(Boolean), itemId);
     if (!row) return res.status(404).json(Object.assign(base, { error: 'this listing is no longer in the 15-minute view — reopen the card and press again' }));
     // The same queue, worker pool and item-id cache the listing gate uses:

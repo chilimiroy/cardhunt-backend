@@ -225,7 +225,7 @@ console.log('\n6. THE SERVER — wired after the text gates, before display');
 const S = fs.readFileSync(__dirname + '/server.js', 'utf8').split('\r\n').join('\n');
 const fnS = decl => { const i = S.indexOf('\n' + decl); return i < 0 ? '' : S.slice(i + 1, S.indexOf('\n}\n', i + 1) + 2); };
 const jl = fnS('async function judgeListings(');
-ok('judgeListings runs stampcheck.gate', /stampcheck\.gate\(listings, stampReprints, \{ hideBelow \}\)/.test(jl));
+ok('judgeListings runs stampcheck.gate', /stampcheck\.gate\(listings, stampReprints, \{ hideBelow, notRun: stampNotRun \}\)/.test(jl));
 ok('...BEFORE the outlier check (reprints cannot set the median)', jl.indexOf('stampcheck.gate(') > 0 && jl.indexOf('stampcheck.gate(') < jl.indexOf('outlier.flagOutliers('));
 ok('...never on a reprint\'s own listings (noReprintCheck)', /opts\.noReprintCheck \? \[\] : await photoChecksFor\(card\)/.test(jl));
 ok('a photo-check update never fetches the reprint\'s listings (noFetch)', /else if \(opts\.noFetch\) why =/.test(jl));

@@ -230,9 +230,10 @@ lettered numbers are their own card. Re-run `node querygap.js en` (~200
 tooling calls) after any change to `buildQuery` or a set's vocabulary.
 Open: raw titles with the pair and no set name are never fetched (unmeasured);
 Ancient Mew prints no number: `cm.PRINTS_NO_NUMBER` (name only, year 2000, refuses its
-paper insert / metal / Mewtwo); grouped with basep on the page, not moved. Unown "?"
-`%3F` -> '?' is SQL for Roy (`roy-writes-20261006.sql`, with the mcd23/24 and
-mep/svp logo copies); TCGdex is asked via `cardid.tcgdexLocalId`. mfb: eBay has nothing (`NO_EBAY_MARKET`);
+paper insert / metal / Mewtwo); grouped with basep on the page, not moved; a slab
+is one card whatever is sealed inside ("Sealed Cello Pack – PSA 8" kept, Roy). Unown "?"
+number and the mcd23/24 + mep/svp logos: Roy ran `roy-writes-20261006.sql` 2026-10-06, confirmed
+on /app. A punctuation number (Unown ! ?) must stand alone ("CLEAN!" passed Unown Q as "!"). TCGdex is asked via `cardid.tcgdexLocalId`. mfb: eBay has nothing (`NO_EBAY_MARKET`);
 an empty panel says none-returned / all-refused / no market (`payload.market`).
 Trainer kits: ONE grid tile, filter by kit — UI only (`groupTrainerKits`).
 
@@ -273,8 +274,8 @@ photo here, ~1.2-1.3 s on Render. A timeout is retryable, never a verdict.
 
 | problem | caught by | on which cards | measured |
 |---|---|---|---|
-| 30th / Celebrations reprint | stamp template from OUR scan, 0.70 + title words + price band | 55 originals (`30th-c-020` no stamp) | 92.5% of reprint photos, 0/16 originals |
-| a different card listed under ours, both scans held | lookalike, margin 0.30 | 3 pairs: bubble Mew 232/091 ↔ 30th Mew 152/128; Mewtwo ☆ and Dragonite ex ↔ their Evolutions cards | Mew 162/178 caught, 0/276 genuine; Evolutions 38 caught, 0 genuine |
+| 30th / Celebrations reprint | stamp template from OUR scan, 0.70 + title words + price band | 55 originals (`30th-c-020` no stamp) | 92.5% of reprint photos; 2026-10-06: 186/186 refusals were reprints; 0/491 genuine Base Charizard (max 0.613); a visible 30th stamp missed at 0.68 |
+| a different card listed under ours, both scans held | lookalike, per-pair margin (`LOOKALIKES`) | bubble Mew ↔ 30th Mew (0.40); Mewtwo ☆ and Dragonite ex ↔ their Evolutions cards (0.30); Base Charizard ← gold Charizard ex 228 (**one way**, 0.10) | 2026-10-06, both ways: Mew 113/178 at 0.40 (a genuine binder photo hit 0.352); Evolutions 22/22 refusals right; 228 28/60, 0/491 genuine |
 | same-name card of the same set | sibling, margin 0.40 | 6,891 English cards | 7/11 swaps, 0/~1,470 genuine |
 | named replica | title words | all | 0/896 right titles refused |
 | implausible price | outlier (flag) | ≥5 priced or current stored price | 0/864 right flagged |
@@ -285,10 +286,13 @@ photo here, ~1.2-1.3 s on Render. A timeout is retryable, never a verdict.
 | printed counterfeit, real back | **NOTHING** (back would LABEL it) | — | |
 
 Rules of the gate:
-- **Stamp / lookalike: found refuses; not visible / unreadable keep; unchecked
-  rows are HIDDEN** (counted in `stampGate.pending`), appear as verdicts land.
-- **Siblings: unchecked hidden only below `SIBLING_HIDE_FRACTION` (0.55)** of
-  a current measured raw price; otherwise shown "Photo being compared".
+- **Found refuses; not visible / unreadable keep. Unchecked rows of EVERY kind
+  (stamp, pair, sibling) are shown "Photo being compared"**, hidden only below
+  `SIBLING_HIDE_FRACTION` (0.55) of a current measured raw price. Hiding all of
+  them emptied 49 of 54 originals' panels on a cold open (T0, PROGRESS 2026-10-06).
+- **A pair is measured both ways before it ships; a pair that cannot be safe
+  both ways is one-way (`oneWay`) or not shipped** — the 228's genuine photos
+  reach 0.195 toward Base Charizard.
 - **Material (novelty): two of {colour > 0.40 above our scan, outlier flag, metal
   photo} refuse; one flags `counterfeit-likely`; a genuine back never refuses.**
   **Colour alone never refuses**: genuine gold hyper rares reach 0.491 (our scan
@@ -315,7 +319,9 @@ Rules of the gate:
   (2/14 on a fresh sample). Base Set 2's set mark needs alignment first.
   **"Which card is this" across all 20,360 scans — STOPPED** (PROGRESS
   2026-10-06: "WHICH CARD IS THIS?…"): the true card of a different-card photo
-  reached the shortlist 1 of 21 (gold 228: rank ~12,000). Lead: a 228 pair.
+  reached the shortlist 1 of 21 (gold 228: rank ~12,000); the 228 lead shipped as a one-way pair.
+  **OCR of name and number — CLOSED** (PROGRESS 2026-10-06 (later): "T1 — OCR"):
+  number read 1/113 at s-l500, 19% at s-l1600, **0/38 on the different-card photos**.
 - **The cheap route for a recurring wrong card is a new `LOOKALIKES` pair,
   measured first.**
 
@@ -450,6 +456,18 @@ schtasks /Run   /TN "CardHunt nightly refresh"
   Shining Charizard gone, but #1 was a gold Charizard ex 228/197 under Base
   Charizard (genuine back) — a real card is not THIS card. Switch on only with
   an "is this photo this card" answer (PROGRESS 2026-10-05 (late)).
+
+## Page language — STARTED 2026-10-06 (T5)
+EN/JA button between currency and the bell; `ch_lang` set on `<html lang>` before
+paint. One exact-text table (`LANG_JA`): a node is translated only when its WHOLE
+text is a key — **never card data** (`i18n.test.js --db`: no key is any of 11,324
+names/sets/rarities). Not yet: ~90 sentences the page builds, server explanations.
+
+## Accounts — DECIDED, waiting on Roy (T6)
+**Supabase Auth's `auth` schema, not a second project** (2026-10-06): emails and
+password hashes live there, our tables hold a user id; a second project = two
+connections, two backups, no user↔alerts join. Roles by row-level security, never
+a hidden button. Build Google + email sign-in only after Roy confirms his 3 steps.
 
 ## Near you (local card shops) — PLANNED, needs a real data source
 Honest empty state. **Do not fill it with anything a source did not return.**
@@ -593,6 +611,9 @@ Make it fire before believing it**; revert the fix and watch the test fail.
 
 **A gate that skips must say what it skipped** (`evidence`, `unchecked`,
 `gateWarning`). *Archive:* "A gate that skips says nothing; now it says what it skipped"
+
+**A gate that hides while it works over-blocks for as long as it works** —
+show pending rows marked; an absent row is never reported (T0, PROGRESS 2026-10-06).
 
 **A guard that over-blocks fails invisibly — make an empty result report**;
 every silent `continue` in a fetch is an unseen over-block (`setyield.js`).

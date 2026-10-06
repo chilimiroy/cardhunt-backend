@@ -1,5 +1,137 @@
 # CardHunt — Progress Log
 
+## 2026-10-06 (later) — T0 the empty panels (pairs and stamps), Mew pair 0.40; T2 SQL landed; T3 Unown "!"; T4 cello slab; T5 language started; T1 OCR measured, 228 pair shipped one-way
+
+**eBay spend:** ~240 tooling calls (300 allowance): 54 + 20 reprint originals
+live (the measurement), Mew / Evolutions / Charizard views across grades,
+16-card T3 sweep, 2 T0 re-checks. User budget untouched.
+
+### T0 — "no links at all": the photo gate HID every unchecked row
+Not reproducible on the bubble Mew at the moment of looking (85 of 166 kept,
+Raw NM; PSA 10 102, PSA 9 109). Reproducible as TIMING, and far wider than
+the Mew: a lookalike or stamp card hid every row whose photo was not yet
+checked, and the checks queue on ONE worker (~1.2 s a photo on Render).
+- bubble Mew CGC 10: 0 of 32 shown on open; 25 shown ~80 s later, 0 refused.
+- Evolutions Mewtwo xy12-51: **0 of 190**; Evolutions Dragonite-EX: **0 of 192**.
+- 54 reprint originals opened cold: **49 showed nothing** (Base Pikachu 0 of
+  177, Brilliant Stars Charizard 0 of 190, Base Blastoise 0); Base Pikachu
+  still 0 of 177 twenty minutes later behind a ~3,600-photo queue (my burst
+  made the queue; one cold card alone blanks for a minute or more).
+- After a verdict-version bump, every stored verdict for those cards is void
+  — every card opens cold.
+Fix (`34a854c`, `2ee6ad3`): every kind of check uses the sibling rule —
+unchecked rows shown "Photo being compared", hidden only below 0.55× a
+current measured raw price. Deployed and checked: bubble Mew cold 81 shown
+at once (6 held below $480), Base Pikachu PSA 9 51 of 51, Evolutions
+Dragonite PSA 9 22 of 22 — each previously 0.
+
+### T0 — the Mew pair DID fail backwards, once
+505 photos (bubble Mew Raw NM / PSA 10 / PSA 9 / CGC 10 / BGS 10; 30th Mew
+Raw NM / PSA 10), scored locally, refusals looked at by eye.
+- 30th Mew's own page: 0 refused; every photo ≤ -0.149 toward the bubble Mew.
+- bubble Mew's page: 2 refusals — a real 30th Mew 152/128 ($190, 0.413) and
+  **a genuine bubble Mew 232/091 in a dim binder photo ($1,050, 0.352)**.
+  Next-hardest genuine 0.254. A synthetic dimmed scan does NOT reproduce it
+  (NCC ignores a linear dimming) — the failure is the pocket and the glare.
+- 30th photos from the bubble side: 157/178 at 0.30, 146 at 0.35, **113 at
+  0.40**, 72 at 0.45.
+Shipped (`5e67974`): the pair's own margin 0.40; verdict key `~m0.4` so only
+that pair's verdicts re-run. Deployed: the genuine binder photo shown, the
+30th photo refused, 86 shown, 1 refused.
+
+### T0 — the other pairs, both ways
+- Mewtwo ☆ ↔ Evolutions Mewtwo: Evolutions page max -0.084 (safe). Mewtwo ☆
+  page: 11 refusals, all 18 photos ≥ 0.25 looked at — every one Evolutions
+  Mewtwo (130 HP). 7 more Evolutions photos at 0.25-0.29 kept (leak).
+- Dragonite ex ↔ Evolutions Dragonite-EX: Evolutions page max -0.017. 11
+  refusals; all 27 photos ≥ 0.22 are Evolutions Dragonite-EX (180 HP).
+- Stamps, 20 originals live: **186 refusals, all 186 show the Celebrations /
+  30th stamp** (Base Charizard 3, Lugia 87, Dark Tyranitar 44, Sneasel 40,
+  Greninja BREAK 12). A reprint's own page runs no photo check
+  (`photoChecksOf` = []), so nothing there can fail backwards.
+
+### T2 — Roy's SQL landed
+30 McDonald's 2023/24 rows, 315 MEP/SVP rows with logos; Unown number '?'.
+On /app: MEP, SVP, McDonald's 2023 and 2024 show their logos. 2022, 2019 and
+older McDonald's years are still blank (not in the SQL; 2022 deliberately).
+
+### T3 — sweep of the sets found broken
+| set | card(s) | result |
+|---|---|---|
+| My First Battle | 1, 2 | no eBay market (A) — the page says so |
+| Poké Card Creator Pack | 1, 3 | working: the only listing is a PSA 9 slab, correctly refused for raw |
+| Unown Collection | A 2/5, ? 2/164, ! 3/164 | **"!" broken: kept Unown Q and P** — fixed `c00078e` |
+| McDonald's 2023 / 2024 | 2023sv-1, -5, 2024sv-1, -10 | working (153-196 kept, right card) |
+| Trainer kits | Latias, Lucario, Gyarados, Pikachu Libre, Alolan Raichu | working (1-40 kept) |
+Unown "!": eBay's "Q/28" is not parsed as a pair, so the bare-number check
+ran and found "!" in "NM+ CLEAN!" / "SWIRL!!!". A punctuation number now
+counts only standing alone. Unown "?" had the same exposure ("real?").
+
+**Base Charizard's raw page shows ≥7 wrong cards** (34 kept, labelled by
+eye): 3 gold Charizard ex 228, 2 silver Charizard ex 215/SVP 056, a 30th
+Celebration reprint with a clearly visible stamp (scored 0.68, threshold
+0.70), a Japanese Base Charizard (English back found among the seller's
+photos). On 491 genuine Base Charizard photos the stamp score tops at
+0.613 — 0.65 would have caught the reprint here, but the threshold is
+shared by 55 originals and needs their genuine photos measured first.
+
+### T4 — Ancient Mew "Sealed Cello Pack – PSA 8" allowed (`f0f946b`)
+A slab asked + a grader and grade stated: singular "sealed" / "(cello) pack"
+are not sealed product. "booster", "box", "packs", "lot" still refuse.
+
+### T5 — page language started (`04b1d74`)
+EN/JA button between currency and the bell (both navs); `ch_lang`; exact-
+text table of ~150 static strings + 15 placeholders/titles; MutationObserver
+for re-rendered content; options keep English values. Checked in the
+browser: 232 nodes translated, card data untouched, reload persists,
+switching back restores. Not yet: ~90 built sentences; server explanations.
+
+### T1 — the 228 lead widened and shipped ONE-WAY (`461f83d`)
+60 gold 228 photos (its own page), 491 genuine Base Charizard (27 raw + 464
+PSA 5-9 / CGC 8 slabs), labelled by eye, measured on the shipped templates:
+at 0.10, 28/60 gold refused, 0/491 genuine (hardest a PSA 5 at 0.031). On
+the live raw page 1 of the 3 gold rows (0.156; the others 0.071, 0.034).
+Reverse: a genuine 228 reaches 0.195 toward Base Charizard (3 of 60 at 0.10)
+— so the pair is checked on Base Charizard only. 215/197 photos do not
+score like 228 (max 0.067): same illustration, different foil structure.
+
+### T1 — OCR, measured before building (tesseract.js 5.1.1, eng)
+**Closed: OCR cannot read the number off a 500px photo, and on the photos it
+would exist for it reads it 0 times at any size.** Labelled set: 113 photos
+(≤20 per card) of 7 known cards, identity by eye — Evolutions Mewtwo 51/108
+(18) and Dragonite-EX 72/108 (20) listed as ex-era cards, Celebrations
+reprints printing their originals' numbers (Charizard 4/102, Lugia 149/147,
+Dark Tyranitar 19/109, Sneasel 25/111, Greninja BREAK 41/122).
+
+| read | name | N/M number | both | time/photo (local) | RSS |
+|---|---|---|---|---|---|
+| whole photo, s-l500 | 51/113 (45%) | **1/113 (0.9%)** | — | 1.4 s | 156 MB |
+| whole photo, s-l1600 | 80/113 (71%) | 21/113 (19%) | 17/113 | 7.5-8.9 s | 342-354 MB |
+| name/number strips, card located by its OWN scan, s-l500 | 42/101 | 0/101 | — | 0.9 s | 422 MB |
+| same, s-l1600 | 41/101 | 15/101 | — | 3.7 s | 430 MB |
+| strips, located by the CLAIMED card's scan (production), s-l1600 | **0/38** | **0/38** | — | 1.3 s | 381 MB |
+
+- **The different-card photos (Evolutions, 38): number read 0/38** at every
+  size and method. Located by the claimed card's scan — the only scan
+  production has — the strips land where the claimed card's name would be:
+  0 names, 0 numbers. The "looking for your face" problem, again.
+- **Both directions:** no photo produced a different catalogue name AND
+  that card's number (0/113 accusations). But 46/113 photos also read
+  ANOTHER catalogue name at confidence ≥80 (attack text, "Evolves from
+  Dark Pupitar", Charmeleon) and 8/113 a pair not ours — a name alone, or
+  a number alone, would accuse genuine listings.
+- Render: not measured there (no deploy for a closed question); Render runs
+  the photo checks ~2.4× slower than here — ~20 s a photo at s-l1600, at
+  ~350 MB on top of the server.
+Per TASK T1's rule, the identification question is closed. Whole-photo
+OCR at s-l1600 could still LABEL a row (a name read, never a refusal) —
+not built; that would be a decision, not a gate.
+
+### Process
+- The photo queue is one worker; a burst of tooling opens queues thousands
+  of photos for an hour — measure on few cards, or expect the wait.
+- Refused rows carry no imageUrl — rebuild it from the URL's `g:` hash.
+
 ## 2026-10-06 — T1 "which card is this" measured and STOPPED; logos/Unown SQL; Ancient Mew; energy; T6 dark mode; T7 counted; T8 waiting on Roy
 
 **eBay spend:** ~10 user calls (Ancient Mew raw ×2, PSA 9, PSA 8, CGC 8, the

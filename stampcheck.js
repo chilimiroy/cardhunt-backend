@@ -675,8 +675,11 @@ async function loadVerdicts(rows, checks) {
 // (the server passes ~55% of the card's current, measured stored price —
 // the Alakazam swaps sat at 14%); every other unchecked row is SHOWN while
 // it is checked. No baseline (null) hides nothing, as outlier.js judges
-// nothing without one. A stamp or a held lookalike pair keeps the old rule:
-// unchecked is hidden.
+// nothing without one. A stamp keeps the old rule: unchecked is hidden.
+// T0 (2026-10-06): a held lookalike pair follows the sibling rule too. Hiding
+// every unchecked row emptied whole panels — Evolutions Mewtwo 0 of 190 and
+// Dragonite-EX 0 of 192 shown, bubble Mew CGC 10 0 of 32 — for as long as
+// the photo queue took. An absent row is invisible; a pending one is labelled.
 const SIBLING_HIDE_FRACTION = 0.55;
 function gate(rows, reprints, opts) {
   opts = opts || {};
@@ -695,8 +698,9 @@ function gate(rows, reprints, opts) {
   const onlyLook = usable.every(isLookalike);
   report.kind = onlyLook ? 'lookalike' : usable.some(isLookalike) ? 'both' : 'stamp';
   const onlySiblings = usable.every(isSibling);
-  const hideBelow = onlySiblings ? (opts.hideBelow > 0 ? opts.hideBelow : null) : Infinity;
-  if (onlySiblings) { report.kind = 'sibling'; report.hideBelow = hideBelow; report.pendingShown = 0; }
+  const hideBelow = onlyLook ? (opts.hideBelow > 0 ? opts.hideBelow : null) : Infinity;
+  if (onlySiblings) report.kind = 'sibling';
+  if (onlyLook) { report.hideBelow = hideBelow; report.pendingShown = 0; }
   const out = [], pending = [];
   for (const row of rows) {
     if (!row || row.source !== 'ebay' || !row.itemId) { out.push(row); continue; }
@@ -708,8 +712,9 @@ function gate(rows, reprints, opts) {
       const price = Number(row.landed != null ? row.landed : row.price);
       if (hideBelow !== Infinity && !(hideBelow != null && price > 0 && price < hideBelow)) {
         report.pendingShown++;
-        out.push(Object.assign({}, row, { stamp: { state: 'pending', kind: 'sibling',
-          says: 'Photo not yet compared with the other cards of this name in the set.' } }));
+        out.push(Object.assign({}, row, { stamp: { state: 'pending', kind: onlySiblings ? 'sibling' : 'lookalike',
+          says: onlySiblings ? 'Photo not yet compared with the other cards of this name in the set.'
+                             : 'Photo not yet compared with the card it is most often confused with.' } }));
       }
       continue;
     }

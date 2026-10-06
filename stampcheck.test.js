@@ -252,11 +252,11 @@ const H = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
 const fn = name => { const i = H.indexOf('function ' + name + '('); return i < 0 ? '' : H.slice(i, H.indexOf('\n}', i) + 2); };
 ok('no "Check photo" button and no /api/stamp call from the page', !/Check photo for reprint stamp/.test(H) && !/\/api\/stamp\//.test(H));
 ok('a row shows the server\'s stamp state (l.stamp)', /var st = l && l\.stamp;/.test(fn('stampLine')));
-// T1 (2026-10-04): "pending" exists only for a same-name SIBLING check, the
-// one kind a row is shown while checked (stampcheck.gate emits it nowhere else).
-ok('chips: not visible / unreadable — no "found" (refused); "pending" only as the sibling comparison',
+// T1 (2026-10-04): "pending" exists only for a COMPARISON check (siblings;
+// since T0 2026-10-06 a held lookalike pair too) — never for a stamp check.
+ok('chips: not visible / unreadable — no "found" (refused); "pending" only as a comparison check',
    /STAMP_CHIP = \{[^}]*'pending':\s+'Photo being compared'/.test(H)
-   && /state: 'pending', kind: 'sibling'/.test(fs.readFileSync(__dirname + '/stampcheck.js', 'utf8'))
+   && /state: 'pending', kind: onlySiblings \? 'sibling' : 'lookalike'/.test(fs.readFileSync(__dirname + '/stampcheck.js', 'utf8'))
    && (fs.readFileSync(__dirname + '/stampcheck.js', 'utf8').match(/state: 'pending'/g) || []).length === 1 &&/'not-visible':\s*'No stamp visible — not proof'/.test(H) && /'unreadable':/.test(H) && !/STAMP_CHIP = \{[^}]*'found'/.test(H));
 ok('nothing on the page calls a stamp result "verified" or "original"', !/STAMP_CHIP[\s\S]{0,400}(verified|genuine original)/i.test(H));
 ok('the panel says how many the stamp check refused', /liveStampNote\(d\)/.test(fn('excludedNote')) && /refused &mdash; the seller&rsquo;s photo shows the/.test(fn('liveStampNote')));

@@ -52,8 +52,7 @@ v = sc.judge(photoOf(img(TH)), onTH);
 ok('a 30th Mew photo under the 30th card is KEPT', v.state !== 'found', 'margin ' + (v.scores[0] || {}).margin);
 v = sc.judge(photoOf(img(PF)), onTH);
 ok('a bubble Mew photo under the 30th card is FOUND', v.state === 'found', 'margin ' + (v.scores[0] || {}).margin);
-ok('the margin is the measured 0.30', sc.LOOKALIKE_MARGIN === 0.30);
-
+ok('the shared margin is the measured 0.30', sc.LOOKALIKE_MARGIN === 0.30);
 console.log('\n  the cross-set pairs (2026-10-05): ex-era cards listed with Evolutions photos');
 for (const [ours, other, name] of [['en-ex13-103', 'en-xy12-51', 'Mewtwo ☆ / Evolutions Mewtwo'],
                                    ['en-ex3-90', 'en-xy12-72', 'Dragonite ex / Evolutions Dragonite-EX']]) {
@@ -83,8 +82,19 @@ console.log('\n  the gate');
 sc._clearCache();
 const url = 'https://i.ebayimg.com/images/g/abc/s-l225.jpg';
 const row = { source: 'ebay', itemId: item, imageUrl: url, title: 'Mew ex 232/091 Paldean Fates', price: 180 };
+// T0 (2026-10-06): hiding every unchecked row emptied whole panels while the
+// photo queue ran (Evolutions Mewtwo 0 of 190 shown). The sibling rule now.
 let g = sc.gate([row], onPF);
-ok('unchecked: HIDDEN and counted, never shown', g.listings.length === 0 && g.report.pending === 1 && g.report.kind === 'lookalike');
+ok('unchecked, no stored price: SHOWN while checked, labelled, still queued',
+   g.listings.length === 1 && g.listings[0].stamp.state === 'pending' && g.listings[0].stamp.kind === 'lookalike'
+   && g.report.pending === 1 && g.pending.length === 1 && g.report.kind === 'lookalike');
+g = sc.gate([row], onPF, { hideBelow: 872.64 * sc.SIBLING_HIDE_FRACTION });
+ok('unchecked and priced below ~55% of the current price ($180 under $872.64): HIDDEN until checked',
+   g.listings.length === 0 && g.report.pending === 1 && g.report.pendingShown === 0);
+g = sc.gate([Object.assign({}, row, { price: 850, landed: 850 })], onPF, { hideBelow: 872.64 * sc.SIBLING_HIDE_FRACTION });
+ok('unchecked at the card\'s price ($850): SHOWN while checked', g.listings.length === 1 && g.report.pendingShown === 1);
+sc._clearCache();
+g = sc.gate([row], onPF);
 sc.cacheSet(sc.verdictKey(item, onPF), { state: 'found', kind: 'lookalike', reprint: TH, label: '30th Celebration Mew ex 152/128', scores: [] }, sc.photoUrl(url));
 g = sc.gate([row], onPF);
 ok('found under Paldean Fates: refused, reason names the other card',

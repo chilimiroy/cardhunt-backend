@@ -30,6 +30,16 @@ ok(keep('Lugia ex 105/115 Unseen Forces Holo', lugia), 'KEPT: Unseen Forces (ex1
 ok(!keep('Unown (A) A/28 Unseen Forces Holo', lugia), 'refused: an Unown Collection title under an Unseen Forces card');
 ok(keep('Unown (?) ?/28 Unseen Forces Holo Pokemon', uq), 'KEPT: the "?" Unown under its own title');
 ok(!keep('Unown (A) A/28 Unseen Forces', uq), 'refused: "?" is not a wildcard — before the escape it kept ANY title');
+// T3 (2026-10-06): a punctuation number stands alone. Live, Unown "!" kept
+// Unown Q and P because their sellers wrote "CLEAN!" and "SWIRL!!!".
+const ux = { name: 'Unown', number: '!', setTotal: 28, setName: 'Unseen Forces Unown Collection', setId: 'exu' };
+for (const t of ['UNOWN Q Q/28 EX Unseen Forces HOLO rare Pokemon TCG card NM+ CLEAN!', 'SWIRL!!! 2005 Pokemon EX Unseen Forces Holo Unown #P/28 NM',
+                 'Unown A Unseen Forces Holo Wow!', 'Is this Unown ? Unseen Forces real?'.replace(' ? ', ' A ')])
+  ok(!keep(t, ux), 'refused under Unown "!": ' + t);
+for (const t of ['Unown (!) !/28 Unseen Forces Holo', 'Unown ! Unseen Forces Holo Rare', 'Pokemon Unown #! Unseen Forces'])
+  ok(keep(t, ux), 'KEPT under Unown "!": ' + t);
+ok(!keep('Unown Q Unseen Forces Holo - real?', uq), 'refused under Unown "?": a question mark ending a sentence');
+ok(keep('Pokemon TCG Unown (?) Unseen Forces Holo ?/28', uq), 'KEPT (live) under Unown "?"');
 
 console.log('\n  where eBay has nothing (measured)');
 ok(!!m.noEbayMarket({ setId: 'mfb' }) && /2026-10-05/.test(m.noEbayMarket({ setId: 'mfb' }).measured), 'My First Battle: measured, dated');

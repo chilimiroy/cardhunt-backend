@@ -2370,7 +2370,14 @@ function verifyCore(title, card, grade, opts) {
   // 516 kept production titles carry a currency sign before a number).
   // Escaped (T2, 2026-10-05): the Unown Collection's "?" made "0*?" — any
   // title passed as stating it, "Unown (A) A/28" included.
-  const bareNum = new RegExp('(?:^|[^0-9/$€£¥])0*' + String(wantNum).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![0-9/])').test(t);
+  // A number that is only punctuation (Unown "!" and "?", T3 2026-10-06)
+  // must stand alone: "NM+ CLEAN!" and "SWIRL!!!" stated "!" and Unown Q and
+  // P passed as Unown "!". After a space, "(" or "#"; before a space, ")",
+  // "/" or the end — "Unown (!) !/28" and "Unown ! Unseen Forces" still read.
+  const wantEsc = String(wantNum).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const bareNum = (/[a-z0-9]/i.test(String(wantNum))
+    ? new RegExp('(?:^|[^0-9/$€£¥])0*' + wantEsc + '(?![0-9/])')
+    : new RegExp('(?:^|[\\s(#])' + wantEsc + '(?=$|[\\s)/])')).test(t);
   const setName = foldAccents(card.setName).toLowerCase()
                     .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
   const titleFlat = foldAccents(lower).replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ');

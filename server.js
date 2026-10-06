@@ -46,7 +46,13 @@ const timing = require('./timing');
 // The page starts a Google or emailed-link sign-in at Supabase with the
 // public anon key; /api/me is where the SERVER decides the token is real.
 // The signed-in state on the page comes from this answer, never from a
-// button having been pressed. No role, approval or alert move yet.
+// button having been pressed.
+// Step 2: /api/me also says the ROLE (roles.js) — master from
+// CARDZON_MASTER_EMAILS against the verified email, else the stored state.
+// A sign-in seen here is recorded (pending until a master decides). When
+// the state cannot be read the answer is 503 with role null: the page
+// fails closed on it.
+const roles = require('./roles');
 app.get('/api/auth/config', (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json(auth.publicConfig());
@@ -57,7 +63,14 @@ app.get('/api/me', async (req, res) => {
   if (!token) return res.status(401).json({ signedIn: false, reason: 'no token' });
   const v = await auth.verify(token);
   if (!v.ok) return res.status(401).json({ signedIn: false, reason: v.reason });
-  res.json({ signedIn: true, user: v.user });
+  try {
+    if (roles.store()) await roles.store().touch(v.user.id);
+    const r = await roles.roleFor(v.user);
+    res.json({ signedIn: true, user: v.user, role: r.role, state: r.state });
+  } catch (e) {
+    res.status(503).json({ signedIn: true, user: v.user, role: null, state: null,
+                           reason: 'could not read the approval state: ' + e.message });
+  }
 });
 
 const stampcheck = require('./stampcheck');
@@ -109,6 +122,9 @@ const db = process.env.DATABASE_URL ? new Pool({
   ssl: { rejectUnauthorized: false }
 }) : null;
 timing.instrumentPool(db);
+// Approval state lives here (user_access, roles.js). With no database there
+// is no store, and every non-master is refused — closed, never assumed.
+if (db) roles.setStore(roles.pgStore(db));
 
 // ── Photo verdicts, kept (TASK T2, 2026-10-03) ────────────────
 // The stamp gate's verdicts outlive a restart: a photo never changes under

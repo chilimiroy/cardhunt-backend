@@ -64,7 +64,7 @@ app.get('/api/me', async (req, res) => {
   const v = await auth.verify(token);
   if (!v.ok) return res.status(401).json({ signedIn: false, reason: v.reason });
   try {
-    if (roles.store()) await roles.store().touch(v.user.id);
+    if (roles.store()) await roles.store().touch(v.user.id, v.user.email);   // email from the verified token, nothing else
     const r = await roles.roleFor(v.user);
     res.json({ signedIn: true, user: v.user, role: r.role, state: r.state });
   } catch (e) {

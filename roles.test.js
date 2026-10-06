@@ -63,13 +63,26 @@ function memoryStore(seed) {
 
   console.log('\n  the table and the server');
   ok('user_access cannot hold "master"', /CHECK \(state IN \('pending','approved','rejected'\)\)/.test(roles.USER_ACCESS_SQL) && !/master/.test(roles.USER_ACCESS_SQL));
-  ok('keyed on the auth user id; no email column', /user_id uuid PRIMARY KEY/.test(roles.USER_ACCESS_SQL) && !/email/.test(roles.USER_ACCESS_SQL));
+  ok('keyed on the auth user id; the one token field kept besides it is the email', /user_id uuid PRIMARY KEY/.test(roles.USER_ACCESS_SQL)
+     && /email text\)$/.test(roles.USER_ACCESS_SQL) && /ADD COLUMN IF NOT EXISTS email text$/.test(roles.USER_ACCESS_EMAIL_SQL));
   const mig = fs.readFileSync(__dirname + '/migration-user-access.sql', 'utf8').replace(/\r/g, '');
   const norm = s => s.replace(/--.*$/gm, '').replace(/\s+/g, ' ').replace(/;\s*$/, '').trim();
-  ok('migration-user-access.sql records the same statement roles.js runs', norm(mig) === norm(roles.USER_ACCESS_SQL));
-  ok('a sign-in touch never changes a stored state', /ON CONFLICT \(user_id\) DO UPDATE SET last_seen_at = now\(\)`/.test(fs.readFileSync(__dirname + '/roles.js', 'utf8')));
+  ok('migration-user-access.sql records the same statements roles.js runs', norm(mig) === norm(roles.USER_ACCESS_SQL + '; ' + roles.USER_ACCESS_EMAIL_SQL), norm(mig).slice(-80));
+  const R = fs.readFileSync(__dirname + '/roles.js', 'utf8').replace(/\r/g, '');
+  const touch = R.slice(R.indexOf('async touch('), R.indexOf('async decide('));
+  ok('a sign-in touch never changes a stored state; it writes last_seen_at and the email only',
+     /ON CONFLICT \(user_id\) DO UPDATE SET last_seen_at = now\(\),\s*email = COALESCE\(EXCLUDED\.email, user_access\.email\)`/.test(touch)
+     && !/state/.test(touch.split('ON CONFLICT')[1] || 'state'));
+  ok('touch stores the user id and the email only — no other token field reaches the table',
+     /INSERT INTO user_access \(user_id, email\) VALUES \(\$1, \$2\)/.test(touch) && /\[userId, emailOf\(email\)\]/.test(touch));
+  ok('nothing in roles.js reads the auth schema (no cross-schema read)', !/\bauth\.\w+/.test(R.replace(/\/\/.*$/gm, '')));
+  ok("the masters' list reads user_access only", /FROM user_access a\s+LEFT JOIN user_access d ON d\.user_id = a\.decided_by/.test(R));
+  ok('emailOf: trimmed, lower-cased; not an email -> null, never a guess',
+     roles.emailOf(' Roy@CardZon.com ') === 'roy@cardzon.com' && roles.emailOf('') === null && roles.emailOf(null) === null
+     && roles.emailOf('x y@z') === null && roles.emailOf('no-at-sign') === null && roles.emailOf('a@b') === 'a@b');
   const S = fs.readFileSync(__dirname + '/server.js', 'utf8').replace(/\r/g, '');
   const meAt = S.indexOf("app.get('/api/me'"), me = S.slice(meAt, S.indexOf('\n});', meAt) + 4);
+  ok("/api/me records the VERIFIED token's id and email at sign-in, nothing the page sends", /touch\(v\.user\.id, v\.user\.email\)/.test(me) && !/req\.(body|query)/.test(me));
   ok('/api/me reports the role from roles.roleFor, after auth.verify', /auth\.verify\(token\)[\s\S]*roles\.roleFor\(v\.user\)[\s\S]*role: r\.role/.test(me));
   ok('/api/me fails closed (503, role null) when the state cannot be read', /status\(503\)[\s\S]{0,80}role: null/.test(me));
   ok('the env name is CARDZON_MASTER_EMAILS — not "fixed" to CARDHUNT_', /CARDZON_MASTER_EMAILS/.test(fs.readFileSync(__dirname + '/roles.js', 'utf8'))
@@ -83,11 +96,28 @@ function memoryStore(seed) {
       const c = await db.query(`SELECT column_name, data_type FROM information_schema.columns
         WHERE table_schema='public' AND table_name='user_access' ORDER BY ordinal_position`);
       const cols = c.rows.map(x => x.column_name + ':' + x.data_type).join(',');
-      ok('user_access exists with the expected columns', cols === 'user_id:uuid,state:text,first_signed_in_at:timestamp with time zone,last_seen_at:timestamp with time zone,decided_by:uuid,decided_at:timestamp with time zone', cols);
+      ok('user_access exists with the expected columns', cols === 'user_id:uuid,state:text,first_signed_in_at:timestamp with time zone,last_seen_at:timestamp with time zone,decided_by:uuid,decided_at:timestamp with time zone,email:text', cols);
       let refused = null;
       try { await db.query("BEGIN"); await db.query("INSERT INTO user_access (user_id, state) VALUES (gen_random_uuid(), 'master')"); }
       catch (e) { refused = e.code + ' ' + e.message; } finally { await db.query('ROLLBACK'); }
       ok('Postgres itself refuses a stored "master"', refused && /^23514/.test(refused), refused);
+      // The real store against the real table: throwaway ids, removed after.
+      const st = roles.pgStore(db), id = require('crypto').randomUUID(), by = require('crypto').randomUUID();
+      try {
+        await st.touch(by, 'Decider.Test@Example.com');
+        await st.touch(id, null);
+        let row = (await st.list()).find(r => r.user_id === id);
+        ok('signed in before capture: listed, email null (the page says "awaiting first sign-in")', row && row.email === null && row.state === 'pending', JSON.stringify(row && { email: row.email, state: row.state }));
+        await st.touch(id, ' Roles.Test@Example.COM ');
+        row = (await st.list()).find(r => r.user_id === id);
+        ok('the next sign-in fills it from the token, normalised', row && row.email === 'roles.test@example.com', row && row.email);
+        await st.touch(id, null);
+        row = (await st.list()).find(r => r.user_id === id);
+        ok('a later token without an email does not blank it', row && row.email === 'roles.test@example.com', row && row.email);
+        await st.decide(id, 'approved', by);
+        row = (await st.list()).find(r => r.user_id === id);
+        ok("the deciding master's email comes from user_access too", row && row.decided_by_email === 'decider.test@example.com' && row.state === 'approved', row && row.decided_by_email);
+      } finally { await db.query('DELETE FROM user_access WHERE user_id = ANY($1)', [[id, by]]); }
     } finally { await db.end(); }
   }
 

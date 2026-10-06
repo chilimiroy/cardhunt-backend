@@ -18,8 +18,13 @@
 // decision) is not an error and is not stripped: it simply matches nobody
 // until someone signs in with it.
 //
-// Emails never enter user_access (decided 2026-10-06: they live in Supabase
-// Auth's own `auth` schema). The masters' list reads them from auth.users.
+// The email IS kept in user_access (security follow-up T2, 2026-10-06,
+// reversing the first decision): it is written from the verified token at
+// each sign-in (/api/me -> touch) and nothing else from the token is
+// stored — email and user id only. The masters' list reads our own table;
+// nothing here reads the `auth` schema. A row whose email has not been
+// captured yet (signed in before this) shows "awaiting first sign-in" until
+// that user's next sign-in fills it.
 // ══════════════════════════════════════════════════════════════
 'use strict';
 
@@ -42,7 +47,16 @@ const USER_ACCESS_SQL = `CREATE TABLE IF NOT EXISTS user_access (
   first_signed_in_at timestamptz NOT NULL DEFAULT now(),
   last_seen_at timestamptz NOT NULL DEFAULT now(),
   decided_by uuid,
-  decided_at timestamptz)`;
+  decided_at timestamptz,
+  email text)`;
+// The column for tables made before it existed. Additive; no data moved.
+const USER_ACCESS_EMAIL_SQL = 'ALTER TABLE user_access ADD COLUMN IF NOT EXISTS email text';
+// The email as stored: trimmed, lower-case (how isMasterEmail compares).
+// Not an email-looking string -> null, never a guess.
+function emailOf(v) {
+  const e = String(v || '').trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+$/.test(e) && e.length <= 320 ? e : null;
+}
 
 // The store the server uses. Without one (no DATABASE_URL) a non-master's
 // state cannot be read, and resolve() fails CLOSED — it never assumes.
@@ -52,7 +66,7 @@ function store() { return _store; }
 
 function pgStore(db) {
   let ready = null;
-  const table = () => ready || (ready = db.query(USER_ACCESS_SQL).catch(e => { ready = null; throw e; }));
+  const table = () => ready || (ready = db.query(USER_ACCESS_SQL).then(() => db.query(USER_ACCESS_EMAIL_SQL)).catch(e => { ready = null; throw e; }));
   return {
     async get(userId) {
       await table();
@@ -61,11 +75,13 @@ function pgStore(db) {
     },
     // A sign-in seen (/api/me). Creates the row as pending; an existing
     // row keeps its state — a rejected user signing in again stays
-    // rejected and does not reappear in the pending list.
-    async touch(userId) {
+    // rejected and does not reappear in the pending list. The email is the
+    // verified token's; a token without one leaves the stored one alone.
+    async touch(userId, email) {
       await table();
-      await db.query(`INSERT INTO user_access (user_id) VALUES ($1)
-        ON CONFLICT (user_id) DO UPDATE SET last_seen_at = now()`, [userId]);
+      await db.query(`INSERT INTO user_access (user_id, email) VALUES ($1, $2)
+        ON CONFLICT (user_id) DO UPDATE SET last_seen_at = now(),
+          email = COALESCE(EXCLUDED.email, user_access.email)`, [userId, emailOf(email)]);
     },
     async decide(userId, state, byUserId) {
       await table();
@@ -73,14 +89,14 @@ function pgStore(db) {
         WHERE user_id = $1 RETURNING user_id, state, decided_by, decided_at`, [userId, state, byUserId]);
       return r.rows[0] || null;
     },
-    // For the masters' view. The email is auth.users' — not copied here.
+    // For the masters' view — our own table only. email null = captured
+    // at that user's next sign-in.
     async list() {
       await table();
-      const r = await db.query(`SELECT a.user_id, u.email, a.state, a.first_signed_in_at, a.last_seen_at,
+      const r = await db.query(`SELECT a.user_id, a.email, a.state, a.first_signed_in_at, a.last_seen_at,
                a.decided_at, a.decided_by, d.email AS decided_by_email
         FROM user_access a
-        LEFT JOIN auth.users u ON u.id = a.user_id
-        LEFT JOIN auth.users d ON d.id = a.decided_by
+        LEFT JOIN user_access d ON d.user_id = a.decided_by
         ORDER BY a.first_signed_in_at DESC`);
       return r.rows;
     }
@@ -98,5 +114,5 @@ async function roleFor(user) {
   return { role: state, state };
 }
 
-module.exports = { masterEmails, isMasterEmail, roleFor, setStore, store, pgStore,
-                   USER_ACCESS_SQL, STORED_STATES };
+module.exports = { masterEmails, isMasterEmail, roleFor, setStore, store, pgStore, emailOf,
+                   USER_ACCESS_SQL, USER_ACCESS_EMAIL_SQL, STORED_STATES };

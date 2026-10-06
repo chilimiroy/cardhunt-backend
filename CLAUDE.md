@@ -467,7 +467,7 @@ names/sets/rarities). Not yet: ~90 sentences the page builds, server explanation
 ## Accounts — step 1 (sign-in) and step 2 (roles) SHIPPED 2026-10-06 (T6)
 `auth.js` verifies the token: **ES256 via the project's JWKS** (legacy
 `SUPABASE_JWT_SECRET` only for HS256). `/api/me` is the ONLY source of the
-signed-in state AND the role. Emails live in Supabase's `auth` schema, never ours.
+signed-in state AND the role. `user_access.email` is captured from the verified token at sign-in (id + email only); nothing reads the `auth` schema.
 - **master** = token email in `CARDZON_MASTER_EMAILS` (Render env, read per request,
   never stored; `roy@cardzon.com` has no mailbox yet — intentional). approved /
   pending / rejected in `user_access`, keyed on the auth user id (`roles.js`).

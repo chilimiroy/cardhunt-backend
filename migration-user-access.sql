@@ -12,4 +12,9 @@ CREATE TABLE IF NOT EXISTS user_access (
   first_signed_in_at timestamptz NOT NULL DEFAULT now(),
   last_seen_at timestamptz NOT NULL DEFAULT now(),
   decided_by uuid,
-  decided_at timestamptz);
+  decided_at timestamptz,
+  email text);
+-- Security follow-up T2 (2026-10-06): the email from the verified token,
+-- written at each sign-in (roles.js touch). Email and user id only; the
+-- masters' list reads this, never the auth schema.
+ALTER TABLE user_access ADD COLUMN IF NOT EXISTS email text;

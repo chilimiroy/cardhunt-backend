@@ -2455,8 +2455,25 @@ function filterListings(listings, card, grade) {
   return { kept, dropped };
 }
 
+// ── What an ENGLISH card's eBay request leaves out (2026-10-07) ──
+// Query vocabulary, not a gate: the gate still refuses every foreign copy
+// that gets through (languageOf, JA_SET_CODE), unchanged. Mew ex is 151/165
+// in the English, Japanese (SV2a) and Korean 151 sets, so asking for it
+// asked for all three. Words sellers use to name the card's language; and a
+// Japanese set code whose numbering an English set shares exactly (eBay has
+// no wildcard: an exclusion must name the code). English cards only — a
+// Japanese card's request is never touched.
+const OTHER_LANGUAGE_WORDS = ['japanese', 'japan', 'jp', 'korean', 'korea'];
+const SHARED_NUMBERING_JA_CODES = { 'sv03.5': ['sv2a'] };
+function otherLanguageExclusions(card) {
+  if (cardLanguage(card) !== 'en') return [];
+  const setId = String((card && (card.setId || card.set_api_id)) || '');
+  return OTHER_LANGUAGE_WORDS.concat(SHARED_NUMBERING_JA_CODES[setId] || []);
+}
+
 const API = {
   buildQuery, verify, filterListings, goldBeforeGold, NO_EBAY_MARKET, noEbayMarket,
+  OTHER_LANGUAGE_WORDS, SHARED_NUMBERING_JA_CODES, otherLanguageExclusions,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
   qualifiersIn, sellerCondition, stripHitPoints,
   EBAY_CARD_CONDITION, EBAY_CONDITION_CODES, ebayConditionFilter, EBAY_SITE_ASPECTS, siteAspects,

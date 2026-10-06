@@ -2532,6 +2532,31 @@ const EBAY_SITES_PENDING = {
 };
 const ebaySite = id => EBAY_SITES.find(s => s.id === id) || { id, country: null, currency: null };
 
+// ── Other-language printings, left out of an ENGLISH card's request (2026-10-07) ──
+// Mew ex is 151/165 in the English, Japanese (SV2a) and Korean 151 sets, so
+// its query matched all three: 208 of 225 scanned rows were foreign copies,
+// every refusal correct, and under sort=price (cheapest first) the English
+// listings — 1,746 of 2,452 by eBay's own Language aspect — lay past the cap.
+// The gate is unchanged; this only stops asking for what it would refuse.
+// A row excluded here never reaches the gate and is never counted as refused,
+// so every source block states the exclusion (queryExclusion). English cards
+// only (cm.otherLanguageExclusions); the Japanese path is untouched.
+// Modes, measured before one is chosen: 'none' | 'words' (eBay "-term" in q,
+// as -"near mint" already is) | 'aspect' (Language:{English}, on English-
+// language sites only — other sites name the aspect in their own language).
+const LANG_EXCLUDE_DEFAULT = 'none';
+const LANG_ASPECT_SITES = ['EBAY_US', 'EBAY_GB', 'EBAY_AU', 'EBAY_CA'];
+function languageExclusionFor(matchCard, marketplace, mode) {
+  mode = mode || LANG_EXCLUDE_DEFAULT;
+  const none = { mode: 'none', applied: false, q: '', aspect: null, terms: [] };
+  if (mode === 'none') return none;
+  const terms = cm.otherLanguageExclusions(matchCard);
+  if (!terms.length) return Object.assign({}, none, { mode, why: 'not an English card' });
+  if (mode === 'aspect') return LANG_ASPECT_SITES.includes(marketplace)
+    ? { mode, applied: true, q: '', aspect: 'Language:{English}', terms: [] }
+    : Object.assign({}, none, { mode, why: 'no English "Language" aspect on ' + marketplace });
+  return { mode: 'words', applied: true, q: ' ' + terms.map(t => '-' + t).join(' '), aspect: null, terms };
+}
 async function sourceEbay(card, grade, limit, opts = {}) {
   const background = !!opts.background;
 
@@ -2609,7 +2634,12 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // keeps the cap for the titles that do. eBay syntax, so the eBay REQUEST
   // only — other marketplaces read a leading "-" as literal text.
   const tOnly = cm.titleOnlyCondition(grade);
-  const qAsk = (tOnly && tOnly.code === 'M') ? q + ' -"near mint"' : q;
+  const qMint = (tOnly && tOnly.code === 'M') ? q + ' -"near mint"' : q;
+  // Other-language printings left out of an English card's request
+  // (languageExclusionFor, 2026-10-07) — reported on the source block.
+  const langEx = languageExclusionFor(matchCard, opts.marketplace || 'EBAY_US', opts.langExclude);
+  const qAsk = qMint + langEx.q;
+  const aspectAsk = langEx.aspect ? (aspectFilter ? aspectFilter + ',' + langEx.aspect : 'categoryId:183454,' + langEx.aspect) : aspectFilter;
   // Paged past the first 75 only when eBay says there is more. Measured on
   // five busy cards (/api/ebay/gradecost): the cap lost 79-82 wanted rows on
   // one of them — ~20x what unset grade fields lose — and under sort=price it
@@ -2629,7 +2659,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     // site showed Giratina V 186 PSA 10 auctions we never listed. Same call.
     + '&filter=' + encodeURIComponent('buyingOptions:{FIXED_PRICE|AUCTION}')
     + (offset ? '&offset=' + offset : '')
-    + (aspectFilter ? '&aspect_filter=' + encodeURIComponent(aspectFilter) : '');
+    + (aspectAsk ? '&aspect_filter=' + encodeURIComponent(aspectAsk) : '');
   const url = pageUrl(startOffset);
   // Which eBay site is asked. EBAY_US unless a caller names another — only
   // /api/ebay/marketprobe does (T1, 2026-09-30: measuring what the other
@@ -2922,7 +2952,11 @@ async function sourceEbay(card, grade, limit, opts = {}) {
            printing: printingReport(printing, matchCard, listings, dropped),
            // Refused for STATING another edition (T3), counted before any slice.
            editionRefused: dropped.filter(d => d.editionConflict).length,
-           query: qAsk };
+           query: qAsk,
+           // A row excluded in the request never reaches the gate, so it can
+           // never be counted as refused: the exclusion is stated instead.
+           queryExclusion: { mode: langEx.mode, applied: langEx.applied, terms: langEx.terms,
+                             aspect: langEx.aspect, why: langEx.why || null } };
 }
 
 // What the printing gate did on one source, stated either way (TASK T10).
@@ -3255,6 +3289,7 @@ async function gatherListings(card, grade, limit, opts) {
           sources[s.id].refusedRows = r.value.dropped.slice(0, REFUSED_MAX);   // T4: the page's refused list
         }
         if (r.value.query) sources[s.id].query = r.value.query;
+        if (r.value.queryExclusion) sources[s.id].queryExclusion = r.value.queryExclusion;
         // Two readers of one title that should agree. Surfaced, not swallowed.
         if (r.value.parserDisagreements && r.value.parserDisagreements.length) {
           sources[s.id].parserDisagreements = r.value.parserDisagreements;
@@ -5681,7 +5716,10 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
   // ?shape=bare|or (T0, 2026-10-04): how the collector number is ASKED —
   // measuring whether "N/M" in the query hides PSA-label titles ("#28").
   const shape = ['pair', 'bare', 'or'].includes(String(req.query.shape)) ? String(req.query.shape) : null;
-  const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1', shape, req.query.titles === '1']);
+  // ?lang=none|words|aspect (2026-10-07): which other-language exclusion the
+  // request carries — measured here before production's default changes.
+  const langExclude = ['none', 'words', 'aspect'].includes(String(req.query.lang)) ? String(req.query.lang) : undefined;
+  const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1', shape, req.query.titles === '1', langExclude || null]);
   const hit = marketProbeCache.get(key);
   if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') return res.json(hit.body);
   try {
@@ -5693,7 +5731,7 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
       try {
         const r = await sourceEbay(card, grade, 25, { marketplace: mp.replace(/_NO(CAT|SET)$/, ''),
           noCategory: /_NOCAT$/.test(mp), noSetInQuery: /_NOSET$/.test(mp), numberForm: shape,
-          background: true, allDropped: true });
+          background: true, allDropped: true, langExclude });
         const reasons = {};
         for (const d of r.dropped) {
           const k = /title says (\w+)/.test(d.reason) ? 'language:' + d.reason.match(/title says (\w+)/)[1]
@@ -5712,7 +5750,7 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
         per[mp] = { scanned: r.scanned, kept: r.kept, rejected: r.rejected, pages: r.pages, scannedIds: r.scannedIds || [],
                     extraPhotos: { rows: photoCounts.length, withAny: photoCounts.filter(n => n > 0).length,
                                    total: photoCounts.reduce((a, b) => a + b, 0) },
-                    rejectReasons: reasons, keptRows: kept,
+                    rejectReasons: reasons, keptRows: kept, query: r.query, queryExclusion: r.queryExclusion,
                     droppedRows: r.dropped.map(d => ({ itemId: d.itemId, title: String(d.title || '').slice(0, 140), reason: d.reason })) };
       } catch (e) {
         per[mp] = { error: e.message, status: e.ebayStatus || null };
@@ -5793,7 +5831,9 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
     const titles = req.query.titles === '1' ? Object.fromEntries(sites.map(mp => [mp, {
       kept: ((per[mp] && per[mp].keptRows) || []).map(k => ({ usd: k.usd, title: k.title })),
       refused: ((per[mp] && per[mp].droppedRows) || []).map(d => ({ title: d.title, reason: d.reason })) }])) : undefined;
-    const body = { cardId, grade, sites, summary, crossRefused, titles, union: allIds.size, usKept: usIds.size,
+    const body = { cardId, grade, sites, summary, crossRefused, titles,
+                   query: Object.fromEntries(sites.map(mp => [mp, per[mp] && per[mp].query])),
+                   queryExclusion: Object.fromEntries(sites.map(mp => [mp, per[mp] && per[mp].queryExclusion])), union: allIds.size, usKept: usIds.size,
                    usCapped, usMaxExaminedUsd: usMax, outliers: judged.stats,
                    quotaSpentSearch: calls, stored: false, at: new Date().toISOString() };
     marketProbeCache.set(key, { at: Date.now(), body });

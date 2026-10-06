@@ -136,6 +136,16 @@ for (const t of ['ANCIENT MEW DETAILS INSERT CARD - Pokemon Card - Promo - NM', 
 ok(cm.verify('ANCIENT MEW 2000 POKEMON GAME PROMO 2000 MOVIE PSA 9 Q0895', am, 'PSA 9').ok, 'KEPT (live): a PSA 9 slab of the card');
 ok(cm.verify('2000 Pokemon Movie Promos Ancient Mew PSA 8 163700359', am, 'PSA 8').ok, 'KEPT (live): a PSA 8 slab of the card');
 ok(!cm.verify('PSA 8 2000 POKEMON GAME PROMO ANCIENT Mewtwo', am, 'PSA 8').ok, 'refused (live): Ancient Mewtwo is not Ancient Mew');
+// T4 (Roy, 2026-10-06): a slab is one card whatever is sealed inside it.
+for (const t of ['Ancient Mew 2000 Pokemon Movie Promo Sealed Cello Pack – PSA 8', 'Ancient Mew Sealed PSA 8 Movie Promo 2000',
+                 'PSA 8 Ancient Mew Factory Sealed Cellophane Pack Promo'])
+  ok(cm.verify(t, am, 'PSA 8').ok, 'KEPT: the card slabbed in its cello — ' + t + ' — ' + cm.verify(t, am, 'PSA 8').reason);
+for (const [t, g] of [['Ancient Mew 2000 Movie Promo Sealed Cello Pack', 'Raw'],        // not a slab: sealed stays sealed
+                      ['Ancient Mew Sealed Cello Pack Movie Promo PSA', 'PSA 8'],         // no grade stated
+                      ['Ancient Mew Booster Pack Sealed PSA 8', 'PSA 8'],                 // a booster is still a booster
+                      ['Lot of 3 Ancient Mew Sealed PSA 8', 'PSA 8'],                     // a lot is still a lot
+                      ['Ancient Mew Sealed Packs x2 PSA 8', 'PSA 8']])                    // plural packs still refuse
+  ok(!cm.verify(t, am, g).ok, 'refused (' + g + '): ' + t + ' — ' + (cm.verify(t, am, g).reason || 'kept'));
 ok(cm.promoOf(am) === null && cm.printsNoNumber(am) && cm.printsNoNumber(pk) === null, 'only the listed card is numberless');
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

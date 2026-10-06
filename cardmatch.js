@@ -769,6 +769,13 @@ const GENUINE_ART_PHRASES =
 // Blastoise Holo PSA 8 Card NM-MINT Base Set" was refused as "not a single
 // card: 8 Card". The grader and its grade are masked for the lot test only.
 const GRADE_PHRASES = new RegExp('(?:' + GRADERS.map(graderToken).join('|') + ')' + GRADE_NUM, 'gi');
+// A slab is one card, whatever is sealed inside it (Roy, T4 2026-10-06): the
+// Ancient Mew "Sealed Cello Pack – PSA 8" is the card graded in its 2000
+// cellophane. When a slab is asked for AND the title states a grader and
+// grade, a singular "sealed" / "(cello) pack" is not sealed product. Only
+// those words: "booster", "box", "packs", "lot" still refuse, so a graded
+// sealed booster pack (random cards) never passes as a single.
+const SEALED_IN_SLAB = /\b(?:factory\s+)?sealed\b|\b(?:cello(?:phane)?\s+)?pack\b/gi;
 
 // ── The card's OWN name and set name, protected the same way ──
 // (T2, 2026-10-04.) Every English card's own "name number/total set name"
@@ -2110,8 +2117,10 @@ function verifyCore(title, card, grade, opts) {
   //    stripped to spaces reads "186/196   Card" — which that pattern
   //    matches, rejecting a genuine alt art as a 196-card lot. A
   //    non-space, non-word character cannot be spanned by \s* or \b.
-  const tForLot = maskOwnIdentity(t, card)
-    .replace(SET_NAME_PHRASES, ' ~ ').replace(GENUINE_ART_PHRASES, ' ~ ').replace(GRADE_PHRASES, ' ~ ');
+  let tForLot = maskOwnIdentity(t, card)
+    .replace(SET_NAME_PHRASES, ' ~ ').replace(GENUINE_ART_PHRASES, ' ~ ');
+  if (want.kind === 'graded' && (t.match(GRADE_PHRASES) || []).length) tForLot = tForLot.replace(SEALED_IN_SLAB, ' ~ ');
+  tForLot = tForLot.replace(GRADE_PHRASES, ' ~ ');
   if (NOT_A_SINGLE_CARD.test(tForLot)) {
     return { ok: false, reason: 'not a single card: ' +
       (tForLot.match(NOT_A_SINGLE_CARD) || [])[0] };

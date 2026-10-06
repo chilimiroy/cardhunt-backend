@@ -2471,9 +2471,23 @@ function otherLanguageExclusions(card) {
   return OTHER_LANGUAGE_WORDS.concat(SHARED_NUMBERING_JA_CODES[setId] || []);
 }
 
+// Which refusals are LANGUAGE refusals (2026-10-07) — read by reports and by
+// the union trigger, never by the gate. Matches the gate's own wording above
+// exactly. A loose /title says (\w+)/ also caught the year ("title says 2025,
+// this set is from 2023"), printing, set-size and grade-clash reasons and
+// labelled them languages; anchored, it catches only these three.
+function refusalLanguage(reason) {
+  const r = String(reason || '');
+  const m = r.match(/^title says (\w+), this card is \w+ — a different language printing$/);
+  if (m) return m[1];
+  if (/^title names the Japanese set code \S+, this card is \w+ — a different language printing$/.test(r)) return 'ja-set-code';
+  if (r === 'wanted English, title is in CJK script') return 'cjk-script';
+  return null;
+}
+
 const API = {
   buildQuery, verify, filterListings, goldBeforeGold, NO_EBAY_MARKET, noEbayMarket,
-  OTHER_LANGUAGE_WORDS, SHARED_NUMBERING_JA_CODES, otherLanguageExclusions,
+  OTHER_LANGUAGE_WORDS, SHARED_NUMBERING_JA_CODES, otherLanguageExclusions, refusalLanguage,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
   qualifiersIn, sellerCondition, stripHitPoints,
   EBAY_CARD_CONDITION, EBAY_CONDITION_CODES, ebayConditionFilter, EBAY_SITE_ASPECTS, siteAspects,

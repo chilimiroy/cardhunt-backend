@@ -5787,8 +5787,11 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
           background: true, allDropped: true, langExclude });
         const reasons = {};
         for (const d of r.dropped) {
-          const k = /title says (\w+)/.test(d.reason) ? 'language:' + d.reason.match(/title says (\w+)/)[1]
-                  : String(d.reason || '').replace(/[:(].*$/, '').slice(0, 48);
+          // cm.refusalLanguage: only the gate's language reasons are "language:"
+          // (a loose /title says (\w+)/ labelled a year, a printing, a set size
+          // and a grade clash as languages — "language:2025").
+          const lang = cm.refusalLanguage(d.reason);
+          const k = lang ? 'language:' + lang : String(d.reason || '').replace(/[:(].*$/, '').slice(0, 48);
           reasons[k] = (reasons[k] || 0) + 1;
         }
         const kept = [];

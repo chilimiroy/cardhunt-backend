@@ -6670,6 +6670,10 @@ function adminRender(){
   h += '<div style="font-size:13px;font-weight:800;margin:14px 0 4px">Waiting (' + d.pending.length + ')</div>';
   h += d.pending.length ? d.pending.map(function (u) { return row(u, btn(u, 'approve', 'Approve') + btn(u, 'reject', 'Reject'), 'signed in ' + when(u.firstSignedInAt)); }).join('')
                         : '<div style="font-size:12px;color:var(--mu)">Nobody is waiting.</div>';
+  if (d.masters && d.masters.length) {
+    h += '<div style="font-size:13px;font-weight:800;margin:18px 0 4px">Masters (' + d.masters.length + ')</div>';
+    h += d.masters.map(function (u) { return row(u, '<span style="font-size:11px;font-weight:700;color:var(--mu)">master</span>', 'master by the site settings, not by approval &middot; last seen ' + when(u.lastSeenAt)); }).join('');
+  }
   if (d.rejected.length) {
     h += '<div style="font-size:13px;font-weight:800;margin:18px 0 4px">Not approved (' + d.rejected.length + ')</div>';
     h += d.rejected.map(function (u) { return row(u, btn(u, 'approve', 'Approve'), 'rejected ' + when(u.decidedAt) + (u.decidedBy ? ' by ' + liveEsc(u.decidedBy) : '')); }).join('');
@@ -7199,6 +7203,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-29ebecd-notchecked &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-f88b55b-masterrole &middot; click to hide</div>
 </body>
 </html>

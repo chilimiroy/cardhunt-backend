@@ -88,6 +88,12 @@ function pgStore(db, opts) {
       const r = await db.query('SELECT state FROM user_access WHERE user_id = $1', [userId]);
       return r.rows[0] ? r.rows[0].state : null;
     },
+    // The email captured at sign-in, for refusing a decision on a master.
+    async emailFor(userId) {
+      await table();
+      const r = await db.query('SELECT email FROM user_access WHERE user_id = $1', [userId]);
+      return r.rows[0] ? r.rows[0].email : null;
+    },
     // A sign-in seen (/api/me). Creates the row as pending; an existing
     // row keeps its state — a rejected user signing in again stays
     // rejected and does not reappear in the pending list. The email is the
@@ -118,6 +124,16 @@ function pgStore(db, opts) {
   };
 }
 
+// The role a stored row is SHOWN as. A listed email is master whatever the
+// row's state column says — the column never holds 'master' (CHECK), and a
+// master's row is created 'pending' by touch() like anyone's. Every place
+// that shows a row's state asks this, never r.state directly.
+function displayRole(row) {
+  if (row && isMasterEmail(row.email)) return 'master';
+  const s = row && row.state;
+  return STORED_STATES.includes(s) ? s : 'pending';
+}
+
 // roleFor(user) -> { role, state }   role: master | approved | pending | rejected
 // Throws when the state cannot be read; the caller fails closed.
 async function roleFor(user) {
@@ -129,5 +145,5 @@ async function roleFor(user) {
   return { role: state, state };
 }
 
-module.exports = { masterEmails, isMasterEmail, roleFor, setStore, store, pgStore, emailOf, USER_ACCESS_COLUMNS,
+module.exports = { masterEmails, isMasterEmail, roleFor, displayRole, setStore, store, pgStore, emailOf, USER_ACCESS_COLUMNS,
                    USER_ACCESS_SQL, USER_ACCESS_EMAIL_SQL, STORED_STATES };

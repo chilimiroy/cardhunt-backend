@@ -58,6 +58,11 @@ function memoryStore(seed) {
      (await roles.roleFor({ id: 'u3', email: 'ROY@example.com' })).role === 'master');
   await st.touch('u3');
   ok('a rejected user signing in again stays rejected', st._m.get('u3') === 'rejected');
+  ok('displayRole: a listed email is master whatever the stored state', ['pending', 'approved', 'rejected', null, 'junk'].every(s => roles.displayRole({ state: s, email: 'Roy@Example.com' }) === 'master'));
+  ok('displayRole: an unlisted email shows its stored state; unknown -> pending', roles.displayRole({ state: 'approved', email: 'x@example.com' }) === 'approved'
+     && roles.displayRole({ state: 'rejected', email: null }) === 'rejected' && roles.displayRole({ state: 'junk', email: null }) === 'pending');
+  ok("displayRole: a non-matching listed address (roy@cardzon.com) matches nobody else", roles.displayRole({ state: 'pending', email: 'roy@cardzon.co' }) === 'pending');
+  ok('master is never a stored state', !roles.STORED_STATES.includes('master'));
   threw = null; try { await roles.roleFor({ email: 'a@example.com' }); } catch (e) { threw = e.message; }
   ok('no user id: refused', !!threw);
 

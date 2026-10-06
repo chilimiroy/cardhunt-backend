@@ -154,7 +154,8 @@ if (process.argv.includes('--table')) {
 const PORT = process.env.TEST_PORT || 3997, BASE = 'http://127.0.0.1:' + PORT;
 const SECRET = 'access-test-secret', SUPA = 'https://access-test.supabase.co';
 const ID = { approved: '11111111-1111-4111-8111-111111111111', pending: '22222222-2222-4222-8222-222222222222',
-             rejected: '33333333-3333-4333-8333-333333333333', master: '44444444-4444-4444-8444-444444444444' };
+             rejected: '33333333-3333-4333-8333-333333333333', master: '44444444-4444-4444-8444-444444444444',
+             master2: '55555555-5555-4555-8555-555555555555' };
 const b64 = o => Buffer.from(JSON.stringify(o)).toString('base64url');
 function token(id, email, over) {
   const h = b64({ alg: 'HS256', typ: 'JWT' });
@@ -172,10 +173,13 @@ const TOK = {
 };
 const preload = path.join(os.tmpdir(), 'access-test-store-' + process.pid + '.js');
 fs.writeFileSync(preload, `const roles = require(${JSON.stringify(path.join(__dirname, 'roles.js'))});
-const m = new Map(${JSON.stringify([[ID.approved, 'approved'], [ID.rejected, 'rejected'], [ID.master, 'rejected']])});
-roles.setStore({ get: async id => m.get(id) || null, touch: async id => { if (!m.has(id)) m.set(id, 'pending'); },
+const m = new Map(${JSON.stringify([[ID.approved, 'approved'], [ID.rejected, 'rejected'], [ID.master, 'rejected'], [ID.master2, 'pending']])});
+// Emails as touch() captures them. master2 is a listed address whose row says pending.
+const em = new Map(${JSON.stringify([[ID.approved, 'approved@example.com'], [ID.master, 'master@example.com'], [ID.master2, 'roy@cardzon.com']])});
+roles.setStore({ get: async id => m.get(id) || null, emailFor: async id => em.get(id) || null,
+  touch: async (id, e) => { if (!m.has(id)) m.set(id, 'pending'); if (e) em.set(id, String(e).toLowerCase()); },
   decide: async (id, s, by) => { if (!m.has(id)) return null; m.set(id, s); return { user_id: id, state: s, decided_by: by }; },
-  list: async () => [...m].map(([user_id, state]) => ({ user_id, state, email: null })) });`);
+  list: async () => [...m].map(([user_id, state]) => ({ user_id, state, email: em.get(user_id) || null })) });`);
 
 const sample = p => p.replace(/:cardId|:id|:userId/g, m => m === ':cardId' ? 'en-base1-4' : m === ':userId' ? ID.pending : '1');
 async function ask(method, p, tok, body) {
@@ -255,6 +259,19 @@ async function ask(method, p, tok, body) {
     ok('an id that never signed in: 404, nothing created', r.status === 404, r.text);
     r = await ask('get', '/api/admin/users', TOK.master);
     ok("the masters' list answers for a master", r.status === 200 && Array.isArray(r.body.pending), r.text.slice(0, 120));
+    const all = b => [].concat(b.pending, b.approved, b.rejected, b.masters);
+    const where = (b, id) => ['pending', 'approved', 'rejected', 'masters'].filter(k => b[k].some(u => u.userId === id));
+    ok('a master whose stored row says pending is listed under masters only, never in the waiting queue',
+       JSON.stringify(where(r.body, ID.master2)) === '["masters"]', JSON.stringify(where(r.body, ID.master2)));
+    ok('a master whose stored row says rejected: masters only', JSON.stringify(where(r.body, ID.master)) === '["masters"]', JSON.stringify(where(r.body, ID.master)));
+    ok("every master's row says role master, not its stored state", r.body.masters.length >= 2 && r.body.masters.every(u => u.role === 'master'), JSON.stringify(r.body.masters.map(u => u.role)));
+    ok('a non-master keeps its stored state as its role', all(r.body).filter(u => u.userId === ID.approved).every(u => u.role === 'approved'));
+    r = await ask('post', '/api/admin/users/' + ID.master2 + '/reject', TOK.master);
+    ok('rejecting another master: 409, refused', r.status === 409 && /master/.test(r.body.error), r.status + ' ' + r.text);
+    r = await ask('post', '/api/admin/users/' + ID.master2 + '/approve', TOK.master);
+    ok('approving another master: 409 too (nothing to decide)', r.status === 409, r.status + ' ' + r.text);
+    r = await ask('get', '/api/admin/users', TOK.master);
+    ok('... and nothing was recorded: still listed under masters', JSON.stringify(where(r.body, ID.master2)) === '["masters"]');
     r = await ask('get', '/api/alerts/anon-abc12345', null);
     ok('the old /api/alerts/:userId read is gone (404), not silently public', r.status === 404, String(r.status));
   } finally { server.kill(); try { fs.unlinkSync(preload); } catch (e) {} }

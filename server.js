@@ -1635,10 +1635,12 @@ app.get('/api/admin/users', access.master, async (req, res) => {
     const rows = await roles.store().list();
     const out = { pending: [], approved: [], rejected: [], masters: [] };
     for (const r of rows) {
-      const u = { userId: r.user_id, email: r.email || null, firstSignedInAt: r.first_signed_in_at,
+      // The derived role wins: a listed email is master whatever the row's
+      // state column says — never in a queue, never shown as pending.
+      const role = roles.displayRole(r);
+      const u = { userId: r.user_id, email: r.email || null, role, firstSignedInAt: r.first_signed_in_at,
                   lastSeenAt: r.last_seen_at, decidedAt: r.decided_at || null, decidedBy: r.decided_by_email || r.decided_by || null };
-      // A listed email is a master whatever its row says — never in a queue.
-      if (roles.isMasterEmail(r.email)) out.masters.push(u); else (out[r.state] || out.pending).push(u);
+      (role === 'master' ? out.masters : out[role]).push(u);
     }
     res.json(out);
   } catch (err) { res.status(503).json({ error: 'could not read accounts: ' + err.message }); }
@@ -1652,6 +1654,10 @@ function decideAccount(state) {
     if (!UUID_RE.test(id)) return res.status(400).json({ error: 'not a user id' });
     if (id === req.account.userId) return res.status(400).json({ error: "a master's access comes from CARDZON_MASTER_EMAILS, not from approval" });
     try {
+      // Another master: nothing to approve or reject — refused, not recorded.
+      const st = roles.store();
+      if (st.emailFor && roles.isMasterEmail(await st.emailFor(id)))
+        return res.status(409).json({ error: "that account is a master: its access comes from CARDZON_MASTER_EMAILS, not from approval" });
       const r = await roles.store().decide(id, state, req.account.userId);
       if (!r) return res.status(404).json({ error: 'no such account (it has never signed in)' });
       res.json({ ok: true, userId: r.user_id, state: r.state, decidedBy: r.decided_by, decidedAt: r.decided_at || null });

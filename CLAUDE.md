@@ -581,6 +581,14 @@ pricing). List every path (THE GATES) when adding a rule. *Archive:* "A fix is n
 Make it fire before believing it**; revert the fix and watch the test fail.
 *Archive:* "A guard that has never fired is indistinguishable from one that cannot"; restored from `CLAUDE.md.bak-20260901`: "Nothing happened" is not proof a guard works
 
+**A check that looks correct is not a check that ran. For any gate, guard or
+test, state what would be observably different if it were silently doing
+nothing — then verify that, not the code.** Three cases: a sibling timeout that
+was not firing, yet the check still never produced a verdict within a visit; a
+gate correct on all 213 refusals while the query spent the budget on cards it
+would refuse; a suite green in a working tree and red on a clean checkout
+(PROGRESS 2026-10-06 (late night), 2026-10-07 (night)).
+
 **A gate that skips must say what it skipped** (`evidence`, `unchecked`,
 `gateWarning`). *Archive:* "A gate that skips says nothing; now it says what it skipped"
 

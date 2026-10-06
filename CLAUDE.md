@@ -817,6 +817,12 @@ job. *Archive:* "Search could not find cards we hold by their own name (2026-09-
 **A limit nobody checks gets exceeded** — this file's budget is a test, not a
 request (T0, PROGRESS 2026-10-05).
 
+**Green in your tree is not green: run the full suite on a clean checkout of
+HEAD before calling a commit done** — a test that slices server.js runs only
+the helpers it lists, and a fresh Windows checkout is CRLF while a tool-edited
+tree is LF. **Never link `node_modules` into a worktree: `git worktree remove
+--force` deletes THROUGH a junction** — use `NODE_PATH` (PROGRESS 2026-10-07 (night)).
+
 ## Photo-check lessons (all PROGRESS 2026-10-02 … 10-04)
 - Measure a check's time where it runs; a timeout is not a verdict.
 - A verdict that cannot change is stored, not cached; an unchecked row is hidden.

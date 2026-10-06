@@ -1,5 +1,29 @@
 # CardHunt — Progress Log
 
+## 2026-10-07 (night) — fcfade6 red on a clean checkout; node_modules deleted through a junction
+
+- `fcfade6` (other-language exclusion, default off) left ebaypaging,
+  gradefilter and selector red on a clean checkout of HEAD (found by the roles
+  session). I had run four related suites, not the full suite. ebaypaging
+  slices sourceEbay and a listed set of helpers out of server.js; the new
+  top-level `languageExclusionFor` was not listed -> ReferenceError in the
+  harness only — in the module it is a top-level declaration beside
+  sourceEbay, so no deployed path (open, Load more, other sites, marketprobe)
+  could reach an undefined symbol. Fixed in `cbb9be1`; the paging test now
+  also pins that the default request carries no exclusion.
+- The clean-checkout run then showed two more red suites, pricecheck and
+  refused, red at dc82d46 too: a fresh checkout here is CRLF
+  (core.autocrlf=true), the working tree LF, and their slicers end on
+  "\n}\n". Fixed in `6212fec` (strip CR). Fresh checkout of 6212fec:
+  **85/85 suites, 4,500 assertions, jptest 88/0**.
+- My error while doing that: the first clean worktree had a junction to the
+  real node_modules; `git worktree remove --force` deleted through it and
+  emptied node_modules (01:45 local). The sibling backfill then recorded 19
+  cards 'unbuildable: Cannot find module jpeg-js' in 44 s before I stopped
+  it. The 19 rows deleted (exactly that reason and window); `npm ci` restored
+  86 packages from the unchanged lockfile; backfills restarted. Clean
+  checkouts now resolve packages through NODE_PATH, no link.
+
 ## 2026-10-07 (later) — The door (catalogue public, prices approved-only) and the per-user record
 
 Notes here only: CLAUDE.md was being compressed by the speed session.

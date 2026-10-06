@@ -80,7 +80,10 @@ const TOOLING_DAILY = 300;
 // allowance for the last hour of the day (3,100 calls unused) for the
 // counterfeit-gate measurement (TASK T1). The daily limit, the reserve and
 // the soft stop still bind.
-const TOOLING_OVERRIDES = { '2026-10-04': 5000 };
+// 2026-10-06 (UTC; Roy, the last 17 minutes of the day): the language-union
+// and year-gate measurements, up to the 100-call reserve rather than waiting
+// for the reset. Lapses at 00:00 UTC by itself.
+const TOOLING_OVERRIDES = { '2026-10-04': 5000, '2026-10-06': 1000 };
 function toolingAllowance(now) {
   return TOOLING_OVERRIDES[(now || new Date()).toISOString().slice(0, 10)] || TOOLING_DAILY;
 }

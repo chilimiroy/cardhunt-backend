@@ -13,8 +13,10 @@ const vm = require('vm');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };
 
-const S = fs.readFileSync(__dirname + '/server.js', 'utf8');
-const H = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
+// CRLF stripped: a clean checkout on Windows (core.autocrlf=true) has CRLF
+// endings, and fnS ends on "\n}\n" — it found nothing there.
+const S = fs.readFileSync(__dirname + '/server.js', 'utf8').replace(/\r\n/g, '\n');
+const H = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8').replace(/\r\n/g, '\n');
 const fnS = (src, decl) => { const i = src.indexOf('\n' + decl); return i < 0 ? '' : src.slice(i + 1, src.indexOf('\n}\n', i + 1) + 2); };
 
 console.log('\n  the server: one refused list, every stage');

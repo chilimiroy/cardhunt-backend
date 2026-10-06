@@ -37,7 +37,9 @@ if (typeof E === 'function') {
 }
 
 // ── 2. tcgdexPriceFor, the real function ──
-const I = fs.existsSync('ingest.js') ? fs.readFileSync('ingest.js', 'utf8') : null;
+// CRLF stripped: a clean checkout on Windows (core.autocrlf=true) has CRLF
+// endings, and the slicer below ends on "\n}\n" — it found nothing there.
+const I = fs.existsSync('ingest.js') ? fs.readFileSync('ingest.js', 'utf8').replace(/\r\n/g, '\n') : null;
 if (!I) console.log('  SKIP parts 2-3 — ingest.js not present');
 function slice(src, start) {
   const i = src.indexOf(start); if (i < 0) return '';

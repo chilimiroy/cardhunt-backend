@@ -165,7 +165,7 @@ ok('page: the alerts calls send the token and no user id', /'\/api\/alerts', \{ 
 
 if (process.argv.includes('--table')) {
   console.log('\n| route | method | level | where it checks / why public |\n|---|---|---|---|');
-  for (const f of found) console.log(`| \`${f.path}\` | ${f.method.toUpperCase()} | ${f.level || '?'} | ${f.level === 'public' ? f.reason : f.level === 'tooling' ? 'server.js:' + f.line + ' `toolingKey.require` (X-CardHunt-Key)' : 'server.js:' + f.line + ' `access.' + f.level + '`'} |`);
+  for (const f of found) console.log(`| \`${f.path}\` | ${f.method.toUpperCase()} | ${f.level || '?'} | ${f.level === 'public' ? f.reason : f.level === 'tooling' ? 'server.js:' + f.line + ' `toolingKey.require` (X-CardHunt-Key)' : f.level === 'catalogue' ? 'server.js:' + f.line + ' `access.optional` (prices stripped unless approved)' : 'server.js:' + f.line + ' `access.' + f.level + '`'} |`);
 }
 
 // ── live: boot the server and ask ──────────────────────────────

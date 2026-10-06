@@ -45,6 +45,9 @@ const ROUTES = [
   ['patch', '/api/alerts/:id', 'approved', null],
   ['get', '/api/portfolio', 'approved', null],
   ['post', '/api/portfolio', 'approved', null],
+  ['get', '/api/admin/users', 'master', null],
+  ['post', '/api/admin/users/:userId/approve', 'master', null],
+  ['post', '/api/admin/users/:userId/reject', 'master', null],
   ['get', '/api/history/:cardId', 'public', CATALOGUE],
   ['get', '/api/listings-log', 'public', 'calls per card view, aggregated; listing_views holds no user id'],
   ['get', '/api/listings/:cardId', 'public', CATALOGUE + ' (records a view row: card, grade, calls — no user)'],
@@ -106,14 +109,27 @@ for (const f of found) {
 }
 for (const r of ROUTES) if (!seen.has(key(r))) ok('still in server.js: ' + key(r), false, 'listed here but not declared');
 ok('found routes in server.js at all (' + found.length + ')', found.length >= 40);
+// A route declared any other way (indented, in a loop, a computed path)
+// would be invisible to everything above.
+const anyDecl = (S.match(/\bapp\.(get|post|put|patch|delete|all)\(/g) || []).length;
+ok('every app.METHOD( in server.js is a readable one-line declaration', anyDecl === found.length, anyDecl + ' calls, ' + found.length + ' readable');
 const uses = lines.map((l, i) => [l, i + 1]).filter(([l]) => /^app\.use\(/.test(l));
 ok('app.use: only the known middleware, no mounted router', uses.length === USES.length && uses.every(([l]) => USES.some(u => l.includes(u))),
    uses.map(([l, n]) => n + ': ' + l.slice(0, 50)).join(' | '));
 ok('no express.Router anywhere in server.js', !/express\.Router|Router\(\)/.test(S));
+// The one URL user id allowed is the TARGET of a master's decision.
 ok('every gated route takes the user from req.account, never the URL or body',
-   !/req\.params\.userId|b\.user_id|req\.body\.user_id/.test(S) && /\[req\.account\.userId, b\.card_api_id/.test(S));
+   !/b\.user_id|req\.body\.user_id/.test(S) && (S.match(/req\.params\.userId/g) || []).length === 1
+   && /function decideAccount[\s\S]{0,80}const id = req\.params\.userId;/.test(S) && /\[req\.account\.userId, b\.card_api_id/.test(S));
 ok('ONE helper: access.js resolves the request; server.js builds no second check',
    (S.match(/auth\.verify\(/g) || []).length === 1);   // the one in /api/me
+
+const H = fs.readFileSync(path.join(__dirname, 'cardhunt_preview.html'), 'utf8').replace(/\r/g, '');
+const pfn = name => { const i = H.indexOf('function ' + name + '('); return i < 0 ? '' : H.slice(i, H.indexOf('\n}', i) + 2); };
+ok('page: "Approve accounts" is offered only when /api/me said master', /AUTH\.role === 'master' \? '<button[^']*onclick="adminOpen\(\)">Approve accounts/.test(pfn('authRender')));
+ok('page: the masters’ list and each decision send the session token', /Authorization: 'Bearer ' \+ token/.test(pfn('adminLoad')) && /Authorization: 'Bearer ' \+ token/.test(pfn('adminDecide')));
+ok('page: reject says, before the click, what it does and that it can be undone', /cannot use the site[\s\S]{0,160}can be undone/.test(pfn('adminRender')));
+ok('page: the alerts calls send the token and no user id', /'\/api\/alerts', \{ headers: \{ Authorization: 'Bearer ' \+ token/.test(pfn('loadAlerts')) && !/user_id: CH_USER/.test(H));
 
 if (process.argv.includes('--table')) {
   console.log('\n| route | method | level | where it checks / why public |\n|---|---|---|---|');
@@ -147,7 +163,7 @@ roles.setStore({ get: async id => m.get(id) || null, touch: async id => { if (!m
   decide: async (id, s, by) => { if (!m.has(id)) return null; m.set(id, s); return { user_id: id, state: s, decided_by: by }; },
   list: async () => [...m].map(([user_id, state]) => ({ user_id, state, email: null })) });`);
 
-const sample = p => p.replace(/:cardId|:id|:userId/g, m => m === ':cardId' ? 'en-base1-4' : '1');
+const sample = p => p.replace(/:cardId|:id|:userId/g, m => m === ':cardId' ? 'en-base1-4' : m === ':userId' ? ID.pending : '1');
 async function ask(method, p, tok, body) {
   const headers = { 'Content-Type': 'application/json' };
   if (tok) headers.Authorization = 'Bearer ' + tok;
@@ -203,6 +219,28 @@ async function ask(method, p, tok, body) {
       r = await ask('get', p, null);
       ok(`anonymous ${p}: 200, not gated`, r.status === 200, String(r.status));
     }
+    console.log('\n  live: approval');
+    r = await ask('post', '/api/admin/users/' + ID.pending + '/approve', TOK.approved);
+    ok('an APPROVED non-master approving someone: 403 masters only', r.status === 403 && r.body.error === 'masters only', r.status + ' ' + r.text);
+    r = await ask('post', '/api/admin/users/' + ID.pending + '/approve', TOK.pending);
+    ok('a pending user approving themselves: 403 approval pending', r.status === 403 && r.body.error === 'approval pending', r.status + ' ' + r.text);
+    r = await ask('get', '/api/me', TOK.pending);
+    ok('... and they are still pending', r.body.role === 'pending');
+    r = await ask('post', '/api/admin/users/' + ID.pending + '/approve', TOK.master);
+    ok("a master approves: 200, recorded with the master's user id", r.status === 200 && r.body.state === 'approved' && r.body.decidedBy === ID.master, r.text);
+    r = await ask('get', '/api/me', TOK.pending);
+    ok('the approved user is approved on their next request', r.body.role === 'approved', r.text.slice(0, 100));
+    r = await ask('post', '/api/admin/users/' + ID.pending + '/reject', TOK.master);
+    r = await ask('get', '/api/alerts', TOK.pending);
+    ok('rejected: refused on the next request (403, state rejected)', r.status === 403 && r.body.state === 'rejected', r.text);
+    r = await ask('post', '/api/admin/users/' + ID.master + '/reject', TOK.master);
+    ok('a master cannot reject (or approve) their own access', r.status === 400, r.text);
+    r = await ask('post', '/api/admin/users/not-a-uuid/approve', TOK.master);
+    ok('a malformed id: 400', r.status === 400);
+    r = await ask('post', '/api/admin/users/99999999-9999-4999-8999-999999999999/approve', TOK.master);
+    ok('an id that never signed in: 404, nothing created', r.status === 404, r.text);
+    r = await ask('get', '/api/admin/users', TOK.master);
+    ok("the masters' list answers for a master", r.status === 200 && Array.isArray(r.body.pending), r.text.slice(0, 120));
     r = await ask('get', '/api/alerts/anon-abc12345', null);
     ok('the old /api/alerts/:userId read is gone (404), not silently public', r.status === 404, String(r.status));
   } finally { server.kill(); try { fs.unlinkSync(preload); } catch (e) {} }

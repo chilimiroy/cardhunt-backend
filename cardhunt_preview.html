@@ -6574,6 +6574,7 @@ function authRender(){
     h += '<div style="font-size:18px;font-weight:800;margin-bottom:6px">Signed in</div>'
       + '<div style="font-size:13px;color:var(--mu);margin-bottom:18px">' + liveEsc(AUTH.user.email || AUTH.user.id)
       + (AUTH.user.provider ? ' &middot; ' + liveEsc(AUTH.user.provider) : '') + '</div>'
+      + (AUTH.role === 'master' ? '<button class="btn" style="margin-right:8px" onclick="adminOpen()">Approve accounts</button>' : '')
       + '<button class="btn" onclick="authSignOut()">Sign out</button>';
   } else {
     h += '<div style="font-size:18px;font-weight:800;margin-bottom:6px">Sign in to CardHunt</div>'
@@ -6587,6 +6588,66 @@ function authRender(){
   el.innerHTML = h;
 }
 function authOpen(){ authRender(); openM('auth-overlay'); }
+
+// ── Approving accounts — masters only (T6 step 2) ─────────────────
+// The button is shown when /api/me said master, but the SERVER refuses
+// every non-master at /api/admin/* — the button is convenience, not control.
+var ADMIN = { data: null, error: null, busy: false };
+function adminOpen(){ closeM('auth-overlay'); openM('admin-overlay'); adminLoad(); }
+async function adminLoad(){
+  ADMIN.error = null; adminRender();
+  try {
+    var token = await authToken();
+    var r = await fetch(BACKEND + '/api/admin/users', { headers: { Authorization: 'Bearer ' + token } });
+    var j = await r.json();
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    ADMIN.data = j;
+  } catch (e) { ADMIN.data = null; ADMIN.error = e.message || 'the server did not answer'; }
+  adminRender();
+}
+async function adminDecide(userId, action){
+  if (ADMIN.busy) return; ADMIN.busy = true;
+  try {
+    var token = await authToken();
+    var r = await fetch(BACKEND + '/api/admin/users/' + encodeURIComponent(userId) + '/' + action,
+      { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+    var j = await r.json();
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  } catch (e) { ADMIN.error = 'Not recorded: ' + (e.message || 'the server did not answer'); }
+  ADMIN.busy = false;
+  if (ADMIN.error) return adminRender();
+  adminLoad();       // re-read: the screen shows what the server holds
+}
+function adminRender(){
+  var el = document.getElementById('admin-body'); if (!el) return;
+  var when = function (t) { return t ? new Date(t).toLocaleString() : ''; };
+  var who = function (u) { return u.email ? liveEsc(u.email) : '<span style="color:var(--mu)">email not readable &middot; ' + liveEsc(u.userId) + '</span>'; };
+  var row = function (u, buttons, note) {
+    return '<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--bd)">'
+      + '<div style="min-width:0;overflow-wrap:anywhere"><div style="font-weight:700;font-size:13px">' + who(u) + '</div>'
+      + '<div style="font-size:11px;color:var(--mu)">' + note + '</div></div>'
+      + '<div style="flex-shrink:0">' + buttons + '</div></div>';
+  };
+  var btn = function (u, action, label) { return '<button class="btn" style="margin-left:6px" data-uid="' + liveEsc(u.userId) + '" data-act="' + action + '" onclick="adminDecide(this.dataset.uid, this.dataset.act)">' + label + '</button>'; };
+  var h = '<div style="font-size:18px;font-weight:800;margin-bottom:6px">Approve accounts</div>';
+  if (ADMIN.error) h += '<div style="font-size:12px;color:var(--re);margin-bottom:10px">' + liveEsc(ADMIN.error) + '</div>';
+  var d = ADMIN.data;
+  if (!d) { el.innerHTML = h + (ADMIN.error ? '' : '<div style="font-size:13px;color:var(--mu)">Loading…</div>'); return; }
+  h += '<div style="font-size:12px;color:var(--mu);margin-bottom:12px">Reject means the account cannot use the site, and it does not come back to this list when it signs in again. '
+    + 'It can be undone: rejected accounts stay under <b>Not approved</b>, where you can approve them later.</div>';
+  h += '<div style="font-size:13px;font-weight:800;margin:14px 0 4px">Waiting (' + d.pending.length + ')</div>';
+  h += d.pending.length ? d.pending.map(function (u) { return row(u, btn(u, 'approve', 'Approve') + btn(u, 'reject', 'Reject'), 'signed in ' + when(u.firstSignedInAt)); }).join('')
+                        : '<div style="font-size:12px;color:var(--mu)">Nobody is waiting.</div>';
+  if (d.rejected.length) {
+    h += '<div style="font-size:13px;font-weight:800;margin:18px 0 4px">Not approved (' + d.rejected.length + ')</div>';
+    h += d.rejected.map(function (u) { return row(u, btn(u, 'approve', 'Approve'), 'rejected ' + when(u.decidedAt) + (u.decidedBy ? ' by ' + liveEsc(u.decidedBy) : '')); }).join('');
+  }
+  if (d.approved.length) {
+    h += '<div style="font-size:13px;font-weight:800;margin:18px 0 4px">Approved (' + d.approved.length + ')</div>';
+    h += d.approved.map(function (u) { return row(u, btn(u, 'reject', 'Reject'), 'approved ' + when(u.decidedAt) + (u.decidedBy ? ' by ' + liveEsc(u.decidedBy) : '')); }).join('');
+  }
+  el.innerHTML = h;
+}
 function authSay(text, bad){ AUTH.notice = text ? { text: text, bad: !!bad } : null; authRender(); }
 // The only writer of AUTH.user: the server's verdict on the session's token.
 async function authCheck(session){
@@ -6936,6 +6997,13 @@ function cleanSeries(name) {
     <div id="auth-body"></div>
   </div>
 </div>
+<!-- ══ APPROVE ACCOUNTS (T6 step 2) — masters only; the server refuses anyone else ══ -->
+<div id="admin-overlay" class="overlay">
+  <div class="modal" style="max-width:560px;max-height:90vh;overflow:auto">
+    <button class="modal-x" onclick="closeM('admin-overlay')" aria-label="Close">&#10005;</button>
+    <div id="admin-body"></div>
+  </div>
+</div>
 <!-- ══ PHOTOS — the seller's own images of one eBay listing ══ -->
 <div id="photos-overlay" class="overlay" data-item="">
   <div class="modal" style="max-width:560px;max-height:90vh;overflow:auto">
@@ -7098,6 +7166,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-6af3bc6-t6door &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-f68c278-t6approve &middot; click to hide</div>
 </body>
 </html>

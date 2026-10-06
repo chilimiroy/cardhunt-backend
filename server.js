@@ -1577,6 +1577,45 @@ app.post('/api/portfolio', access.approved, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Approval, for masters only (T6 step 2, 2026-10-06) ────────────
+// Guarded HERE, at the endpoint (access.master) — the button that leads
+// to it is hidden from non-masters, but hiding a button is not access
+// control. Every decision records the deciding master's user id and when.
+// Reject is REVERSIBLE: a rejected account is listed under "Not approved"
+// and a master can approve it later; until then it cannot use the site and
+// does not reappear as pending when it signs in again (roles.js touch()).
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+app.get('/api/admin/users', access.master, async (req, res) => {
+  try {
+    const rows = await roles.store().list();
+    const out = { pending: [], approved: [], rejected: [], masters: [] };
+    for (const r of rows) {
+      const u = { userId: r.user_id, email: r.email || null, firstSignedInAt: r.first_signed_in_at,
+                  lastSeenAt: r.last_seen_at, decidedAt: r.decided_at || null, decidedBy: r.decided_by_email || r.decided_by || null };
+      // A listed email is a master whatever its row says — never in a queue.
+      if (roles.isMasterEmail(r.email)) out.masters.push(u); else (out[r.state] || out.pending).push(u);
+    }
+    res.json(out);
+  } catch (err) { res.status(503).json({ error: 'could not read accounts: ' + err.message }); }
+});
+// Two routes written out, not generated in a loop: access.test.js reads
+// every app.METHOD('/literal', ...) line, and a route it cannot read is a
+// route nobody checked.
+function decideAccount(state) {
+  return async (req, res) => {
+    const id = req.params.userId;
+    if (!UUID_RE.test(id)) return res.status(400).json({ error: 'not a user id' });
+    if (id === req.account.userId) return res.status(400).json({ error: "a master's access comes from CARDZON_MASTER_EMAILS, not from approval" });
+    try {
+      const r = await roles.store().decide(id, state, req.account.userId);
+      if (!r) return res.status(404).json({ error: 'no such account (it has never signed in)' });
+      res.json({ ok: true, userId: r.user_id, state: r.state, decidedBy: r.decided_by, decidedAt: r.decided_at || null });
+    } catch (err) { res.status(503).json({ error: 'could not record the decision: ' + err.message }); }
+  };
+}
+app.post('/api/admin/users/:userId/approve', access.master, decideAccount('approved'));
+app.post('/api/admin/users/:userId/reject', access.master, decideAccount('rejected'));
+
 // GET /api/history/:cardId — measured, ungraded price observations, one
 // series per market.
 //

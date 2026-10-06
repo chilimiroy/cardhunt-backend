@@ -162,7 +162,14 @@ async function buildOne(row) {
   await Promise.all(Array.from({ length: LANES }, lane));
   console.log(`refbuild: built ${tally.built}, unbuildable ${tally.unbuildable}, transient ${tally.transient}`
     + (tally.transient ? ' ' + JSON.stringify(transientWhy) : '') + ` in ${Math.round((Date.now() - t0) / 1000)} s`);
-  const left = (await MODE.missing()).length;
-  console.log(`still missing: ${left}${left ? ' — run again to resume' : ''}; stored now:`, JSON.stringify(await counts()));
+  // Two kinds of "left", told apart: a card still MISSING (a transient
+  // failure, or the run was stopped) is fixed by running again; a card
+  // recorded UNBUILDABLE (no scan URL, 404, not an image) is not — rerunning
+  // asks the same question and gets the same answer (2026-10-07).
+  const leftRows = await MODE.missing();
+  const unbuildable = leftRows.filter(r => r.was === 'unbuildable').length, left = leftRows.length - unbuildable;
+  console.log(`still missing: ${left}${left ? ' — run again to resume' : ''}`
+    + (unbuildable ? `; ${unbuildable} recorded unbuildable — a rerun will not change them (reasons in the table)` : '')
+    + '; stored now:', JSON.stringify(await counts()));
   await db.end();
 })().catch(e => { console.error('refbuild failed:', e.message); process.exit(1); });

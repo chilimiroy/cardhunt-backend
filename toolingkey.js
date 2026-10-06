@@ -74,7 +74,11 @@ if (require.main === module) {
   if (!p || !p.startsWith('/')) { console.error('usage: node toolingkey.js /api/ebay/<probe>[?query]'); process.exit(2); }
   if (!configured()) console.error('note: ' + ENV + ' is not set here — the server will refuse (401).');
   const base = process.env.CARDHUNT_API || 'https://cardhunt-backend.onrender.com';
+  // process.exitCode, never process.exit(), once fetch has run: exiting while
+  // its socket is still closing aborts Node on Windows ("Assertion failed:
+  // !(handle->flags & UV_HANDLE_CLOSING), src\win\async.c") with exit 127,
+  // after the output — every local tooling probe looked broken (2026-10-07).
   fetch(base + p, { headers: Object.assign({ Accept: 'application/json' }, headers()) })
-    .then(async r => { console.log(r.status); console.log(await r.text()); process.exit(r.ok ? 0 : 1); })
-    .catch(e => { console.error('request failed: ' + e.message); process.exit(1); });
+    .then(async r => { console.log(r.status); console.log(await r.text()); process.exitCode = r.ok ? 0 : 1; })
+    .catch(e => { console.error('request failed: ' + e.message); process.exitCode = 1; });
 }

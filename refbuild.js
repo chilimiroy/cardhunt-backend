@@ -4,6 +4,8 @@
 //   node refbuild.js --dry                 how many are missing, and the size
 //   node refbuild.js [--max=N] [--set=X]   build the missing ones
 //   node refbuild.js --retry-unbuildable   ask again for ones recorded unbuildable
+//   node refbuild.js --colour [...]        the novelty check's colour reference instead
+//                                          (card_colour_refs: every English card with a scan)
 //   (a built row of another REF_VERSION is rebuilt on every run, no flag needed)
 //   options: --concurrency=2 (default)
 //
@@ -26,7 +28,7 @@ const stampcheck = require('./stampcheck');
 
 const arg = (k, d) => { const a = process.argv.find(x => x.startsWith('--' + k + '=')); return a ? a.split('=')[1] : d; };
 const has = k => process.argv.includes('--' + k);
-const DRY = has('dry'), MAX = +arg('max', 0) || Infinity, SET = arg('set', null);
+const DRY = has('dry'), MAX = +arg('max', 0) || Infinity, SET = arg('set', null), COLOUR = has('colour');
 const LANES = Math.max(1, Math.min(4, +arg('concurrency', 2) || 2));
 const FETCH_MS = 60 * 1000, PAUSE_MIN = 5000, PAUSE_MAX = 5 * 60 * 1000;
 
@@ -53,8 +55,38 @@ async function missing() {
   return r.rows;
 }
 
+// --colour (2026-10-07): every English card with a scan the novelty check
+// reads (refscans.colourScanUrlOf), with no built profile of the current
+// MATERIAL_VERSION for its CURRENT scan. Cards with no such scan are not
+// selected: the server applies no novelty check to them (materialApplies).
+async function missingColour() {
+  const r = await db.query(`
+    SELECT c.api_card_id, c.image_large, c.image_small, cr.state AS was, cr.version, cr.scan_url
+      FROM cards c LEFT JOIN card_colour_refs cr ON cr.card_id = c.api_card_id
+     WHERE c.api_card_id LIKE 'en-%' AND ${digital.visibleSql('c')}
+       AND (c.image_small IS NOT NULL OR c.image_large IS NOT NULL) ${SET ? 'AND c.set_api_id = $1' : ''}
+     ORDER BY c.set_api_id, c.api_card_id`, SET ? [SET] : []);
+  return r.rows.filter(x => {
+    const url = refscans.colourScanUrlOf(x);
+    if (!url) return false;
+    if (!x.was) return true;
+    if (x.was === 'unbuildable') return has('retry-unbuildable');
+    return x.version !== stampcheck.MATERIAL_VERSION || x.scan_url !== url;
+  });
+}
+function saveColour(id, url, v) {
+  return db.query(`INSERT INTO card_colour_refs (card_id, scan_url, state, reason, version, gold, black, built_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7, now())
+    ON CONFLICT (card_id) DO UPDATE SET scan_url = EXCLUDED.scan_url, state = EXCLUDED.state, reason = EXCLUDED.reason,
+      version = EXCLUDED.version, gold = EXCLUDED.gold, black = EXCLUDED.black, built_at = now()`,
+    [id, url, v.reason ? 'unbuildable' : 'built', v.reason || null, v.version || null,
+     v.gold == null ? null : v.gold, v.black == null ? null : v.black]);
+}
+
 async function counts() {
-  const r = await db.query(`SELECT state, count(*)::int AS n, sum(octet_length(rgb))::bigint AS bytes
+  const r = await db.query(COLOUR
+    ? `SELECT state, count(*)::int AS n FROM card_colour_refs GROUP BY 1 ORDER BY 1`
+    : `SELECT state, count(*)::int AS n, sum(octet_length(rgb))::bigint AS bytes
     FROM card_reference_scans GROUP BY 1 ORDER BY 1`);
   return r.rows;
 }
@@ -67,30 +99,38 @@ function save(id, url, v) {
     [id, url, v.reason ? 'unbuildable' : 'built', v.reason || null, v.version || null, v.tw || null, v.w || null, v.h || null, v.rgb || null]);
 }
 
+// The one thing that differs between the two modes.
+const MODE = COLOUR
+  ? { urlOf: row => refscans.colourScanUrlOf(row), derive: buf => refscans.colourFromScan(buf), save: (...a) => saveColour(...a),
+      missing: () => missingColour(), ensure: () => refscans.ensureColourTable(db), what: 'colour reference(s)' }
+  : { urlOf: row => refscans.scanUrlOf(row), derive: buf => refscans.templateFromScan(buf), save: (...a) => save(...a),
+      missing: () => missing(), ensure: () => refscans.ensureTable(db), what: 'card(s)' };
+
 // One card: { built } | { unbuildable } | { transient } — only the first two are stored.
 async function buildOne(row) {
-  const url = refscans.scanUrlOf(row);
-  if (!/^https:\/\//.test(url)) { await save(row.api_card_id, url || '(none)', { reason: 'no scan URL' }); return 'unbuildable'; }
+  const url = MODE.urlOf(row);
+  if (!/^https:\/\//.test(url)) { await MODE.save(row.api_card_id, url || '(none)', { reason: 'no scan URL' }); return 'unbuildable'; }
   let r;
   try { r = await fetch(url, { signal: AbortSignal.timeout(FETCH_MS) }); }
   catch (e) { return { transient: (e && e.name) === 'TimeoutError' ? 'timeout' : 'network: ' + (e && e.message) }; }
   if (r.status === 429 || r.status >= 500) return { transient: 'HTTP ' + r.status };
-  if (!r.ok) { await save(row.api_card_id, url, { reason: 'HTTP ' + r.status }); return 'unbuildable'; }
+  if (!r.ok) { await MODE.save(row.api_card_id, url, { reason: 'HTTP ' + r.status }); return 'unbuildable'; }
   let buf;
   try { buf = Buffer.from(await r.arrayBuffer()); }
   catch (e) { return { transient: 'body: ' + (e && e.message) }; }
   let v;
-  try { v = refscans.templateFromScan(buf); }
-  catch (e) { v = { reason: 'JPEG did not decode: ' + String(e && e.message).slice(0, 80) }; }
-  await save(row.api_card_id, url, v);
+  try { v = MODE.derive(buf); }
+  catch (e) { v = { reason: 'scan did not decode: ' + String(e && e.message).slice(0, 80) }; }
+  await MODE.save(row.api_card_id, url, v);
   return v.reason ? 'unbuildable' : 'built';
 }
 
 (async () => {
-  await refscans.ensureTable(db);
-  const todo = (await missing()).slice(0, MAX);
-  console.log(`refbuild: ${todo.length} card(s) to build${SET ? ' in ' + SET : ''}, ${LANES} at a time; stored now:`,
+  await MODE.ensure();
+  const todo = (await MODE.missing()).slice(0, MAX);
+  console.log(`refbuild: ${todo.length} ${MODE.what} to build${SET ? ' in ' + SET : ''}, ${LANES} at a time; stored now:`,
     JSON.stringify(await counts()));
+  if (DRY && COLOUR) { console.log('dry run: two numbers a card'); return db.end(); }
   if (DRY) {
     console.log(`dry run: ~${(todo.length * stampcheck.WHOLE_TW * Math.round(stampcheck.WHOLE_TW * 1.375) * 3 / 1e6).toFixed(1)} MB of templates to add`);
     return db.end();
@@ -122,7 +162,7 @@ async function buildOne(row) {
   await Promise.all(Array.from({ length: LANES }, lane));
   console.log(`refbuild: built ${tally.built}, unbuildable ${tally.unbuildable}, transient ${tally.transient}`
     + (tally.transient ? ' ' + JSON.stringify(transientWhy) : '') + ` in ${Math.round((Date.now() - t0) / 1000)} s`);
-  const left = (await missing()).length;
+  const left = (await MODE.missing()).length;
   console.log(`still missing: ${left}${left ? ' — run again to resume' : ''}; stored now:`, JSON.stringify(await counts()));
   await db.end();
 })().catch(e => { console.error('refbuild failed:', e.message); process.exit(1); });

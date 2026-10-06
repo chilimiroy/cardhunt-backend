@@ -113,9 +113,11 @@ ok(/const scanPng = job\.material && PNG_SCAN_HOST\.test\(job\.url\) && \/png\/i
 ok(/m\.material \? decodeImage\(/.test(sjob), 'the worker decodes a scan as PNG or JPEG');
 const sb = fs.readFileSync(__dirname + '/stampbuild.js', 'utf8');
 ok(/const decodeAny = sc\.decodeImage;/.test(sb) && !/PNG\.sync\.read/.test(sb), 'stampbuild uses the same decoder — one definition');
+// The rule lives in refscans.js (2026-10-07): the builder and the server
+// must measure the same scan, so the server delegates to it.
 const ssrc = fs.readFileSync(__dirname + '/server.js', 'utf8').replace(/\r/g, '');
-const msu = ssrc.slice(ssrc.indexOf('function materialScanUrl(card) {'), ssrc.indexOf('\nfunction materialApplies('));
-const scanUrlOf = msu.length > 50 ? new Function('stampcheck', msu + '\nreturn materialScanUrl;')(sc) : () => 'missing';
+ok(/const materialScanUrl = card => refscans\.colourScanUrlOf\(card\);/.test(ssrc), 'the server reads the scan URL rule from refscans.js — one definition');
+const scanUrlOf = require('./refscans.js').colourScanUrlOf;
 ok(scanUrlOf({ image_small: 'https://images.pokemontcg.io/cel25c/4_A.png' }) === 'https://images.pokemontcg.io/cel25c/4_A.png',
    'the server takes a pokemontcg.io scan as the reference (CC002 had none)');
 ok(scanUrlOf({ image_small: 'https://assets.tcgdex.net/en/neo/neo4/107/low.png' }) === 'https://assets.tcgdex.net/en/neo/neo4/107/low.jpg',
@@ -158,5 +160,41 @@ ok(/metal: stampcheck\.metalPhotoOf\(scores, mref\)/.test(src) && /v\.metal \? '
 ok(!/ebayCall|fetchEbay/.test(judge.slice(judge.indexOf('Gold and black novelty'), judge.indexOf('listings.sort('))),
    'the novelty check makes no eBay call');
 
-console.log(`\n  ${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+// ── Our scan's colour, stored ahead (2026-10-07) ──
+// server.js storedColourRef + materialRefOf, run as written against a fake
+// database and a spy on the live path (stampcheck.checkMaterialScan).
+console.log('\n  our scan\'s colour: stored first, live only as the fallback');
+const refscans = require('./refscans.js');
+const seg = ssrc.slice(ssrc.indexOf('async function storedColourRef(card) {'), ssrc.indexOf('\nconst materialPhotoOf'));
+ok(seg.length > 300 && !/INSERT INTO card_colour_refs/.test(seg), 'the server reads card_colour_refs and never writes it (refbuild.js is the one writer)');
+const harness = (rows) => {
+  const live = { calls: 0 };
+  const fakeSc = { checkMaterialScan: async () => { live.calls++; return { state: 'profiled', gold: 0.5, black: 0.1 }; } };
+  const fakeDb = { query: async (sql) => ({ rows: /FROM card_colour_refs/.test(sql) ? rows : [] }) };
+  const fakeRefscans = Object.assign({}, refscans, { ensureColourTable: async () => {} });
+  const f = new Function('db', 'refscans', 'stampcheck', 'materialScanUrl', '_materialRef',
+    seg + '\nreturn materialRefOf;')(fakeDb, fakeRefscans, fakeSc, c => refscans.colourScanUrlOf(c), new Map());
+  return { f, live };
+};
+const card199 = { api_card_id: 'en-sv03.5-199', image_small: 'https://assets.tcgdex.net/en/sv/sv03.5/199/low.png' };
+const url199 = 'https://assets.tcgdex.net/en/sv/sv03.5/199/low.jpg';
+(async () => {
+  let h = harness([{ scan_url: url199, state: 'built', version: sc.MATERIAL_VERSION, gold: 0.012, black: 0.011 }]);
+  let v = await h.f(card199);
+  ok(v && v.gold === 0.012 && v.stored === true && h.live.calls === 0, 'a stored profile is used and the scan is NOT fetched', JSON.stringify(v));
+  h = harness([]);
+  v = await h.f(card199);
+  ok(v && v.gold === 0.5 && !v.stored && h.live.calls === 1, 'not stored yet: the old live path, unchanged (no coverage lost)');
+  h = harness([{ scan_url: 'https://assets.tcgdex.net/en/sv/sv03.5/199/OLD.jpg', state: 'built', version: sc.MATERIAL_VERSION, gold: 0.9, black: 0 }]);
+  v = await h.f(card199);
+  ok(v && v.gold === 0.5 && h.live.calls === 1, 'a profile of a DIFFERENT scan is not this card\'s: measured live');
+  h = harness([{ scan_url: url199, state: 'built', version: 'material-0', gold: 0.9, black: 0 }]);
+  v = await h.f(card199);
+  ok(v && v.gold === 0.5 && h.live.calls === 1, 'a profile of another MATERIAL_VERSION is retired: measured live');
+  const png = require('pngjs').PNG, p = new png({ width: 20, height: 28 });
+  for (let i = 0; i < p.data.length; i += 4) { p.data[i] = 200; p.data[i + 1] = 160; p.data[i + 2] = 40; p.data[i + 3] = 255; }
+  const built = refscans.colourFromScan(png.sync.write(p));
+  ok(built.version === sc.MATERIAL_VERSION && built.gold != null && built.black != null, 'the builder stamps the current MATERIAL_VERSION');
+  console.log(`\n  ${pass} passed, ${fail} failed\n`);
+  process.exit(fail ? 1 : 0);
+})();

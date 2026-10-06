@@ -53,27 +53,79 @@ const RLS_SQL = [
   'ALTER TABLE card_reference_scans ENABLE ROW LEVEL SECURITY',
   'REVOKE TRUNCATE ON card_reference_scans FROM anon, authenticated'];
 
-// First use: create / migrate the table — only on an unguarded pool
+// First use: create / migrate a table — only on an unguarded pool
 // (schemaguard.js, as roles.pgStore). A guarded pool (a test booting the
 // server against the real database) never sends DDL: it CHECKS the table has
 // every column this code reads and refuses, naming what is missing.
+function ensurer(spec) {
+  let ready = null;
+  return db => {
+    const migrate = !require('./schemaguard').isGuarded(db);
+    return ready || (ready = (async () => {
+      if (!migrate) {
+        const r = await db.query(`SELECT column_name FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = $1`, [spec.name]);
+        const have = new Set(r.rows.map(x => x.column_name)), missing = spec.columns.filter(c => !have.has(c));
+        if (missing.length) throw new Error(spec.name + ' is missing ' + missing.join(', ')
+          + ' — the server\'s first-use migration or ' + spec.migration + ' adds it; a guarded pool does not');
+        return;
+      }
+      await db.query(spec.sql);
+      for (const s of spec.migrate || []) await db.query(s);
+      for (const s of spec.rls) await db.query(s).catch(() => {});   // roles absent outside Supabase
+    })().catch(e => { ready = null; throw e; }));
+  };
+}
 const COLUMNS = ['card_id', 'scan_url', 'state', 'reason', 'version', 'tw', 'w', 'h', 'rgb', 'built_at'];
-let _ready = null;
-function ensureTable(db) {
-  const migrate = !require('./schemaguard').isGuarded(db);
-  return _ready || (_ready = (async () => {
-    if (!migrate) {
-      const r = await db.query(`SELECT column_name FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = 'card_reference_scans'`);
-      const have = new Set(r.rows.map(x => x.column_name)), missing = COLUMNS.filter(c => !have.has(c));
-      if (missing.length) throw new Error('card_reference_scans is missing ' + missing.join(', ')
-        + ' — the server\'s first-use migration or migration-reference-scans.sql adds it; a guarded pool does not');
-      return;
-    }
-    await db.query(TABLE_SQL);
-    for (const s of MIGRATE_SQL) await db.query(s);
-    for (const s of RLS_SQL) await db.query(s).catch(() => {});   // roles absent outside Supabase
-  })().catch(e => { _ready = null; throw e; }));
+const ensureTable = ensurer({ name: 'card_reference_scans', sql: TABLE_SQL, migrate: MIGRATE_SQL, rls: RLS_SQL,
+  columns: COLUMNS, migration: 'migration-reference-scans.sql' });
+
+// ── The colour reference: our scan's gold/black profile (2026-10-07) ──
+// The novelty check (stampcheck.materialJudge) compares a seller's photo
+// with OUR scan's colour. That profile was computed inside the request
+// (server.js materialRefOf: fetch the scan, decode, colourProfile), bounded
+// at 1.5 s — a visitor's request waiting on a third-party host, the same as
+// the sibling scans. Now refbuild.js --colour stores it ahead of time; the
+// server reads it and keeps the old path only as a live fallback. Two
+// numbers a card. version = stampcheck.MATERIAL_VERSION: a change to how
+// colour is measured retires every stored profile. scan_url is the scan it
+// was measured from: a card whose image changed is measured again.
+const COLOUR_TABLE_SQL = `CREATE TABLE IF NOT EXISTS card_colour_refs (
+  card_id text PRIMARY KEY,
+  scan_url text NOT NULL,
+  state text NOT NULL,              -- 'built' | 'unbuildable'
+  reason text,
+  version text,                     -- stampcheck.MATERIAL_VERSION of a built row
+  gold double precision, black double precision,
+  built_at timestamptz NOT NULL DEFAULT now())`;
+const COLOUR_RLS_SQL = [
+  'ALTER TABLE card_colour_refs ENABLE ROW LEVEL SECURITY',
+  'REVOKE TRUNCATE ON card_colour_refs FROM anon, authenticated'];
+const COLOUR_COLUMNS = ['card_id', 'scan_url', 'state', 'reason', 'version', 'gold', 'black', 'built_at'];
+const ensureColourTable = ensurer({ name: 'card_colour_refs', sql: COLOUR_TABLE_SQL, rls: COLOUR_RLS_SQL,
+  columns: COLOUR_COLUMNS, migration: 'migration-colour-refs.sql' });
+
+// The scan the colour is measured from — the rule server.js materialScanUrl
+// had (moved here: the builder and the server must agree). English cards
+// with a TCGdex scan (the .jpg beside the .png) or pokemontcg.io PNG art.
+function colourScanUrlOf(card) {
+  const src = String((card && (card.image_small || card.image_large)) || '');
+  if (/^https:\/\/assets\.tcgdex\.net\/.+\.(?:png|jpg)$/.test(src)) return src.replace(/\.png$/, '.jpg');
+  return stampcheck.PNG_SCAN_HOST.test(src) ? src : null;
+}
+// Scan bytes -> { version, gold, black } or { reason }: the decode and
+// colourProfile the worker runs on a scan (stampcheck checkMaterialScan).
+function colourFromScan(buf) {
+  const png = buf && buf[0] === 0x89 && buf[1] === 0x50, jpeg = buf && buf[0] === 0xff && buf[1] === 0xd8;
+  if (!png && !jpeg) return { reason: 'scan is neither a JPEG nor a PNG' };
+  const p = stampcheck.colourProfile(stampcheck.decodeImage(buf));
+  return { version: stampcheck.MATERIAL_VERSION, gold: p.gold, black: p.black };
+}
+// A stored row -> { gold, black } for this card's CURRENT scan, or null.
+function colourOf(row, scanUrl) {
+  if (!row || row.state !== 'built' || row.version !== stampcheck.MATERIAL_VERSION) return null;
+  if (!scanUrl || row.scan_url !== scanUrl || row.gold == null || row.black == null) return null;
+  return { gold: row.gold, black: row.black };
 }
 
 // The scan a reference is built from — the same rule wholeTemplateOf used:
@@ -108,4 +160,5 @@ function entryOf(row) {
   return { scan: row.scan_url, w: row.w, h: row.h, rgb: Buffer.from(row.rgb).toString('base64') };
 }
 
-module.exports = { REF_VERSION, TABLE_SQL, MIGRATE_SQL, RLS_SQL, ensureTable, scanUrlOf, templateFromScan, entryOf };
+module.exports = { REF_VERSION, TABLE_SQL, MIGRATE_SQL, RLS_SQL, ensureTable, scanUrlOf, templateFromScan, entryOf,
+  COLOUR_TABLE_SQL, COLOUR_RLS_SQL, ensureColourTable, colourScanUrlOf, colourFromScan, colourOf };

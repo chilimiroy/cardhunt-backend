@@ -236,18 +236,30 @@ const materialProfiles = new Map();   // itemId -> { gold, black, photoKey }
 const materialMissed = new Map();     // the store had nothing: not asked again for a minute
 const _materialRef = new Map();       // cardId -> Promise<{ gold, black } | null>
 const MATERIAL_MAX_PER_VIEW = 300, MATERIAL_REF_MS = 1500;
-function materialScanUrl(card) {
-  const src = String((card && (card.image_small || card.image_large)) || '');
-  if (/^https:\/\/assets\.tcgdex\.net\/.+\.(?:png|jpg)$/.test(src)) return src.replace(/\.png$/, '.jpg');
-  // pokemontcg.io art (806 English cards, 2026-10-05): PNG only, decoded as is.
-  return stampcheck.PNG_SCAN_HOST.test(src) ? src : null;
-}
+// The scan's URL rule lives in refscans.js: refbuild.js --colour must
+// measure exactly the scan this reads.
+const materialScanUrl = card => refscans.colourScanUrlOf(card);
 function materialApplies(card) { return /^en-/.test(String(card && card.api_card_id || '')) && !!materialScanUrl(card); }
+// Our scan's colour (2026-10-07): read from card_colour_refs, built ahead by
+// refbuild.js --colour — a visitor's request never waits on a third-party
+// host. A card not stored yet (or whose scan changed) falls back to the old
+// path, measured in the request and bounded by MATERIAL_REF_MS at its
+// caller, so deploying never switches the novelty check off. The live path
+// does not write the table: refbuild.js is the one writer.
+async function storedColourRef(card) {
+  if (!db) return null;
+  try {
+    await refscans.ensureColourTable(db);
+    const r = await db.query(`SELECT scan_url, state, version, gold, black FROM card_colour_refs WHERE card_id = $1`, [card.api_card_id]);
+    const c = refscans.colourOf(r.rows[0], materialScanUrl(card));
+    return c ? Object.assign(c, { stored: true }) : null;
+  } catch (e) { console.warn('[material] stored reference not read:', e.message); return null; }
+}
 function materialRefOf(card) {
   const cid = card.api_card_id;
   if (_materialRef.has(cid)) return _materialRef.get(cid);
-  const p = stampcheck.checkMaterialScan(materialScanUrl(card))
-    .then(v => v && v.state === 'profiled' ? { gold: v.gold, black: v.black } : null).catch(() => null);
+  const p = storedColourRef(card).then(s => s || stampcheck.checkMaterialScan(materialScanUrl(card))
+    .then(v => v && v.state === 'profiled' ? { gold: v.gold, black: v.black } : null)).catch(() => null);
   _materialRef.set(cid, p);
   p.then(v => { if (!v) setTimeout(() => _materialRef.delete(cid), 10 * 60 * 1000); });   // retry a failed scan later
   return p;

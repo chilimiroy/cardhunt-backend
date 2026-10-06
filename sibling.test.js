@@ -156,7 +156,14 @@ ok('...only for cards with no stored reference that were never recorded unbuilda
 ok('...never writes the table (refbuild.js is the one writer)', !/INSERT INTO card_reference_scans/.test(sibBlock));
 ok('...and a live build that fails is reported with its reason, never dropped', /liveFailed/.test(sibBlock) && /row\.liveFailed/.test(sibBlock));
 ok('a missing reference is reported (notRun), never dropped', /notRun\.push\(/.test(sibBlock) && /notRun: stampNotRun/.test(server));
-ok('the page labels a row still being compared', /'pending':\s+'Photo being compared'/.test(page));
+ok('the page labels a row whose check has not run yet as NOT checked yet', /'pending':\s+'Not checked yet'/.test(page));
+ok('...and never claims a comparison is under way while the row waits in the queue', !/being compared/.test(page));
+const notRunFn = page.slice(page.indexOf('function liveNotRun('), page.indexOf('function liveStampNote('));
+const noteFn = page.slice(page.indexOf('function liveStampNote('), page.indexOf('function scheduleStampPoll('));
+ok('a check that could not run is named on the page with its reason, never shown as a pass',
+   /g\.notRun/.test(notRunFn) && /r\.why/.test(notRunFn) && /did not run/.test(notRunFn) && /not cleared/.test(notRunFn));
+ok('...on a card where NO check could run (the note used to be empty)', /if \(!g\.applied\) return liveNotRun\(g\)/.test(noteFn));
+ok('...and beside the checks that did run (sibling, pair, stamp notes)', (noteFn.match(/\n\s+\+ liveNotRun\(g\)/g) || []).length === 3);
 ok('the page says what the check does NOT catch', /not every wrong card/.test(page));
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);

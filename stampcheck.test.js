@@ -264,13 +264,13 @@ ok('a row shows the server\'s stamp state (l.stamp)', /var st = l && l\.stamp;/.
 // T1 (2026-10-04): "pending" exists only for a COMPARISON check (siblings;
 // since T0 2026-10-06 a held lookalike pair too) — never for a stamp check.
 ok('chips: not visible / unreadable — no "found" (refused); "pending" only as a comparison check',
-   /STAMP_CHIP = \{[^}]*'pending':\s+'Photo being compared'/.test(H)
+   /STAMP_CHIP = \{[^}]*'pending':\s+'Not checked yet'/.test(H)
    && /state: 'pending', kind: report\.kind/.test(fs.readFileSync(__dirname + '/stampcheck.js', 'utf8'))
    && (fs.readFileSync(__dirname + '/stampcheck.js', 'utf8').match(/state: 'pending'/g) || []).length === 1 &&/'not-visible':\s*'No stamp visible — not proof'/.test(H) && /'unreadable':/.test(H) && !/STAMP_CHIP = \{[^}]*'found'/.test(H));
 ok('nothing on the page calls a stamp result "verified" or "original"', !/STAMP_CHIP[\s\S]{0,400}(verified|genuine original)/i.test(H));
 ok('the panel says how many the stamp check refused', /liveStampNote\(d\)/.test(fn('excludedNote')) && /refused &mdash; the seller&rsquo;s photo shows the/.test(fn('liveStampNote')));
-ok('the panel says how many are shown and how many still being checked',
-   /liveStampPending\(g, 'still being checked for the ' \+ liveEsc\(names\) \+ ' stamp'\)/.test(fn('liveStampNote'))
+ok('the panel says how many are shown and how many are not checked yet',
+   /liveStampPending\(g, 'not checked yet &mdash; queued to be checked for the ' \+ liveEsc\(names\) \+ ' stamp'\)/.test(fn('liveStampNote'))
    && /shown meanwhile/.test(fn('liveStampPending')) && /hidden until checked/.test(fn('liveStampPending')));
 ok('every row hidden behind its check is not called "No listing matched"', /pause \|\| stampWaiting \? ''/.test(H) && /var stampWaiting = !!\(d && d\.stampGate && d\.stampGate\.pending > 0\)/.test(H));
 ok('the panel re-reads while photos are pending, with ?poll=1', /stampGate\.pending > 0/.test(fn('scheduleStampPoll')) && /poll: true/.test(fn('scheduleStampPoll')) && /scheduleStampPoll\(card, grade, d\)/.test(H));

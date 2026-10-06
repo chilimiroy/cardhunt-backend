@@ -3878,8 +3878,10 @@ async function backCheck(btn){
 var STAMP_CHIP = {
   'not-visible': 'No stamp visible — not proof',
   'unreadable':  'Photo unreadable',
-  // Same-name siblings (T1): shown while its photo is still being compared.
-  'pending':     'Photo being compared'
+  // A comparison check (siblings, held pairs) not run yet: the row waits in
+  // the photo queue, often for minutes (2026-10-06: ~12 min on a cold card).
+  // Nothing is compared while it waits, so the chip must not claim a check.
+  'pending':     'Not checked yet'
 };
 // A lookalike check (T1, 2026-10-04) compares the photo with ANOTHER card
 // we hold a scan of; its weak answer is "not clearly that card", never a stamp.
@@ -3901,13 +3903,25 @@ function liveCountNoun(n){ n = n || 0; return n + ' listing' + (n === 1 ? '' : '
 function liveStampPending(g, doing){
   var hid = (g.pending || 0) - (g.pendingShown || 0);
   return g.pending + ' photo' + (g.pending === 1 ? '' : 's') + ' ' + doing
-    + (g.pendingShown ? ' &mdash; ' + g.pendingShown + ' shown meanwhile, marked &ldquo;Photo being compared&rdquo;' : '')
+    + (g.pendingShown ? ' &mdash; ' + g.pendingShown + ' shown meanwhile, marked &ldquo;Not checked yet&rdquo;' : '')
     + (hid ? (g.pendingShown ? '; ' : ' &mdash; ') + hid + ' priced well below this card&rsquo;s price '
         + (hid === 1 ? 'is' : 'are') + ' hidden until checked' : '') + '. ';
 }
+// A photo check that could NOT run (2026-10-06): no reference scan of a
+// same-name card yet, or its live build failed. The server names each in
+// stampGate.notRun. It is an unknown, never a pass, so the page says so —
+// including on a card where no check could run at all.
+function liveNotRun(g){
+  var nr = (g && g.notRun) || [];
+  if (!nr.length) return '';
+  return 'Not checked against ' + nr.map(function (r) { return liveEsc(r.label) + ' (' + liveEsc(r.why) + ')'; }).join('; ')
+    + ' &mdash; that photo check did not run, so these listings are not cleared of being that card. ';
+}
 function liveStampNote(d){
   var g = d && d.stampGate;
-  if (!g || !g.applied) return '';
+  if (!g) return '';
+  if (!g.applied) return liveNotRun(g)
+    ? '<div id="cd-stamp-note" style="font-size:11px;color:var(--fa);margin-top:4px">' + liveNotRun(g) + '</div>' : '';
   var names = (g.reprints || []).filter(function (r) { return r.template; })
     .map(function (r) { return r.label; }).join(' / ');
   // Same-name cards in this set (T1, 2026-10-04): cheap unchecked rows are
@@ -3917,26 +3931,29 @@ function liveStampNote(d){
     return '<div id="cd-stamp-note" style="font-size:11px;color:var(--fa);margin-top:4px">'
       + (g.refused ? g.refused + ' listing' + (g.refused === 1 ? '' : 's') + ' refused &mdash; the seller&rsquo;s photo matches '
           + 'another card of this name in the set (' + liveEsc(names) + ') better than this one. ' : '')
-      + (g.pending ? g.pending + ' photo' + (g.pending === 1 ? '' : 's') + ' still being compared with ' + liveEsc(names)
-          + (hid ? ' &mdash; ' + hid + ' priced well below this card&rsquo;s price ' + (hid === 1 ? 'is' : 'are')
+      + (g.pending ? g.pending + ' photo' + (g.pending === 1 ? '' : 's') + ' not checked yet &mdash; queued to be compared with ' + liveEsc(names)
+          + (hid ? '; ' + hid + ' priced well below this card&rsquo;s price ' + (hid === 1 ? 'is' : 'are')
               + ' hidden until checked' : '') + '. '
         : 'Every photo was compared with ' + liveEsc(names) + '. ')
+      + liveNotRun(g)
       + 'This catches a photo of a sibling card under this card&rsquo;s number, not every wrong card.'
       + '</div>';
   }
   if (g.kind === 'lookalike') return '<div id="cd-stamp-note" style="font-size:11px;color:var(--fa);margin-top:4px">'
     + (g.refused ? g.refused + ' listing' + (g.refused === 1 ? '' : 's') + ' refused &mdash; the seller&rsquo;s photo matches '
         + liveEsc(names) + ' better than this card. ' : '')
-    + (g.pending ? liveStampPending(g, 'still being compared with ' + liveEsc(names))
+    + (g.pending ? liveStampPending(g, 'not checked yet &mdash; queued to be compared with ' + liveEsc(names))
       : 'Every photo was compared with ' + liveEsc(names) + (g.refused ? '' : ' and none clearly matched it')
-        + '. Not clearly the other card is not proof of this one.')
+        + '. Not clearly the other card is not proof of this one. ')
+    + liveNotRun(g)
     + '</div>';
   return '<div id="cd-stamp-note" style="font-size:11px;color:var(--fa);margin-top:4px">'
     + (g.refused ? g.refused + ' listing' + (g.refused === 1 ? '' : 's') + ' refused &mdash; the seller&rsquo;s photo shows the '
         + liveEsc(names) + ' reprint stamp. ' : '')
-    + (g.pending ? liveStampPending(g, 'still being checked for the ' + liveEsc(names) + ' stamp')
+    + (g.pending ? liveStampPending(g, 'not checked yet &mdash; queued to be checked for the ' + liveEsc(names) + ' stamp')
       : 'Every photo was checked for the ' + liveEsc(names) + ' stamp' + (g.refused ? '' : ' and none showed it')
-        + '. No stamp visible is not proof of the original.')
+        + '. No stamp visible is not proof of the original. ')
+    + liveNotRun(g)
     + '</div>';
 }
 // Re-read the view while photos are pending: ?poll=1 is a cache read on the
@@ -7182,6 +7199,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-5585d39-t2email &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-29ebecd-notchecked &middot; click to hide</div>
 </body>
 </html>

@@ -2597,6 +2597,14 @@ function languageExclusionFor(matchCard, marketplace, mode) {
   if (mode === 'none') return none;
   const terms = cm.otherLanguageExclusions(matchCard);
   if (!terms.length) return Object.assign({}, none, { mode, why: 'not an English card' });
+  // MEASUREMENT ONLY (marketprobe ?lang=notspecified, 2026-10-07): ask for
+  // exactly the listings Language:{English} would drop — those whose seller
+  // left Language "Not Specified" — so the gate can say how many are the
+  // genuine English card. Never a production mode (CLAUDE.md: never send
+  // {Not Specified} as a filter); only marketprobe passes it.
+  if (mode === 'notspecified') return LANG_ASPECT_SITES.includes(marketplace)
+    ? { mode, applied: true, q: '', aspect: 'Language:{Not Specified}', terms: [], measurement: true }
+    : Object.assign({}, none, { mode, why: 'no English "Language" aspect on ' + marketplace });
   if (mode === 'aspect') return LANG_ASPECT_SITES.includes(marketplace)
     ? { mode, applied: true, q: '', aspect: 'Language:{English}', terms: [] }
     : Object.assign({}, none, { mode, why: 'no English "Language" aspect on ' + marketplace });
@@ -5763,7 +5771,7 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
   const shape = ['pair', 'bare', 'or'].includes(String(req.query.shape)) ? String(req.query.shape) : null;
   // ?lang=none|words|aspect (2026-10-07): which other-language exclusion the
   // request carries — measured here before production's default changes.
-  const langExclude = ['none', 'words', 'aspect'].includes(String(req.query.lang)) ? String(req.query.lang) : undefined;
+  const langExclude = ['none', 'words', 'aspect', 'notspecified'].includes(String(req.query.lang)) ? String(req.query.lang) : undefined;
   const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1', shape, req.query.titles === '1', langExclude || null]);
   const hit = marketProbeCache.get(key);
   if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') return res.json(hit.body);

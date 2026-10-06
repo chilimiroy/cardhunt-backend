@@ -32,12 +32,20 @@ ok('aspect on a site that names it in another language: not applied, and says wh
 const ja = L.languageExclusionFor({ cardId: 'ja-SV2a-151', lang: 'ja' }, 'EBAY_US', 'words');
 ok('a Japanese card: nothing excluded, and says why', !ja.applied && ja.q === '' && /not an English card/.test(ja.why));
 
+const ns = L.languageExclusionFor(en151, 'EBAY_US', 'notspecified');
+ok('notspecified (measurement): asks for exactly the listings Language:{English} would drop', ns.applied && ns.aspect === 'Language:{Not Specified}' && ns.measurement === true);
+// Only marketprobe may pass a mode: every other caller of sourceEbay gets the
+// production default, so "Not Specified" can never become a live filter.
+const passers = (src.match(/langExclude \}\)/g) || []).length;
+ok('only marketprobe passes a mode to sourceEbay', /background: true, allDropped: true, langExclude \}\);/.test(src)
+   && (src.match(/opts\.langExclude/g) || []).length === 1 && passers === 1, 'passed to sourceEbay ' + passers + 'x');
+
 console.log('\n  never silent');
 const se = src.slice(src.indexOf('async function sourceEbay('), src.indexOf('async function sourceEbayAll('));
 ok('the request uses the exclusion (q and aspect_filter)', /const qAsk = qMint \+ langEx\.q;/.test(se) && /aspectAsk \? '&aspect_filter='/.test(se));
 ok('every eBay source block states it (queryExclusion)', /queryExclusion: \{ mode: langEx\.mode, applied: langEx\.applied, terms: langEx\.terms/.test(se)
    && /sources\[s\.id\]\.queryExclusion = r\.value\.queryExclusion/.test(src));
-ok('marketprobe measures each mode, and caches them apart', /const langExclude = \['none', 'words', 'aspect'\]/.test(src) && /langExclude \|\| null\]\);/.test(src));
+ok('marketprobe measures each mode, and caches them apart', /const langExclude = \['none', 'words', 'aspect', 'notspecified'\]/.test(src) && /langExclude \|\| null\]\);/.test(src));
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

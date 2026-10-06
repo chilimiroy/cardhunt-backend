@@ -3005,6 +3005,9 @@ async function sourceEbay(card, grade, limit, opts = {}) {
            printing: printingReport(printing, matchCard, listings, dropped),
            // Refused for STATING another edition (T3), counted before any slice.
            editionRefused: dropped.filter(d => d.editionConflict).length,
+           // Language refusals, counted over ALL refusals before any slice —
+           // the language union's trigger reads it (cm.refusalLanguage).
+           languageRefused: dropped.filter(d => cm.refusalLanguage(d.reason)).length,
            query: qAsk,
            // A row excluded in the request never reaches the gate, so it can
            // never be counted as refused: the exclusion is stated instead.
@@ -3153,6 +3156,47 @@ function ebayStateResult(st) {
   });
 }
 
+// ── The language UNION (2026-10-07; measured before any default changes) ──
+// Language:{English} as a REPLACEMENT lost genuine English rows (0, 9, 3, 9,
+// 0 kept rows on five cards); as a SUPPLEMENT nothing is lost: the
+// unfiltered query runs as always, and only when it hit the cap AND language
+// refusals are most of its refusals is the filtered query run too, its kept
+// rows added by item id. Cost: the filtered query's pages, on polluted cards
+// only (unionPages caps them). marketprobe ?lang=union measures it.
+const LANG_UNION_SHARE = 0.5;
+async function sourceEbayLanguageUnion(card, grade, limit, opts = {}) {
+  const base = await sourceEbay(card, grade, limit, Object.assign({}, opts, { langExclude: 'none' }));
+  const capHit = !!(base.pages && base.pages.stoppedAtCap);
+  const share = base.rejected ? (base.languageRefused || 0) / base.rejected : 0;
+  const triggered = capHit && share > LANG_UNION_SHARE;
+  const union = { triggered, capHit, languageRefused: base.languageRefused || 0, rejected: base.rejected || 0,
+    share: +share.toFixed(3), threshold: LANG_UNION_SHARE, extraPages: 0, gained: 0,
+    why: !capHit ? 'the unfiltered query did not hit the cap'
+       : !triggered ? 'language refusals are not most of the refusals' : 'cap hit and language refusals dominate' };
+  if (!triggered) return Object.assign({}, base, { union,
+    queryExclusion: Object.assign({}, base.queryExclusion, { mode: 'union', applied: false, why: union.why }) });
+  const extra = await sourceEbay(card, grade, limit, Object.assign({}, opts, { langExclude: 'aspect',
+    maxPages: opts.unionPages || opts.maxPages }));
+  const seen = new Set(base.listings.map(l => l.itemId));
+  const added = extra.listings.filter(l => l.itemId && !seen.has(l.itemId));
+  const listings = base.listings.concat(added);
+  const keptIds = new Set(listings.map(l => l.itemId)), droppedIds = new Set();
+  const dropped = base.dropped.concat(extra.dropped).filter(d => {
+    if (!d.itemId) return true;
+    if (keptIds.has(d.itemId) || droppedIds.has(d.itemId)) return false;
+    droppedIds.add(d.itemId); return true;
+  });
+  union.extraPages = (extra.pages && extra.pages.fetched) || 0;
+  union.gained = added.length;
+  union.filteredQuery = { ebayTotal: extra.pages && extra.pages.ebayTotal, scanned: extra.scanned, kept: extra.kept,
+                          stoppedAtCap: !!(extra.pages && extra.pages.stoppedAtCap) };
+  return Object.assign({}, base, { listings, kept: listings.length, dropped,
+    rejected: opts.allDropped ? dropped.length : (base.rejected || 0) + (extra.rejected || 0),
+    scanned: (base.scanned || 0) + (extra.scanned || 0),
+    scannedIds: base.scannedIds && extra.scannedIds ? [...new Set(base.scannedIds.concat(extra.scannedIds))] : base.scannedIds,
+    pages: Object.assign({}, base.pages, { fetched: ((base.pages && base.pages.fetched) || 0) + union.extraPages }),
+    union, queryExclusion: { mode: 'union', applied: true, terms: [], aspect: 'Language:{English}', why: union.why } });
+}
 async function sourceEbayAll(card, grade, limit, opts = {}) {
   // A dry run builds US's request only: it exists to debug the gate, and
   // four identical requests with a different header say nothing more.
@@ -5771,8 +5815,10 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
   const shape = ['pair', 'bare', 'or'].includes(String(req.query.shape)) ? String(req.query.shape) : null;
   // ?lang=none|words|aspect (2026-10-07): which other-language exclusion the
   // request carries — measured here before production's default changes.
-  const langExclude = ['none', 'words', 'aspect', 'notspecified'].includes(String(req.query.lang)) ? String(req.query.lang) : undefined;
-  const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1', shape, req.query.titles === '1', langExclude || null]);
+  const langExclude = ['none', 'words', 'aspect', 'notspecified', 'union'].includes(String(req.query.lang)) ? String(req.query.lang) : undefined;
+  // ?lang=union&unionPages=1..3: how many pages the filtered query may take.
+  const unionPages = req.query.unionPages ? Math.max(1, Math.min(3, parseInt(req.query.unionPages, 10) || 3)) : undefined;
+  const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1', shape, req.query.titles === '1', langExclude || null, unionPages || null]);
   const hit = marketProbeCache.get(key);
   if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') return res.json(hit.body);
   try {
@@ -5782,9 +5828,9 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
     const per = {};
     for (const mp of sites) {
       try {
-        const r = await sourceEbay(card, grade, 25, { marketplace: mp.replace(/_NO(CAT|SET)$/, ''),
+        const r = await (langExclude === 'union' ? sourceEbayLanguageUnion : sourceEbay)(card, grade, 25, { marketplace: mp.replace(/_NO(CAT|SET)$/, ''),
           noCategory: /_NOCAT$/.test(mp), noSetInQuery: /_NOSET$/.test(mp), numberForm: shape,
-          background: true, allDropped: true, langExclude });
+          background: true, allDropped: true, langExclude, unionPages });
         const reasons = {};
         for (const d of r.dropped) {
           // cm.refusalLanguage: only the gate's language reasons are "language:"
@@ -5806,7 +5852,7 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
         per[mp] = { scanned: r.scanned, kept: r.kept, rejected: r.rejected, pages: r.pages, scannedIds: r.scannedIds || [],
                     extraPhotos: { rows: photoCounts.length, withAny: photoCounts.filter(n => n > 0).length,
                                    total: photoCounts.reduce((a, b) => a + b, 0) },
-                    rejectReasons: reasons, keptRows: kept, query: r.query, queryExclusion: r.queryExclusion,
+                    rejectReasons: reasons, keptRows: kept, query: r.query, queryExclusion: r.queryExclusion, langUnion: r.union,
                     droppedRows: r.dropped.map(d => ({ itemId: d.itemId, title: String(d.title || '').slice(0, 140), reason: d.reason })) };
       } catch (e) {
         per[mp] = { error: e.message, status: e.ebayStatus || null };
@@ -5889,7 +5935,8 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
       refused: ((per[mp] && per[mp].droppedRows) || []).map(d => ({ title: d.title, reason: d.reason })) }])) : undefined;
     const body = { cardId, grade, sites, summary, crossRefused, titles,
                    query: Object.fromEntries(sites.map(mp => [mp, per[mp] && per[mp].query])),
-                   queryExclusion: Object.fromEntries(sites.map(mp => [mp, per[mp] && per[mp].queryExclusion])), union: allIds.size, usKept: usIds.size,
+                   queryExclusion: Object.fromEntries(sites.map(mp => [mp, per[mp] && per[mp].queryExclusion])),
+                   langUnion: Object.fromEntries(sites.map(mp => [mp, per[mp] && per[mp].langUnion])), union: allIds.size, usKept: usIds.size,
                    usCapped, usMaxExaminedUsd: usMax, outliers: judged.stats,
                    quotaSpentSearch: calls, stored: false, at: new Date().toISOString() };
     marketProbeCache.set(key, { at: Date.now(), body });

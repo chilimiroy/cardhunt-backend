@@ -567,7 +567,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <button class="nl" onclick="SS('portfolio')">Portfolio</button>
     <div class="nav-r">
       <div class="nsearch"><span class="nsearch-i">🔍</span><input id="nav-q" placeholder="Search any card…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
-      <button class="btn" onclick="cycleTheme()" id="theme-btn" title="Theme: follows your device">◐ Auto</button><button class="btn" onclick="toggleCurrency()" id="currency-btn">🌐 USD</button><button class="btn" onclick="cycleLang()" id="lang-btn" title="Page language">EN</button><button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--re);color:var(--accent-ink);font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button>
+      <button class="btn" onclick="cycleTheme()" id="theme-btn" title="Theme: follows your device">◐ Auto</button><button class="btn" onclick="toggleCurrency()" id="currency-btn">🌐 USD</button><button class="btn" onclick="cycleLang()" id="lang-btn" title="Page language">EN</button><button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--re);color:var(--accent-ink);font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button><button class="btn auth-btn" onclick="authOpen()" id="auth-btn" style="display:none" title="Sign in with Google or an emailed link">Sign in</button>
     </div>
   </nav>
   <div class="hero">
@@ -998,6 +998,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
       <button class="btn" onclick="toggleCurrency()" id="currency-btn2">&#127760; USD</button>
       <button class="btn" onclick="cycleLang()" id="lang-btn2" title="Page language">EN</button>
       <button class="btn" onclick="SS('alerts')">&#128276;</button>
+      <button class="btn auth-btn" onclick="authOpen()" id="auth-btn2" style="display:none" title="Sign in with Google or an emailed link">Sign in</button>
     </div>
   </nav>
   <div class="content" style="padding-top:28px">
@@ -6390,7 +6391,13 @@ var LANG_JA = {
   'Pokémon TCG — sets, trending cards and prices': 'ポケモンカード — セット、注目カード、価格',
   'Not in the CardHunt catalogue — no cards or prices are held for this game': 'CardHuntのカタログ外 — このゲームのカードと価格は保持していません',
   'Close': '閉じる', 'eBay calls today — click for detail': '本日のeBay呼び出し回数 — クリックで詳細',
-  'Click to hide': 'クリックで非表示', 'Page language': '表示言語'
+  'Click to hide': 'クリックで非表示', 'Page language': '表示言語',
+  // sign-in (T6 step 1)
+  'Sign in': 'ログイン', 'Sign out': 'ログアウト', 'Signed in': 'ログイン中', 'Sign in to CardHunt': 'CardHuntにログイン',
+  'With Google, or with a one-time link sent to your email.': 'Google、またはメールで届く1回限りのリンクでログイン。',
+  'Continue with Google': 'Googleで続ける', 'Email': 'メールアドレス', 'Email me a sign-in link': 'ログインリンクをメールで送る',
+  'Sign in with Google or an emailed link': 'Googleまたはメールのリンクでログイン', 'Opening Google…': 'Googleを開いています…',
+  'Sending…': '送信中…', 'Enter an email address.': 'メールアドレスを入力してください。'
 };
 var LANG_ATTRS = ['placeholder', 'title', 'aria-label'];
 var LANG_ORIG = new Map();     // text node -> [its English text, what was written]
@@ -6459,6 +6466,110 @@ function applyLang(l){
 }
 function cycleLang(){ applyLang(currentLang() === 'ja' ? 'en' : 'ja'); }
 document.addEventListener('DOMContentLoaded', function(){ if (currentLang() === 'ja') applyLang('ja'); else langButtons(); });
+
+// ══ SIGN-IN (T6 step 1, 2026-10-06): Google, or a one-time link by email ══
+// Supabase Auth signs the person in; the page keeps the session it returns.
+// The signed-in state shown here comes ONLY from /api/me — the server
+// verifying the token — never from a button having been pressed (the
+// lesson of the old disabled login). Offered only over http(s): Google cannot
+// return to a file:// page. No roles, approval or alert move in this step.
+var AUTH = { cfg: null, sb: null, user: null, notice: null, seq: 0 };
+var SUPABASE_JS = { src: 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js',
+                    integrity: 'sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok' };
+function authLoadLib(){
+  return new Promise(function (res, rej) {
+    if (window.supabase && window.supabase.createClient) return res();
+    var s = document.createElement('script');
+    s.src = SUPABASE_JS.src; s.integrity = SUPABASE_JS.integrity; s.crossOrigin = 'anonymous';
+    s.onload = function () { res(); }; s.onerror = function () { rej(new Error('the sign-in library did not load')); };
+    document.head.appendChild(s);
+  });
+}
+function authRedirect(){ return location.origin + location.pathname; }
+function authButtons(){
+  ['auth-btn', 'auth-btn2'].forEach(function (id) {
+    var b = document.getElementById(id); if (!b) return;
+    b.style.display = AUTH.sb ? '' : 'none';
+    // The person's own address, as the server returned it — card data rules do not apply.
+    b.textContent = AUTH.user ? (AUTH.user.email || 'Signed in') : 'Sign in';
+  });
+}
+function authRender(){
+  var el = document.getElementById('auth-body'); if (!el) return;
+  var h = '';
+  if (AUTH.user) {
+    h += '<div style="font-size:18px;font-weight:800;margin-bottom:6px">Signed in</div>'
+      + '<div style="font-size:13px;color:var(--mu);margin-bottom:18px">' + liveEsc(AUTH.user.email || AUTH.user.id)
+      + (AUTH.user.provider ? ' &middot; ' + liveEsc(AUTH.user.provider) : '') + '</div>'
+      + '<button class="btn" onclick="authSignOut()">Sign out</button>';
+  } else {
+    h += '<div style="font-size:18px;font-weight:800;margin-bottom:6px">Sign in to CardHunt</div>'
+      + '<div style="font-size:13px;color:var(--mu);margin-bottom:18px">With Google, or with a one-time link sent to your email.</div>'
+      + '<button class="btn" style="width:100%;margin-bottom:16px" onclick="authGoogle()">Continue with Google</button>'
+      + '<label for="auth-email" style="display:block;font-size:11px;font-weight:700;color:var(--mu);margin-bottom:6px">Email</label>'
+      + '<input id="auth-email" type="email" autocomplete="email" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--bd);border-radius:10px;font-size:14px;margin-bottom:10px;background:var(--w);color:inherit">'
+      + '<button class="btn" style="width:100%" onclick="authEmail()">Email me a sign-in link</button>';
+  }
+  if (AUTH.notice) h += '<div id="auth-notice" style="font-size:12px;margin-top:14px;color:' + (AUTH.notice.bad ? 'var(--re)' : 'var(--mu)') + '">' + liveEsc(AUTH.notice.text) + '</div>';
+  el.innerHTML = h;
+}
+function authOpen(){ authRender(); openM('auth-overlay'); }
+function authSay(text, bad){ AUTH.notice = text ? { text: text, bad: !!bad } : null; authRender(); }
+// The only writer of AUTH.user: the server's verdict on the session's token.
+async function authCheck(session){
+  var mine = ++AUTH.seq, user = null;
+  if (session && session.access_token) {
+    try {
+      var r = await fetch(BACKEND + '/api/me', { headers: { Authorization: 'Bearer ' + session.access_token } });
+      var j = await r.json();
+      if (r.ok && j.signedIn) user = j.user;
+      else authSay('Sign-in was not accepted by the server: ' + (j.reason || ('HTTP ' + r.status)) + '.', true);
+    } catch (e) { authSay('Could not reach the server to confirm the sign-in.', true); }
+  }
+  if (mine !== AUTH.seq) return;            // a newer check is in flight
+  AUTH.user = user;
+  authButtons(); authRender();
+}
+async function authGoogle(){
+  if (!AUTH.sb) return;
+  authSay('Opening Google…');
+  var r = await AUTH.sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: authRedirect() } });
+  if (r.error) authSay(r.error.message, true);
+}
+async function authEmail(){
+  if (!AUTH.sb) return;
+  var input = document.getElementById('auth-email'), email = input ? input.value.trim() : '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return authSay('Enter an email address.', true);
+  authSay('Sending…');
+  var r = await AUTH.sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: authRedirect() } });
+  // Said only once Supabase has accepted the request — never before.
+  if (r.error) authSay(r.error.message, true);
+  else authSay('Supabase accepted the request: a sign-in link is on its way to ' + email + '. Open it in this browser.');
+}
+async function authSignOut(){
+  if (!AUTH.sb) return;
+  var r = await AUTH.sb.auth.signOut();
+  if (r.error) return authSay(r.error.message, true);
+  AUTH.notice = null; authCheck(null);
+}
+async function authInit(){
+  if (!/^https?:$/.test(location.protocol)) return;
+  try { AUTH.cfg = await fetch(BACKEND + '/api/auth/config').then(function (r) { return r.json(); }); } catch (e) { return; }
+  if (!AUTH.cfg || !AUTH.cfg.enabled) return;
+  // An error Supabase sent back on the redirect (?error_description=…) is said, then removed from the address.
+  var q = new URLSearchParams(location.search + '&' + location.hash.replace(/^#/, ''));
+  if (q.get('error_description')) AUTH.notice = { text: q.get('error_description'), bad: true };
+  try { await authLoadLib(); } catch (e) { console.warn('[auth]', e.message); return; }
+  AUTH.sb = window.supabase.createClient(AUTH.cfg.url, AUTH.cfg.anonKey,
+    { auth: { flowType: 'pkce', persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  authButtons();
+  AUTH.sb.auth.onAuthStateChange(function (ev, session) { authCheck(session); });
+  var s = await AUTH.sb.auth.getSession();
+  await authCheck(s.data && s.data.session);
+  if (/[?&#](code|error|error_description)=/.test(location.href)) history.replaceState(null, '', authRedirect());
+  if (AUTH.notice) authOpen();
+}
+document.addEventListener('DOMContentLoaded', function(){ authInit(); });
 
 function fmtCurrency(usd){
   if(!usd) return CURRENCY_SYMBOLS[currentCurrency]+'0';
@@ -6735,6 +6846,15 @@ function cleanSeries(name) {
 
 </script>
 
+<!-- ══ SIGN-IN (T6 step 1, 2026-10-06) — Google, or a one-time link by email ══
+     Supabase Auth does the signing in; the server (/api/me) verifies the token.
+     No password field: the emailed link is the credential. -->
+<div id="auth-overlay" class="overlay">
+  <div class="modal" style="max-width:420px">
+    <button class="modal-x" onclick="closeM('auth-overlay')" aria-label="Close">&#10005;</button>
+    <div id="auth-body"></div>
+  </div>
+</div>
 <!-- ══ PHOTOS — the seller's own images of one eBay listing ══ -->
 <div id="photos-overlay" class="overlay" data-item="">
   <div class="modal" style="max-width:560px;max-height:90vh;overflow:auto">
@@ -6897,6 +7017,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-c00078e-t5lang &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-716a315-t6signin &middot; click to hide</div>
 </body>
 </html>

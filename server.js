@@ -29,6 +29,9 @@ const pricequality = require('./pricequality');   // T1: is that headline curren
 // A card id not matching ^(en|ja|zh-tw|zh-cn)- is a bug, not a card:
 // refused at every entry point that takes one, never served. cardid.js.
 const cardid = require('./cardid');
+// T6 step 1: who is signed in, verified here from the Supabase token — never
+// from the page saying so. auth.js.
+const auth = require('./auth');
 
 const app = express();
 app.use(cors({ origin: '*' }));
@@ -38,6 +41,25 @@ app.use(express.json());
 // and outlier pass inside this request records into it; the JSON response
 // gains a `timings` key. Without the flag nothing is recorded.
 const timing = require('./timing');
+
+// ── Sign-in (T6 step 1, 2026-10-06) ─────────────────────────────
+// The page starts a Google or emailed-link sign-in at Supabase with the
+// public anon key; /api/me is where the SERVER decides the token is real.
+// The signed-in state on the page comes from this answer, never from a
+// button having been pressed. No role, approval or alert move yet.
+app.get('/api/auth/config', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(auth.publicConfig());
+});
+app.get('/api/me', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const token = auth.bearer(req);
+  if (!token) return res.status(401).json({ signedIn: false, reason: 'no token' });
+  const v = await auth.verify(token);
+  if (!v.ok) return res.status(401).json({ signedIn: false, reason: v.reason });
+  res.json({ signedIn: true, user: v.user });
+});
+
 const stampcheck = require('./stampcheck');
 const backcheck = require('./backcheck.js');   // TASK T3: the card back
 timing.instrumentFetch();

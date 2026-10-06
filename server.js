@@ -53,6 +53,7 @@ const timing = require('./timing');
 // the state cannot be read the answer is 503 with role null: the page
 // fails closed on it.
 const roles = require('./roles');
+const access = require('./access');   // THE gate: alerts, admin, and the door (prices, listings, links)
 app.get('/api/auth/config', (req, res) => {
   res.set('Cache-Control', 'no-store');
   res.json(auth.publicConfig());
@@ -395,7 +396,7 @@ function dealBackFollowUp(card, requestedId, grade, printing, edition, payload) 
 // minutes, or the verdict is stored). Never a URL from the caller: the item
 // id is checked, the photos come from eBay's own getItem, and stampcheck
 // fetches only from i.ebayimg.com.
-app.get('/api/back/:cardId', async (req, res) => {
+app.get('/api/back/:cardId', access.priced, async (req, res) => {
   const cardId = req.params.cardId;
   const itemId = String(req.query.item || '');
   const base = { cardId, itemId, stored: false };
@@ -632,7 +633,7 @@ app.get('/api/db/check', async (req, res) => {
 
 
 // ── SETS ──────────────────────────────────────────────────────
-app.get('/api/sets', async (req, res) => {
+app.get('/api/sets', access.optional, async (req, res) => {
   try {
     const cached = cGet('sets');
     if (cached) return res.json(cached);
@@ -701,7 +702,7 @@ function extractPrice(card) {
   return null;
 }
 
-app.get('/api/sets/:setId/cards', async (req, res) => {
+app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
   const { setId } = req.params;
   const lang = (req.query.lang || 'en').toLowerCase();
   const key = `set_${setId}_${lang}_v5`;
@@ -953,7 +954,7 @@ app.get('/api/sets/:setId/cards', async (req, res) => {
 });
 
 
-app.get('/api/cards/:cardId', async (req, res) => {
+app.get('/api/cards/:cardId', access.optional, async (req, res) => {
   const { cardId } = req.params;
   try {
     if (db) {
@@ -1078,7 +1079,7 @@ app.get('/api/cards/:cardId', async (req, res) => {
 // changes nightly, and the cold query takes ~5s.
 const trending = require('./trending');
 const deals_ = require('./deals');
-app.get('/api/trending', async (req, res) => {
+app.get('/api/trending', access.priced, async (req, res) => {
   const p = trending.parseParams(req.query);
   const key = `trending_${p.lang}_${p.sort}_${p.window}_${p.limit}`;
   const hit = cGet(key);
@@ -1135,7 +1136,7 @@ app.get('/api/trending', async (req, res) => {
 // The cheapest trusted Buy It Now against the card's current measured price,
 // drawn ONLY from views opened in the last 15 minutes (the listing cache).
 // Reads the cache and the database; never gathers listings — 0 eBay calls.
-app.get('/api/deals', async (req, res) => {
+app.get('/api/deals', access.priced, async (req, res) => {
   // Off (deals.ENABLED) answers that it is off and why — never an empty
   // shelf that reads as "no deals right now".
   if (!deals_.ENABLED) return res.json({ enabled: false, reason: deals_.OFF_REASON, rule: deals_.describeRule(),
@@ -1189,7 +1190,7 @@ app.get('/api/cards', async (req, res) => {
 });
 
 // ── PRICE ─────────────────────────────────────────────────────
-app.get('/api/price/:cardId', async (req, res) => {
+app.get('/api/price/:cardId', access.priced, async (req, res) => {
   const { cardId } = req.params;
   try {
     const cached = cGet(`price_${cardId}`);
@@ -1519,7 +1520,7 @@ async function getEbayToken() {
 // A row that is not the caller's is not found, not refused: the answer does
 // not say whether someone else's id exists.
 // ══════════════════════════════════════════════════════════════
-const access = require('./access');
+// (access is required at the top: the door's routes above use it too.)
 const ALERT_STATUSES = ['active', 'paused', 'deleted'];
 
 app.get('/api/alerts', access.approved, async (req, res) => {
@@ -1681,7 +1682,7 @@ app.post('/api/admin/users/:userId/reject', access.master, decideAccount('reject
 //     markets, and averaging across sources manufactures movement;
 //   * `series` names each one, so the page can draw the card's own market.
 // No date limit: price_history starts 2026-07-27, and "All" means all.
-app.get('/api/history/:cardId', async (req, res) => {
+app.get('/api/history/:cardId', access.priced, async (req, res) => {
   if (!db) return res.json({ data: [], series: [] });
   try {
     const rows = await db.query(`
@@ -4183,7 +4184,7 @@ function withTimeout(promise, ms, label) {
 // ══════════════════════════════════════════════════════════════
 // GET /api/listings/:cardId?grade=PSA+10&limit=25[&refresh=1]
 // ══════════════════════════════════════════════════════════════
-app.get('/api/listings/:cardId', async (req, res, next) => {
+app.get('/api/listings/:cardId', access.priced, async (req, res, next) => {
   const { cardId } = req.params;
   const grade = req.query.grade || 'Raw';
   const limit = Math.min(parseInt(req.query.limit) || 25, 50);
@@ -4288,7 +4289,7 @@ function searchCandidate(r) {
   };
 }
 
-app.get('/api/search', async (req, res) => {
+app.get('/api/search', access.optional, async (req, res) => {
   const q = String(req.query.q || '').trim();
   const limit = Math.min(parseInt(req.query.limit) || 10, 25);
   const wantListings = req.query.listings !== '0';
@@ -4339,7 +4340,11 @@ app.get('/api/search', async (req, res) => {
     }
 
     // A2 — chain a confident hit straight into listings.
-    if (confident && wantListings) {
+    // The door (T1, 2026-10-07): listings are for approved accounts. Not
+    // fetched at all otherwise — no eBay call is spent on a caller who
+    // could not be sent the rows.
+    if (confident && wantListings && !req.seesPrices) payload.listingsWithheld = true;
+    if (confident && wantListings && req.seesPrices) {
       const card = await resolveListingCard(top.cardId);
       if (card) {
         const grade = parsed.gradeString;
@@ -4386,7 +4391,7 @@ app.get('/api/listings/:cardName', (req, res) => {
 // ══════════════════════════════════════════════════════════════
 const PC_TOKEN = process.env.PRICECHARTING_TOKEN || '';
 
-app.get('/api/graded/:cardName', async (req, res) => {
+app.get('/api/graded/:cardName', access.priced, async (req, res) => {
   const { cardName } = req.params;
   const setName = req.query.set || '';
   if (!PC_TOKEN) {
@@ -4420,7 +4425,7 @@ app.get('/api/graded/:cardName', async (req, res) => {
 // ══════════════════════════════════════════════════════════════
 // DIAGNOSTIC — tells you exactly which sources are live
 // ══════════════════════════════════════════════════════════════
-app.get('/api/diagnostic', async (req, res) => {
+app.get('/api/diagnostic', access.optional, async (req, res) => {
   const out = { version: '5.6.0', checks: {} };
 
   try {
@@ -4524,7 +4529,7 @@ const MARKET_WITHDRAWN = Object.freeze({
 });
 
 // GET /api/market/:cardName?cardId=en-base1-4
-app.get('/api/market/:cardName', async (req, res) => {
+app.get('/api/market/:cardName', access.priced, async (req, res) => {
   try {
     const cardId = req.query.cardId || '';
     let nm = null;
@@ -4590,7 +4595,7 @@ app.get('/api/scraper/test', async (req, res) => {
 // SETS BY LANGUAGE — real set lists from TCGdex per language
 // GET /api/sets/lang/ja  -> every Japanese set with JP names + logos
 // ══════════════════════════════════════════════════════════════
-app.get('/api/sets/lang/:lang', async (req, res) => {
+app.get('/api/sets/lang/:lang', access.optional, async (req, res) => {
   const lang = (req.params.lang || 'en').toLowerCase();
   const key = `setlist_${lang}_v3`;
   try {
@@ -5449,7 +5454,7 @@ async function ebayItemOnDemand(itemId, cardId, purpose, o) {
 const ebayItemMeta = (hit, calls) => ({ calls, cached: calls === 0,
   ageSec: Math.round((Date.now() - hit.at) / 1000), keptFor: '15 minutes, in memory only' });
 
-app.get('/api/cert/:cardId', async (req, res) => {
+app.get('/api/cert/:cardId', access.priced, async (req, res) => {
   const cardId = req.params.cardId;
   const itemId = String(req.query.item || '');
   const grade = String(req.query.grade || '');
@@ -5486,7 +5491,7 @@ app.get('/api/cert/:cardId', async (req, res) => {
 // shown with their listing and a link to it, and kept no longer than the
 // 15-minute window. The same getItem as /api/cert — one call answers both.
 // Returns exactly the images the listing has: one is one.
-app.get('/api/photos/:cardId', async (req, res) => {
+app.get('/api/photos/:cardId', access.priced, async (req, res) => {
   const cardId = req.params.cardId;
   const itemId = String(req.query.item || '');
   const base = { cardId, itemId, stored: false };
@@ -5527,7 +5532,7 @@ function cachedListingRow(cardIds, itemId) {
   }
   return null;
 }
-app.get('/api/stamp/:cardId', async (req, res) => {
+app.get('/api/stamp/:cardId', access.priced, async (req, res) => {
   const cardId = req.params.cardId;
   const itemId = String(req.query.item || '');
   const base = { cardId, itemId, stored: false, ebayCalls: 0 };

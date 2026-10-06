@@ -25,21 +25,26 @@ const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? 
 
 // [method, path, level, reason]. level: public | approved | master | tooling.
 // tooling = the eBay probes: a shared secret (toolingkey.js), not a sign-in.
+// priced = prices / listings / links (the door, 2026-10-07): an approved
+//   account or the tooling key; refuses everyone else (access.priced).
+// catalogue = public, never refuses, but a caller without an approved
+//   account gets the body with every price key stripped (access.optional,
+//   pricegate.js; pricegate.test.js proves it against real responses).
 // A public route's reason says why it may answer anyone.
 const CATALOGUE = 'the public catalogue: browsing cards, sets, prices and listings is not gated';
 const ROUTES = [
   ['get', '/api/auth/config', 'public', 'what a signed-out page needs to START a sign-in: URL + anon key (public by design)'],
   ['get', '/api/me', 'public', 'verifies the caller\'s own token itself and answers only about that token (401 without one)'],
-  ['get', '/api/back/:cardId', 'public', CATALOGUE + ' (card-back check of a public listing; the verdict stored is hashed, no user)'],
+  ['get', '/api/back/:cardId', 'priced', null],
   ['get', '/', 'public', 'service banner and version'],
   ['get', '/api/db/check', 'public', 'catalogue counts; no user rows'],
-  ['get', '/api/sets', 'public', CATALOGUE],
-  ['get', '/api/sets/:setId/cards', 'public', CATALOGUE],
-  ['get', '/api/cards/:cardId', 'public', CATALOGUE],
-  ['get', '/api/trending', 'public', CATALOGUE],
-  ['get', '/api/deals', 'public', CATALOGUE],
+  ['get', '/api/sets', 'catalogue', null],
+  ['get', '/api/sets/:setId/cards', 'catalogue', null],
+  ['get', '/api/cards/:cardId', 'catalogue', null],
+  ['get', '/api/trending', 'priced', null],
+  ['get', '/api/deals', 'priced', null],
   ['get', '/api/cards', 'public', CATALOGUE + ' (search)'],
-  ['get', '/api/price/:cardId', 'public', CATALOGUE],
+  ['get', '/api/price/:cardId', 'priced', null],
   ['get', '/api/alerts', 'approved', null],
   ['post', '/api/alerts', 'approved', null],
   ['get', '/api/alerts/triggered', 'approved', null],
@@ -50,18 +55,18 @@ const ROUTES = [
   ['get', '/api/admin/users', 'master', null],
   ['post', '/api/admin/users/:userId/approve', 'master', null],
   ['post', '/api/admin/users/:userId/reject', 'master', null],
-  ['get', '/api/history/:cardId', 'public', CATALOGUE],
+  ['get', '/api/history/:cardId', 'priced', null],
   ['get', '/api/listings-log', 'public', 'calls per card view, aggregated; listing_views holds no user id'],
-  ['get', '/api/listings/:cardId', 'public', CATALOGUE + ' (records a view row: card, grade, calls — no user)'],
-  ['get', '/api/search', 'public', CATALOGUE],
+  ['get', '/api/listings/:cardId', 'priced', null],
+  ['get', '/api/search', 'catalogue', null],
   ['get', '/api/listings/:cardName', 'public', 'refuses: an unidentifiable card gets no listings'],
-  ['get', '/api/graded/:cardName', 'public', CATALOGUE],
-  ['get', '/api/diagnostic', 'public', 'which sources answer; no user data'],
-  ['get', '/api/market/:cardName', 'public', CATALOGUE],
+  ['get', '/api/graded/:cardName', 'priced', null],
+  ['get', '/api/diagnostic', 'catalogue', null],
+  ['get', '/api/market/:cardName', 'priced', null],
   ['get', '/api/market/:cardName/sold', 'public', 'answers 410 Gone'],
   ['get', '/api/market/:cardName/active', 'public', 'answers 410 Gone'],
   ['get', '/api/scraper/test', 'public', 'reports what the market block does; no user data'],
-  ['get', '/api/sets/lang/:lang', 'public', CATALOGUE],
+  ['get', '/api/sets/lang/:lang', 'catalogue', null],
   ['get', '/api/health/full', 'public', 'operational check; no user data'],
   ['get', '/ebay/deletion', 'public', 'eBay\'s ownership challenge — eBay must reach it unauthenticated'],
   ['post', '/ebay/deletion', 'public', 'eBay\'s account-deletion notification — called by eBay, answered with the verification token; stores nothing'],
@@ -69,9 +74,9 @@ const ROUTES = [
   ['get', '/api/ebay/conditionvalues', 'tooling', null],
   ['get', '/api/ebay/certprobe/:cardId', 'tooling', null],
   ['get', '/api/ebay/setprobe/:cardId', 'tooling', null],
-  ['get', '/api/cert/:cardId', 'public', CATALOGUE + ' (cert number of a public listing)'],
-  ['get', '/api/photos/:cardId', 'public', CATALOGUE + ' (photos of a public listing)'],
-  ['get', '/api/stamp/:cardId', 'public', CATALOGUE + ' (photo check of a public listing)'],
+  ['get', '/api/cert/:cardId', 'priced', null],
+  ['get', '/api/photos/:cardId', 'priced', null],
+  ['get', '/api/stamp/:cardId', 'priced', null],
   ['get', '/api/ebay/gradecost/:cardId', 'tooling', null],
   ['get', '/api/ebay/marketprobe/:cardId', 'tooling', null],
   ['get', '/api/ebay/aspects/:cardId', 'tooling', null],
@@ -106,6 +111,8 @@ for (const f of found) {
   if (!r) { ok('classified: ' + k, false, 'line ' + f.line + ' — add it to ROUTES with a level'); continue; }
   const lvl = r[2];
   if (lvl === 'tooling') ok(`tooling: ${k} names toolingKey.require on its declaration line, and no user gate`, f.text.includes(', toolingKey.require, ') && !/access./.test(f.text), 'line ' + f.line);
+  else if (lvl === 'priced' || lvl === 'catalogue') { const mw = lvl === 'priced' ? 'access.priced' : 'access.optional';
+    ok(`${lvl}: ${k} calls ${mw} on its declaration line`, f.text.includes(`, ${mw}, `), 'line ' + f.line); }
   else if (lvl === 'public') ok(`public with a reason, no gate: ${k}`, !!r[3] && !/access\./.test(f.text), 'line ' + f.line);
   else ok(`${lvl}: ${k} calls access.${lvl} on its declaration line`, f.text.includes(`, access.${lvl}, `), 'line ' + f.line);
   f.level = lvl; f.reason = r[3];
@@ -153,6 +160,7 @@ if (process.argv.includes('--table')) {
 // ── live: boot the server and ask ──────────────────────────────
 const PORT = process.env.TEST_PORT || 3997, BASE = 'http://127.0.0.1:' + PORT;
 const SECRET = 'access-test-secret', SUPA = 'https://access-test.supabase.co';
+const TKEY = crypto.randomBytes(24).toString('base64url');   // the tooling key, this run only
 const ID = { approved: '11111111-1111-4111-8111-111111111111', pending: '22222222-2222-4222-8222-222222222222',
              rejected: '33333333-3333-4333-8333-333333333333', master: '44444444-4444-4444-8444-444444444444',
              master2: '55555555-5555-4555-8555-555555555555' };
@@ -193,7 +201,8 @@ async function ask(method, p, tok, body) {
 (async () => {
   const server = spawn(process.execPath, ['-r', preload, path.join(__dirname, 'server.js')], {
     env: { ...process.env, PORT: String(PORT), DATABASE_URL: '', EBAY_ENABLED: 'false', SUPABASE_URL: SUPA,
-           SUPABASE_ANON_KEY: 'anon', SUPABASE_JWT_SECRET: SECRET, CARDZON_MASTER_EMAILS: 'master@example.com, roy@cardzon.com' },
+           SUPABASE_ANON_KEY: 'anon', SUPABASE_JWT_SECRET: SECRET, CARDZON_MASTER_EMAILS: 'master@example.com, roy@cardzon.com',
+           CARDZON_TOOLING_KEY: TKEY },
     stdio: ['ignore', 'pipe', 'pipe'] });
   let err = ''; server.stderr.on('data', d => { err += d; }); server.stdout.on('data', () => {});
   let up = false;
@@ -201,7 +210,7 @@ async function ask(method, p, tok, body) {
   if (!up) { console.log('\nCOULD NOT BOOT server.js — the live half was not tested.\n' + err); fs.unlinkSync(preload); process.exit(2); }
 
   try {
-    const gated = found.filter(f => f.level && f.level !== 'public' && f.level !== 'tooling');   // tooling: toolingkey.test.js
+    const gated = found.filter(f => f.level === 'approved' || f.level === 'master');   // tooling: toolingkey.test.js
     console.log('\n  live: every gated route (' + gated.length + '), every kind of caller');
     for (const f of gated) {
       const p = sample(f.path), k = f.method.toUpperCase() + ' ' + f.path;
@@ -221,6 +230,30 @@ async function ask(method, p, tok, body) {
       r = await ask(f.method, p, TOK.master);
       ok(`${k}  master (stored row says rejected; the list wins) -> past the gate`, r.status !== 401 && r.status !== 403, r.status + ' ' + r.text.slice(0, 80));
     }
+
+    const pricedR = found.filter(f => f.level === 'priced');
+    console.log('\n  live: every priced route (' + pricedR.length + ') — prices, listings, links — every kind of caller');
+    for (const f of pricedR) {
+      const p = sample(f.path), k = 'GET ' + f.path;
+      let r = await ask('get', p, null);
+      ok(`${k}  no token -> 401, nothing but the refusal`, r.status === 401 && r.body && r.body.error === 'sign-in required' && Object.keys(r.body).length <= 2, r.status + ' ' + r.text.slice(0, 80));
+      r = await ask('get', p, TOK.pending);
+      ok(`${k}  pending -> 403`, r.status === 403 && r.body.state === 'pending', r.status + ' ' + r.text.slice(0, 60));
+      r = await ask('get', p, TOK.forged);
+      ok(`${k}  pending with forged role claims -> 403`, r.status === 403, String(r.status));
+      r = await ask('get', p, TOK.rejected);
+      ok(`${k}  rejected -> 403`, r.status === 403 && r.body.state === 'rejected', String(r.status));
+      r = await ask('get', p, TOK.approved);
+      ok(`${k}  approved -> past the gate`, r.status !== 401 && r.status !== 403, r.status + ' ' + r.text.slice(0, 60));
+      r = await fetch(BASE + p, { headers: { 'X-CardHunt-Key': TKEY } }).then(x => x.status);
+      ok(`${k}  tooling key -> past the gate`, r !== 401 && r !== 403, String(r));
+      r = await fetch(BASE + p, { headers: { 'X-CardHunt-Key': TKEY + 'x', 'X-CardHunt-Origin': 'tooling' } }).then(x => x.status);
+      ok(`${k}  wrong tooling key with the origin claim -> 401`, r === 401, String(r));
+    }
+    let tr = await fetch(BASE + '/api/alerts', { headers: { 'X-CardHunt-Key': TKEY } });
+    ok('the tooling key is NOT a user: /api/alerts with it -> 401', tr.status === 401, String(tr.status));
+    tr = await fetch(BASE + '/api/admin/users', { headers: { 'X-CardHunt-Key': TKEY } });
+    ok('... nor a master: /api/admin/users with it -> 401', tr.status === 401, String(tr.status));
 
     console.log('\n  live: /api/me says the role; public routes stay public');
     let r = await ask('get', '/api/me', TOK.pending);

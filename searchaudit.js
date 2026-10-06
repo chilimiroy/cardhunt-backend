@@ -41,7 +41,7 @@ const CAP = 25;
 async function get(path, tries = 3) {
   for (let t = 0; t < tries; t++) {
     try {
-      const r = await fetch(BASE + path, { headers: { Accept: 'application/json', 'X-CardHunt-Origin': 'tooling' } });
+      const r = await fetch(BASE + path, { headers: Object.assign({ Accept: 'application/json' }, require('./toolingkey').headers()) }   // tooling origin + CARDZON_TOOLING_KEY: the door lets tooling through (T1, 2026-10-07));
       if (r.ok) return await r.json();
       if (r.status < 500) return { _status: r.status };
     } catch (e) { if (t === tries - 1) return { _error: e.message }; }

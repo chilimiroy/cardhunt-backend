@@ -22,6 +22,8 @@
 'use strict';
 const auth = require('./auth');
 const roles = require('./roles');
+const pricegate = require('./pricegate');
+const toolingKey = require('./toolingkey');
 
 async function resolve(req) {
   const token = auth.bearer(req);
@@ -59,5 +61,49 @@ function gate(need) {
   };
 }
 
-module.exports = { resolve, refusalFor, isApproved,
+// Prices and listings (door task T1, 2026-10-07): an approved account, as
+// gate('approved') — or the tooling key (toolingkey.js, the shared secret
+// on Render), so the audit scripts that read /api/listings keep working
+// without a person's token. The key never stands in for a USER:
+// req.account.userId stays undefined, and the routes that act on a user
+// (alerts, portfolio) are on gate('approved'), which does not accept it.
+const approvedGate = gate('approved');
+function priced(req, res, next) {
+  if (req.get(toolingKey.HEADER) && toolingKey.check(req).ok) {
+    res.set('Cache-Control', 'no-store');
+    req.account = { tooling: true, role: 'tooling' };
+    return next();
+  }
+  return approvedGate(req, res, next);
+}
+
+// The catalogue routes (door task T1, 2026-10-07): public, never a refusal.
+// An approved or master token gets the full body. Anyone else — no token,
+// a bad token, pending, rejected, or a state that cannot be read — gets the
+// body through pricegate.strip(): no price, listing or link leaves the
+// server. Never cached by anything between us and the caller, because the
+// same URL answers differently by who asks.
+async function optional(req, res, next) {
+  res.set('Cache-Control', 'private, no-store');
+  res.vary('Authorization');
+  let account = null;
+  if (req.get(toolingKey.HEADER) && toolingKey.check(req).ok) account = { tooling: true, role: 'tooling' };
+  else if (auth.bearer(req)) {
+    const r = await resolve(req);
+    if (r.ok) account = r.account;
+  }
+  req.account = account;
+  req.seesPrices = !!account && (account.tooling || isApproved(account.role));
+  if (!req.seesPrices) {
+    const json = res.json.bind(res);
+    res.json = body => {
+      const out = pricegate.strip(body);
+      if (out && typeof out === 'object' && !Array.isArray(out)) out.pricesWithheld = pricegate.WITHHELD;
+      return json(out);
+    };
+  }
+  next();
+}
+
+module.exports = { resolve, refusalFor, isApproved, optional, priced,
                    approved: gate('approved'), master: gate('master') };

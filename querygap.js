@@ -53,7 +53,7 @@ for (const fam of Object.values(cm.REPRINT_OF || {}))
 async function get(path) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const r = await fetch(BASE + path, { headers: { Accept: 'application/json', 'X-CardHunt-Origin': 'tooling' } });
+      const r = await fetch(BASE + path, { headers: Object.assign({ Accept: 'application/json' }, require('./toolingkey').headers()) }   // tooling origin + CARDZON_TOOLING_KEY: the door lets tooling through (T1, 2026-10-07));
       const text = await r.text();
       if (!r.ok) { if (r.status >= 500) { await sleep(3000); continue; } return { ok: false, status: r.status, body: text.slice(0, 200) }; }
       return { ok: true, json: JSON.parse(text) };

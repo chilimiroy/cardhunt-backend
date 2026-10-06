@@ -15,10 +15,12 @@
 <script>
 (function(){try{var t=localStorage.getItem('ch_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
 (function(){try{if(localStorage.getItem('ch_lang')==='ja')document.documentElement.setAttribute('lang','ja');}catch(e){}})();
-// The closed door (T6 step 2): a browser holding a sign-in session shows
-// NOTHING until the server (/api/me) says the account is approved. No
-// session, no door: anonymous visitors browse exactly as before.
-(function(){try{if(!/^https?:$/.test(location.protocol))return;if(/[?&]code=/.test(location.search)){document.documentElement.classList.add('ch-door');return;}for(var i=0;i<localStorage.length;i++)if(/^sb-.+-auth-token$/.test(localStorage.key(i))){document.documentElement.classList.add('ch-door');return;}}catch(e){}})();
+// The door (T1, 2026-10-07): the catalogue is public to everyone; prices,
+// listings and links are for approved accounts. They start CLOSED here,
+// before the first paint, and authCheck() opens them only on /api/me's
+// word. Nothing holds the page any more: a pending account browses the
+// catalogue like anyone, and its waiting screen is in the account panel.
+try { document.documentElement.classList.add('ch-noprice'); } catch (e) {}
 </script>
 
 <!-- ══ FONTS — LOADED WITHOUT BLOCKING THE FIRST PAINT ══
@@ -557,24 +559,20 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .eq-d div{display:flex;justify-content:space-between;gap:12px}
 .lq-pause{padding:12px 14px;margin:0 0 12px;border-radius:10px;border:1px solid var(--crit);background:var(--crit-soft);font-size:12px;line-height:1.6;color:var(--ink)}
 .lq-pause strong{color:var(--crit)}
-/* ══ THE CLOSED DOOR (T6 step 2) ══ a signed-in account that is not
-   approved sees this and nothing else. html.ch-door is set by the head
-   script while a session is being checked, and by doorSet() after. */
-#door { display: none; }
-html.ch-door body > *:not(#door) { display: none !important; }
-html.ch-door #door { display: flex; min-height: 100vh; align-items: center; justify-content: center;
-  padding: 24px 16px; box-sizing: border-box; background: var(--bg); color: var(--tx); }
-#door .door-box { max-width: 420px; width: 100%; background: var(--w); border: 1px solid var(--bd);
-  border-radius: var(--r); padding: 28px 24px; text-align: center; }
-#door .door-title { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
-#door .door-text { font-size: 14px; color: var(--mu); margin-bottom: 20px; line-height: 1.5; }
+/* ══ THE DOOR (T1, 2026-10-07) ══ the catalogue is public; prices, listings
+   and links are for approved accounts. The SERVER withholds them
+   (access.optional / access.priced): this only swaps the blocks that would
+   have held them for one plain note. html.ch-noprice is set by the head
+   script and cleared by authCheck() when /api/me says approved or master. */
+html.ch-noprice .price-only { display: none !important; }
+html:not(.ch-noprice) .price-door { display: none !important; }
+.price-door { background: var(--w); border: 1px dashed var(--bd); border-radius: var(--r); padding: 18px 20px;
+  font-size: 13px; line-height: 1.6; color: var(--mu); }
+.price-door b { color: var(--tx); }
+.price-door .btn { margin-top: 10px; }
 </style>
 </head>
 <body>
-<div id="door" aria-live="polite"><div class="door-box" id="door-box">
-  <div class="door-title">Checking your account…</div>
-  <div class="door-text">One moment.</div>
-</div></div>
 <!-- ══ LOGIN ══ -->
 <!-- ══ HOME ══ -->
 <div id="screen-home" class="screen on">
@@ -672,6 +670,11 @@ html.ch-door #door { display: flex; min-height: 100vh; align-items: center; just
       <div class="gc off" aria-disabled="true" title="Not in the CardHunt catalogue — no cards or prices are held for this game"><div class="gc-logo"><span class="gc-word">Vanguard</span></div><div class="gc-n">Cardfight!! Vanguard</div><div class="gc-c">Not tracked yet</div></div>
     </div>
 
+    <!-- ══ THE DOOR (T1, 2026-10-07) ══ one note where the price sections
+         below would be; they are .price-only and the server sends them
+         nothing without an approved account. -->
+    <div class="price-door" role="note" style="margin-top:38px"></div>
+    <div class="price-only">
     <!-- ══ MY ALERTS — kept as it was ══ -->
     <div class="sec-h" style="margin-top:38px;margin-bottom:14px">
       <div>
@@ -698,6 +701,7 @@ html.ch-door #door { display: flex; min-height: 100vh; align-items: center; just
     <div class="mnote" id="movers-note"></div>
     <div class="sec-h"><div><div class="sec-t">💎 Best deals right now</div><div class="sec-s" id="deals-sub">Cheapest trusted Buy It Now below the measured price — cards opened in the last 15 minutes</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
     <div class="cg" id="home-deals"><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div></div>
+    </div><!-- /.price-only (alerts, movers, deals) -->
   </div>
 </div>
 
@@ -737,7 +741,9 @@ html.ch-door #door { display: flex; min-height: 100vh; align-items: center; just
     </div>
     <div id="home-setrow" class="setrow2"></div>
 
-    <!-- ── TRENDING RIGHT NOW ── moved from Home. -->
+    <!-- ── TRENDING RIGHT NOW ── moved from Home. Prices: approved accounts only (the door). -->
+    <div class="price-door" role="note" style="margin-top:28px"></div>
+    <div class="price-only">
     <div class="sec-h" style="align-items:flex-end">
       <div><div class="sec-t">🔥 Trending right now</div><div class="sec-s" id="trend-sub">Loading&hellip;</div></div>
       <div class="trend-ctl">
@@ -762,6 +768,7 @@ html.ch-door #door { display: flex; min-height: 100vh; align-items: center; just
     </div>
     <div class="trend-note" id="trend-rule"></div>
     <div class="trend-grid" id="home-trending"><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div><div class="sk" style="width:158px;height:230px;flex-shrink:0"></div></div>
+    </div><!-- /.price-only (trending) -->
   </div>
 </div>
 
@@ -828,8 +835,8 @@ html.ch-door #door { display: flex; min-height: 100vh; align-items: center; just
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div><div style="font-size:20px;font-weight:800" id="results-title">Results</div><div style="font-size:12px;color:var(--mu);margin-top:3px" id="results-sub"></div></div>
       <div style="display:flex;gap:8px">
-        <select class="tbsel" onchange="sortResults(this.value)"><option value="rel">Best match</option><option value="price">Price ↑</option><option value="price-d">Price ↓</option></select>
-        <button class="btn" onclick="openCompare()">⚖️ Compare</button>
+        <select class="tbsel price-only" onchange="sortResults(this.value)"><option value="rel">Best match</option><option value="price">Price ↑</option><option value="price-d">Price ↓</option></select>
+        <button class="btn price-only" onclick="openCompare()">⚖️ Compare</button>
       </div>
     </div>
     <!-- Language filter chips -->
@@ -881,7 +888,7 @@ html.ch-door #door { display: flex; min-height: 100vh; align-items: center; just
     <div style="display:flex;align-items:center;gap:18px;margin-bottom:22px" id="sd-hdr"></div>
     <div class="toolbar">
       <span class="tbl">Sort:</span>
-      <select class="tbsel" id="sd-sort" onchange="applyFilters()"><option value="num">Number ↑</option><option value="num-d">Number ↓</option><option value="name">Name A–Z</option><option value="name-d">Name Z–A</option><option value="price-d">Price: High → Low</option><option value="price">Price: Low → High</option><option value="rarity">Rarity</option></select>
+      <select class="tbsel" id="sd-sort" onchange="applyFilters()"><option value="num">Number ↑</option><option value="num-d">Number ↓</option><option value="name">Name A–Z</option><option value="name-d">Name Z–A</option><option class="price-only" value="price-d">Price: High → Low</option><option class="price-only" value="price">Price: Low → High</option><option value="rarity">Rarity</option></select>
       <div class="tbdiv"></div><span class="tbl">Type:</span>
       <button class="tbchip on" data-tf="type" data-tv="all" onclick="toggleTb(this,'type')">All</button>
       <button class="tbchip" data-tf="type" data-tv="Pokémon" onclick="toggleTb(this,'type')">Pokémon</button>
@@ -905,9 +912,9 @@ html.ch-door #door { display: flex; min-height: 100vh; align-items: center; just
     <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
     <button class="nl on">Card</button>
     <div class="nav-r">
-      <button class="btn" onclick="openCompare()">⚖️ Compare</button>
-      <button class="btn" onclick="addAlertFromCard()" style="border-color:var(--am);color:var(--am)" onmouseover="this.style.background='var(--warn-soft)'" onmouseout="this.style.background=''">🔔 Set Alert</button>
-      <button class="btn" id="watch-btn" onclick="toggleWatch()">🤍 Watch</button>
+      <button class="btn price-only" onclick="openCompare()">⚖️ Compare</button>
+      <button class="btn price-only" onclick="addAlertFromCard()" style="border-color:var(--am);color:var(--am)" onmouseover="this.style.background='var(--warn-soft)'" onmouseout="this.style.background=''">🔔 Set Alert</button>
+      <button class="btn price-only" id="watch-btn" onclick="toggleWatch()">🤍 Watch</button>
       
     </div>
   </nav>
@@ -938,6 +945,8 @@ html.ch-door #door { display: flex; min-height: 100vh; align-items: center; just
 
         <!-- 1b. price boxes, and the position bar beneath them -->
         <div class="cdtop-r">
+          <div class="price-door" role="note"></div>
+          <div class="price-only">
           <div class="pboxes">
             <div class="pbox"><div class="pbl">Market value</div><div class="pbv" id="cd-mkt">—</div><div class="pbs up" id="cd-chg"></div></div>
             <div class="pbox"><div class="pbl">Lowest listing</div><div class="pbv" id="cd-low" style="color:var(--t)">—</div><div class="pbs" id="cd-lowsrc" style="color:var(--mu)"></div></div>
@@ -958,6 +967,7 @@ html.ch-door #door { display: flex; min-height: 100vh; align-items: center; just
               <span style="font-size:10px;color:var(--fa)">Recorded high: <strong id="cd-52high">&#8212;</strong></span>
             </div>
           </div>
+          </div><!-- /.price-only (price boxes, position bar) -->
         </div>
 
         <!-- 2a. information panel, under the image and matching its width:
@@ -965,7 +975,7 @@ html.ch-door #door { display: flex; min-height: 100vh; align-items: center; just
         <div class="mbox2 cd-info" id="cd-meta"></div>
 
         <!-- 2b. price history, beside the information panel -->
-        <div class="chart-box cd-chartcell">
+        <div class="chart-box cd-chartcell price-only">
           <div class="chart-h">
             <div><div class="chart-t">Price history — <span id="cd-grade-lbl">Raw NM</span></div><div class="chart-s" id="cd-chart-src">Loading recorded prices…</div></div>
             <div class="rchips">
@@ -986,13 +996,13 @@ html.ch-door #door { display: flex; min-height: 100vh; align-items: center; just
       <!-- 3. the grading selector. Piece 2 of this phase replaces the flat
            chip list with a status box and a condition box; the chips stay
            addressable meanwhile so selGrade() keeps working. -->
-      <div id="cd-selector"></div>
+      <div id="cd-selector" class="price-only"></div>
       <!-- The flat 16-chip GRADES row used to sit here. The status/condition
            selector above replaces it: two controls for one setting is two
            places for them to disagree about what is selected, which is the
            same reason the listings panel lost its own chip grid. -->
 
-        <div class="lbox">
+        <div class="lbox price-only">
           <div class="lhdr">
             <div class="ltabs2">
               <button class="ltab on" id="ltab-bin" onclick="setLTab(this,'live')">Buy It Now</button>
@@ -1066,6 +1076,34 @@ const BACKEND=(['localhost','127.0.0.1'].indexOf(location.hostname)>=0
 // window.__perf and the console as "[perf]".
 var PERF_ON = /[?&]debug=1(&|$)/.test(location.search);
 window.__perf = { marks: [], api: [] };
+// ── The door: our API sees who is asking (T1, 2026-10-07) ─────
+// Prices, listings and links leave the server only for an approved account.
+// So every call to our own API carries the session's token when there is
+// one. A browser holding a stored session (or returning from Google with
+// ?code=) waits for the sign-in check first, so its first catalogue answer
+// is already the right one. /api/me and /api/auth/config ARE the check and
+// never wait. A call that set its own Authorization is left alone.
+(function () {
+  var base = window.fetch.bind(window);
+  function signingIn() {
+    if (/[?&]code=/.test(location.search)) return true;
+    try { for (var i = 0; i < localStorage.length; i++) if (/^sb-.+-auth-token$/.test(localStorage.key(i))) return true; } catch (e) {}
+    return false;
+  }
+  window.fetch = async function (url, init) {
+    var u = String(url);
+    if (u.indexOf(BACKEND + '/api/') !== 0 || /^\/api\/(me|auth\/config)(\?|$)/.test(u.slice(BACKEND.length))) return base(url, init);
+    init = Object.assign({}, init || {});
+    var h = new Headers(init.headers || {});
+    if (!h.has('Authorization') && /^https?:$/.test(location.protocol)) {
+      if (signingIn() && typeof AUTH !== 'undefined') { try { await AUTH.ready; } catch (e) {} }
+      var t = typeof authToken === 'function' ? await authToken() : null;
+      if (t) h.set('Authorization', 'Bearer ' + t);
+    }
+    init.headers = h;
+    return base(url, init);
+  };
+})();
 function perfMark(name, extra) {
   if (!PERF_ON) return;
   var m = Object.assign({ name: name, t: Math.round(performance.now()) }, extra || {});
@@ -1830,6 +1868,7 @@ const GRADES=['Raw NM','Raw LP','Raw MP','PSA 5','PSA 6','PSA 7','PSA 8','PSA 9'
 // const PD (the fixed price-history curve genPD drew) is gone with it.
 
 function mockP(rarity, cardId, cardName, cardNumber, setTotal, setRelease) {
+  if (!pricesOpen()) return 0;   // the door: an estimate is a price too
   // This function WAS the estimator, and it was the only one with a vintage
   // multiplier: server.js and ingest.js had none, so the same 1999 card was
   // priced up to 9x apart depending on which screen asked. estimator.js is
@@ -1956,6 +1995,10 @@ function normRarity(r){
 
 function getBase(c) {
   if (!c) return 0;
+  // The door (T1, 2026-10-07): every price the page draws is read here or in
+  // mockP. Closed, there is none — not a figure the server withheld, and not
+  // one this page would otherwise estimate or read from a third party.
+  if (!pricesOpen()) return 0;
   // Backend serves merged real prices from our own database
   if (c._price && c._price > 0) return parseFloat(Number(c._price).toFixed(2));
   var t = (c.tcgplayer && c.tcgplayer.prices) ? c.tcgplayer.prices : {};
@@ -2203,7 +2246,8 @@ async function doSearch(q, lang) {
       + 'text-overflow:ellipsis">#' + liveEsc(c.number) + '/' + liveEsc(c.setTotal || '?')
       + ' \u00b7 ' + liveEsc(c.setName || '') + '</div>'
       + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px">'
-      + '<span style="font-size:14px;font-weight:800">' + price + '</span>'
+      // The door: no price slot (and no dash in it) without prices.
+      + (pricesOpen() ? '<span style="font-size:14px;font-weight:800">' + price + '</span>' : '<span></span>')
       + '<span style="font-size:10px;color:var(--fa)">score ' + liveEsc(c.score) + '</span>'
       + '</div></div></div>';
   });
@@ -2364,6 +2408,7 @@ function setSourceNote(source, lang, realCount, total){
   var old = document.getElementById('sd-lang-note');
   if (old) old.remove();
   if (!source) return;
+  if (!pricesOpen()) return;   // the door: this note is about where PRICES come from
   var msg = '', bg = 'var(--accent-soft)', bd = 'var(--border)', fg = 'var(--accent)';
 
   if (source === 'cardhunt_db') {
@@ -2484,7 +2529,8 @@ function applyFilters(){
       +'<div class="cn" title="'+(c.nameEn||c.name||'')+'">'+nameWithEn(c.name, c.nameEn)+'</div>'
       +(c._kitName?'<div class="cs" style="color:var(--fa)">'+liveEsc(c._kitName.replace(/ trainer Kit/i,''))+'</div>':'')
       +'<div class="cs">#'+c.number+' &middot; '+(c.rarity||'')+(c._raritySource==='inferred'?'<span style="color:var(--fa);font-size:9px">*</span>':'')+'</div>'
-      +'<div class="cr"><span class="cp">'+priceStr+estMark+'</span></div>'
+      // The door: no price row at all without prices — not a dash.
+      +(pricesOpen() ? '<div class="cr"><span class="cp">'+priceStr+estMark+'</span></div>' : '')
       +'</div></div>');
   });
 
@@ -3408,6 +3454,7 @@ function livePrintRuns(rows) {
 }
 
 function renderListingFinder(card) {
+  var _a = arguments; if (!whenPrices(function () { renderListingFinder.apply(null, _a); })) return;   // the door: prices only
   LF.card = card;
   var host = document.getElementById('cd-listings');
   if (!host || !card) return;
@@ -4236,6 +4283,7 @@ function onlyUsNote(d) {
 }
 
 async function renderLiveListings(card, grade, opts){
+  var _a = arguments; if (!whenPrices(function () { renderLiveListings.apply(null, _a); })) return;   // the door: prices only
   opts = opts || {};
   var host = document.getElementById('cd-live');
   if (!host || !card) return;
@@ -4679,6 +4727,7 @@ var HIST = { cardId: null, series: null, all: null, loading: null, done: false }
 var RANGE_DAYS = { '1M': 30, '3M': 91, '6M': 182, '1Y': 365, 'All': 100000 };
 
 function loadHistory(card) {
+  var _a = arguments; if (!whenPrices(function () { loadHistory.apply(null, _a); })) return Promise.resolve(null);   // the door: prices only
   if (!card) return Promise.resolve(null);
   if (HIST.cardId === card.id && HIST.done) return Promise.resolve(HIST.series);
   if (HIST.cardId === card.id && HIST.loading) return HIST.loading;
@@ -5207,6 +5256,7 @@ function listingAvgKey(cardId, grade) { return cardId + '@@' + (grade || 'Raw NM
 // Second call, deliberately separate: /api/listings spends eBay quota, so
 // the tile paints from /api/cards first and fills this in when it arrives.
 async function cardListingAvg(cardId, grade) {
+  var _a = arguments; if (!whenPrices(function () { cardListingAvg.apply(null, _a); })) return { avg: null, count: 0, notFetched: true };   // the door: prices only
   try {
     // The card panel's answer if someone already fetched it — never a new
     // eBay search for a tile nobody opened (T2: one home-page load opened
@@ -5280,10 +5330,12 @@ function cardSummaryTile(s, opts) {
     + '<div class="ci">'
       + '<div class="cn" ' + open + '>' + liveEsc(s.name || s.cardId) + '</div>'
       + '<div class="cs">' + liveEsc(s.setName || '') + '</div>'
-      + '<div class="cr" style="margin-top:4px">' + price + '</div>'
+      // The door: without prices neither line is drawn — "no market price"
+      // would be untrue, and a 'checking listings…' slot would never fill.
+      + (pricesOpen() ? '<div class="cr" style="margin-top:4px">' + price + '</div>' : '')
       // opts.noAvg: a caller that will not fetch listings must not print a
       // 'checking listings…' slot that nothing ever fills.
-      + (opts.noAvg ? '' : '<div style="font-size:10px;margin-top:3px;line-height:1.5">'
+      + (opts.noAvg || !pricesOpen() ? '' : '<div style="font-size:10px;margin-top:3px;line-height:1.5">'
         + '<span style="color:var(--fa)">avg listing </span>' + avg + '</div>')
       + (opts.extra || '')
     + '</div></div>';
@@ -5480,6 +5532,7 @@ function setPokeLang(l) {
 // an arbitrary order wearing a ranking's clothes.
 var TREND_SEQ = 0;
 async function loadTrending() {
+  var _a = arguments; if (!whenPrices(function () { loadTrending.apply(null, _a); })) return;   // the door: prices only
   var host = document.getElementById('home-trending');
   if (!host) return;
   var sortEl = document.getElementById('trend-sort');
@@ -5554,6 +5607,7 @@ async function loadTrending() {
 // measured price, from views opened in the last 15 minutes ONLY — the server
 // never fetches to fill this shelf (deals.js). An empty shelf says why.
 async function loadHomeDeals() {
+  var _a = arguments; if (!whenPrices(function () { loadHomeDeals.apply(null, _a); })) return;   // the door: prices only
   var host = document.getElementById('home-deals');
   if (!host) return;
   var d;
@@ -5607,6 +5661,7 @@ async function moverList(sort, lang) {
   return { d: tried[tried.length - 1], fellBack: true, first: tried[0], empty: true };
 }
 async function loadHomeMovers() {
+  var _a = arguments; if (!whenPrices(function () { loadHomeMovers.apply(null, _a); })) return;   // the door: prices only
   var lang = S.lang || 'en';
   var notes = [];
   await Promise.all(MOVER_LISTS.map(async function (sort) {
@@ -5711,6 +5766,7 @@ function renderLatestSearches() {
 }
 
 function updateAlertsBar() {
+  var _a = arguments; if (!whenPrices(function () { updateAlertsBar.apply(null, _a); })) return;   // the door: prices only
   var bar = document.getElementById('alerts-bar-items');
   if (!bar) return;
 
@@ -6225,7 +6281,8 @@ function cardTile(c) {
     + '<div class="ci">'
     + '<div class="cn" title="' + (c.nameEn || c.name || '') + '">' + nameWithEn(c.name, c.nameEn) + '</div>'
     + '<div class="cs">' + setName + ' &middot; #' + (c.number || '') + '</div>'
-    + '<div class="cr"><span class="cp">' + priceStr + '</span>' + priceMarksHtml(isReal, c._priceQuality) + '</div>'
+    // The door: no price row at all without prices — not a dash, not "$0".
+    + (pricesOpen() ? '<div class="cr"><span class="cp">' + priceStr + '</span>' + priceMarksHtml(isReal, c._priceQuality) + '</div>' : '')
     + '</div></div>';
 }
 
@@ -6547,24 +6604,54 @@ var AUTH = { cfg: null, sb: null, user: null, notice: null, seq: 0 };
 // sign-in unavailable): what reads AUTH.user waits for it.
 AUTH.ready = new Promise(function (res) { AUTH._ready = res; });
 // The session's current access token (Supabase refreshes it), or null.
-// ── The closed door ─────────────────────────────────────────────
-// kind: null (open) | 'checking' | 'pending' | 'rejected' | 'unconfirmed'.
-// Decided only from /api/me's answer. A session the server could not
-// confirm (unreachable, 503, the library or config not loading) is
-// 'unconfirmed' — CLOSED, never open.
-var DOOR = { kind: document.documentElement.classList.contains('ch-door') ? 'checking' : null, email: null };
+// ── The door (T1, 2026-10-07) ──────────────────────────────────
+// kind: null (signed out, or approved) | 'checking' | 'pending' | 'rejected'
+// | 'unconfirmed'. Decided only from /api/me's answer. A session the server
+// could not confirm (unreachable, 503, the library or config not loading)
+// is 'unconfirmed' — prices CLOSED, never open.
+// Nothing here holds the page: the catalogue is public to everyone. The door
+// decides whether prices open, what each price note says, and what the
+// account panel shows — a pending account's waiting screen lives there.
+var DOOR = { kind: (function () { try { if (!/^https?:$/.test(location.protocol)) return null;
+    if (/[?&]code=/.test(location.search)) return 'checking';
+    for (var i = 0; i < localStorage.length; i++) if (/^sb-.+-auth-token$/.test(localStorage.key(i))) return 'checking'; } catch (e) {}
+    return null; })(), email: null, shown: false };
+// The one test the page uses for "may this visitor see prices". The server
+// has already decided (it withholds them otherwise); this only lays out.
+function pricesOpen(){ return AUTH.role === 'master' || AUTH.role === 'approved'; }
+// For a loader of prices or listings: true = go ahead now. While the
+// sign-in check is still running it says false and runs fn once the check
+// has settled, if prices opened. Closed: false, and nothing is asked of the
+// server (it would refuse anyway).
+function whenPrices(fn){
+  if (DOOR.kind === 'checking') { AUTH.ready.then(function () { if (pricesOpen()) fn(); }); return false; }
+  return pricesOpen();
+}
+var DOOR_TEXT = {
+  checking: ['Checking your account…', 'One moment.'],
+  pending: ['Awaiting approval', 'Your account has been created and is waiting for a CardHunt administrator to approve it. Prices, price history and live listings open once it is approved.'],
+  rejected: ['Not approved', 'This account was not approved for access to CardHunt prices and listings.'],
+  unconfirmed: ['Could not confirm your account', 'The server did not answer, so your access could not be checked. Prices stay closed until it can be.'] };
+// What stands where a price block would be. Words only: no figure, no
+// blurred number, no dash in a price box.
+function priceDoorHtml(){
+  if (DOOR.kind && DOOR.kind !== 'checking') return '<b>' + DOOR_TEXT[DOOR.kind][0] + '.</b> ' + DOOR_TEXT[DOOR.kind][1]
+    + (DOOR.kind === 'unconfirmed' ? '<br><button class="btn" onclick="location.reload()">Try again</button>' : '');
+  if (DOOR.kind === 'checking') return DOOR_TEXT.checking[0];
+  return '<b>Prices are for approved accounts.</b> Sign in to see market prices, price history and live listings from every marketplace, '
+    + 'each linking to the exact card. New accounts are approved by CardHunt.'
+    + (AUTH.sb ? '<br><button class="btn" onclick="authOpen()">Sign in</button>' : '');
+}
+function renderPriceDoors(){
+  var h = priceDoorHtml();
+  document.querySelectorAll('.price-door').forEach(function (el) { el.innerHTML = h; });
+}
 function doorSet(kind, email){
   DOOR.kind = kind || null; DOOR.email = email || null;
-  document.documentElement.classList.toggle('ch-door', !!DOOR.kind);
-  var box = document.getElementById('door-box'); if (!box || !DOOR.kind) return;
-  var who = DOOR.email ? '<div class="door-text" style="margin-bottom:6px"><b>' + liveEsc(DOOR.email) + '</b></div>' : '';
-  var t = { checking: ['Checking your account…', 'One moment.'],
-            pending: ['Awaiting approval', 'Your account has been created and is waiting for a CardHunt administrator to approve it. You will have access once it is approved.'],
-            rejected: ['Not approved', 'This account was not approved for access to CardHunt.'],
-            unconfirmed: ['Could not confirm your account', 'The server did not answer, so your access could not be checked. Nothing is shown until it can be.'] }[DOOR.kind];
-  box.innerHTML = '<div class="door-title">' + t[0] + '</div>' + who + '<div class="door-text">' + t[1] + '</div>'
-    + (DOOR.kind === 'unconfirmed' ? '<button class="btn" style="margin-right:8px" onclick="location.reload()">Try again</button>' : '')
-    + (DOOR.kind === 'checking' ? '' : '<button class="btn" onclick="doorSignOut()">Sign out</button>');
+  document.documentElement.classList.toggle('ch-noprice', !pricesOpen());
+  renderPriceDoors();
+  // The waiting screen, once a visit, where the account lives.
+  if ((DOOR.kind === 'pending' || DOOR.kind === 'rejected') && !DOOR.shown) { DOOR.shown = true; authOpen(); }
 }
 // Sign out from the door — also when the sign-in library never loaded:
 // the stored session is removed and the page reloads signed out.
@@ -6596,13 +6683,25 @@ function authButtons(){
     var b = document.getElementById(id); if (!b) return;
     b.style.display = AUTH.sb ? '' : 'none';
     // The person's own address, as the server returned it — card data rules do not apply.
-    b.textContent = AUTH.user ? (AUTH.user.email || 'Signed in') : 'Sign in';
+    b.textContent = AUTH.user ? (AUTH.user.email || 'Signed in')
+      : DOOR.kind === 'pending' ? 'Awaiting approval' : DOOR.kind === 'rejected' ? 'Not approved'
+      : DOOR.kind === 'unconfirmed' ? 'Account' : 'Sign in';
   });
 }
 function authRender(){
   var el = document.getElementById('auth-body'); if (!el) return;
   var h = '';
-  if (AUTH.user) {
+  if (!AUTH.user && DOOR.kind && DOOR.kind !== 'checking') {
+    // The waiting screen: a signed-in account that is not approved. It
+    // browses the catalogue like anyone; this is where it learns why there
+    // are no prices, and how to leave.
+    var t = DOOR_TEXT[DOOR.kind];
+    h += '<div style="font-size:18px;font-weight:800;margin-bottom:6px">' + t[0] + '</div>'
+      + (DOOR.email ? '<div style="font-size:13px;font-weight:700;margin-bottom:8px">' + liveEsc(DOOR.email) + '</div>' : '')
+      + '<div style="font-size:13px;color:var(--mu);margin-bottom:18px;line-height:1.5">' + t[1] + ' You can browse every set and card meanwhile.</div>'
+      + (DOOR.kind === 'unconfirmed' ? '<button class="btn" style="margin-right:8px" onclick="location.reload()">Try again</button>' : '')
+      + '<button class="btn" onclick="doorSignOut()">Sign out</button>';
+  } else if (AUTH.user) {
     h += '<div style="font-size:18px;font-weight:800;margin-bottom:6px">Signed in</div>'
       + '<div style="font-size:13px;color:var(--mu);margin-bottom:18px">' + liveEsc(AUTH.user.email || AUTH.user.id)
       + (AUTH.user.provider ? ' &middot; ' + liveEsc(AUTH.user.provider) : '') + '</div>'
@@ -6702,6 +6801,10 @@ async function authCheck(session){
   if (mine !== AUTH.seq) return;            // a newer check is in flight
   if (door) { user = null; role = null; }  // not approved: no signed-in state behind the door
   AUTH.user = user; AUTH.role = role;
+  // Prices opened or closed after the page settled (signed out, signed in
+  // in another tab): what is on screen was fetched for the other level —
+  // start again rather than mix the two.
+  if (AUTH.settled && AUTH.openSeen !== pricesOpen()) { location.reload(); return; }
   doorSet(door, email);
   authButtons(); authRender();
   if (typeof loadAlerts === 'function' && ALERTS_LOADED) loadAlerts();   // the account changed: re-read its alerts
@@ -6746,9 +6849,14 @@ async function authInit(){
   var s = await AUTH.sb.auth.getSession();
   await authCheck(s.data && s.data.session);
   if (/[?&#](code|error|error_description)=/.test(location.href)) history.replaceState(null, '', authRedirect());
+  AUTH.openSeen = pricesOpen(); AUTH.settled = true;
   if (AUTH.notice) authOpen();
 }
-document.addEventListener('DOMContentLoaded', function(){ authInit().catch(function (e) { console.warn('[auth]', e && e.message); }).then(function () { AUTH._ready(); }); });
+document.addEventListener('DOMContentLoaded', function(){
+  renderPriceDoors();   // the notes say something from the first paint, on every path (file://, sign-in off)
+  authInit().catch(function (e) { console.warn('[auth]', e && e.message); })
+    .then(function () { if (DOOR.kind === 'checking') doorSet('unconfirmed'); else renderPriceDoors(); AUTH._ready(); });
+});
 
 function fmtCurrency(usd){
   if(!usd) return CURRENCY_SYMBOLS[currentCurrency]+'0';
@@ -7203,6 +7311,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-f88b55b-masterrole &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-0879a37-door &middot; click to hide</div>
 </body>
 </html>

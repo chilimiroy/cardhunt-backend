@@ -50,7 +50,7 @@ function quotaStop(d) {
 }
 async function get(path) {
   try {
-    const r = await fetch(BASE + path, { headers: { Accept: 'application/json', 'X-CardHunt-Origin': 'tooling' } });
+    const r = await fetch(BASE + path, { headers: Object.assign({ Accept: 'application/json' }, require('./toolingkey').headers()) }   // tooling origin + CARDZON_TOOLING_KEY: the door lets tooling through (T1, 2026-10-07));
     const text = await r.text();
     if (!r.ok) return { ok: false, status: r.status, body: text.slice(0, 200) };
     const json = JSON.parse(text); quotaStop(json);

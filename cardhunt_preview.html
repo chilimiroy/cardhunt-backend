@@ -14,6 +14,7 @@
      falls back to the system. -->
 <script>
 (function(){try{var t=localStorage.getItem('ch_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
+(function(){try{if(localStorage.getItem('ch_lang')==='ja')document.documentElement.setAttribute('lang','ja');}catch(e){}})();
 </script>
 
 <!-- ══ FONTS — LOADED WITHOUT BLOCKING THE FIRST PAINT ══
@@ -566,7 +567,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <button class="nl" onclick="SS('portfolio')">Portfolio</button>
     <div class="nav-r">
       <div class="nsearch"><span class="nsearch-i">🔍</span><input id="nav-q" placeholder="Search any card…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
-      <button class="btn" onclick="cycleTheme()" id="theme-btn" title="Theme: follows your device">◐ Auto</button><button class="btn" onclick="toggleCurrency()" id="currency-btn">🌐 USD</button><button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--re);color:var(--accent-ink);font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button>
+      <button class="btn" onclick="cycleTheme()" id="theme-btn" title="Theme: follows your device">◐ Auto</button><button class="btn" onclick="toggleCurrency()" id="currency-btn">🌐 USD</button><button class="btn" onclick="cycleLang()" id="lang-btn" title="Page language">EN</button><button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--re);color:var(--accent-ink);font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button>
     </div>
   </nav>
   <div class="hero">
@@ -995,6 +996,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
     <button class="nl" onclick="SS('sets')">Sets</button><button class="nl on">Portfolio</button>
     <div class="nav-r">
       <button class="btn" onclick="toggleCurrency()" id="currency-btn2">&#127760; USD</button>
+      <button class="btn" onclick="cycleLang()" id="lang-btn2" title="Page language">EN</button>
       <button class="btn" onclick="SS('alerts')">&#128276;</button>
     </div>
   </nav>
@@ -6312,6 +6314,152 @@ document.addEventListener('DOMContentLoaded', function(){
   if (b) { b.textContent = THEME_LABEL[t]; b.title = THEME_TITLE[t]; }
 });
 
+// ══ PAGE LANGUAGE (T5, 2026-10-06): English and Japanese, UI strings only ══
+// NEVER card data. Search, the gates and every matcher work on the English
+// card names, set names, rarities and grades; translating "Charizard" or
+// "Rare" would break them. So this is an exact-text table of the page's own
+// words: a text node is translated only when its whole trimmed text is a key.
+// Card names, set names, rarities, grades and game names are not keys
+// (i18n.test.js asserts it, and against the catalogue with --db).
+// The choice is per device (localStorage 'ch_lang'), like the theme. The
+// English text is kept per node and put back on switching. An <option>
+// without a value gets its English text pinned as its value first, so code
+// reading select.value still reads English. Sentences the page BUILDS with
+// numbers in them are not here yet — this table is the static text.
+var LANG_JA = {
+  'Home': 'ホーム', 'Search': '検索', 'Sets': 'セット', 'Portfolio': 'ポートフォリオ',
+  '◐ Auto': '◐ 自動', '☀ Light': '☀ ライト', '☾ Dark': '☾ ダーク',
+  'Find the best deal on': '最安値を探そう —', 'any': 'すべての', 'Pokémon card.': 'ポケモンカードで。',
+  'Language:': '言語:', '🌍 All': '🌍 すべて', '🇺🇸 English': '🇺🇸 英語', '🇯🇵 Japanese': '🇯🇵 日本語', '🇨🇳 Chinese': '🇨🇳 中国語',
+  'Recent searches': '最近の検索', 'Clear': 'クリア', 'Search →': '検索 →',
+  'Sets tracked': '追跡中のセット', 'Cards indexed': '登録カード数', 'Browse by game': 'ゲームから探す',
+  'Not tracked yet': '未対応', 'EN · JA · Chinese': '英語 · 日本語 · 中国語',
+  '🔔 My card alerts': '🔔 マイカードアラート', 'Live price tracking — click any card to view listings': 'リアルタイム価格追跡 — カードをクリックして出品を表示',
+  'Manage alerts →': 'アラートを管理 →', 'Add alert': 'アラートを追加', 'Track any card price': 'どのカードの価格も追跡',
+  '📊 Biggest movers': '📊 値動きの大きいカード', 'TCGdex market prices, the same printing and product at both ends': 'TCGdexの相場価格（両時点とも同じ仕様・同じ商品）',
+  'See all →': 'すべて見る →', '🚀 Gainers — %': '🚀 上昇 — %', '📉 Fallers — %': '📉 下落 — %',
+  '🚀 Gainers — value': '🚀 上昇 — 金額', '📉 Fallers — value': '📉 下落 — 金額',
+  '💎 Best deals right now': '💎 現在のお買い得',
+  'Cheapest trusted Buy It Now below the measured price — cards opened in the last 15 minutes': '実測価格を下回る、信頼できる最安の即決出品 — 直近15分に開かれたカード',
+  '← Back': '← 戻る', 'Choose language': '言語を選択', '🇹🇼 Chinese Traditional': '🇹🇼 中国語（繁体字）', '🇨🇳 Chinese Simplified': '🇨🇳 中国語（簡体字）',
+  'Latest sets': '最新セット', 'Newest first — every set in the CardHunt database': '新しい順 — CardHuntデータベースの全セット',
+  '🔥 Trending right now': '🔥 いま注目', 'Loading…': '読み込み中…',
+  'Sort': '並び替え', 'Sort:': '並び替え:', 'Price: high to low': '価格：高い順', 'Price: low to high': '価格：安い順',
+  'Biggest movers — % gain': '上昇率が大きい順', 'Biggest fallers — %': '下落率が大きい順',
+  'Biggest movers — value gain': '上昇額が大きい順', 'Biggest fallers — value': '下落額が大きい順',
+  'Over': '期間', '24 hours': '24時間', '7 days': '7日間', '30 days': '30日間',
+  '🔍 Search': '🔍 検索', 'Choose a game, then search by card name, set or grade': 'ゲームを選んで、カード名・セット・グレードで検索',
+  'Choose a game': 'ゲームを選択', 'English, Japanese, Chinese': '英語・日本語・中国語', 'Coming soon': '近日対応',
+  'Pokémon — Trending': 'ポケモン — 注目', 'Results': '検索結果', 'Best match': '関連度順',
+  'Price ↑': '価格 ↑', 'Price ↓': '価格 ↓', '⚖️ Compare': '⚖️ 比較',
+  'Number ↑': '番号 ↑', 'Number ↓': '番号 ↓', 'Name A–Z': '名前 A–Z', 'Name Z–A': '名前 Z–A',
+  'Price: High → Low': '価格：高い → 安い', 'Price: Low → High': '価格：安い → 高い',
+  'Rarity': 'レアリティ', 'Rarity:': 'レアリティ:', 'Type:': 'タイプ:', 'All': 'すべて',
+  '🔔 Set Alert': '🔔 アラート設定', '🤍 Watch': '🤍 ウォッチ', 'Set': 'セット',
+  'Market value': '相場', 'Lowest listing': '最安出品', 'Last sold': '直近の落札', 'PRICE POSITION': '価格の位置',
+  'Recorded low:': '記録上の最安:', 'Recorded high:': '記録上の最高:', 'Price history —': '価格推移 —',
+  'Loading recorded prices…': '記録価格を読み込み中…', '30-day avg': '30日平均', '90-day avg': '90日平均',
+  'Highest recorded': '記録上の最高', 'Lowest recorded': '記録上の最安',
+  'Buy It Now': '即決', 'Auctions': 'オークション', 'Recent sales': '最近の取引', 'Near you': '近くのショップ',
+  'My Portfolio': 'マイポートフォリオ', 'Track your collection value over time': 'コレクションの価値の推移を記録',
+  '+ Add card': '+ カードを追加', 'Total value': '評価額合計', 'Total cost': '取得額合計', 'Profit / Loss': '損益',
+  'Cards': 'カード', 'Grade': 'グレード', 'Paid': '購入額', 'Value': '評価額',
+  'View this listing on eBay ↗': 'eBayでこの出品を見る ↗',
+  'Images are the seller’s, from eBay, shown with their listing.': '画像は出品者のもので、eBayの出品とともに表示しています。',
+  '🔔 Alerts': '🔔 アラート', 'Price Alerts': '価格アラート',
+  'Get notified when a card drops below your target price': 'カードが目標価格を下回ったら通知',
+  '+ New Alert': '+ 新規アラート', 'Active alerts': '有効なアラート', 'Triggered today': '本日発動',
+  'Cards watching': 'ウォッチ中のカード', 'All alerts': 'すべてのアラート', 'Active': '有効', 'Triggered': '発動済み', 'Paused': '一時停止',
+  'No alerts yet': 'アラートはまだありません',
+  'Set a price alert on any card to get notified when it drops below your target.': 'カードに価格アラートを設定すると、目標価格を下回ったときに通知されます。',
+  '+ Create your first alert': '+ 最初のアラートを作成',
+  '⚖️ Compare cards': '⚖️ カードを比較', 'Side by side, at the grade each one is currently showing.': '各カードの現在のグレードで並べて比較。',
+  '🔔 Create Price Alert': '🔔 価格アラートを作成', 'Get notified when a new listing matches your criteria': '条件に合う新しい出品があれば通知',
+  'Click to choose a card…': 'クリックしてカードを選択…', 'Grade / Condition': 'グレード / 状態', 'Any grade': 'すべてのグレード',
+  'Alert type': 'アラートの種類', 'Price drops below': '価格が下回ったら', 'Price rises above': '価格が上回ったら',
+  'New listing appears': '新しい出品が出たら', 'Deal % below market': '相場より何%安いか', 'Target price ($)': '目標価格（$）',
+  'Marketplace': 'マーケット', 'All markets': 'すべてのマーケット', 'eBay only': 'eBayのみ', 'TCGPlayer only': 'TCGPlayerのみ',
+  'Mercari only': 'メルカリのみ', 'Yahoo Japan only': 'ヤフオクのみ', 'Amazon only': 'Amazonのみ',
+  'Notify via': '通知方法', 'In-app + Email': 'アプリ内 + メール', 'Email only': 'メールのみ', 'In-app only': 'アプリ内のみ',
+  'Push notification': 'プッシュ通知', 'Alert preview:': 'アラートのプレビュー:', '🔔 Create Alert': '🔔 アラートを作成',
+  // attributes (placeholder / title / aria-label)
+  'Search any card…': 'カードを検索…', 'Try: Charizard Base Set PSA 9…': '例: Charizard Base Set PSA 9…',
+  'e.g. Charizard Holo Base Set PSA 9…': '例: Charizard Holo Base Set PSA 9…', 'Refine…': '絞り込み…',
+  'Search sets…': 'セットを検索…', 'Search in set…': 'セット内を検索…',
+  'Theme: follows your device': 'テーマ：端末の設定に従う', 'Theme: always light': 'テーマ：常にライト', 'Theme: always dark': 'テーマ：常にダーク',
+  'Pokémon TCG — sets, trending cards and prices': 'ポケモンカード — セット、注目カード、価格',
+  'Not in the CardHunt catalogue — no cards or prices are held for this game': 'CardHuntのカタログ外 — このゲームのカードと価格は保持していません',
+  'Close': '閉じる', 'eBay calls today — click for detail': '本日のeBay呼び出し回数 — クリックで詳細',
+  'Click to hide': 'クリックで非表示', 'Page language': '表示言語'
+};
+var LANG_ATTRS = ['placeholder', 'title', 'aria-label'];
+var LANG_ORIG = new Map();     // text node -> [its English text, what was written]
+var LANG_ATTR_ORIG = new Map(); // element -> { attr: English }
+var LANG_OBS = null;
+function currentLang(){ return document.documentElement.getAttribute('lang') === 'ja' ? 'ja' : 'en'; }
+function langNode(n){
+  var raw = n.nodeValue, key = raw.replace(/\s+/g, ' ').trim(), ja = key && LANG_JA[key];
+  if (!ja) return;
+  var p = n.parentElement;
+  if (p && p.tagName === 'OPTION' && !p.hasAttribute('value')) p.setAttribute('value', key);
+  var out = raw.replace(key, ja);
+  LANG_ORIG.set(n, [raw, out]);
+  n.nodeValue = out;
+}
+function langAttrs(el){
+  for (var i = 0; i < LANG_ATTRS.length; i++) {
+    var a = LANG_ATTRS[i], v = el.getAttribute(a), ja = v && LANG_JA[v.trim()];
+    if (!ja) continue;
+    var o = LANG_ATTR_ORIG.get(el) || {}; o[a] = v; LANG_ATTR_ORIG.set(el, o);   // the latest English
+    el.setAttribute(a, ja);
+  }
+}
+function langWalk(root){
+  if (!root) return;
+  if (root.nodeType === 3) { langNode(root); return; }
+  if (root.nodeType !== 1 || /^(SCRIPT|STYLE)$/.test(root.tagName)) return;
+  langAttrs(root);
+  var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT), n;
+  while ((n = w.nextNode())) {
+    if (n.nodeType === 3) { if (!/^(SCRIPT|STYLE)$/.test(n.parentElement && n.parentElement.tagName)) langNode(n); }
+    else langAttrs(n);
+  }
+}
+function langButtons(){
+  ['lang-btn', 'lang-btn2'].forEach(function (id) {
+    var b = document.getElementById(id); if (!b) return;
+    // The button names the language it shows; written raw, never through the table.
+    b.firstChild ? (b.firstChild.nodeValue = currentLang() === 'ja' ? '日本語' : 'EN') : (b.textContent = currentLang() === 'ja' ? '日本語' : 'EN');
+  });
+}
+function applyLang(l){
+  if (l === 'ja') document.documentElement.setAttribute('lang', 'ja'); else document.documentElement.setAttribute('lang', 'en');
+  try { if (l === 'ja') localStorage.setItem('ch_lang', 'ja'); else localStorage.removeItem('ch_lang'); } catch (e) {}
+  if (LANG_OBS) { LANG_OBS.disconnect(); LANG_OBS = null; }
+  if (l === 'ja') {
+    langWalk(document.body);
+    // The page re-renders constantly; whatever it writes is read the same way.
+    LANG_OBS = new MutationObserver(function (ms) {
+      for (var i = 0; i < ms.length; i++) {
+        var m = ms[i];
+        if (m.type === 'characterData') langNode(m.target);
+        else if (m.type === 'attributes') langAttrs(m.target);
+        else for (var j = 0; j < m.addedNodes.length; j++) langWalk(m.addedNodes[j]);
+      }
+    });
+    LANG_OBS.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: LANG_ATTRS });
+  } else {
+    // Only a node still showing what was written: one the page has since
+    // rewritten keeps the page's own text.
+    LANG_ORIG.forEach(function (v, n) { if (n.isConnected && n.nodeValue === v[1]) n.nodeValue = v[0]; });
+    LANG_ATTR_ORIG.forEach(function (o, el) { for (var a in o) el.setAttribute(a, o[a]); });
+    LANG_ORIG.clear(); LANG_ATTR_ORIG.clear();
+  }
+  langButtons();
+}
+function cycleLang(){ applyLang(currentLang() === 'ja' ? 'en' : 'ja'); }
+document.addEventListener('DOMContentLoaded', function(){ if (currentLang() === 'ja') applyLang('ja'); else langButtons(); });
+
 function fmtCurrency(usd){
   if(!usd) return CURRENCY_SYMBOLS[currentCurrency]+'0';
   var rate = CURRENCY_RATES[currentCurrency] || 1;
@@ -6749,6 +6897,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-5e67974-t0stamp &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261006-c00078e-t5lang &middot; click to hide</div>
 </body>
 </html>

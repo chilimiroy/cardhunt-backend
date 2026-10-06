@@ -940,10 +940,20 @@ if (stamp.length && headSha) {
       const card = await get('/api/cards/' + id);
       const d = card && card.data;
       ok(id + ' resolves', !!d && d.id === id, card._err || JSON.stringify(card).slice(0, 120));
-      if (d) {
+      if (d && card.pricesWithheld) {
+        // The door (2026-10-07): signed out, the card answers with no price at
+        // all and says why. This run has no approved token, so the price flag
+        // itself cannot be checked here — said, not passed.
+        ok(id + ' signed out: no price field, and the answer says prices are withheld',
+          !Object.keys(d).some(k => /price|tcgplayer|cardmarket/i.test(k)) && /approved/i.test(String(card.pricesWithheld)),
+          Object.keys(d).join(','));
+        console.log('  SKIP  ' + id + ' real-vs-estimate flag — needs an approved account\'s token; signed out it is withheld by design');
+      } else if (d) {
         ok(id + ' carries an explicit real-vs-estimate flag',
           typeof d._priceIsReal === 'boolean',
           '_priceIsReal is what the UI badges');
+      }
+      if (d) {
         ok(id + ' carries its set release (the year gate reads it)',
           !!(d.set && d.set.releaseDate),
           'setYear was null on every live route for weeks because of this');

@@ -400,6 +400,7 @@ function finish(slot, verdict, kill) {
   if (job) {
     const v = Object.assign({}, verdict, { tookMs: Date.now() - job.t0 });
     if (v.retryable) _stats.failed++; else { _stats.checked++; _stats.msTotal += v.tookMs; }
+    if (job.fetchMs != null && verdict && verdict.workMs) timeSplit(job, verdict);
     cacheSet(job.itemId, v, job.url);
     // A back photo's scores are an input to backcheck's LISTING verdict,
     // which the server stores itself (check_kind 'back').
@@ -421,6 +422,7 @@ async function runJob(slot, job) {
   const scanPng = job.material && PNG_SCAN_HOST.test(job.url) && /png/i.test(type);
   if (!/jpe?g/i.test(type) && !scanPng) return finish(slot, { state: 'unreadable', scores: [], says: 'The photo is not a JPEG (' + type.slice(0, 30) + ').' });
   const buf = Buffer.from(await r.arrayBuffer());
+  job.fetchMs = Date.now() - job.t0;
   slot.timer = setTimeout(() => finish(slot, { state: 'unreadable', retryable: true, scores: [],
     says: 'The photo check took too long and was stopped.' }, true), JOB_TIMEOUT_MS);
   slot.w.postMessage({ jpeg: buf, reprints: job.reprints, back: !!job.back, material: !!job.material });
@@ -583,10 +585,30 @@ function materialJudge({ profile, ref, priceFlag, back }) {
   return { action, signals, genuineBack };
 }
 
+// Where a photo job's time goes, by kind (speed, 2026-10-06; measurement
+// only): fetch from eBay's CDN on the main thread, then decode and compare
+// in the worker, with the CPU the process spent during the worker's part.
+const _split = {};
+function timeSplit(job, v) {
+  const k = job.material ? 'material' : job.back ? 'back' : (job.reprints || []).some(isSibling) ? 'sibling' : 'stamp';
+  const s = _split[k] || (_split[k] = { n: 0, fetchMs: 0, workMs: 0, decodeMs: 0, cpuMs: 0 });
+  s.n++; s.fetchMs += job.fetchMs; s.workMs += v.workMs || 0; s.decodeMs += v.decodeMs || 0; s.cpuMs += v.cpuMs || 0;
+}
+// The CPU this process may use: cgroup v2 quota where there is one.
+function cpuQuota() {
+  const os = require('os');
+  let max = null;
+  try { max = require('fs').readFileSync('/sys/fs/cgroup/cpu.max', 'utf8').trim(); } catch (e) { /* not cgroup v2 */ }
+  const m = max && /^(\d+) (\d+)$/.exec(max);
+  return { cpus: os.cpus().length, cgroupCpuMax: max, cores: m ? +(m[1] / m[2]).toFixed(2) : null };
+}
 function poolState() {
+  const split = {};
+  for (const [k, s] of Object.entries(_split)) split[k] = { n: s.n, fetchMs: Math.round(s.fetchMs / s.n),
+    workMs: Math.round(s.workMs / s.n), decodeMs: Math.round(s.decodeMs / s.n), cpuMs: Math.round(s.cpuMs / s.n) };
   return { store: _store ? Object.assign({ version: VERDICT_VERSION }, _storeStats) : null, workers: POOL_SIZE, running: _workers.filter(s => s.job).length, queued: _queue.length,
            cachedItems: _cache.size, checked: _stats.checked, failed: _stats.failed, cacheHits: _stats.cacheHits,
-           meanMs: _stats.checked ? Math.round(_stats.msTotal / _stats.checked) : null };
+           meanMs: _stats.checked ? Math.round(_stats.msTotal / _stats.checked) : null, split, host: cpuQuota() };
 }
 
 // ── Verdicts in the database (TASK T2, 2026-10-03) ──
@@ -769,14 +791,22 @@ const wt = (() => { try { return require('worker_threads'); } catch (e) { return
 if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
   wt.parentPort.on('message', m => {
     let v;
+    const t0 = Date.now(), c0 = process.cpuUsage();
+    let decodeMs = null;
     try {
       const img = m.material ? decodeImage(Buffer.from(m.jpeg)) : decodeJpeg(Buffer.from(m.jpeg));
+      decodeMs = Date.now() - t0;
       v = m.material ? Object.assign({ state: 'profiled' }, colourProfile(img))
         : m.back ? Object.assign({ state: 'scored' }, require('./backcheck.js').scorePhoto(img), colourProfile(img))
         : judge(img, m.reprints);
     }
     catch (e) { v = { state: 'unreadable', says: 'The photo could not be decoded: ' + String(e && e.message || e).slice(0, 80), scores: [] }; }
-    wt.parentPort.postMessage({ verdict: v });
+    // Where the worker's time went (speed, 2026-10-06): wall time in the
+    // decode and in the comparison, and the process CPU spent meanwhile.
+    // CPU close to wall = CPU-bound; CPU far below wall = waiting for a share.
+    const c = process.cpuUsage(c0);
+    wt.parentPort.postMessage({ verdict: Object.assign(v, { workMs: Date.now() - t0, decodeMs,
+      cpuMs: Math.round((c.user + c.system) / 1000) }) });
   });
 }
 

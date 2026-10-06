@@ -23,7 +23,8 @@ const { spawn } = require('child_process');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };
 
-// [method, path, level, reason]. level: public | approved | master.
+// [method, path, level, reason]. level: public | approved | master | tooling.
+// tooling = the eBay probes: a shared secret (toolingkey.js), not a sign-in.
 // A public route's reason says why it may answer anyone.
 const CATALOGUE = 'the public catalogue: browsing cards, sets, prices and listings is not gated';
 const ROUTES = [
@@ -64,17 +65,17 @@ const ROUTES = [
   ['get', '/api/health/full', 'public', 'operational check; no user data'],
   ['get', '/ebay/deletion', 'public', 'eBay\'s ownership challenge — eBay must reach it unauthenticated'],
   ['post', '/ebay/deletion', 'public', 'eBay\'s account-deletion notification — called by eBay, answered with the verification token; stores nothing'],
-  ['get', '/api/ebay/conditions/:cardId', 'public', 'tooling probe, catalogue id only; spends TOOLING quota (capped 300/day by ebayquota); no user data'],
-  ['get', '/api/ebay/conditionvalues', 'public', 'tooling probe, as above'],
-  ['get', '/api/ebay/certprobe/:cardId', 'public', 'tooling probe, as above'],
-  ['get', '/api/ebay/setprobe/:cardId', 'public', 'tooling probe, as above'],
+  ['get', '/api/ebay/conditions/:cardId', 'tooling', null],
+  ['get', '/api/ebay/conditionvalues', 'tooling', null],
+  ['get', '/api/ebay/certprobe/:cardId', 'tooling', null],
+  ['get', '/api/ebay/setprobe/:cardId', 'tooling', null],
   ['get', '/api/cert/:cardId', 'public', CATALOGUE + ' (cert number of a public listing)'],
   ['get', '/api/photos/:cardId', 'public', CATALOGUE + ' (photos of a public listing)'],
   ['get', '/api/stamp/:cardId', 'public', CATALOGUE + ' (photo check of a public listing)'],
-  ['get', '/api/ebay/gradecost/:cardId', 'public', 'tooling probe, as above'],
-  ['get', '/api/ebay/marketprobe/:cardId', 'public', 'tooling probe, as above'],
-  ['get', '/api/ebay/aspects/:cardId', 'public', 'tooling probe, as above'],
-  ['get', '/api/ebay/quota', 'public', 'eBay spend so far; no user data'],
+  ['get', '/api/ebay/gradecost/:cardId', 'tooling', null],
+  ['get', '/api/ebay/marketprobe/:cardId', 'tooling', null],
+  ['get', '/api/ebay/aspects/:cardId', 'tooling', null],
+  ['get', '/api/ebay/quota', 'public', 'eBay spend so far, read from the ledger (spends nothing); no user data. ?probe=1 asks eBay and needs the tooling key (toolingkey.test.js)'],
   ['get', '/app', 'public', 'the page itself — anonymous visitors browse it'],
   ['get', '/gradeprice.js', 'public', 'a module the page loads'],
   ['get', '/estimator.js', 'public', 'a module the page loads'],
@@ -104,7 +105,8 @@ for (const f of found) {
   seen.add(k);
   if (!r) { ok('classified: ' + k, false, 'line ' + f.line + ' — add it to ROUTES with a level'); continue; }
   const lvl = r[2];
-  if (lvl === 'public') ok(`public with a reason, no gate: ${k}`, !!r[3] && !/access\./.test(f.text), 'line ' + f.line);
+  if (lvl === 'tooling') ok(`tooling: ${k} names toolingKey.require on its declaration line, and no user gate`, f.text.includes(', toolingKey.require, ') && !/access./.test(f.text), 'line ' + f.line);
+  else if (lvl === 'public') ok(`public with a reason, no gate: ${k}`, !!r[3] && !/access\./.test(f.text), 'line ' + f.line);
   else ok(`${lvl}: ${k} calls access.${lvl} on its declaration line`, f.text.includes(`, access.${lvl}, `), 'line ' + f.line);
   f.level = lvl; f.reason = r[3];
 }
@@ -145,7 +147,7 @@ ok('page: the alerts calls send the token and no user id', /'\/api\/alerts', \{ 
 
 if (process.argv.includes('--table')) {
   console.log('\n| route | method | level | where it checks / why public |\n|---|---|---|---|');
-  for (const f of found) console.log(`| \`${f.path}\` | ${f.method.toUpperCase()} | ${f.level || '?'} | ${f.level === 'public' ? f.reason : 'server.js:' + f.line + ' `access.' + f.level + '`'} |`);
+  for (const f of found) console.log(`| \`${f.path}\` | ${f.method.toUpperCase()} | ${f.level || '?'} | ${f.level === 'public' ? f.reason : f.level === 'tooling' ? 'server.js:' + f.line + ' `toolingKey.require` (X-CardHunt-Key)' : 'server.js:' + f.line + ' `access.' + f.level + '`'} |`);
 }
 
 // ── live: boot the server and ask ──────────────────────────────
@@ -195,7 +197,7 @@ async function ask(method, p, tok, body) {
   if (!up) { console.log('\nCOULD NOT BOOT server.js — the live half was not tested.\n' + err); fs.unlinkSync(preload); process.exit(2); }
 
   try {
-    const gated = found.filter(f => f.level && f.level !== 'public');
+    const gated = found.filter(f => f.level && f.level !== 'public' && f.level !== 'tooling');   // tooling: toolingkey.test.js
     console.log('\n  live: every gated route (' + gated.length + '), every kind of caller');
     for (const f of gated) {
       const p = sample(f.path), k = f.method.toUpperCase() + ' ' + f.path;

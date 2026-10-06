@@ -109,6 +109,7 @@ app.use((req, res, next) => {
 // Only 'tooling' can be CLAIMED: it can only ever narrow what a caller may
 // spend, never widen it. Everything else is a user request.
 const ebay0 = require('./ebaycall');
+const toolingKey = require('./toolingkey');   // the seven /api/ebay/* probes: shared secret, checked before any spend
 const TOOLING_PATHS = /^\/(api\/ebay\/|ebay\/status|api\/scraper\/test|api\/health\/full)/;
 function requestOrigin(req) {
   const claimed = String(req.get('x-cardhunt-origin') || req.query.origin || '').toLowerCase();
@@ -4818,7 +4819,7 @@ app.post('/ebay/deletion', (req, res) => {
 // URL. Cached 30 minutes, because a probe that can be hammered spends the
 // quota it exists to measure.
 const conditionProbeCache = new Map();
-app.get('/api/ebay/conditions/:cardId', async (req, res) => {
+app.get('/api/ebay/conditions/:cardId', toolingKey.require, async (req, res) => {
   const cardId = req.params.cardId;
   const grade = String(req.query.grade || 'Raw NM');
   const nItems = Math.max(0, Math.min(25, parseInt(req.query.items, 10) || 0));
@@ -5018,7 +5019,7 @@ app.get('/api/ebay/conditions/:cardId', async (req, res) => {
 // Metadata — the list a seller picks from), the category's ASPECTS
 // (Taxonomy), and live Card Condition distributions over several raw-heavy
 // cards. Read-only; card ids only (resolved from our catalogue).
-app.get('/api/ebay/conditionvalues', async (req, res) => {
+app.get('/api/ebay/conditionvalues', toolingKey.require, async (req, res) => {
   try {
     if (!ebay.ebayEnabled()) return res.status(503).json({ error: 'EBAY_ENABLED=false' });
     const auth = await getEbayTokenDetailed({});
@@ -5078,7 +5079,7 @@ app.get('/api/ebay/conditionvalues', async (req, res) => {
 // grader name from our own list, never a URL. Costs pages + 1 + bulk calls,
 // all background, so it yields at the soft stop like ingestion does.
 const certProbeCache = new Map();
-app.get('/api/ebay/certprobe/:cardId', async (req, res) => {
+app.get('/api/ebay/certprobe/:cardId', toolingKey.require, async (req, res) => {
   const cardId = req.params.cardId;
   const pages = Math.max(1, Math.min(3, parseInt(req.query.pages, 10) || 1));
   const bulk = Math.max(0, Math.min(5, parseInt(req.query.bulk, 10) || 0));
@@ -5198,7 +5199,7 @@ app.get('/api/ebay/certprobe/:cardId', async (req, res) => {
 // stored. ?verify=1 adds one filtered search per top Set value (+2 calls).
 const setProbeCache = new Map();
 const SET_ASPECT = /^(set|year|year manufactured|card number|manufacturer|release year|edition|features|language|card name)$/i;
-app.get('/api/ebay/setprobe/:cardId', async (req, res) => {
+app.get('/api/ebay/setprobe/:cardId', toolingKey.require, async (req, res) => {
   const cardId = req.params.cardId;
   const mp = String(req.query.mp || 'EBAY_US').toUpperCase();
   if (!MARKETPROBE_SITES.includes(mp) || /_NO/.test(mp) || mp === 'EBAY_JP')
@@ -5499,7 +5500,7 @@ app.get('/api/stamp/:cardId', async (req, res) => {
 // verify": unfiltered list + filtered set) would deliver. Read-only; nothing
 // stored; takes a card id and a grade, never a URL. 2 x pages calls.
 const gradeCostCache = new Map();
-app.get('/api/ebay/gradecost/:cardId', async (req, res) => {
+app.get('/api/ebay/gradecost/:cardId', toolingKey.require, async (req, res) => {
   const cardId = req.params.cardId;
   const grade = String(req.query.grade || '');
   const pages = Math.max(1, Math.min(5, parseInt(req.query.pages, 10) || 3));
@@ -5597,7 +5598,7 @@ const MARKETPROBE_SITES = ['EBAY_US', 'EBAY_GB', 'EBAY_DE', 'EBAY_AU', 'EBAY_CA'
                            'EBAY_US_NOCAT',    // US, no category filter
                            'EBAY_US_NOSET'];   // US, set name not in the query
 const marketProbeCache = new Map();
-app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
+app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) => {
   const cardId = req.params.cardId;
   const grade = String(req.query.grade || 'Raw NM');
   const asked = String(req.query.mp || MARKETPROBE_SITES.join(',')).split(',').map(s => s.trim().toUpperCase());
@@ -5739,7 +5740,7 @@ app.get('/api/ebay/marketprobe/:cardId', async (req, res) => {
 // only, never a URL. Cached 30 min; nothing stored.
 // ══════════════════════════════════════════════════════════════
 const aspectProbeCache = new Map();
-app.get('/api/ebay/aspects/:cardId', async (req, res) => {
+app.get('/api/ebay/aspects/:cardId', toolingKey.require, async (req, res) => {
   const mp = String(req.query.mp || 'EBAY_US').toUpperCase();
   if (!MARKETPROBE_SITES.includes(mp) || /_NO/.test(mp)) return res.status(400).json({ error: 'unknown marketplace', allowed: MARKETPROBE_SITES.filter(m => !/_NO/.test(m)) });
   const key = req.params.cardId + '|' + mp;
@@ -5769,6 +5770,12 @@ app.get('/api/ebay/aspects/:cardId', async (req, res) => {
 });
 
 app.get('/api/ebay/quota', async (req, res) => {
+  // Reading the ledger spends nothing and stays open; ?probe=1 asks eBay
+  // (one call), so it needs the tooling key like the seven probes.
+  if (req.query.probe === '1' || req.query.probe === 'true') {
+    const k = toolingKey.check(req);
+    if (!k.ok) return res.status(k.status).json(k.body);
+  }
   try {
     const out = await quota.status(db);
     out.enabled = ebay.ebayEnabled();

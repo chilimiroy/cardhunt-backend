@@ -1,5 +1,30 @@
 # CardHunt — Progress Log
 
+## 2026-10-07 (buyer location) — a ZIP states shipping AND changes which listings come back
+
+`marketprobe ?zip=10001&pages=1` sends `X-EBAY-C-ENDUSERCTX:
+contextualLocation=country=US,zip=10001` on the same search (0 extra calls).
+Card en-me05-116 (Mega Darkrai ex SIR; 78 of its 176 rows had no stated
+shipping in the first vouching run). US, Raw NM, one 75-row page, each mode
+run twice (6 tooling calls in all):
+
+| | kept | shipping stated |
+|---|---|---|
+| no ZIP | 69 | 59 |
+| ZIP 10001 | 69 | **69** |
+
+- Each mode returned the same 69 kept items both times; the two modes share
+  only **31**. On those 31: 29 identical shipping, 2 gained a calculated cost
+  ($5.61, $5.96), 0 changed.
+- The 38 ZIP-only rows run $31-$200, all with odd-cent (calculated) shipping;
+  the 38 no-ZIP-only rows run $200-$322, 8 with no shipping. 34 of the 38
+  ZIP-only titles appear nowhere in the no-ZIP answer. So **without a buyer
+  location the price-sorted first page left out cheaper listings** that use
+  calculated shipping; with one, they come back with a cost.
+- One card. Production does NOT send the header: it changes the result set of
+  every view, and a quote to one ZIP is an estimate for every other buyer —
+  Roy's decision, measured on more cards first.
+
 ## 2026-10-07 (gate fixes) — three holes the vouching bar found, closed and measured
 
 First vouching run (80 cards, /api/ebay/dealsprobe?bar=vouch): 2,966 listings

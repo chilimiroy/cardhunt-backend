@@ -664,13 +664,14 @@ reprints reusing number and set name). Reprints keyed by SET ID
 (`REPRINT_FAMILIES`, `REPRINT_OF`), never set name. *Archive:* "The master-ball mirror, found for the third time", "A reprint reuses the original numbering", "Ingesting a set can disable a gate that names it", "Superseded 2026-09-26: reprints are keyed by SET ID, both directions", "A collector number does not identify one card"
 
 **A lettered number is its own card** ("24a" ≠ "24"; `verifyLetterNumber`).
+(PROGRESS 2026-10-04)
 
 **The title's condition beats eBay's dropdown — the worse claim stands**; a range
 ("NM/LP") states its lower end (`worstStatedCondition`). It matters for the
 condition filter and the deals bar, NOT the headline: 0 of 9 cheapest changed.
 **A card's name is a word, outside a kit's product name** (`KIT_NAME_PAIRS`):
-"Latias & Latios" named 15 Magnemite under Latias #4. (PROGRESS 2026-10-07 (gate fixes))
-(PROGRESS 2026-10-04)
+"Latias & Latios" named 15 Magnemite under Latias #4. Names fold accents and may be run together
+("Poké" was "pok"; "Masterball"). (PROGRESS 2026-10-07 (gate fixes))
 
 **A set ingested once is never re-read — compare card by card** (`cardgap`);
 ask a source by ITS id, read off its own listing. (PROGRESS 2026-10-04)
@@ -746,6 +747,11 @@ word — 51 on English-only Evolutions); `Language:{English}` dropped 0, 9, 3, 9
 0; `Language:{Not Specified}` is not a filterable value (eBay ignores it).
 Production asks with no exclusion (`LANG_EXCLUDE_DEFAULT = 'none'`)
 (PROGRESS 2026-10-07 (language exclusion)).
+
+**Without a buyer location, eBay's cheapest page drops calculated-shipping
+listings**: with `X-EBAY-C-ENDUSERCTX` (ZIP 10001) every row stated shipping and
+38 of 69 were different, cheaper rows (one card, reproducible; `marketprobe
+?zip=`). Production sends none — open, Roy's (PROGRESS 2026-10-07 (buyer location)).
 
 **Measure the question across the catalogue, not the instance**
 (`querygap.js`); one symbol (`δ`) can empty a search. (PROGRESS 2026-10-04)

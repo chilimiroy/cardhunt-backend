@@ -1437,7 +1437,9 @@ const CJK = /[぀-ヿ㐀-䶿一-鿿가-힯]/;
 const LANG_WORDS = {
   ja: /\b(japanese|japan|jpn|jp\b|nihongo|japanische?|japonais|japonaise|giapponese|giapponesi|japon[eé]s|japonesa|japoneses|japonesas)\b/i,
   ko: /\b(korean|korea|kor\b|koreanische?|coréen|coreen|coreano|coreana)\b/i,
-  zh: /\b(chinese|china|traditional chinese|simplified chinese|t-chinese|s-chinese|chinesische?|chinois|cinese)\b/i,
+  // Traditional Chinese prints are sold by where they are printed for
+  // (2026-10-07): "Taiwan version", "Hong Kong".
+  zh: /\b(chinese|china|traditional chinese|simplified chinese|t-chinese|s-chinese|chinesische?|chinois|cinese|taiwan|taiwanese|hong\s*kong|mandarin)\b/i,
   de: /\b(german|deutsch|deutsche|deutsches|ger|allemand|allemande|tedesco|tedesca|tedeschi|tedesche|alem[aá]n|alemana|alemanes|alemanas)\b/i,
   // "VF" is "version française" — how French sellers mark a French card.
   fr: /\b(french|francais|français|française|francaise|vf|franz[öo]sische?|francese|francesi|franc[eé]s|francesa|franceses|francesas)\b/i,
@@ -1445,7 +1447,10 @@ const LANG_WORDS = {
   // "Charizard base set pokemon card 4/102 holo Italia" ($851), both kept.
   it: /\b(italian|italiano|italiana|italianos|italianas|italiani|italiane|italia|ita|italienische?|italien|italienne)\b/i,
   es: /\b(spanish|espanol|español|española|espanola|esp|spanische?|espagnol|espagnole|spagnolo|spagnola)\b/i,
-  pt: /\b(portuguese|portugese|portugues|português|portugiesische?|portugais|portoghese|portoghesi|portugu[eé]s|portugueses)\b/i,
+  // The COUNTRY too (2026-10-07): Brazilian sellers write where the card was
+  // printed — "Mewtwo & Mew GX SM191 ... Brazilian Card" reached the deals
+  // bar as English. "PT-BR" is how Brazil's own listings mark it.
+  pt: /\b(portuguese|portugese|portugues|português|portugiesische?|portugais|portoghese|portoghesi|portugu[eé]s|portugueses|brazilian|brazil|brasil|brasileir[oa]s?|brasilian(?:o|a|isch)?|pt-br|ptbr)\b/i,
   // "Olanda" / "Holanda" — eBay ES, live: "Charizard bs4 holo set base Olanda".
   nl: /\b(dutch|nederlands|holland|holländische?|hollandische?|niederländische?|niederlandische?|olandese|olandesi|olanda|holanda|holand[eé]s|holandeses|néerlandais)\b/i,
   ru: /\b(russian|russische?|russe|russo|ruso)\b/i,
@@ -1455,7 +1460,9 @@ const LANG_WORDS = {
   // by sitecheck.js's independent reader. Across 4,097 kept rows on 13 cards
   // those 4 were the only titles carrying either word.
   id: /\b(indonesian|indonesia|bahasa)\b/i,
-  th: /\b(thai)\b/i
+  th: /\b(thai|thailand)\b/i,
+  // Pokémon prints Polish cards (2026-10-07). Bounded: "polished" is not it.
+  pl: /\b(polish|polski|polska|polnische?|polacco|polacca|polaco|polaca|polonais|polonaise)\b/i
 };
 
 // The same evidence, written the way a Japanese marketplace writes it.
@@ -1504,7 +1511,7 @@ const JA_SET_CODE = /(?<![A-Za-z0-9])(?:sv|s|sm)\d{1,2}[a-z](?![A-Za-z0-9])/i;
 const LANG_FLAGS = [
   ['🇩🇪', 'de'], ['🇦🇹', 'de'], ['🇫🇷', 'fr'], ['🇮🇹', 'it'], ['🇪🇸', 'es'], ['🇵🇹', 'pt'],
   ['🇧🇷', 'pt'], ['🇳🇱', 'nl'], ['🇯🇵', 'ja'], ['🇰🇷', 'ko'], ['🇨🇳', 'zh'], ['🇹🇼', 'zh'],
-  ['🇮🇩', 'id'], ['🇹🇭', 'th']
+  ['🇮🇩', 'id'], ['🇹🇭', 'th'], ['🇵🇱', 'pl'], ['🇭🇰', 'zh']
 ];
 
 // What language does this title claim? null when it says nothing, and

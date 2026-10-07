@@ -58,8 +58,17 @@ ok('card page: price history, grade selector and listings are .price-only',
    /class="chart-box cd-chartcell price-only"/.test(H) && /id="cd-selector" class="price-only"/.test(H) && /<div class="lbox price-only">/.test(H));
 ok('card page: Compare, Set Alert and Watch are .price-only', /class="btn price-only" onclick="openCompare\(\)"/.test(H) && /class="btn price-only" onclick="addAlertFromCard\(\)"/.test(H) && /class="btn price-only" id="watch-btn"/.test(H));
 const home = H.slice(H.indexOf('<div id="screen-home"'), H.indexOf('<div id="screen-pokemon"'));
-ok('home: alerts, movers and deals inside one .price-only, a note before it', /<div class="price-door"[^>]*><\/div>\s*<div class="price-only">\s*<!-- ══ MY ALERTS/.test(home)
-   && home.indexOf('<!-- /.price-only (alerts, movers, deals) -->') > home.indexOf('id="home-deals"'));
+// TASK-ui T8: search, best deals, browse by game, movers, alerts last.
+ok('home: best deals is its own .price-only section, hidden until /api/deals says enabled',
+   /<section id="home-deals-sec" class="price-only" hidden>\s*<div class="sec-h"[^>]*><div><div class="sec-t">💎 Best deals/.test(home) && /<div class="cg" id="home-deals"><\/div>/.test(home));
+ok('home: movers then alerts inside one .price-only, a note before it',
+   /<div class="price-door"[^>]*><\/div>\s*<div class="price-only">\s*<div class="sec-h"><div><div class="sec-t">📊 Biggest movers/.test(home)
+   && home.indexOf('id="alerts-bar-items"') > home.indexOf('id="mv-gain-pct"')
+   && home.indexOf('<!-- /.price-only (movers, alerts) -->') > home.indexOf('id="alerts-bar-items"'));
+const at = s => home.indexOf(s);
+ok('home order: search, deals, browse by game, movers, alerts',
+   at('id="hero-q"') > 0 && at('id="hero-q"') < at('id="home-deals-sec"') && at('id="home-deals-sec"') < at('id="game-grid"')
+   && at('id="game-grid"') < at('id="mv-gain-pct"') && at('id="mv-gain-pct"') < at('id="alerts-bar-items"'));
 const pk = H.slice(H.indexOf('<div id="screen-pokemon"'), H.indexOf('<div id="screen-search"'));
 ok('trending: inside .price-only, a note before it', /<div class="price-door"[^>]*><\/div>\s*<div class="price-only">\s*<div class="sec-h"/.test(pk) && pk.indexOf('/.price-only (trending)') > pk.indexOf('id="home-trending"'));
 ok('set page and results: the price sorts are .price-only', /<option class="price-only" value="price-d">/.test(H) && /<option class="price-only" value="price">/.test(H)

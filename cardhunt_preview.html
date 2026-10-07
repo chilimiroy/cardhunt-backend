@@ -657,6 +657,18 @@ html:not(.ch-noprice) .price-door { display: none !important; }
     </div>
   </div>
   <div class="content">
+    <!-- ══ HOME ORDER (TASK-ui T8, 2026-10-07) ══ search (the hero above),
+         best deals, browse by game, biggest movers, alerts last.
+         Best deals is HIDDEN until /api/deals answers enabled: the slot
+         takes no space and shows no placeholder while it is off, and the
+         section appears in second place, unchanged, when it returns.
+         Prices: approved accounts only (the door) — every price section is
+         .price-only; one note stands where movers would be. -->
+    <section id="home-deals-sec" class="price-only" hidden>
+    <div class="sec-h" style="margin-top:28px"><div><div class="sec-t">💎 Best deals right now</div><div class="sec-s" id="deals-sub">Cheapest trusted Buy It Now below the measured price — cards opened in the last 15 minutes</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
+    <div class="cg" id="home-deals"></div>
+    </section>
+
     <!-- ── BROWSE BY GAME ── moved up into the space Choose TCG set held.
          The catalogue is Pokémon only: 46,088 cards, every one of them a
          Pokémon card. Every other tile is therefore UNAVAILABLE, and says
@@ -688,11 +700,16 @@ html:not(.ch-noprice) .price-door { display: none !important; }
       <div class="gc off" aria-disabled="true" title="Not in the CardHunt catalogue — no cards or prices are held for this game"><div class="gc-logo"><span class="gc-word">Vanguard</span></div><div class="gc-n">Cardfight!! Vanguard</div><div class="gc-c">Not tracked yet</div></div>
     </div>
 
-    <!-- ══ THE DOOR (T1, 2026-10-07) ══ one note where the price sections
-         below would be; they are .price-only and the server sends them
-         nothing without an approved account. -->
     <div class="price-door" role="note" style="margin-top:38px"></div>
     <div class="price-only">
+    <div class="sec-h"><div><div class="sec-t">📊 Biggest movers</div><div class="sec-s" id="movers-sub">TCGdex market prices, the same printing and product at both ends</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
+    <div class="movers">
+      <div class="mbox"><div class="mhdr">🚀 Gainers — % <span class="mwin" id="mv-gain-pct-w"></span></div><div id="mv-gain-pct"></div></div>
+      <div class="mbox"><div class="mhdr">📉 Fallers — % <span class="mwin" id="mv-fall-pct-w"></span></div><div id="mv-fall-pct"></div></div>
+      <div class="mbox"><div class="mhdr">🚀 Gainers — value <span class="mwin" id="mv-gain-usd-w"></span></div><div id="mv-gain-usd"></div></div>
+      <div class="mbox"><div class="mhdr">📉 Fallers — value <span class="mwin" id="mv-fall-usd-w"></span></div><div id="mv-fall-usd"></div></div>
+    </div>
+    <div class="mnote" id="movers-note"></div>
     <!-- ══ MY ALERTS — kept as it was ══ -->
     <div class="sec-h" style="margin-top:38px;margin-bottom:14px">
       <div>
@@ -709,17 +726,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
         <span style="font-size:11px;color:var(--fa)">Track any card price</span>
       </div>
     </div>
-    <div class="sec-h"><div><div class="sec-t">📊 Biggest movers</div><div class="sec-s" id="movers-sub">TCGdex market prices, the same printing and product at both ends</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
-    <div class="movers">
-      <div class="mbox"><div class="mhdr">🚀 Gainers — % <span class="mwin" id="mv-gain-pct-w"></span></div><div id="mv-gain-pct"></div></div>
-      <div class="mbox"><div class="mhdr">📉 Fallers — % <span class="mwin" id="mv-fall-pct-w"></span></div><div id="mv-fall-pct"></div></div>
-      <div class="mbox"><div class="mhdr">🚀 Gainers — value <span class="mwin" id="mv-gain-usd-w"></span></div><div id="mv-gain-usd"></div></div>
-      <div class="mbox"><div class="mhdr">📉 Fallers — value <span class="mwin" id="mv-fall-usd-w"></span></div><div id="mv-fall-usd"></div></div>
-    </div>
-    <div class="mnote" id="movers-note"></div>
-    <div class="sec-h"><div><div class="sec-t">💎 Best deals right now</div><div class="sec-s" id="deals-sub">Cheapest trusted Buy It Now below the measured price — cards opened in the last 15 minutes</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
-    <div class="cg" id="home-deals"><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div><div class="sk" style="height:230px;border-radius:var(--r)"></div></div>
-    </div><!-- /.price-only (alerts, movers, deals) -->
+    </div><!-- /.price-only (movers, alerts) -->
   </div>
 </div>
 
@@ -5626,8 +5633,8 @@ async function loadTrending() {
 // never fetches to fill this shelf (deals.js). An empty shelf says why.
 async function loadHomeDeals() {
   var _a = arguments; if (!whenPrices(function () { loadHomeDeals.apply(null, _a); })) return;   // the door: prices only
-  var host = document.getElementById('home-deals');
-  if (!host) return;
+  var host = document.getElementById('home-deals'), sec = document.getElementById('home-deals-sec');
+  if (!host || !sec) return;
   var d;
   try {
     var r = await fetch(BACKEND + '/api/deals?limit=8');
@@ -5635,12 +5642,18 @@ async function loadHomeDeals() {
     if (!r.ok) throw new Error(d && d.error ? d.error : 'HTTP ' + r.status);
   } catch (e) {
     host.innerHTML = '<div class="trend-empty">Best deals could not be loaded &mdash; ' + liveEsc(e.message) + '</div>';
+    sec.hidden = false;   // a failure is shown, never mistaken for "switched off"
     return;
   }
+  // Switched off (T8): the section stays hidden — no gap, no placeholder in
+  // second place on the home page. The reason is stated where we read it;
+  // the shelf appears in its slot, unchanged, the day /api/deals says enabled.
   if (d.enabled === false) {
-    host.innerHTML = '<div class="trend-empty"><b>Best deals is switched off.</b> ' + liveEsc(d.reason || '') + '</div>';
+    sec.hidden = true;
+    console.info('[deals] Best deals is switched off: ' + (d.reason || 'no reason given'));
     return;
   }
+  sec.hidden = false;
   if (!d.deals.length) {
     host.innerHTML = '<div class="trend-empty"><b>No deal to show right now.</b> '
       + (d.considered ? d.considered + ' card' + (d.considered === 1 ? ' was' : 's were') + ' opened in the last 15 minutes and none had a trusted listing well below its measured price. '
@@ -7371,6 +7384,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-ada6dc0-wordmark &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-617d579-homeorder &middot; click to hide</div>
 </body>
 </html>

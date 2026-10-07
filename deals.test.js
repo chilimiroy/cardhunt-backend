@@ -145,7 +145,11 @@ ok(/fetch\(BACKEND \+ '\/api\/deals/.test(page) && /loadHomeDeals\(\)/.test(page
 ok(!/function notYet/.test(page), 'the "not live yet" placeholder is gone, not left dormant');
 ok(/No deal to show right now/.test(page) && /opened in the last 15 minutes/.test(page), 'an empty shelf says why');
 ok(/if \(!deals_\.ENABLED\) return res\.json\(\{ enabled: false, reason: deals_\.OFF_REASON/.test(h), 'switched off, /api/deals answers enabled:false with the reason before reading any view');
-ok(/d\.enabled === false/.test(page) && /Best deals is switched off/.test(page), 'and the page says it is off, not "no deal right now"');
+// TASK-ui T8: switched off, the home slot is empty — no gap, no placeholder —
+// and the reason is stated in the console; a FAILURE is still shown.
+const ldAt = page.indexOf('async function loadHomeDeals'), ld = page.slice(ldAt, page.indexOf('\n}\n', ldAt));
+ok(/if \(d\.enabled === false\) \{\s*sec\.hidden = true;\s*console\.info\('\[deals\] Best deals is switched off: '/.test(ld), 'switched off: the section stays hidden and the reason is logged, not "no deal right now"');
+ok(/sec\.hidden = false;\s*\/\/ a failure is shown/.test(ld) && /\n  sec\.hidden = false;/.test(ld), 'a load failure, and an enabled shelf, show the section');
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

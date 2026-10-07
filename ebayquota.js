@@ -86,7 +86,9 @@ const TOOLING_DAILY = 300;
 // 2026-10-07 (UTC; AUTHORISED BY ROY in the session, for the shipping probe
 // and the vouching-bar re-run): 1,000 tooling calls for this UTC day only.
 // The 100-call reserve and the hourly cap stand and never lift.
-const TOOLING_OVERRIDES = { '2026-10-04': 5000, '2026-10-06': 1000, '2026-10-07': 1000 };
+// Raised to 1,300 at 23:48 UTC (AUTHORISED BY ROY in the session) for the
+// production deals re-run on the photo-count fix; lapses at 00:00 UTC.
+const TOOLING_OVERRIDES = { '2026-10-04': 5000, '2026-10-06': 1000, '2026-10-07': 1300 };
 function toolingAllowance(now) {
   return TOOLING_OVERRIDES[(now || new Date()).toISOString().slice(0, 10)] || TOOLING_DAILY;
 }

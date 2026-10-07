@@ -31,8 +31,13 @@ ok('marketAfterListings / fetchMarketPrice / renderMarketData are gone',
 ok('the listings request is published while in flight', /LIVE_INFLIGHT\[key\] = pr;/.test(code));
 // Opening a card fired /api/listings twice ~110ms apart (panel + Latest-
 // searches tile average), and the panel's copy queued behind its twin.
-const listingFetches = (code.match(/fetch\(BACKEND \+ '\/api\/listings\/'/g) || []).length;
+// The listings SEARCH, that is: POST .../compare (photo speed, 2026-10-07) asks
+// for photo comparisons of rows already fetched, never searches, and is pinned
+// in photoqueue.test.js.
+const listingFetches = (code.match(/fetch\(BACKEND \+ '\/api\/listings\/' \+ encodeURIComponent\(\w+\)(?!\s*\+\s*'\/compare')/g) || []).length;
 ok('exactly ONE place in the page fetches /api/listings', listingFetches === 1, listingFetches + ' places');
+ok('…and the only other /api/listings call is the comparison POST',
+   (code.match(/fetch\(BACKEND \+ '\/api\/listings\/'/g) || []).length === 2 && /'\/api\/listings\/' \+ encodeURIComponent\(card\.id\) \+ '\/compare', \{ method: 'POST'/.test(code));
 ok('...and it is fetchListings', /fetch\(BACKEND \+ '\/api\/listings\/'/.test(slice('fetchListings')));
 ok('the panel and the tile average both go through it',
   /fetchListings\(/.test(slice('renderLiveListings')) && /fetchListings\(/.test(slice('cardListingAvg')));

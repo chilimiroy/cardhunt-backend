@@ -51,6 +51,18 @@ function priceOf(l) {
   const n = parseFloat(p);
   return isFinite(n) && n > 0 ? n : null;
 }
+// The cheap floor judges the ITEM price (Roy, 2026-10-07): what the seller
+// asks for the card. Postage is no evidence a listing is genuine, and judging
+// the delivered price let a shipping quote lift a flagged row over the line —
+// the ZIP union's headline drops, Pikachu SM162 $10 (flagged under $17) became
+// $10 + $8.80 = $18.80 (over $18.00, by 80 cents) — and lets any seller clear
+// the floor by moving money from price into postage. priceOf (delivered)
+// still ranks and is shown; only the judgement uses this.
+function itemPriceOf(l) {
+  const p = l.price != null ? l.price : l.landed;
+  const n = parseFloat(p);
+  return isFinite(n) && n > 0 ? n : null;
+}
 
 // ── A median the fakes set themselves (2026-10-04) ────────────
 // Shining Charizard 107/105, Raw NM, all eight eBay sites: 144 rows past the
@@ -74,8 +86,12 @@ function flagOutliers(listings, opts) {
   const minSample   = opts.minSample        || MIN_SAMPLE;
   const minMedian   = opts.minMedian        || MIN_MEDIAN;
 
+  // Item price for the median and for every row (itemPriceOf). opts.judgeBy
+  // 'delivered' is the rule before 2026-10-07, kept ONLY so the deals probe
+  // can measure both on the same rows; nothing else passes it.
+  const judgeOf = opts.judgeBy === 'delivered' ? priceOf : itemPriceOf;
   const out = listings.map(l => Object.assign({}, l));
-  const prices = out.filter(l => !isCurrentBid(l)).map(priceOf).filter(p => p !== null);
+  const prices = out.filter(l => !isCurrentBid(l)).map(judgeOf).filter(p => p !== null);
 
   const stats = {
     count: out.length, priced: prices.length,
@@ -112,8 +128,9 @@ function flagOutliers(listings, opts) {
       `$${stats.median.toFixed(2)}, sits below it)`
     : `the $${basis.toFixed(2)} median for this card`;
 
+  stats.judgedOn = opts.judgeBy === 'delivered' ? 'delivered price' : 'item price';
   for (const l of out) {
-    const p = priceOf(l);
+    const p = judgeOf(l);
     if (p === null || isCurrentBid(l)) continue;
     const r = p / basis;
     if (r <= hardRatio) {

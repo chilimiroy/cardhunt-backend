@@ -85,4 +85,29 @@ const sorted = o.sortWithSuspectsLast(r.listings);
 chk('cheapest trustworthy row is first ($' + sorted[0].landed + ')', !sorted[0].suspect);
 chk('flagged rows are at the end', !!sorted[sorted.length-1].suspect);
 
+// ── The floor judges the ITEM price (Roy, 2026-10-07) ──────────
+// The ZIP union showed postage lifting flagged rows over the line: Pikachu
+// SM162 $10 (flagged under $17.00) became $10 + $8.80 = $18.80, over $18.00.
+// And anyone can clear the floor by moving money from price into postage.
+console.log('\nThe floor judges what the seller asks, not price + postage\n');
+{
+const row =(price, shipping, extra) => Object.assign({ price, shipping, landed: +(price + (shipping || 0)).toFixed(2) }, extra || {});
+const feed = Array.from({ length: 30 }, (_, i) => row(160 + i * 2, 5));        // item median ~$189
+const pikachu = row(10, 8.80, { id: 'pika' });                                  // the real case's shape
+const laundered = row(5, 25, { id: 'launder' });                                 // price moved into postage
+const honestCheap = row(24, 5, { id: 'honest' });                                // 13% of median: a real bargain
+const all = feed.concat([pikachu, laundered, honestCheap]);
+const byItem = o.flagOutliers(all), byDelivered = o.flagOutliers(all, { judgeBy: 'delivered' });
+const flagged = (r, id) => !!r.listings.find(l => l.id === id).suspect;
+chk('item price: the $10 + $8.80 row is flagged ($10 is under 10% of the median)', flagged(byItem, 'pika'));
+chk('item price: $5 + $25 postage is flagged — moving money into shipping does not clear the floor', flagged(byItem, 'launder'));
+chk('item price KEEPS an honest cheap row (13% of the median)', !flagged(byItem, 'honest'));
+chk('the stats say what was judged', byItem.stats.judgedOn === 'item price' && byDelivered.stats.judgedOn === 'delivered price');
+chk('the old rule (delivered, measurement only) misses the laundered row — the bug, reproduced', !flagged(byDelivered, 'launder'));
+const rank = o.sortWithSuspectsLast(byItem.listings);
+chk('ranking still uses the DELIVERED price: cheapest trusted first by price + postage',
+    !rank[0].suspect && rank.filter(l => !l.suspect).every((l, i, a) => i === 0 || a[i - 1].landed <= l.landed));
+chk('a row with no item price is judged on what it has (landed)', o.flagOutliers(feed.concat([{ id: 'x', landed: 3 }])).listings.find(l => l.id === 'x').suspect);
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

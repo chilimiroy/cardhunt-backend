@@ -20,7 +20,8 @@ const why = t => cm.verify(t, pk, 'Raw').reason;
 ok('"Japanese" -> ja', cm.refusalLanguage(why('Pikachu 025/165 151 Japanese NM')) === 'ja');
 ok('"Korean" -> ko', cm.refusalLanguage(why('Pikachu 025/165 151 Korean')) === 'ko');
 ok('a Japanese set code -> ja-set-code', cm.refusalLanguage(why('Pikachu 025/165 Pokemon Card 151 SV2a NM')) === 'ja-set-code');
-const yr = why('Pikachu SV: Scarlet & Violet 151 Common #025/165 Pokemon 2025 NM');
+// Graded: a raw stated year is now a flag, not a refusal (2026-10-07); graded keeps it.
+const yr = cm.verify('Pikachu SV: Scarlet & Violet 151 Common #025/165 Pokemon 2025 PSA 10', pk, 'PSA 10').reason;
 ok('a YEAR is not a language (was "language:2025")', /^title says 2025/.test(yr) && cm.refusalLanguage(yr) === null, yr);
 const sz = why('Pikachu 025/130 151 NM');
 ok('a set size is not a language', /title says 025\/130/.test(sz) && cm.refusalLanguage(sz) === null, sz);

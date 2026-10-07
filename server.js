@@ -2961,6 +2961,12 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       editionKey: v.edition || null,
       editionStated: !!v.editionStated
     }));
+    // A stated year the gate let through (cm.verify yearFlag, 2026-10-07):
+    // kept, FLAGGED — sorted last and out of the headline price like any
+    // suspect row, labelled with why. Set after normaliseListing, which
+    // keeps only the fields it names.
+    if (v.yearFlag) Object.assign(listings[listings.length - 1],
+      { suspect: 'year-stated', suspectReason: v.yearFlag.says });
   }
 
   // kept AND dropped, always. "12 listings, 40 rejected" and "no listings"
@@ -3608,7 +3614,9 @@ async function judgeListings(card, grade, listings, opts, memo) {
         const prof = materialProfileOf(l);
         if (!prof) { materialReport.pending++; l = Object.assign({}, l, { materialPending: true }); }
         const bv = backVerdicts.get(backKey(l.itemId, card.api_card_id)) || null;   // l may be a copy (materialPending)
-        const m = stampcheck.materialJudge({ profile: prof, ref: mref, priceFlag: !!l.suspect, back: bv });
+        // A year flag is not a price signal (2026-10-07): only the outlier's
+        // and the reprint-price flags count as "priced far below".
+        const m = stampcheck.materialJudge({ profile: prof, ref: mref, priceFlag: !!l.suspect && l.suspect !== 'year-stated', back: bv });
         if (m.action === 'refuse') {
           materialReport.refused++;
           const refusal = { title: l.title, itemId: l.itemId, price: l.price, landed: l.landed, currency: 'USD',

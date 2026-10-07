@@ -1921,6 +1921,22 @@ function buildQuery(card, grade, opts) {
 //                      it ever fired there.
 //
 // Returns a reason string, or null when the title is not excluded.
+// The stated-year mismatch, one definition for the refusal and the flag:
+// the reason when every year the title states is more than one off the
+// set's year, else null.
+function statedYearConflict(title, card) {
+  if (!card || !card.setYear) return null;
+  const ys = yearsIn(String(title || ''));
+  return ys.length && !ys.some(y => Math.abs(y - card.setYear) <= 1)
+    ? `title says ${ys.join('/')}, this set is from ${card.setYear} — a different printing` : null;
+}
+// Does the title state a year (within one) of a family that reprinted this
+// card? Read from REPRINT_FAMILIES[].year through familiesReprinting.
+function statedYearIsReprintYear(title, card) {
+  const years = familiesReprinting(card).map(f => f.year).filter(Boolean);
+  return years.length > 0 && yearsIn(String(title || '')).some(y => years.some(ry => Math.abs(y - ry) <= 1));
+}
+
 function printingConflict(title, card, opts) {
   opts = opts || {};
   const t = String(title || '');
@@ -1974,10 +1990,18 @@ function printingConflict(title, card, opts) {
   // Year. A title with no year is NOT rejected — absence is not a mismatch.
   // Scans ALL stated years so "1999 ... graded 2021" survives.
   if (card.setYear) {
-    const ys = yearsIn(t);
-    if (ys.length && !ys.some(y => Math.abs(y - card.setYear) <= 1)) {
-      return `title says ${ys.join('/')}, this set is from ${card.setYear} — a different printing`;
-    }
+    const why = statedYearConflict(t, card);
+    // A year in a seller's title is as often the year they bought it, a
+    // typo, or the copyright line Base Set prints (©1995) as the printing
+    // (Roy, 2026-10-07; measured: raw, the year alone refused 3 genuine
+    // cards and 0 reprints). So on an ORIGINAL in a RAW view the year
+    // refuses only when it is a reprint year of a family that reprinted
+    // THIS card (REPRINT_FAMILIES[].year — data, not literals here); any
+    // other stated year passes FLAGGED (verify -> yearFlag). Kept as a
+    // refusal: a reprint card, a graded view (graded, the year alone caught
+    // the 2021 Celebrations slabs — no "wants raw" to corroborate there),
+    // and any caller that does not say the view is raw.
+    if (why && (reprintOf(card) || opts.wantKind !== 'raw' || statedYearIsReprintYear(t, card))) return why;
   }
 
   return null;
@@ -2087,6 +2111,13 @@ function verify(title, card, grade, opts) {
   if (nn && nn.year && card.setYear !== nn.year) card = Object.assign({}, card, { setYear: nn.year });
   const r = verifyCore(title, card, grade, opts) || { ok: false, reason: 'no verdict' };
   r.evidence = printingEvidence(card);
+  // A stated year the gate let through (raw, an original, not a reprint
+  // year): the row is kept and FLAGGED — sorted last, out of the headline
+  // price, labelled — never deleted (2026-10-07).
+  if (r.ok) {
+    const y = statedYearConflict(title, card);
+    if (y) r.yearFlag = { says: y.replace(/ — a different printing$/, '') + ' — the year may be the purchase, a typo or the copyright line' };
+  }
   // Printing (TASK T10): every verdict says what the title claimed, so kept
   // rows can be grouped stated / unstated. Only opts.printing refuses.
   const claim = printingClaim(title, card);
@@ -2143,7 +2174,8 @@ function verifyCore(title, card, grade, opts) {
   //     second marketplace needs exactly these and must not grow its own
   //     copy: two implementations of one gate is how the estimator, the
   //     query builder and the title gate each drifted in this project.
-  const printing = printingConflict(t, card, opts);
+  // wantKind: the year rule refuses less only when the view is RAW.
+  const printing = printingConflict(t, card, Object.assign({}, opts, { wantKind: want.kind }));
   if (printing) return { ok: false, reason: printing };
   // After the printing reasons: a reprint or a language, where stated, is
   // the more specific answer ("Cristal Dorado Lugia … 30ª Celebración").
@@ -2488,6 +2520,7 @@ function refusalLanguage(reason) {
 const API = {
   buildQuery, verify, filterListings, goldBeforeGold, NO_EBAY_MARKET, noEbayMarket,
   OTHER_LANGUAGE_WORDS, SHARED_NUMBERING_JA_CODES, otherLanguageExclusions, refusalLanguage,
+  statedYearConflict, statedYearIsReprintYear,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
   qualifiersIn, sellerCondition, stripHitPoints,
   EBAY_CARD_CONDITION, EBAY_CONDITION_CODES, ebayConditionFilter, EBAY_SITE_ASPECTS, siteAspects,

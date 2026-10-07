@@ -17,8 +17,9 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.log('  FAIL ' + m); } }
 
 const grid = (page.match(/\.cdgrid\{--cd-gap:[^}]+\}/) || [''])[0];
-ok(/grid-template-areas:"img top" "img chart" "info chart"/.test(grid),
-   'wide: the graph spans under the price cell, not a shared second row');
+// TASK-ui T2 (2026-10-07): the information panel is gone — its fields are above the image.
+ok(/grid-template-areas:"img top" "img chart"/.test(grid) && !/info/.test(grid),
+   'wide: the graph spans under the price cell, not a shared second row; no info cell');
 ok(/gap:var\(--cd-gap\)/.test(grid), 'the grid row gap is the column token');
 ok(/\.cdtop-r\{[^}]*display:flex;flex-direction:column;gap:var\(--cd-gap\)/.test(page),
    'prices -> bar spacing is the same token');
@@ -26,10 +27,11 @@ ok(/\.cdgrid > \[class\], \.cdtop-r > \[class\], \.cdgrid \.cview\{margin:0\}/.t
    'no cell carries its own margin inside the grid (specificity beats later .chart-box)');
 ok(!/\.cdtop-r \.pboxes\{[^}]*margin-bottom:14px/.test(page), 'the old 14px pboxes margin is gone');
 const narrow = (page.match(/@media\(max-width:860px\)\{\s*\.cdgrid\{[^}]+\}/) || [''])[0];
-ok(/grid-template-areas:"img" "top" "chart" "info"/.test(narrow),
-   'narrow: prices, bar and graph stay together; info follows');
+ok(/grid-template-areas:"img" "top" "chart"/.test(narrow) && !/info/.test(narrow),
+   'narrow: prices, bar and graph stay together');
+ok(!/id="cd-meta"/.test(page) && !/function renderCardInfo/.test(page), 'T2: the details box and its writer are gone, not left dormant');
 for (const id of ['cd-img', 'cd-mkt', 'cd-low', 'cd-sold', 'cd-trend-bar', 'cd-52low', 'cd-52high',
-                  'cd-meta', 'cd-chart', 'cd-chart-src', 'cd-grade-lbl'])
+                  'cd-sub', 'cd-chart', 'cd-chart-src', 'cd-grade-lbl'])
   ok(page.includes('id="' + id + '"'), 'element id unchanged: ' + id);
 
 // T4 (2026-09-28): 390px phones. Measured in a 390px iframe: all nine

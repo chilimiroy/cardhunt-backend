@@ -723,20 +723,22 @@ console.log('7d2. THE CARD PAGE IS ROY\'S T4 ARRANGEMENT');
 (function () {
   const g0 = html.indexOf('class="cdgrid"');
   const pos = function (id) { return html.indexOf('id="' + id + '"', g0); };
-  ok('the image, the price boxes, the info panel and the graph share ONE grid',
-    g0 >= 0 && [pos('cd-img'), pos('cd-mkt'), pos('cd-meta'), pos('cd-chart')].every(function (p) { return p > g0; })
-    && pos('cd-img') < pos('cd-mkt') && pos('cd-mkt') < pos('cd-meta') && pos('cd-meta') < pos('cd-chart'),
-    'image | boxes, then info | graph - in that order');
+  // TASK-ui T2 (2026-10-07): the info panel under the image is gone; its
+  // fields are in #cd-sub above the image, with the artist moved up.
+  ok('the image, the price boxes and the graph share ONE grid; no info panel',
+    g0 >= 0 && [pos('cd-img'), pos('cd-mkt'), pos('cd-chart')].every(function (p) { return p > g0; })
+    && pos('cd-img') < pos('cd-mkt') && pos('cd-mkt') < pos('cd-chart') && html.indexOf('id="cd-meta"') < 0,
+    'image | boxes | graph - in that order');
   ok('...and the selector and listings come AFTER it',
     html.indexOf('id="cd-selector"') > pos('cd-chart') && html.indexOf('id="cd-listings"') > html.indexOf('id="cd-selector"'));
   ok('the price table is gone, and nothing still writes to it',
     codeOnly.indexOf('cd-gpt') < 0 && codeOnly.indexOf('gpt-r') < 0,
     'raw price x a fixed multiplier, labelled as a market avg');
-  const info = fnCode('renderCardInfo');
-  ok('the info panel shows set, number, rarity and artist - nothing else',
-    ['Set', 'Number', 'Rarity', 'Artist'].every(function (k) { return info.indexOf(String.fromCharCode(39) + k + String.fromCharCode(39)) >= 0 || info.indexOf('>' + k + '<') >= 0; })
-    && !/'(HP|Types|TCGPlayer|Cardmarket)'/.test(info),
-    'Roy named four fields');
+  const info = fnCode('renderCardSub');
+  ok('above the image: set, number, year, rarity and artist',
+    /set.name/.test(info) && /c.number/.test(info) && /releaseDate/.test(info) && /c.rarity/.test(info) && /id="cd-artist"/.test(info),
+    'T2 moved the artist up');
+  ok('a Japanese or Chinese set keeps its English name, which only the old panel showed', /set.nameEn && set.nameEn !== set.name/.test(info));
   ok('an absent artist says "not recorded", never a bare dash',
     info.indexOf('not recorded') >= 0);
   const rs = fnCode('renderSelector');

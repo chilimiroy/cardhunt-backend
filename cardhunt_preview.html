@@ -442,8 +442,8 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
    bar. Every gap in the column is --cd-gap and nothing else. The markup
    and every element id are unchanged. */
 .cdgrid{--cd-gap:16px;display:grid;grid-template-columns:minmax(300px,380px) 1fr;
-  grid-template-areas:"img top" "img chart" "info chart";
-  grid-template-rows:auto auto 1fr;
+  grid-template-areas:"img top" "img chart";
+  grid-template-rows:auto 1fr;
   gap:var(--cd-gap) 28px;align-items:start;margin-bottom:20px}
 /* Inside the grid, the gap is the ONLY spacing: every cell and every child
    of the price column drops its own margin. [class] lifts this above single-
@@ -454,13 +454,14 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .cd-imgcell{grid-area:img}
 .cdtop-r{grid-area:top;min-width:0;display:flex;flex-direction:column;gap:var(--cd-gap)}
 .cdtop-r .pboxes{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
-.cd-info{grid-area:info;align-self:start}
 .cd-chartcell{grid-area:chart;min-width:0}
+/* The artist's label above the image (T2): quieter than the name it labels. */
+.cd-al{color:var(--fa)}
 /* Narrow: one column, and the PRICE story stays together - prices, bar,
    graph - with the information panel after it. In DOM order the panel sat
    between the bar and the graph, splitting the same column on phones. */
 @media(max-width:860px){
-  .cdgrid{grid-template-columns:1fr;grid-template-areas:"img" "top" "chart" "info";grid-template-rows:none}
+  .cdgrid{grid-template-columns:1fr;grid-template-areas:"img" "top" "chart";grid-template-rows:none}
   .cdtop-r .pboxes{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
 }
 .cview{background:linear-gradient(145deg,var(--surface-2),var(--accent-soft));border:1px solid var(--border);border-radius:var(--r);padding:26px;text-align:center;margin-bottom:16px;box-shadow:var(--sh)}
@@ -994,10 +995,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
           </div>
           </div><!-- /.price-only (price boxes, position bar) -->
         </div>
-
-        <!-- 2a. information panel, under the image and matching its width:
-                 set, number, rarity, artist - nothing else. -->
-        <div class="mbox2 cd-info" id="cd-meta"></div>
 
         <!-- 2b. price history, beside the information panel -->
         <div class="chart-box cd-chartcell price-only">
@@ -3077,7 +3074,6 @@ async function openCard(id){
   document.getElementById('cd-img').src='';
   document.getElementById('cd-name').textContent='Loading…';
   document.getElementById('cd-sub').textContent='';
-  document.getElementById('cd-meta').innerHTML='';
   document.getElementById('cd-listings').innerHTML='<div style="padding:48px;text-align:center;color:var(--mu)"><div class="spin" style="width:34px;height:34px;border:3px solid var(--bd);border-top-color:var(--t);border-radius:50%;animation:sp .75s linear infinite;margin:0 auto 12px"></div></div>';
   try{
     // Check card cache first — but ONLY if what is cached came from our
@@ -3132,7 +3128,7 @@ async function openCard(id){
     document.getElementById('cd-bc').textContent=nameWithEnPlain(c.name, c.nameEn);
     showCardArt(c);
     document.getElementById('cd-name').textContent=c.name;
-    document.getElementById('cd-sub').innerHTML=( c.set&&c.set.name?c.set.name:'')+' · #'+c.number+'/'+(c.set&&c.set.total?c.set.total:'?')+' · '+(c.set&&c.set.releaseDate?String(c.set.releaseDate).slice(0,4):'')+' · <span class="b bg2">'+(c.rarity||'?')+'</span>';
+    renderCardSub(c);
     var base=getBase(c);S.activeGradeBase=base;
     updateCardPrices('Raw NM',base);
     // The price table that sat here is gone (Roy, TASK.md T4). Every row was
@@ -3142,7 +3138,6 @@ async function openCard(id){
     // The 16-chip GRADES row is gone; renderSelector() draws the status and
     // condition boxes that replaced it.
     renderSelector();
-    renderCardInfo(c);
     try { renderListingFinder(c); }
     catch (err) { console.warn('listing finder failed:', err.message); }
     updateValueBar(base);
@@ -3154,34 +3149,29 @@ async function openCard(id){
 }
 
 
-// ── The information panel: set, number, rarity, artist — nothing else ──
-// Roy's list. The artist is not in our database (no column on `cards`), so
-// it is read from TCGdex, the source the catalogue itself was built from,
-// by the card's own id. TCGdex numbers some sets zero-padded (sv10-001) and
-// some not (base1-4), so both are tried. If neither answers, the row says
-// the artist is not recorded rather than showing a bare dash that reads as
-// "this card has no artist".
-function renderCardInfo(c) {
-  var host = document.getElementById('cd-meta');
+// ── The details above the image (TASK-ui T2, 2026-10-07) ──
+// The information panel under the image is gone: its set, number and rarity
+// were already up here. What it alone carried moved up: the artist, and the
+// set's English name beside a Japanese or Chinese one. The artist is not in
+// our database (no column on `cards`), so it is read from TCGdex by the
+// card's own id; if neither id form answers it says "not recorded" rather
+// than a bare dash that reads as "this card has no artist".
+function renderCardSub(c) {
+  var host = document.getElementById('cd-sub');
   if (!host || !c) return;
-  var row = function (k, v) {
-    return '<div class="mr2"><span class="ml2">' + k + '</span><span class="mv2">' + v + '</span></div>';
-  };
-  host.innerHTML =
-      row('Set', liveEsc(c.set && (c.set.nameEn || c.set.name) || '—'))
-    + row('Number', '#' + liveEsc(String(c.number || '?')) + '/' + (c.set && c.set.total ? c.set.total : '?'))
-    + row('Rarity', liveEsc(c.rarity || '—'))
+  var set = c.set || {};
+  var setName = liveEsc(set.name || '') + (set.nameEn && set.nameEn !== set.name ? ' (' + liveEsc(set.nameEn) + ')' : '');
+  host.innerHTML = setName + ' · #' + liveEsc(String(c.number || '?')) + '/' + (set.total ? liveEsc(String(set.total)) : '?')
+    + ' · ' + (set.releaseDate ? String(set.releaseDate).slice(0, 4) : '')
+    + ' · <span class="b bg2">' + liveEsc(c.rarity || '?') + '</span>'
     // The id is written out literally so the element-id check can see it.
-    + '<div class="mr2"><span class="ml2">Artist</span><span class="mv2" id="cd-artist">'
-    + '<span style="color:var(--fa);font-weight:500">looking up&hellip;</span></span></div>';
+    + ' · <span class="cd-al">Artist</span> <span id="cd-artist" title="Artist from TCGdex, by the card&rsquo;s own id"><span style="color:var(--fa)">looking up&hellip;</span></span>';
   fetchArtist(c).then(function (name) {
     // A slow answer for the previous card must not land on this one.
     if (!S.currentCard || S.currentCard.id !== c.id) return;
     var el = document.getElementById('cd-artist');
     if (!el) return;
-    el.innerHTML = name
-      ? liveEsc(name) + ' <span style="color:var(--fa);font-weight:500;font-size:10px">via TCGdex</span>'
-      : '<span style="color:var(--fa);font-weight:500">not recorded</span>';
+    el.innerHTML = name ? liveEsc(name) : '<span style="color:var(--fa)">not recorded</span>';
   });
 }
 
@@ -7384,6 +7374,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-617d579-homeorder &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-6502c7b-details &middot; click to hide</div>
 </body>
 </html>

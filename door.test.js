@@ -52,10 +52,16 @@ ok('pending: says the account is waiting for approval', /waiting/.test(pdh('pend
 
 console.log('\n  the page: where the prices would be');
 const blk = id => { const i = H.indexOf(id); return i < 0 ? '' : H.slice(H.lastIndexOf('<', i), H.indexOf('>', i) + 1); };
-ok('card page: price boxes and position bar sit inside .price-only, with a note beside them',
-   /<div class="cdtop-r">\s*<div class="price-door" role="note"><\/div>\s*<div class="price-only">\s*<div class="pboxes">/.test(H));
-ok('card page: price history, grade selector and listings are .price-only',
-   /class="chart-box cd-chartcell price-only"/.test(H) && /id="cd-selector" class="price-only"/.test(H) && /<div class="lbox price-only">/.test(H));
+// TASK-ui T1: one price column — the view area (boxes | history), its
+// toggle and the selector — inside ONE .price-only, with a note beside it.
+ok('card page: the price column sits inside .price-only, with a note beside it',
+   /<div class="cdtop-r">\s*<div class="price-door" role="note"><\/div>\s*<div class="price-only cd-pricecol">\s*<div class="cd-viewwrap"/.test(H));
+const col = H.slice(H.indexOf('<div class="price-only cd-pricecol">'), H.indexOf('<!-- /.price-only (price column) -->'));
+ok('card page: boxes, history, the view toggle and the grade selector are all inside it',
+   ['id="cd-mkt"', 'id="cd-chart"', 'id="cd-vtog"', 'id="cd-selector"'].every(s => col.includes(s)));
+ok('card page: the listings are .price-only', /<div class="lbox price-only">/.test(H));
+ok('the view toggle exists nowhere else, and does nothing with prices closed',
+   (H.match(/id="cd-vtog"/g) || []).length === 1 && /function toggleCardView\(\)\{\s*if \(!pricesOpen\(\)\) return;/.test(H));
 ok('card page: Compare, Set Alert and Watch are .price-only', /class="btn price-only" onclick="openCompare\(\)"/.test(H) && /class="btn price-only" onclick="addAlertFromCard\(\)"/.test(H) && /class="btn price-only" id="watch-btn"/.test(H));
 const home = H.slice(H.indexOf('<div id="screen-home"'), H.indexOf('<div id="screen-pokemon"'));
 // TASK-ui T8: search, best deals, browse by game, movers, alerts last.

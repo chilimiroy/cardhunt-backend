@@ -18,17 +18,34 @@ function ok(c, m) { if (c) pass++; else { fail++; console.log('  FAIL ' + m); } 
 
 const grid = (page.match(/\.cdgrid\{--cd-gap:[^}]+\}/) || [''])[0];
 // TASK-ui T2 (2026-10-07): the information panel is gone — its fields are above the image.
-ok(/grid-template-areas:"img top" "img chart"/.test(grid) && !/info/.test(grid),
-   'wide: the graph spans under the price cell, not a shared second row; no info cell');
+// TASK-ui T1: the graph is one of the price column's two views, not a cell.
+ok(/grid-template-areas:"img top";/.test(grid) && !/info|chart/.test(grid),
+   'wide: one row — the image and the price column; no info or chart cell');
+ok(/align-items:stretch/.test(grid), 'the row stretches, so the column ends level with the image panel');
 ok(/gap:var\(--cd-gap\)/.test(grid), 'the grid row gap is the column token');
 ok(/\.cdtop-r\{[^}]*display:flex;flex-direction:column;gap:var\(--cd-gap\)/.test(page),
    'prices -> bar spacing is the same token');
-ok(/\.cdgrid > \[class\], \.cdtop-r > \[class\], \.cdgrid \.cview\{margin:0\}/.test(page),
+ok(/\.cdgrid > \[class\], \.cdtop-r > \[class\], \.cdgrid \.cview, \.cd-view > \[class\], \.cd-pricecol > \[class\], \.cd-pricecol \.selwrap\{margin:0\}/.test(page),
    'no cell carries its own margin inside the grid (specificity beats later .chart-box)');
 ok(!/\.cdtop-r \.pboxes\{[^}]*margin-bottom:14px/.test(page), 'the old 14px pboxes margin is gone');
 const narrow = (page.match(/@media\(max-width:860px\)\{\s*\.cdgrid\{[^}]+\}/) || [''])[0];
-ok(/grid-template-areas:"img" "top" "chart"/.test(narrow) && !/info/.test(narrow),
-   'narrow: prices, bar and graph stay together');
+ok(/grid-template-areas:"img" "top";/.test(narrow) && !/info|chart/.test(narrow),
+   'narrow: the image, then the price column');
+
+// TASK-ui T1: the toggle. Both views in ONE grid cell (no jump), the hidden
+// one invisible and inert; switching fetches nothing.
+ok(/\.cd-view\{grid-row:1;grid-column:1;/.test(page), 'both views share one grid cell');
+ok(/\.cd-viewwrap\[data-view="boxes"\] \.cd-view-chart,\.cd-viewwrap\[data-view="chart"\] \.cd-view-boxes\{visibility:hidden\}/.test(page),
+   'the other view is visibility:hidden, so it keeps its space');
+const fnSrc = n => { const i = page.indexOf('function ' + n + '('); return i < 0 ? '' : page.slice(i, page.indexOf('\n}', i) + 2); };
+const tog = fnSrc('toggleCardView') + fnSrc('applyCardView');
+ok(tog.length > 200 && !/fetch|apiFetch|initChart|loadHistory|renderListingFinder|selGrade|openCard/.test(tog),
+   'switching views fetches and redraws nothing');
+ok(/p\[0\]\.inert = !p\[1\]/.test(fnSrc('applyCardView')), 'the hidden view is inert (no focus, no clicks)');
+const box = page.slice(page.indexOf('id="cd-viewwrap"'), page.indexOf('id="cd-selector"'));
+ok(box.indexOf('id="cd-sold"') > 0 && box.indexOf('id="cd-vtog"') > box.indexOf('id="cd-chart"'), 'the toggle sits beside the views, after Last sold');
+ok(page.indexOf('id="cd-selector"') > page.indexOf('id="cd-vtog"') && page.indexOf('id="cd-selector"') < page.indexOf('<div class="lbox'),
+   'the selector is below the toggle area, in the price column');
 ok(!/id="cd-meta"/.test(page) && !/function renderCardInfo/.test(page), 'T2: the details box and its writer are gone, not left dormant');
 for (const id of ['cd-img', 'cd-mkt', 'cd-low', 'cd-sold', 'cd-trend-bar', 'cd-52low', 'cd-52high',
                   'cd-sub', 'cd-chart', 'cd-chart-src', 'cd-grade-lbl'])

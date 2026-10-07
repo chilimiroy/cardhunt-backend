@@ -1,0 +1,326 @@
+{
+ "rule": "English cards with an uncached Raw NM open since 2026-10-03 whose view held >= 30 listings, a TCGdex price recorded in the last 7 days of at least $20, not one of backcheck.MOST_FAKED (en-neo4-107, en-base1-4, en-swsh4-188: their raw headline needs automatic back checks the probe does not run); the 40 most-opened by that count, ties by card id.",
+ "chosenAt": "2026-10-07T20:31:34.040Z",
+ "cards": [
+  {
+   "id": "en-me02.5-276",
+   "name": "Pikachu ex",
+   "set": "Ascended Heroes",
+   "opens": 8,
+   "maxRows": 146,
+   "price": 926.12
+  },
+  {
+   "id": "en-sv03.5-199",
+   "name": "Charizard ex",
+   "set": "151",
+   "opens": 8,
+   "maxRows": 127,
+   "price": 341.79
+  },
+  {
+   "id": "en-ex13-103",
+   "name": "Mewtwo Star",
+   "set": "Holon Phantoms",
+   "opens": 5,
+   "maxRows": 37,
+   "price": 7850
+  },
+  {
+   "id": "en-sv04.5-232",
+   "name": "Mew ex",
+   "set": "Paldean Fates",
+   "opens": 5,
+   "maxRows": 89,
+   "price": 872.64
+  },
+  {
+   "id": "en-swsh7-215",
+   "name": "Umbreon VMAX",
+   "set": "Evolving Skies",
+   "opens": 5,
+   "maxRows": 46,
+   "price": 2292.5
+  },
+  {
+   "id": "en-xy10-125",
+   "name": "Alakazam EX",
+   "set": "Fates Collide",
+   "opens": 5,
+   "maxRows": 222,
+   "price": 328.06
+  },
+  {
+   "id": "en-me02-125",
+   "name": "Mega Charizard X ex",
+   "set": "Phantasmal Flames",
+   "opens": 4,
+   "maxRows": 118,
+   "price": 659.53
+  },
+  {
+   "id": "en-swsh12-186",
+   "name": "Lugia V",
+   "set": "Silver Tempest",
+   "opens": 4,
+   "maxRows": 58,
+   "price": 507.04
+  },
+  {
+   "id": "en-base1-15",
+   "name": "Venusaur",
+   "set": "Base Set",
+   "opens": 3,
+   "maxRows": 73,
+   "price": 169.95
+  },
+  {
+   "id": "en-base1-2",
+   "name": "Blastoise",
+   "set": "Base Set",
+   "opens": 3,
+   "maxRows": 62,
+   "price": 222.49
+  },
+  {
+   "id": "en-base3-5",
+   "name": "Gengar",
+   "set": "Fossil",
+   "opens": 3,
+   "maxRows": 81,
+   "price": 212.74
+  },
+  {
+   "id": "en-ex3-90",
+   "name": "Dragonite ex",
+   "set": "Dragon",
+   "opens": 3,
+   "maxRows": 59,
+   "price": 524.89
+  },
+  {
+   "id": "en-me04-116",
+   "name": "Mega Greninja ex",
+   "set": "Chaos Rising",
+   "opens": 3,
+   "maxRows": 175,
+   "price": 136.64
+  },
+  {
+   "id": "en-me05-120",
+   "name": "Mega Darkrai ex",
+   "set": "Pitch Black",
+   "opens": 3,
+   "maxRows": 139,
+   "price": 141.64
+  },
+  {
+   "id": "en-smp-SM191",
+   "name": "Mewtwo & Mew GX",
+   "set": "SM Black Star Promos",
+   "opens": 3,
+   "maxRows": 41,
+   "price": 363.84
+  },
+  {
+   "id": "en-sv02-203",
+   "name": "Magikarp",
+   "set": "Paldea Evolved",
+   "opens": 3,
+   "maxRows": 79,
+   "price": 356.6
+  },
+  {
+   "id": "en-swsh5-155",
+   "name": "Tyranitar V",
+   "set": "Battle Styles",
+   "opens": 3,
+   "maxRows": 59,
+   "price": 241.41
+  },
+  {
+   "id": "en-base5-4",
+   "name": "Dark Charizard",
+   "set": "Team Rocket",
+   "opens": 2,
+   "maxRows": 59,
+   "price": 381.69
+  },
+  {
+   "id": "en-cel25cc-CC002",
+   "name": "Charizard",
+   "set": "Celebrations Classic Collection",
+   "opens": 2,
+   "maxRows": 71,
+   "price": 272.82
+  },
+  {
+   "id": "en-me05-116",
+   "name": "Mega Darkrai ex",
+   "set": "Pitch Black",
+   "opens": 2,
+   "maxRows": 177,
+   "price": 162.47
+  },
+  {
+   "id": "en-me05-117",
+   "name": "Morpeko ex",
+   "set": "Pitch Black",
+   "opens": 2,
+   "maxRows": 173,
+   "price": 65.33
+  },
+  {
+   "id": "en-sm3-150",
+   "name": "Charizard GX",
+   "set": "Burning Shadows",
+   "opens": 2,
+   "maxRows": 88,
+   "price": 806.1
+  },
+  {
+   "id": "en-smp-SM162",
+   "name": "Pikachu",
+   "set": "SM Black Star Promos",
+   "opens": 2,
+   "maxRows": 40,
+   "price": 114.1
+  },
+  {
+   "id": "en-smp-SM228",
+   "name": "Armored Mewtwo",
+   "set": "SM Black Star Promos",
+   "opens": 2,
+   "maxRows": 47,
+   "price": 169.35
+  },
+  {
+   "id": "en-sv10.5w-173",
+   "name": "Reshiram ex",
+   "set": "White Flare",
+   "opens": 2,
+   "maxRows": 35,
+   "price": 477.62
+  },
+  {
+   "id": "en-svp-085",
+   "name": "Pikachu with Grey Felt Hat",
+   "set": "SVP Black Star Promos",
+   "opens": 2,
+   "maxRows": 45,
+   "price": 600.02
+  },
+  {
+   "id": "en-swshp-SWSH262",
+   "name": "Charizard VSTAR",
+   "set": "SWSH Black Star Promos",
+   "opens": 2,
+   "maxRows": 125,
+   "price": 68.09
+  },
+  {
+   "id": "en-xy2-108",
+   "name": "M Charizard EX",
+   "set": "Flashfire",
+   "opens": 2,
+   "maxRows": 46,
+   "price": 1501.23
+  },
+  {
+   "id": "en-base1-1",
+   "name": "Alakazam",
+   "set": "Base Set",
+   "opens": 1,
+   "maxRows": 127,
+   "price": 69.41
+  },
+  {
+   "id": "en-base5-3",
+   "name": "Dark Blastoise",
+   "set": "Team Rocket",
+   "opens": 1,
+   "maxRows": 52,
+   "price": 219.7
+  },
+  {
+   "id": "en-base5-8",
+   "name": "Dark Gyarados",
+   "set": "Team Rocket",
+   "opens": 1,
+   "maxRows": 56,
+   "price": 73.58
+  },
+  {
+   "id": "en-ecard2-149",
+   "name": "Lugia",
+   "set": "Aquapolis",
+   "opens": 1,
+   "maxRows": 83,
+   "price": 4500
+  },
+  {
+   "id": "en-lc-1",
+   "name": "Alakazam",
+   "set": "Legendary Collection",
+   "opens": 1,
+   "maxRows": 53,
+   "price": 78.24
+  },
+  {
+   "id": "en-sm3.5-40",
+   "name": "Shining Mew",
+   "set": "Shining Legends",
+   "opens": 1,
+   "maxRows": 36,
+   "price": 179.84
+  },
+  {
+   "id": "en-sv02-211",
+   "name": "Raichu",
+   "set": "Paldea Evolved",
+   "opens": 1,
+   "maxRows": 75,
+   "price": 100.69
+  },
+  {
+   "id": "en-sv03-215",
+   "name": "Charizard ex",
+   "set": "Obsidian Flames",
+   "opens": 1,
+   "maxRows": 179,
+   "price": 21.98
+  },
+  {
+   "id": "en-sv03-228",
+   "name": "Charizard ex",
+   "set": "Obsidian Flames",
+   "opens": 1,
+   "maxRows": 175,
+   "price": 33.61
+  },
+  {
+   "id": "en-sv03.5-193",
+   "name": "Mew ex",
+   "set": "151",
+   "opens": 1,
+   "maxRows": 172,
+   "price": 28.85
+  },
+  {
+   "id": "en-sv04-199",
+   "name": "Groudon",
+   "set": "Paradox Rift",
+   "opens": 1,
+   "maxRows": 85,
+   "price": 107.28
+  },
+  {
+   "id": "en-sv04.5-234",
+   "name": "Charizard ex",
+   "set": "Paldean Fates",
+   "opens": 1,
+   "maxRows": 99,
+   "price": 258.49
+  }
+ ]
+}

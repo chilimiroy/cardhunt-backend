@@ -4016,6 +4016,49 @@ what was NOT fetched; nothing runs by itself (the auto-expansion is deleted).
 
 
 
+## MOVED FROM CLAUDE.md, 2026-10-07 (TASK-ui, third pass)
+
+Moved verbatim from the committed CLAUDE.md (59,651 of 60,000 characters) after
+the TASK-ui layout rules were added. Each rule stays in CLAUDE.md in a line;
+this is the detail behind it.
+
+Measured under `node -r ./costmeter.js` (eBay stubbed, calls counted by origin,
+DB writes swallowed). **Re-measure before changing a row.** Full tables:
+PROGRESS 2026-10-05: "CALL COST — what spends eBay quota, measured
+(2026-10-01)" (its sections:
+"Recurring — runs whether anyone is there or not",
+"User — costs only when someone acts",
+"Tooling — counted against the 300/day allowance"). Budget: 5,000/day · 600/hour all origins · tooling 300/day;
+one-day raises in `ebayquota.TOOLING_OVERRIDES` keyed on the UTC day.
+
+---
+
+| `/api/ebay/conditions?items=N` · `marketprobe` default | 1+N · 11 per card |
+| `/api/ebay/dealsprobe/:card` (measurement; deals stay off) | ≤ 4 per card: 1 search, +1 language union, ≤ 2 back getItem |
+| `node sitecheck.js` default · `node querygap.js en` · `linkaudit --live` | 41-89 · ~230 · 1 per card |
+
+---
+
+`pricecheck` flags >40% from live. Known: Mega Gengar ex #284 ≈ $1,176 · Mega
+Charizard Y ex #294 ≈ $438 · Pokégear 3.0 #186 < $1. Read a source's own rarity
+label before calling a vintage price wrong (`ja-CP6-33` is a ¥24,800 Common).
+
+---
+
+`node ingest.js refresh <lang>` prices whatever is overdue: hot 24h (≥$100 or
+Hyper Rare/SIR) · active 72h (≥$20, IR/Secret/Ultra) · steady 7d (≥$5, Double
+Rare/Holo/ACE SPEC) · slow 14d (≥$1, Rare/V/VMAX/VSTAR/GX) · dormant 30d.
+**Price beats rarity.**
+
+---
+
+`auth.js` verifies the token: **ES256 via the project's JWKS** (legacy
+`SUPABASE_JWT_SECRET` only for HS256). `/api/me` is the ONLY source of the
+signed-in state AND the role. `user_access.email` is captured from the verified token at sign-in (id + email only); nothing reads the `auth` schema.
+- **master** = token email in `CARDZON_MASTER_EMAILS` (Render env, read per request,
+  never stored; `roy@cardzon.com` has no mailbox yet — intentional). approved /
+  pending / rejected in `user_access`, keyed on the auth user id (`roles.js`).
+
 ## MOVED FROM CLAUDE.md, 2026-10-07 (compression)
 
 Moved verbatim when CLAUDE.md reached 59,436 of its 60,000 characters. Each rule

@@ -328,14 +328,12 @@ fixes them.
 
 # CALL COST — what spends eBay quota, measured (2026-10-01)
 
-Measured under `node -r ./costmeter.js` (eBay stubbed, calls counted by origin,
-DB writes swallowed). **Re-measure before changing a row.** Full tables:
-PROGRESS 2026-10-05: "CALL COST — what spends eBay quota, measured
-(2026-10-01)" (its sections:
+Measured with `node -r ./costmeter.js`. **Re-measure before changing a row.**
+Budget 5,000/day · 600/hour · tooling 300/day (`ebayquota.TOOLING_OVERRIDES`).
+Method, tooling rows: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-07 (TASK-ui, third pass)"; full tables:
 "Recurring — runs whether anyone is there or not",
 "User — costs only when someone acts",
-"Tooling — counted against the 300/day allowance"). Budget: 5,000/day · 600/hour all origins · tooling 300/day;
-one-day raises in `ebayquota.TOOLING_OVERRIDES` keyed on the UTC day.
+"Tooling — counted against the 300/day allowance".
 
 | action | eBay calls |
 |---|---|
@@ -349,9 +347,7 @@ one-day raises in `ebayquota.TOOLING_OVERRIDES` keyed on the UTC day.
 | stamp / lookalike / sibling / auctions / novelty (material) | 0 |
 | home movers (4 × `/api/trending`) · best deals (`/api/deals`, cache only) | 0 |
 | search resolving to one card · ambiguous | 1 per card (+reprints) · 0 |
-| `/api/ebay/conditions?items=N` · `marketprobe` default | 1+N · 11 per card |
-| `/api/ebay/dealsprobe/:card` (measurement; deals stay off) | ≤ 4 per card: 1 search, +1 language union, ≤ 2 back getItem |
-| `node sitecheck.js` default · `node querygap.js en` · `linkaudit --live` | 41-89 · ~230 · 1 per card |
+| tooling probes and audits | tooling origin, 300/day — rows in the archive |
 | every `node ingest.js` command, the test suite | 0 |
 
 **Nothing recurring touches eBay.** State an eBay change's calls per card view
@@ -369,9 +365,8 @@ node ingest.js audit en --bad ; node ingest.js audit ja --bad
 node ingest.js setcover en
 node ingest.js pricecheck en me02.5 ; node ingest.js pricecheck en sv03.5
 ```
-`pricecheck` flags >40% from live. Known: Mega Gengar ex #284 ≈ $1,176 · Mega
-Charizard Y ex #294 ≈ $438 · Pokégear 3.0 #186 < $1. Read a source's own rarity
-label before calling a vintage price wrong (`ja-CP6-33` is a ¥24,800 Common).
+`pricecheck` flags >40% from live. Read a source's own rarity label before
+calling a vintage price wrong (known values: archive, third pass).
 
 ## T2 · Listing finder — SHIPPED, with named gaps
 Full spec, envelope and row fields: *Archive:* "T2 · Listing finder — SHIPPED,
@@ -397,10 +392,8 @@ language's nightly refresh from `price_history` (0 network); a trigger records
 *Archive (the open version of this section):* "T3 · Alert engine on real data — STILL OPEN, and still simulated"
 
 ## T4 · Scheduled refresh — running nightly
-`node ingest.js refresh <lang>` prices whatever is overdue: hot 24h (≥$100 or
-Hyper Rare/SIR) · active 72h (≥$20, IR/Secret/Ultra) · steady 7d (≥$5, Double
-Rare/Holo/ACE SPEC) · slow 14d (≥$1, Rare/V/VMAX/VSTAR/GX) · dormant 30d.
-**Price beats rarity.** Ordered by overdue-ness weighted by value. "Due" is
+`node ingest.js refresh <lang>` prices whatever is overdue, in five tiers from
+hot 24h to dormant 30d (thresholds: archive, third pass). **Price beats rarity.** Ordered by overdue-ness weighted by value. "Due" is
 judged on the headline row only. **`--max` is per language** (`all` = 4
 caps); `--hours=4` is the bound that holds. An empty set or 200-card gap is
 named and exits 2 (`setyield.js`, `refresh-empty-sets.log`).
@@ -442,12 +435,10 @@ counted (`i18n.test.js` prints it). Built sentences, server text: English.
 - CardZon is display only; logo 42px nav, 30px at <=640 (`brand.test.js`).
 
 ## Accounts — step 1 (sign-in) and step 2 (roles) SHIPPED 2026-10-06 (T6)
-`auth.js` verifies the token: **ES256 via the project's JWKS** (legacy
-`SUPABASE_JWT_SECRET` only for HS256). `/api/me` is the ONLY source of the
-signed-in state AND the role. `user_access.email` is captured from the verified token at sign-in (id + email only); nothing reads the `auth` schema.
-- **master** = token email in `CARDZON_MASTER_EMAILS` (Render env, read per request,
-  never stored; `roy@cardzon.com` has no mailbox yet — intentional). approved /
-  pending / rejected in `user_access`, keyed on the auth user id (`roles.js`).
+`auth.js` verifies the token (ES256 via JWKS). `/api/me` is the ONLY source of the
+signed-in state AND the role; nothing reads the `auth` schema (mechanics: archive, third pass).
+- **master** = token email in `CARDZON_MASTER_EMAILS` (Render env); approved /
+  pending / rejected in `user_access` (`roles.js`).
 - **ONE gate, `access.js`**, named on each protected route's own line; 401 / 403
   pending|rejected / 403 masters only / 503 fail-closed. `access.test.js` fails on an
   unclassified route (public needs a reason) — add every new route there.

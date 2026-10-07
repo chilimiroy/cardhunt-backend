@@ -250,8 +250,19 @@ All photo work: eBay CDN photos (0 API calls) except the back (1 shared
 getItem), one worker pool (`STAMP_WORKERS`, default 1), queue, one job per
 item, verdicts in `listing_photo_verdicts` (hashed item + photo, versioned —
 bump `VERDICT_VERSION` when a template, threshold or matcher changes). Checks
-run after the response, cheapest rows first; `?poll=1` is cache-only. ~0.5 s a
-photo here, ~1.2-1.3 s on Render. A timeout is retryable, never a verdict.
+run after the response; `?poll=1` is cache-only. ~0.5 s a photo here, ~1 s on
+Render. A timeout is retryable, never a verdict.
+- **Queue order (`stampcheck.PRIO`, Roy 2026-10-07):** top-25 colour, then top-25
+  comparisons + hidden rows + backs, then other colour. Top 25 = first 25 in
+  `compareOrder` (cheapest Buy It Now, then auctions). Comparisons past 25 run
+  only when scrolled into view (`POST /api/listings/:id/compare`) or from stored
+  verdicts; hidden rows always. **The old "cheapest rows first" note was WRONG
+  for comparisons** (gathered order: the cheapest 25 resolved at 146 s of 191 s);
+  it stopped anyone looking. Downloads run off the worker (≤12 ahead).
+- **Comparison photos s-l400, stamps s-l500, never smaller:** real stamps are
+  36-88 px at s-l500, the matcher's floor 28 px — a smaller photo drops a ~40 px
+  stamp below it and the check still reports it ran. Identity stays the s-l500
+  URL. eBay serves only listed sizes: s-l350 is an 80x80 placeholder.
 
 | problem | caught by | on which cards | measured |
 |---|---|---|---|
@@ -300,8 +311,8 @@ Rules of the gate:
   unbuilt card uses the old live path, bounded. "Unbuildable" is a MOVING set
   (78 -> 136 in one backfill): re-count with `--dry`, never quote it.
 - **HARD LIMIT: one sibling worker.** Render gives 0.15 core (cgroup, 2026-10-07);
-  a compare is CPU (68 ms -> ~450 ms wall). Faster cold sibling coverage means a
-  paid Render tier, not code. Colour downloads overlap (5 lanes) — not CPU.
+  a compare is CPU (142 ms CPU -> ~900 ms wall). More throughput means a paid
+  tier; what code can do is less wasted work (queue order above).
 - **The cheap route for a recurring wrong card is a new `LOOKALIKES` pair,
   measured first.**
 
@@ -846,6 +857,9 @@ tree is LF. **Never link `node_modules` into a worktree: `git worktree remove
   test. Compare to the card's own scan, never a fixed colour.
 - Split a mixed denominator by kind; label samples by eye, not by the gate; fold
   only padding (a fold can merge two cards).
+- A smaller input can make a check stop finding things while still reporting it
+  ran — check the feature's size against the matcher's floor first (stamps,
+  PHOTO CHECKS). A size the CDN does not serve answers a placeholder, not an error.
 
 ## 6 · Metered APIs (eBay)
 

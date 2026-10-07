@@ -6177,7 +6177,7 @@ async function vouchBarOf(card, id, payload, t0, pendingOf) {
 // production's view); the view is re-judged in private while they land.
 // Reports the headline (cheapestLive) row and why it was trusted.
 const DEALS_PROBE_ZIP = '10001';
-async function probeZipView(card, id, mode, waitMs) {
+async function probeZipView(card, id, mode, waitMs, wantRows) {
   const grade = 'Raw NM', t0 = Date.now();
   const gathered = await gatherListings(card, grade, 25, { background: true, sites: ['EBAY_US'],
     zipUnion: mode === 'union' ? DEALS_PROBE_ZIP : null });
@@ -6218,7 +6218,23 @@ async function probeZipView(card, id, mode, waitMs) {
       colour: h.materialPending ? 'not profiled yet' : (h.material ? h.material.action || 'profiled' : 'profiled or n/a'),
       back: h.back ? h.back.state : 'not checked', condition: h.sellerCondition || h.condition || null,
       conditionSource: h.conditionSource || null, seller: h.seller || null, sellerFeedback: h.sellerFeedback || null } } : null;
-  return { payload, headline, cheapestLive: payload.cheapestLive, zipUnion: st.zipUnion || null,
+  // ?rows=1 (2026-10-07): every row of the view, and the cheap floor judged
+  // BOTH ways on this identical set — item price (the rule) and delivered
+  // price (the rule before) — so a rule change is measured, not projected.
+  // Served to the caller, never stored (eBay data).
+  let rows;
+  if (wantRows) {
+    const o = payload.outliers || {}, ref = o.reference && !o.reference.why ? { price: o.reference.price } : null;
+    const bare = (payload.listings || []).map(l => Object.assign({}, l, { suspect: undefined, suspectReason: undefined }));
+    const byItem = outlier.flagOutliers(bare, { reference: ref }), byDelivered = outlier.flagOutliers(bare, { reference: ref, judgeBy: 'delivered' });
+    rows = (payload.listings || []).map((l, i) => ({ itemId: l.itemId, title: String(l.title || '').slice(0, 100),
+      price: l.price, shipping: l.shipping, landed: l.landed, live: !!l.live, saleType: l.saleType, priceKind: l.priceKind || null,
+      suspect: l.suspect || null, floorItem: byItem.listings[i].suspect || null, floorDelivered: byDelivered.listings[i].suspect || null,
+      seller: l.seller || null, sellerFeedback: l.sellerFeedback || null, source: l.source,
+      stamp: l.stamp ? l.stamp.state : null, zipOnly: !!l.zipOnly }));
+    rows.floorStats = { item: byItem.stats, delivered: byDelivered.stats, live: o };
+  }
+  return { payload, headline, rows, floorStats: rows && rows.floorStats, cheapestLive: payload.cheapestLive, zipUnion: st.zipUnion || null,
     calls: st.calls, pages: Object.fromEntries(Object.entries(st.sites).map(([m, x]) => [m, x.pagesFetched || 0])),
     queued, stillWaiting: waiting(payload), outliers: payload.outliers || null };
 }
@@ -6233,12 +6249,12 @@ app.get('/api/ebay/dealsprobe/:cardId', toolingKey.require, async (req, res) => 
     const pendingOf = p => ((p && p.stampGate && p.stampGate.pending) || 0) + ((p && p.materialCheck && p.materialCheck.pending) || 0);
     if (req.query.zip === 'none' || req.query.zip === 'union') {
       if (req.query.bar !== 'vouch') return res.status(400).json({ error: '?zip= runs with ?bar=vouch only' });
-      const z = await probeZipView(card, id, req.query.zip, waitMs);
+      const z = await probeZipView(card, id, req.query.zip, waitMs, req.query.rows === '1');
       if (z.error) return res.status(502).json({ error: z.error, sources: z.sources });
       const v = await vouchBarOf(card, id, z.payload, t0, p => ((p.stampGate && p.stampGate.pendingQueued) || 0) + ((p.materialCheck && p.materialCheck.pending) || 0));
       return res.json(Object.assign(v, { zip: req.query.zip, headline: z.headline, cheapestLive: z.cheapestLive,
         searchCalls: z.calls, pages: z.pages, zipUnion: z.zipUnion, queued: z.queued, stillWaiting: z.stillWaiting,
-        outliers: z.outliers, listings: z.payload.count, isolated: true }));
+        outliers: z.outliers, listings: z.payload.count, isolated: true, rows: z.rows, floorStats: z.floorStats }));
     }
     let payload = await listingsFor(card, id, grade, null, {});
     const reread = async () => { const p = await listingsFor(card, id, grade, null, { poll: true }); return p && !p.notFetched ? p : payload; };

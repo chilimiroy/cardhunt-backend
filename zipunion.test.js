@@ -46,5 +46,12 @@ ok('it queues the checks production would: the gate\'s top rows (class 1), colou
 ok('one vouching bar: the production path and the probe both call vouchBarOf',
    (S.match(/await vouchBarOf\(card, id, /g) || []).length === 2 && (S.match(/function vouchBarOf\(/g) || []).length === 1);
 
+console.log('\n  the old outlier rule is a measurement, never the rule');
+const delivered = [...S.matchAll(/judgeBy: 'delivered'/g)].map(m => m.index);
+ok('only the probe\'s rows=1 measurement passes judgeBy: \'delivered\'',
+   delivered.length === 1 && pz.includes("judgeBy: 'delivered'"), delivered.length + ' places');
+ok('…and every production call of flagOutliers judges the item price (no judgeBy)',
+   [...S.matchAll(/outlier\.flagOutliers\([^)]*\)/g)].filter(m => !pz.includes(m[0])).every(m => !/judgeBy/.test(m[0])));
+
 console.log('\n  zipunion.test.js — ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

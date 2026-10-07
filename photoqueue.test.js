@@ -141,6 +141,32 @@ sc._setFetch(async url => { fetched.push(url.match(/\/g\/(\w+)\//)[1]);
     ok('…watched after every draw of the panel', (P.match(/applyMeasuredGrade\(d\);\n\s*watchDeferredRows\(card, grade\);/g) || []).length === 2);
   }
 
+  console.log('\n  5. a smaller photo for comparisons only — never for a stamp');
+  {
+    const SF = JSON.parse(fs.readFileSync(__dirname + '/sibling.fixture.json', 'utf8')).wholes;
+    const SIB = [{ cardId: 'en-xy10-117', kind: 'sibling', ours: 'en-xy10-125', label: '#117', wholes: { 'en-xy10-125': SF['en-xy10-125'], 'en-xy10-117': SF['en-xy10-117'] } }];
+    const LOOK = [{ cardId: 'en-30th-152', kind: 'lookalike', ours: 'en-sv04.5-232' }];
+    // Measured 2026-10-07 on eBay's CDN: s-l300, s-l400, s-l500 are served; s-l350 answers an 80x80 placeholder.
+    ok('comparisons use s-l400, a size eBay\'s CDN serves (never s-l350, an 80x80 placeholder)', sc.COMPARE_PHOTO_SIZE === 's-l400'
+       && ['s-l300', 's-l400', 's-l500'].includes(sc.COMPARE_PHOTO_SIZE));
+    ok('sibling-only and lookalike-only checks download the smaller photo', sc.compareSize(SIB) === 's-l400' && sc.compareSize(LOOK) === 's-l400');
+    ok('anything with a STAMP downloads s-l500 — alone or mixed with a comparison; no checks, s-l500',
+       sc.compareSize(LUG) === 's-l500' && sc.compareSize(LUG.concat(SIB)) === 's-l500' && sc.compareSize([]) === 's-l500' && sc.PHOTO_SIZE === 's-l500');
+    sc._clearCache(); const got = [], saved = [];
+    sc._setFetch(async url => { got.push(url.match(/\/(s-l\d+)\.jpg$/)[1]);
+      return { ok: true, status: 200, headers: { get: () => 'image/jpeg' }, arrayBuffer: async () => JPEG.buffer.slice(JPEG.byteOffset, JPEG.byteOffset + JPEG.length) }; });
+    sc.setStore({ async load() { return []; }, async save(v) { saved.push(v); } });
+    await sc.checkItem('v1|960|0', U('sib'), SIB, 'en-xy10-125');
+    await sc.checkItem('v1|961|0', U('stp'), LUG, 'en-ecard2-149');
+    await new Promise(r => setTimeout(r, 20));
+    ok('executed: the sibling job fetched s-l400, the stamp job s-l500', got.join(',') === 's-l400,s-l500', got.join(','));
+    ok('the verdict\'s identity stays the s-l500 photo — stored verdicts made before still match',
+       saved.length === 2 && saved[0].photoKey === sc.photoKey(sc.photoUrl(U('sib'))) && sc.photoUrl(U('sib')).endsWith('/s-l500.jpg'));
+    const sib = sc.cacheGet(sc.verdictKey('v1|960|0', SIB), sc.photoUrl(U('sib')));
+    ok('…and the gate finds it under that identity', !!sib);
+    sc.setStore(null);
+  }
+
   console.log('\n  photoqueue.test.js — ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
 })();

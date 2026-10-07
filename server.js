@@ -5805,7 +5805,7 @@ app.get('/api/stamp/:cardId', access.priced, async (req, res) => {
     // The same queue, worker pool and item-id cache the listing gate uses:
     // one definition, and a row the gate already checked costs nothing here.
     const verdict = await stampcheck.checkItem(itemId, row.imageUrl, reprints, card.api_card_id);
-    res.json(Object.assign(base, verdict, { photo: stampcheck.photoUrl(row.imageUrl), photoSize: stampcheck.PHOTO_SIZE,
+    res.json(Object.assign(base, verdict, { photo: stampcheck.photoUrl(row.imageUrl), photoSize: stampcheck.compareSize(reprints),
       threshold: stampcheck.THRESHOLD, cached: !!verdict.cached, keptFor: 'by a hash of the eBay item id, in memory and the database (our verdict only, never the photo)',
       attribution: 'Checked against the seller’s own eBay photo; the photo is not stored' }));
   } catch (e) { res.status(500).json(Object.assign(base, { error: e.message })); }

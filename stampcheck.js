@@ -41,6 +41,15 @@
 
 const THRESHOLD = 0.70;       // measured: 0.66 flags 3 Rayquaza originals, 0.70 none
 const PHOTO_SIZE = 's-l500';  // measured: s-l225 too small on small/angled cards
+// A smaller photo for a COMPARISON (sibling, lookalike) only — never for a
+// stamp (photo speed, 2026-10-07). A comparison scores the whole card at a
+// 24 px template, so the photo is shrunk far below either size anyway; on the
+// fixtures every verdict held at s-l400 (margins moved <= 0.001) for 20-28%
+// less CPU. A STAMP is a small feature: real stamps measure 36-88 px at
+// s-l500 and the matcher's smallest scale is 28 px, so a smaller photo drops
+// a ~40 px stamp below the floor — the check would run and stop finding it.
+// Only sizes eBay's CDN serves: s-l350 answers an 80x80 placeholder.
+const COMPARE_PHOTO_SIZE = 's-l400';
 const MIN_SIDE = 150;         // a photo this small cannot show the stamp
 
 // ── Images: { w, h, data: Uint8Array RGB } ──
@@ -508,6 +517,13 @@ function compareOrder(rows) {
     .sort((a, b) => auction(a[0]) - auction(b[0]) || priceOf(a[0]) - priceOf(b[0]) || a[1] - b[1])
     .map(x => x[0]);
 }
+// The size a check downloads: smaller only when EVERY check is a comparison.
+// The verdict's identity stays the s-l500 URL (photoUrl), so verdicts made at
+// either size answer the same photo and none stored before is lost.
+function compareSize(checks) {
+  const cs = checks || [];
+  return cs.length && cs.every(isLookalike) ? COMPARE_PHOTO_SIZE : PHOTO_SIZE;
+}
 // A view's top rows: the first COMPARE_TOP eBay rows with a photo, in compareOrder.
 function topOf(rows) {
   return compareOrder((rows || []).filter(r => r && r.source === 'ebay' && r.itemId && photoUrl(r.imageUrl))).slice(0, COMPARE_TOP);
@@ -519,7 +535,8 @@ function checkItem(itemId, imageUrl, reprints, cardId, prio) {
   const hit = cacheGet(itemId, url);
   if (hit) { _stats.cacheHits++; return Promise.resolve(Object.assign({}, hit.verdict, { cached: true })); }
   if (_inflight.has(itemId)) { raise(itemId, prio); return _inflight.get(itemId); }
-  const p = new Promise(resolve => enqueue({ itemId, url, reprints, cardId: cardId || null, prio, resolve }));
+  const fetchUrl = photoUrl(imageUrl, compareSize(reprints));
+  const p = new Promise(resolve => enqueue({ itemId, url, fetchUrl, reprints, cardId: cardId || null, prio, resolve }));
   _inflight.set(itemId, p);
   pump();
   return p;
@@ -649,7 +666,7 @@ function materialBackoff() {
 async function fetchJob(job) {
   job.t0 = Date.now();
   let r = null, buf = null;
-  try { r = await _fetch(job.url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }); } catch (e) { r = null; }
+  try { r = await _fetch(job.fetchUrl || job.url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }); } catch (e) { r = null; }
   if (r && r.ok) { try { buf = Buffer.from(await r.arrayBuffer()); } catch (e) { buf = null; } }
   if (!buf) {
     if (!r || r.ok || r.status === 429 || r.status >= 500) materialBackoff();   // the host is struggling, not the photo
@@ -943,7 +960,7 @@ if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
 }
 
 module.exports = { MATERIAL_VERSION, MATERIAL_GOLD_EXCESS, MATERIAL_PHOTO_SIZE, colourProfile, checkMaterialPhoto, checkMaterialScan, metalPhotoOf, materialJudge,
-                   THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, decodeImage, PNG_SCAN_HOST, crop, resize, rotate90, nccMax, bestScore,
+                   THRESHOLD, PHOTO_SIZE, COMPARE_PHOTO_SIZE, compareSize, MIN_SIDE, MATCH, decodeJpeg, decodeImage, PNG_SCAN_HOST, crop, resize, rotate90, nccMax, bestScore,
                    judge, checkItem, checkBackPhoto, compareOrder, topOf, PRIO, COMPARE_TOP, gate, verdictKey, wholeScore, WHOLE_TW: WHOLE.maxTw, LOOKALIKE_MARGIN, SIBLING_MARGIN, SIBLING_HIDE_FRACTION, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
                    _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; }, _hold: on => { _held = !!on; if (!on) pump(); },
                    _clearCache: () => { _cache.clear(); _missed.clear(); } };

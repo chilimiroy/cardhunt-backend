@@ -369,8 +369,41 @@ function cacheSet(itemId, verdict, url) {
 const POOL_SIZE = Math.max(1, parseInt(process.env.STAMP_WORKERS, 10) || 1);
 const JOB_TIMEOUT_MS = 30000;
 const FETCH_TIMEOUT_MS = 8000;
-const _queue = [];               // { itemId, url, reprints, resolve }
+const _queue = [];               // { itemId, url, reprints, prio, resolve }
 const _inflight = new Map();     // itemId -> Promise<verdict>
+const _jobs = new Map();         // itemId -> its job, while queued (a later, more urgent caller raises its prio)
+// ── What the one worker does first (photo speed, 2026-10-07; Roy) ──
+// Render gives it 0.15 of a core, so ORDER is the whole speed question.
+// Measured on Giratina V #130 cold (194 rows): 191 colour profiles ran before
+// the first comparison (5160962 put every colour job at the front), and the
+// cheapest 25 rows resolved at 146 s of 191 s. Now, by class, lowest first,
+// first-come within a class:
+//   0 colour of a view's top COMPARE_TOP rows — milliseconds each, and the
+//     novelty check needs them on the rows anyone looks at (5160962's reason)
+//   1 comparisons of the top rows, a back photo, a check someone asked for
+//   2 colour of every other row — colour alone only FLAGS, so it can wait
+//   3 comparisons of every other row — a comparison can REFUSE, but nobody
+//     reads row 180 before it lands
+// The top rows: the first COMPARE_TOP of compareOrder (cheapest Buy It Now
+// first) — what sets the headline and opens the default tab.
+const PRIO = { colourTop: 0, compareTop: 1, back: 1, asked: 1, colourRest: 2, compareRest: 3 };
+const COMPARE_TOP = 25;
+function enqueue(job) {
+  job.prio = job.prio == null ? PRIO.compareTop : job.prio;
+  _jobs.set(job.itemId, job);
+  _queue.push(job);
+}
+// A job already queued, asked for again more urgently, moves up its class.
+function raise(itemId, prio) {
+  const j = _jobs.get(itemId);
+  if (j && prio != null && prio < j.prio) j.prio = prio;
+}
+// The next job: the lowest class, first-come within it.
+function nextJob(q) {
+  let best = 0;
+  for (let i = 1; i < q.length; i++) if (q[i].prio < q[best].prio) best = i;
+  return q.splice(best, 1)[0];
+}
 const _workers = [];             // { w, job, timer }
 let _fetch = (...a) => fetch(...a);
 const _stats = { checked: 0, failed: 0, msTotal: 0, cacheHits: 0 };
@@ -412,7 +445,7 @@ function settle(job, verdict) {
     // which the server stores itself (check_kind 'back').
     // A material profile is stored by the server (check_kind 'material').
     if (!v.retryable && !job.back && !job.material) saveVerdict(job.itemId, job.url, v, job.cardId);
-    _inflight.delete(job.itemId);
+    _inflight.delete(job.itemId); _jobs.delete(job.itemId);
     job.resolve(v);
   }
 }
@@ -446,7 +479,7 @@ function pump() {
     let slot = _workers.find(s => !s.job);
     if (!slot && _workers.length < POOL_SIZE) slot = spawnWorker();
     if (!slot) return;
-    const job = _queue.shift();
+    const job = nextJob(_queue);
     slot.job = job;
     runJob(slot, job).catch(e => finish(slot, { state: 'unreadable', retryable: true, scores: [],
       says: 'The photo check failed: ' + String(e && e.message || e).slice(0, 80) }));
@@ -482,14 +515,18 @@ function compareOrder(rows) {
     .sort((a, b) => auction(a[0]) - auction(b[0]) || priceOf(a[0]) - priceOf(b[0]) || a[1] - b[1])
     .map(x => x[0]);
 }
-function checkItem(itemId, imageUrl, reprints, cardId) {
+// A view's top rows: the first COMPARE_TOP eBay rows with a photo, in compareOrder.
+function topOf(rows) {
+  return compareOrder((rows || []).filter(r => r && r.source === 'ebay' && r.itemId && photoUrl(r.imageUrl))).slice(0, COMPARE_TOP);
+}
+function checkItem(itemId, imageUrl, reprints, cardId, prio) {
   const url = photoUrl(imageUrl);
   if (!url) return Promise.resolve({ state: 'unreadable', says: 'The listing has no eBay photo to check.', scores: [] });
   itemId = verdictKey(itemId, reprints);
   const hit = cacheGet(itemId, url);
   if (hit) { _stats.cacheHits++; return Promise.resolve(Object.assign({}, hit.verdict, { cached: true })); }
-  if (_inflight.has(itemId)) return _inflight.get(itemId);
-  const p = new Promise(resolve => _queue.push({ itemId, url, reprints, cardId: cardId || null, resolve }));
+  if (_inflight.has(itemId)) { raise(itemId, prio); return _inflight.get(itemId); }
+  const p = new Promise(resolve => enqueue({ itemId, url, reprints, cardId: cardId || null, prio, resolve }));
   _inflight.set(itemId, p);
   pump();
   return p;
@@ -504,8 +541,8 @@ function checkBackPhoto(imageUrl) {
   const key = 'back|' + url;
   const hit = cacheGet(key, url);
   if (hit) return Promise.resolve(hit.verdict);
-  if (_inflight.has(key)) return _inflight.get(key);
-  const p = new Promise(resolve => _queue.push({ itemId: key, url, reprints: [], back: true, resolve }));
+  if (_inflight.has(key)) { raise(key, PRIO.back); return _inflight.get(key); }
+  const p = new Promise(resolve => enqueue({ itemId: key, url, reprints: [], back: true, prio: PRIO.back, resolve }));
   _inflight.set(key, p);
   pump();
   return p;
@@ -564,11 +601,13 @@ function colourProfile(img) {
   }
   return { gold: n ? +(gold / n).toFixed(3) : 0, black: n ? +(black / n).toFixed(3) : 0 };
 }
-function queueMaterial(key, url) {
+function queueMaterial(key, url, prio) {
   const hit = cacheGet(key, url);
   if (hit) return Promise.resolve(hit.verdict);
-  if (_inflight.has(key)) return _inflight.get(key);
-  const p = new Promise(resolve => _matFetchQueue.push({ itemId: key, url, reprints: [], material: true, resolve }));
+  prio = prio == null ? PRIO.colourTop : prio;
+  if (_inflight.has(key)) { raise(key, prio); return _inflight.get(key); }
+  const p = new Promise(resolve => { const job = { itemId: key, url, reprints: [], material: true, prio, resolve };
+    _jobs.set(key, job); _matFetchQueue.push(job); });
   _inflight.set(key, p);
   pumpMaterialFetch();
   return p;
@@ -578,8 +617,10 @@ function queueMaterial(key, url) {
 // download and 22 ms of work, 7 ms of it CPU — 86% waiting on eBay's CDN
 // while holding the one worker. So the download runs here, in
 // MATERIAL_FETCH_LANES lanes (default 5, at most 6), OFF the worker; only
-// the decode reaches the worker queue — at its FRONT, as before (5160962):
-// it costs milliseconds and must not wait behind a page of comparisons.
+// the decode reaches the worker queue in its class (PRIO): a top row's colour
+// first, as 5160962 put every colour job — it costs milliseconds and must not
+// wait behind a page of comparisons — and every other row's after the top
+// rows' comparisons (photo speed, 2026-10-07).
 // Every row is still profiled; nothing is skipped. A network error, a
 // timeout, 429 or 5xx pauses every lane, doubling from 2 s to 60 s; a
 // success resets it. The failed row gets the same retryable verdict as before.
@@ -596,7 +637,7 @@ function pumpMaterialFetch() {
       if (!_mat.timer) _mat.timer = setTimeout(() => { _mat.timer = null; pumpMaterialFetch(); }, wait);
       return;
     }
-    const job = _matFetchQueue.shift();
+    const job = nextJob(_matFetchQueue);
     _mat.fetching++;
     fetchMaterial(job).catch(e => settle(job, { state: 'unreadable', retryable: true, scores: [],
       says: 'The photo check failed: ' + String(e && e.message || e).slice(0, 80) }))
@@ -623,14 +664,14 @@ async function fetchMaterial(job) {
   if (!/jpe?g/i.test(type) && !(PNG_SCAN_HOST.test(job.url) && /png/i.test(type)))
     return settle(job, { state: 'unreadable', scores: [], says: 'The photo is not a JPEG (' + type.slice(0, 30) + ').' });
   job.buf = buf; job.fetchMs = Date.now() - job.t0;
-  _queue.unshift(job);
+  _queue.push(job);
   pump();
 }
 // A listing's primary photo (eBay's CDN only). Zero eBay API calls.
-function checkMaterialPhoto(imageUrl) {
+function checkMaterialPhoto(imageUrl, prio) {
   const url = photoUrl(imageUrl, MATERIAL_PHOTO_SIZE);
   if (!url) return Promise.resolve({ state: 'unreadable' });
-  return queueMaterial('mat|' + url, url);
+  return queueMaterial('mat|' + url, url, prio);
 }
 // OUR scan of the card (TCGdex's .jpg only).
 function checkMaterialScan(url) {
@@ -684,6 +725,7 @@ function poolState() {
   for (const [k, s] of Object.entries(_split)) split[k] = { n: s.n, fetchMs: Math.round(s.fetchMs / s.n),
     workMs: Math.round(s.workMs / s.n), decodeMs: Math.round(s.decodeMs / s.n), cpuMs: Math.round(s.cpuMs / s.n) };
   return { store: _store ? Object.assign({ version: VERDICT_VERSION }, _storeStats) : null, workers: POOL_SIZE, running: _workers.filter(s => s.job).length, queued: _queue.length,
+           queuedByClass: _queue.reduce((o, j) => { o[j.prio] = (o[j.prio] || 0) + 1; return o; }, {}),
            cachedItems: _cache.size, checked: _stats.checked, failed: _stats.failed, cacheHits: _stats.cacheHits,
            meanMs: _stats.checked ? Math.round(_stats.msTotal / _stats.checked) : null, split, host: cpuQuota(),
            materialFetch: { lanes: MATERIAL_FETCH_LANES, fetching: _mat.fetching, queued: _matFetchQueue.length,
@@ -821,14 +863,15 @@ function gate(rows, reprints, opts) {
   const hideBelow = opts.hideBelow > 0 ? opts.hideBelow : null;
   if (onlySiblings) report.kind = 'sibling';
   report.hideBelow = hideBelow; report.pendingShown = 0;
-  const out = [], pending = [];
+  const out = [], pending = [], pendingTop = [];
+  const top = new Set(topOf(rows));
   for (const row of rows) {
     if (!row || row.source !== 'ebay' || !row.itemId) { out.push(row); continue; }
     const url = photoUrl(row.imageUrl);
     if (!url) { report.unreadable++; out.push(Object.assign({}, row, { stamp: { state: 'unreadable', says: 'No eBay photo to check.' } })); continue; }
     const hit = cacheGet(verdictKey(row.itemId, reprints), url);
     if (!hit) {
-      report.pending++; pending.push(row);
+      report.pending++; pending.push(row); if (top.has(row)) pendingTop.push(row);
       const price = Number(row.landed != null ? row.landed : row.price);
       if (!(hideBelow != null && price > 0 && price < hideBelow)) {
         report.pendingShown++;
@@ -862,7 +905,9 @@ function gate(rows, reprints, opts) {
     + (report.pending ? ', ' + (report.pending - (report.pendingShown || 0)) + ' hidden until checked'
                         + (report.pendingShown ? ', ' + report.pendingShown + ' shown while checked' : '') : '')
     + (notRunText ? '; ' + notRunText : '');
-  return { listings: out, report, pending };
+  // Pending rows in the order they should be compared, and which of them are
+  // among the view's top COMPARE_TOP rows (photo speed, 2026-10-07).
+  return { listings: out, report, pending: compareOrder(pending), pendingTop: compareOrder(pendingTop) };
 }
 
 // Worker side: long-lived, one photo per message.
@@ -891,6 +936,6 @@ if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
 
 module.exports = { MATERIAL_VERSION, MATERIAL_GOLD_EXCESS, MATERIAL_PHOTO_SIZE, colourProfile, checkMaterialPhoto, checkMaterialScan, metalPhotoOf, materialJudge,
                    THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, decodeImage, PNG_SCAN_HOST, crop, resize, rotate90, nccMax, bestScore,
-                   judge, checkItem, checkBackPhoto, compareOrder, gate, verdictKey, wholeScore, WHOLE_TW: WHOLE.maxTw, LOOKALIKE_MARGIN, SIBLING_MARGIN, SIBLING_HIDE_FRACTION, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
+                   judge, checkItem, checkBackPhoto, compareOrder, topOf, PRIO, COMPARE_TOP, gate, verdictKey, wholeScore, WHOLE_TW: WHOLE.maxTw, LOOKALIKE_MARGIN, SIBLING_MARGIN, SIBLING_HIDE_FRACTION, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
                    _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; },
                    _clearCache: () => { _cache.clear(); _missed.clear(); } };

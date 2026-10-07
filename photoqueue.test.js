@@ -33,10 +33,53 @@ sc._setFetch(async url => { fetched.push(url.match(/\/g\/(\w+)\//)[1]);
   ok('Buy It Now by price, then auctions by price, unpriced last; ties keep their order', order === '5,3,7,1,4,6,2', order);
   ok('compareOrder does not mutate the view\'s rows', gathered[0].itemId === 'v1|1|0');
   ok('the server queues a view\'s pending rows in that order, not gathered order',
-     /pendingRows = stampcheck\.compareOrder\(pendingRows\);\s*Promise\.all\(pendingRows\.map\(r => stampcheck\.checkItem\(/.test(fnS('stampFollowUpWith')));
+     /pendingRows = stampcheck\.compareOrder\(pendingRows\);[^]{0,200}?Promise\.all\(pendingRows\.map\(r => stampcheck\.checkItem\(/.test(fnS('stampFollowUpWith')));
   sc._clearCache(); fetched = [];
   await Promise.all(sc.compareOrder(gathered).map(r => sc.checkItem(r.itemId, r.imageUrl, LUG)));
   ok('…and the pool fetches them in that order', fetched.join(',') === 'p5,p3,p7,p1,p4,p6,p2', fetched.join(','));
+
+  console.log('\n  2. classes: top colour, top comparisons, other colour, other comparisons');
+  ok('the classes, lowest first: colour top 0 · comparisons top / back / asked 1 · colour rest 2 · comparisons rest 3',
+     sc.PRIO.colourTop === 0 && sc.PRIO.compareTop === 1 && sc.PRIO.back === 1 && sc.PRIO.asked === 1 && sc.PRIO.colourRest === 2 && sc.PRIO.compareRest === 3);
+  ok('the top rows are the first 25 in compareOrder', sc.COMPARE_TOP === 25
+     && sc.topOf(Array.from({ length: 40 }, (_, i) => row(100 + i, 40 - i))).map(r => r.price).join(',') === Array.from({ length: 25 }, (_, i) => i + 1).join(','));
+  {
+    // Hold the worker on one slow download, queue every class behind it, and
+    // read the order they finish in: with one worker, that is the order run.
+    sc._clearCache(); const done = []; let release;
+    const hold = new Promise(r => { release = r; });
+    sc._setFetch(async url => { const id = url.match(/\/g\/(\w+)\//)[1]; if (id === 'hold') await hold;
+      return { ok: true, status: 200, headers: { get: () => 'image/jpeg' }, arrayBuffer: async () => JPEG.buffer.slice(JPEG.byteOffset, JPEG.byteOffset + JPEG.length) }; });
+    const track = (name, p) => p.then(() => done.push(name));
+    const all = [track('hold', sc.checkItem('v1|900|0', U('hold'), LUG, null, sc.PRIO.compareTop))];
+    all.push(track('cmpRest', sc.checkItem('v1|901|0', U('cr1'), LUG, null, sc.PRIO.compareRest)));
+    all.push(track('colRest', sc.checkMaterialPhoto(U('mr1'), sc.PRIO.colourRest)));
+    all.push(track('cmpTop', sc.checkItem('v1|902|0', U('ct1'), LUG, null, sc.PRIO.compareTop)));
+    all.push(track('colTop', sc.checkMaterialPhoto(U('mt1'), sc.PRIO.colourTop)));
+    all.push(track('raised', sc.checkItem('v1|903|0', U('rz1'), LUG, null, sc.PRIO.compareRest)));
+    sc.checkItem('v1|903|0', U('rz1'), LUG, null, sc.PRIO.compareTop);   // asked again, more urgently
+    await new Promise(r => setTimeout(r, 50));                          // colour downloads land in the queue
+    const byClass = sc.poolState().queuedByClass;
+    release();
+    await Promise.all(all);
+    ok('the queue reports itself by class', byClass && byClass[0] === 1 && byClass[1] === 2 && byClass[2] === 1 && byClass[3] === 1, JSON.stringify(byClass));
+    ok('run in class order: top colour, top comparisons (first-come), other colour, other comparisons',
+       done.join(',') === 'hold,colTop,cmpTop,raised,colRest,cmpRest', done.join(','));
+    ok('a job asked for again more urgently moves up its class (raised from 3 to 1)', done.indexOf('raised') < done.indexOf('colRest'));
+  }
+  const fu = fnS('stampFollowUpWith'), mf = fnS('materialFollowUp');
+  ok('the server queues the view\'s top rows in class 1 and the rest in class 3',
+     /top\.has\(r\.itemId\) \? stampcheck\.PRIO\.compareTop : stampcheck\.PRIO\.compareRest/.test(fu));
+  ok('…the top rows come from the gate (pendingTop), on the first answer and on every rebuild',
+     /stampFollowUp\(card, requestedId, grade, printing, edition, gathered\.stampPending, gathered\.stampPendingTop\)/.test(S)
+     && /stampFollowUp\(card, requestedId, grade, printing, edition, j\.stampPending, j\.stampPendingTop\)/.test(S));
+  ok('colour: the top rows in class 0, the rest in class 2, in compareOrder',
+     /top\.has\(r\) \? stampcheck\.PRIO\.colourTop : stampcheck\.PRIO\.colourRest/.test(mf) && /stampcheck\.compareOrder\(/.test(mf) && /stampcheck\.topOf\(rows\)/.test(mf));
+  {
+    const g = sc.gate([row(10, 9), row(11, 2), row(12, 5, 'auction'), row(13, 1)], LUG);
+    ok('the gate returns pending rows in compareOrder, and which are top rows',
+       g.pending.map(r => r.price).join(',') === '1,2,9,5' && g.pendingTop.length === 4, g.pending.map(r => r.price).join(','));
+  }
 
   console.log('\n  photoqueue.test.js — ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

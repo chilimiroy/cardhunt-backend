@@ -239,8 +239,8 @@ ok('...on a COPY (a view\'s sources are re-used by every rebuild)', srcs.ebay.co
 ok('the payload carries stampGate', /stampGate: j\.stamp \?/.test(fnS('function buildListingsPayload(')));
 const lf = fnS('async function listingsFor(');
 ok('a re-read (?poll=1) never searches: cache or "not fetched"', /if \(opts\.poll && !wantSites && !wantMore\) return \{[^}]*notFetched: true/.test(lf));
-ok('opening a card starts the photo checks after the answer (the hidden rows)', /stampFollowUp\(card, requestedId, grade, printing, edition, gathered\.stampPending\)/.test(lf));
-ok('a rebuild checks ITS hidden rows (j.stampPending), not rows on the payload', /stampFollowUp\(card, requestedId, grade, printing, edition, j\.stampPending\)/.test(fnS('async function rebuildView(')));
+ok('opening a card starts the photo checks after the answer (the hidden rows)', /stampFollowUp\(card, requestedId, grade, printing, edition, gathered\.stampPending, gathered\.stampPendingTop\)/.test(lf));
+ok('a rebuild checks ITS hidden rows (j.stampPending), not rows on the payload', /stampFollowUp\(card, requestedId, grade, printing, edition, j\.stampPending, j\.stampPendingTop\)/.test(fnS('async function rebuildView(')));
 ok('judgeListings reads stored verdicts BEFORE the gate', jl.indexOf('await stampcheck.loadVerdicts(listings, stampReprints)') > 0 && jl.indexOf('await stampcheck.loadVerdicts(listings, stampReprints)') < jl.indexOf('stampcheck.gate('));
 ok('the server hands stampcheck a store, keyed on hashes, on its own table', /stampcheck\.setStore\(\{/.test(S) && /CREATE TABLE IF NOT EXISTS listing_photo_verdicts/.test(S) && /item_key = ANY\(\$1\)/.test(S));
 ok('the store holds no title, price, URL or photo column', !/\b(title|price|url|image|photo_url)\b/.test(S.slice(S.indexOf('const PHOTO_VERDICTS_SQL'), S.indexOf('PRIMARY KEY (item_key', S.indexOf('const PHOTO_VERDICTS_SQL')))));

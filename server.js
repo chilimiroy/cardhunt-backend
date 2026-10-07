@@ -304,12 +304,15 @@ function saveMaterialProfile(itemId, url, v) {
     [stampcheck.itemKey(itemId), stampcheck.MATERIAL_VERSION, prof.photoKey, String(v.black), v.gold]))
     .catch(e => console.warn('[material] profile not stored:', e.message));
 }
-// After the answer: profile the rows that lack one, cheapest first, then
-// re-judge the view once with what landed. Zero eBay calls.
+// After the answer: profile the rows that lack one, then re-judge the view
+// once with what landed. Zero eBay calls. The view's top rows (stampcheck.topOf)
+// are profiled first, in the worker's class 0; every other row in class 2,
+// after the top rows' comparisons — colour alone only flags (Roy, 2026-10-07).
 const materialRunning = new Set();
 function materialFollowUp(card, requestedId, grade, printing, edition, rows) {
   if (!materialApplies(card)) return;
-  const todo = (rows || []).filter(r => materialPhotoOf(r) && !materialProfileOf(r)).slice(0, MATERIAL_MAX_PER_VIEW);
+  const todo = stampcheck.compareOrder((rows || []).filter(r => materialPhotoOf(r) && !materialProfileOf(r))).slice(0, MATERIAL_MAX_PER_VIEW);
+  const top = new Set(stampcheck.topOf(rows));
   const vkey = listingKey(card.api_card_id, viewCacheGrade(grade, printing, edition));
   if (!todo.length || materialRunning.has(vkey)) return;
   materialRunning.add(vkey);
@@ -318,7 +321,7 @@ function materialFollowUp(card, requestedId, grade, printing, edition, rows) {
     let landed = 0;
     await Promise.all(todo.map(r => {
       const url = materialPhotoOf(r);
-      return stampcheck.checkMaterialPhoto(r.imageUrl).then(v => {
+      return stampcheck.checkMaterialPhoto(r.imageUrl, top.has(r) ? stampcheck.PRIO.colourTop : stampcheck.PRIO.colourRest).then(v => {
         if (v && v.state === 'profiled') { saveMaterialProfile(r.itemId, url, v); landed++; }
       });
     }));
@@ -3477,7 +3480,7 @@ async function gatherListings(card, grade, limit, opts) {
   const memo = {};
   const j = await judgeListings(card, grade, listings, opts, memo);
   const out = { listings: j.listings, sources, tookMs: Date.now() - t0, liveCount: j.liveCount,
-                outliers: j.outliers, stamp: j.stamp, stampPending: j.stampPending, back: j.back, material: j.material, ebayState, otherRows, judgeMemo: memo };
+                outliers: j.outliers, stamp: j.stamp, stampPending: j.stampPending, stampPendingTop: j.stampPendingTop, back: j.back, material: j.material, ebayState, otherRows, judgeMemo: memo };
   if (Object.keys(dryRuns).length) out.dryRun = dryRuns;
   return out;
 }
@@ -3518,7 +3521,7 @@ async function judgeListings(card, grade, listings, opts, memo) {
   // its verdict lands; a stamped reprint is never shown, even for a moment.
   // Ahead of the outlier check, so a page full of reprints cannot set the
   // median the original is judged by. Zero eBay calls.
-  let stampReport = null, stampPending = [];
+  let stampReport = null, stampPending = [], stampPendingTop = [];
   // The photo checks: reprints' stamps, and lookalikes compared (T1,
   // 2026-10-04 — cardmatch.photoChecksOf). One gate, one queue.
   // Same-name siblings too (T1, 2026-10-04): where they are the only check,
@@ -3531,7 +3534,7 @@ async function judgeListings(card, grade, listings, opts, memo) {
     const mref = await marketRefOf(card, memo);
     const hideBelow = mref && mref.current && jpf.isRawGrade(grade) ? mref.price * stampcheck.SIBLING_HIDE_FRACTION : null;
     const sg = timing.timeSync('stamp-gate', () => stampcheck.gate(listings, stampReprints, { hideBelow, notRun: stampNotRun }));
-    listings = sg.listings; stampReport = sg.report; stampPending = sg.pending;
+    listings = sg.listings; stampReport = sg.report; stampPending = sg.pending; stampPendingTop = sg.pendingTop;
   }
   // The card back (T3): verdicts already known are applied — another
   // language's back refuses the row, this card's own back labels it, nothing
@@ -3699,7 +3702,7 @@ async function judgeListings(card, grade, listings, opts, memo) {
     (outlier.suspectRank(a) - outlier.suspectRank(b)) ||
     (Number(b.live) - Number(a.live)) || (a.landed - b.landed) || (a.price - b.price));
   return { listings, liveCount: listings.filter(l => l.live).length, outliers: judged.stats,
-           stamp: stampReport, stampPending, back: backReport, material: materialReport };
+           stamp: stampReport, stampPending, stampPendingTop, back: backReport, material: materialReport };
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3888,12 +3891,12 @@ async function photoChecksFor(card) {
   return withNotRun(base.concat(ready), notRun);
 }
 
-function stampFollowUp(card, requestedId, grade, printing, edition, pendingRows) {
+function stampFollowUp(card, requestedId, grade, printing, edition, pendingRows, topRows) {
   if (!pendingRows || !pendingRows.length) return;
-  photoChecksFor(card).then(reprints => stampFollowUpWith(card, requestedId, grade, printing, edition, pendingRows, reprints))
+  photoChecksFor(card).then(reprints => stampFollowUpWith(card, requestedId, grade, printing, edition, pendingRows, reprints, topRows))
     .catch(e => console.warn('[stamp] follow-up failed:', e.message));
 }
-function stampFollowUpWith(card, requestedId, grade, printing, edition, pendingRows, reprints) {
+function stampFollowUpWith(card, requestedId, grade, printing, edition, pendingRows, reprints, topRows) {
   const vkey = listingKey(card.api_card_id, viewCacheGrade(grade, printing, edition));
   let timer = null, last = 0;
   const rebuild = async () => {
@@ -3906,8 +3909,13 @@ function stampFollowUpWith(card, requestedId, grade, printing, edition, pendingR
   const soon = () => { if (!timer) timer = setTimeout(rebuild, Math.max(0, STAMP_REBUILD_MS - (Date.now() - last))); };
   // Queued cheapest Buy It Now first (stampcheck.compareOrder): the gate
   // returns pending rows in gathered order, not the order anyone reads them.
+  // The view's top rows (stampcheck.topOf) in the worker's class 1, every
+  // other row in class 3 — after the top rows' comparisons and the other
+  // rows' colour (stampcheck PRIO, Roy 2026-10-07).
   pendingRows = stampcheck.compareOrder(pendingRows);
-  Promise.all(pendingRows.map(r => stampcheck.checkItem(r.itemId, r.imageUrl, reprints, card.api_card_id).then(soon)))
+  const top = new Set((topRows || []).map(r => r.itemId));
+  Promise.all(pendingRows.map(r => stampcheck.checkItem(r.itemId, r.imageUrl, reprints, card.api_card_id,
+    top.has(r.itemId) ? stampcheck.PRIO.compareTop : stampcheck.PRIO.compareRest).then(soon)))
     .then(() => { clearTimeout(timer); return rebuild(); })
     .catch(e => console.warn('[stamp] follow-up failed:', e.message));
 }
@@ -4198,7 +4206,7 @@ async function rebuildView(card, requestedId, grade, printing, edition, vs, ropt
     Date.now() - t0, progress, edition);
   payload.fetchedAt = new Date(ts).toISOString();
   listingCacheSet(card.api_card_id, viewCacheGrade(grade, printing, edition), payload, ts);
-  if (!ropts.stamp) stampFollowUp(card, requestedId, grade, printing, edition, j.stampPending);
+  if (!ropts.stamp) stampFollowUp(card, requestedId, grade, printing, edition, j.stampPending, j.stampPendingTop);
   if (!ropts.back) backFollowUp(card, requestedId, grade, printing, edition, payload.listings);
   if (!ropts.material) materialFollowUp(card, requestedId, grade, printing, edition, payload.listings);
   dealBackFollowUp(card, requestedId, grade, printing, edition, payload);
@@ -4298,7 +4306,7 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   logListingView(viewRecord(key, grade, printing, st, payload, t0, st ? st.calls : 0, action));
   // Only with view state to rebuild from (eBay answered): the photos are
   // checked after this answer goes, and the view is re-judged as they land.
-  if (st) stampFollowUp(card, requestedId, grade, printing, edition, gathered.stampPending);
+  if (st) stampFollowUp(card, requestedId, grade, printing, edition, gathered.stampPending, gathered.stampPendingTop);
   if (st) backFollowUp(card, requestedId, grade, printing, edition, payload.listings);
   if (st) materialFollowUp(card, requestedId, grade, printing, edition, payload.listings);
   if (st) dealBackFollowUp(card, requestedId, grade, printing, edition, payload);

@@ -470,6 +470,18 @@ function verdictKey(itemId, checks) {
   return lc ? itemId + '@' + lc.ours + ((checks || []).some(isSibling) ? '+s' : '')
             + (lc.margin ? '~m' + lc.margin : '') : itemId;
 }
+// The order a view's photos are compared in (photo speed, 2026-10-07): the
+// cheapest Buy It Now rows first — they set the headline and open the default
+// tab — then auctions, cheapest first; a row with no price last. Measured on
+// Giratina V #130 cold (194 rows): the gate hands back pending rows in
+// GATHERED order, and the cheapest 25 resolved at 146 s of a 191 s run.
+const priceOf = r => { const p = Number(r && (r.landed != null ? r.landed : r.price)); return p > 0 ? p : Infinity; };
+function compareOrder(rows) {
+  const auction = r => (r && r.saleType === 'auction') ? 1 : 0;
+  return (rows || []).map((r, i) => [r, i])
+    .sort((a, b) => auction(a[0]) - auction(b[0]) || priceOf(a[0]) - priceOf(b[0]) || a[1] - b[1])
+    .map(x => x[0]);
+}
 function checkItem(itemId, imageUrl, reprints, cardId) {
   const url = photoUrl(imageUrl);
   if (!url) return Promise.resolve({ state: 'unreadable', says: 'The listing has no eBay photo to check.', scores: [] });
@@ -879,6 +891,6 @@ if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
 
 module.exports = { MATERIAL_VERSION, MATERIAL_GOLD_EXCESS, MATERIAL_PHOTO_SIZE, colourProfile, checkMaterialPhoto, checkMaterialScan, metalPhotoOf, materialJudge,
                    THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, decodeImage, PNG_SCAN_HOST, crop, resize, rotate90, nccMax, bestScore,
-                   judge, checkItem, checkBackPhoto, gate, verdictKey, wholeScore, WHOLE_TW: WHOLE.maxTw, LOOKALIKE_MARGIN, SIBLING_MARGIN, SIBLING_HIDE_FRACTION, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
+                   judge, checkItem, checkBackPhoto, compareOrder, gate, verdictKey, wholeScore, WHOLE_TW: WHOLE.maxTw, LOOKALIKE_MARGIN, SIBLING_MARGIN, SIBLING_HIDE_FRACTION, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
                    _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; },
                    _clearCache: () => { _cache.clear(); _missed.clear(); } };

@@ -3904,6 +3904,9 @@ function stampFollowUpWith(card, requestedId, grade, printing, edition, pendingR
     catch (e) { console.warn('[stamp] rebuild failed:', e.message); }
   };
   const soon = () => { if (!timer) timer = setTimeout(rebuild, Math.max(0, STAMP_REBUILD_MS - (Date.now() - last))); };
+  // Queued cheapest Buy It Now first (stampcheck.compareOrder): the gate
+  // returns pending rows in gathered order, not the order anyone reads them.
+  pendingRows = stampcheck.compareOrder(pendingRows);
   Promise.all(pendingRows.map(r => stampcheck.checkItem(r.itemId, r.imageUrl, reprints, card.api_card_id).then(soon)))
     .then(() => { clearTimeout(timer); return rebuild(); })
     .catch(e => console.warn('[stamp] follow-up failed:', e.message));

@@ -4052,14 +4052,15 @@ async function logListingView(v) {
       calls int NOT NULL, listings int, complete boolean, pages jsonb, totals jsonb,
       incomplete jsonb, ms_first int, ms_total int)`)
       .then(() => db.query(`ALTER TABLE listing_views ADD COLUMN IF NOT EXISTS action text,
-        ADD COLUMN IF NOT EXISTS origin text`));
+        ADD COLUMN IF NOT EXISTS origin text, ADD COLUMN IF NOT EXISTS lang jsonb`));
     await viewTableReady;
     await db.query(`INSERT INTO listing_views (card_id, grade, printing, cached, calls, listings,
-      complete, pages, totals, incomplete, ms_first, ms_total, action, origin)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      complete, pages, totals, incomplete, ms_first, ms_total, action, origin, lang)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [v.cardId, v.grade, v.printing, v.cached, v.calls, v.listings, v.complete,
        JSON.stringify(v.pagesByMarketplace || {}), JSON.stringify(v.ebayTotals || {}),
-       JSON.stringify(v.incomplete || []), v.msFirst, v.msTotal, v.action, v.origin]);
+       JSON.stringify(v.incomplete || []), v.msFirst, v.msTotal, v.action, v.origin,
+       v.lang ? JSON.stringify(v.lang) : null]);
   } catch (e) { viewTableReady = null; console.warn('[listings:view] not recorded: ' + e.message); }
 }
 
@@ -4149,7 +4150,21 @@ function viewRecord(key, grade, printing, st, payload, t0, calls, action) {
     pagesByMarketplace: st ? Object.fromEntries(Object.entries(st.sites).map(([m, s]) => [m, s.pagesFetched || 0])) : {},
     ebayTotals: st ? Object.fromEntries(Object.entries(st.sites).map(([m, s]) => [m, s.ebayTotal])) : {},
     listings: payload.count, complete: payload.progress && payload.progress.complete,
-    incomplete: payload.progress && payload.progress.incomplete, msFirst: Date.now() - t0, msTotal: Date.now() - t0 };
+    incomplete: payload.progress && payload.progress.incomplete, msFirst: Date.now() - t0, msTotal: Date.now() - t0,
+    lang: langTriggerOf(st, payload) };
+}
+// The language union's trigger, as it WOULD fire on this view (2026-10-07):
+// recorded on every logged view so its share of real opens and its daily
+// cost are measured, not projected. Nothing is decided by it here; zero
+// calls. capHit: eBay US had more than was fetched. Title refusals only,
+// from payload.refused (every refusal row, up to 300 — a 200-row page fits).
+function langTriggerOf(st, payload) {
+  const us = st && st.sites && st.sites.EBAY_US;
+  const rows = (payload.refused || []).filter(r => r && r.source === 'ebay' && r.stage === 'title');
+  const languageRefused = rows.filter(r => cm.refusalLanguage(r.reason)).length;
+  const capHit = !!(us && !us.exhausted && us.nextOffset != null);
+  return { capHit, languageRefused, refused: rows.length,
+           wouldTrigger: capHit && rows.length > 0 && languageRefused / rows.length > LANG_UNION_SHARE };
 }
 
 // The whole of one view. /api/listings and /api/search both come through

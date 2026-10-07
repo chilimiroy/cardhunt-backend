@@ -77,6 +77,23 @@ const runUnion = async (base, extra, opts) => {
   finish();
 })();
 
+console.log('\n  the trigger, recorded on every real view (langTriggerOf) — measured, not projected');
+{
+  const i = src.indexOf('\nfunction langTriggerOf(');
+  const T = new Function('cm', 'LANG_UNION_SHARE', src.slice(i + 1, src.indexOf('\n}\n', i + 1) + 2) + '\nreturn langTriggerOf;')(cm, 0.5);
+  const ja = 'title says ja, this card is en — a different language printing';
+  const st = more => ({ sites: { EBAY_US: { exhausted: !more, nextOffset: more ? 200 : null } } });
+  const p = (nl, no) => ({ refused: Array(nl).fill({ source: 'ebay', stage: 'title', reason: ja })
+    .concat(Array(no).fill({ source: 'ebay', stage: 'title', reason: 'not a single card' }), [{ source: 'ebay', stage: 'photo', reason: ja }]) });
+  ok('capped + language-dominated: would trigger', T(st(true), p(150, 10)).wouldTrigger === true);
+  ok('language-dominated but eBay had no more: would not', T(st(false), p(150, 10)).wouldTrigger === false);
+  ok('capped, language a minority: would not', T(st(true), p(5, 40)).wouldTrigger === false);
+  ok('title refusals only (a photo refusal is not counted)', T(st(true), p(150, 10)).refused === 160);
+  ok('no state, no refusals: would not, and does not throw', T(null, {}).wouldTrigger === false);
+  ok('recorded on every logged view (lang column)', /lang: langTriggerOf\(st, payload\)/.test(src) && /ADD COLUMN IF NOT EXISTS lang jsonb/.test(src)
+     && /v\.lang \? JSON\.stringify\(v\.lang\) : null/.test(src));
+}
+
 console.log('\n  never silent');
 const se = src.slice(src.indexOf('async function sourceEbay('), src.indexOf('async function sourceEbayAll('));
 ok('the request uses the exclusion (q and aspect_filter)', /const qAsk = qMint \+ langEx\.q;/.test(se) && /aspectAsk \? '&aspect_filter='/.test(se));

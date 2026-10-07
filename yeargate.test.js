@@ -49,6 +49,13 @@ if (rp) {
   ok('a REPRINT card keeps the year refusal (its original is the other printing)', !!cm.printingConflict('1999 Pokemon Charizard 4/102 Base Set', cc, { wantKind: 'raw' }));
 }
 
+const am = cm.PRINTS_NO_NUMBER && Object.keys(cm.PRINTS_NO_NUMBER)[0];
+if (am) {
+  const mew = { cardId: am, name: 'Ancient Mew', nameEn: 'Ancient Mew', number: '001', setTotal: 1, setName: 'Miscellaneous Promos',
+                setId: am.split('-')[1], setYear: 2000, lang: 'en', printings: ['holo'] };
+  ok('a card that PRINTS NO NUMBER keeps the year refusal (nothing else vouches for it)', !v('Ancient Mew 1996 promo', mew, 'Raw').ok);
+}
+
 console.log('\n  reprint years are DATA (REPRINT_FAMILIES[].year), not literals in the gate');
 const fam = cm.REPRINT_FAMILIES.find(f => f.id === 'cel25'), was = fam.year;
 fam.year = 2030;
@@ -56,8 +63,9 @@ const moved = v('2021 Pokemon Charizard 4/102 Base Set Holo', base4, 'Raw NM');
 const nowRefused = v('2030 Pokemon Charizard 4/102 Base Set Holo', base4, 'Raw NM');
 fam.year = was;
 ok('move the family year: 2021 stops refusing (flagged) and 2030 refuses', moved.ok && moved.yearFlag && !nowRefused.ok);
+// CRLF stripped: a clean Windows checkout is CRLF, and the split ends on "\n}\n".
 ok('no reprint year literal in the year rule', !/\b20(21|26)\b/.test(fs.readFileSync(__dirname + '/cardmatch.js', 'utf8')
-  .split('function statedYearIsReprintYear(')[1].split('\n}\n')[0]));
+  .split('\r\n').join('\n').split('function statedYearIsReprintYear(')[1].split('\n}\n')[0]));
 
 console.log('\n  the server keeps the row, flagged; the colour check does not read it as a price');
 const S = fs.readFileSync(__dirname + '/server.js', 'utf8').split('\r\n').join('\n');

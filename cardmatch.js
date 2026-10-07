@@ -2000,8 +2000,11 @@ function printingConflict(title, card, opts) {
     // other stated year passes FLAGGED (verify -> yearFlag). Kept as a
     // refusal: a reprint card, a graded view (graded, the year alone caught
     // the 2021 Celebrations slabs — no "wants raw" to corroborate there),
-    // and any caller that does not say the view is raw.
-    if (why && (reprintOf(card) || opts.wantKind !== 'raw' || statedYearIsReprintYear(t, card))) return why;
+    // and any caller that does not say the view is raw. And a card that
+    // PRINTS NO NUMBER (PRINTS_NO_NUMBER, Ancient Mew): the downgrade rests
+    // on the number, set total and set name vouching for the card, and here
+    // there is no number — the year is one of the few things that identify it.
+    if (why && (reprintOf(card) || printsNoNumber(card) || opts.wantKind !== 'raw' || statedYearIsReprintYear(t, card))) return why;
   }
 
   return null;

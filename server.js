@@ -199,7 +199,19 @@ async function loadBackVerdicts(card, rows) {
 }
 async function backCheckItem(card, itemId, o) {
   const cid = card.api_card_id, k = backKey(itemId, cid);
-  if (backVerdicts.has(k)) return Object.assign({}, backVerdicts.get(k), { calls: 0, cached: true });
+  if (backVerdicts.has(k)) {
+    const c = backVerdicts.get(k);
+    // A STORED verdict has no photo count (no column for it). The deals bar
+    // needs one (2026-10-08: every re-seen row read "0 photos", so no row
+    // could be picked twice) — count the listing's photos; the verdict stands.
+    if (c.photos == null && o && o.needPhotos) {
+      const got = await ebayItemOnDemand(itemId, cid, 'back', o);
+      if (!got.hit) return Object.assign({}, c, { photos: null, photosError: (got.body && got.body.error) || 'eBay getItem failed', calls: got.calls || 0, cached: true });
+      c.photos = (got.hit.images || []).length;
+      return Object.assign({}, c, { calls: got.calls, cached: true });
+    }
+    return Object.assign({}, c, { calls: 0, cached: true });
+  }
   const got = await ebayItemOnDemand(itemId, cid, 'back', o);
   if (!got.hit) return { error: (got.body && got.body.error) || 'eBay getItem failed', status: got.status };
   const images = (got.hit.images || []).map(x => (x && x.url) || x);
@@ -212,7 +224,7 @@ async function backCheckItem(card, itemId, o) {
     scores: scores.map(x => x && { en: x.en, ja: x.ja, seen: x.seen }) });
   // A photo the CDN would not give is not a verdict: nothing stored, asked again later.
   if (scores.some(x => x && x.retryable) && v.state === 'no-claim') return Object.assign(v, { calls: got.calls, retryable: true });
-  backVerdicts.set(k, { state: v.state, family: v.family || null, says: v.says, metal: v.metal });
+  backVerdicts.set(k, { state: v.state, family: v.family || null, says: v.says, metal: v.metal, photos: v.photos });
   // reprint column: 'metal-photo' when a metal photo was seen (no migration;
   // a verdict stored before 2026-10-05 reads as "not seen").
   if (db) photoVerdictsTable().then(() => db.query(`INSERT INTO listing_photo_verdicts (item_key, check_kind, version, photo_key,
@@ -6193,7 +6205,7 @@ async function vouchBarOf(card, id, payload, t0, pendingOf) {
       if (!backcheck.familyOf(id)) { skip('the back check does not cover this card', l); continue; }
       if (backsAsked >= deals_.DEAL_BACK_MAX) { skip('back-check budget for this card spent', l); continue; }
       backsAsked++;
-      const v = await backCheckItem(card, l.itemId, { background: true }).catch(e => ({ error: e.message }));
+      const v = await backCheckItem(card, l.itemId, { background: true, needPhotos: true }).catch(e => ({ error: e.message }));
       backCalls += (v && v.calls) || 0;
       const p = deals_.vouchPhotos(v);
       if (p.skip) { skip(p.skip, l); continue; }

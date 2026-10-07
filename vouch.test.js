@@ -50,5 +50,19 @@ for (const [what, v, re] of [['back check failed', { error: 'HTTP 500' }, /could
   ['a metal photo among them', { state: 'genuine-back', photos: 4, metal: true }, /metal/], ['nothing at all', null, /could not run/]])
   ok(what + ' -> skip', (x => !!x.skip && re.test(x.skip))(deals.vouchPhotos(v)), (deals.vouchPhotos(v).skip || 'CLEARED'));
 
+// A re-seen row (2026-10-08): the back verdict came from the cache or the
+// store, which kept no photo count, and the bar read it as "0 photos" — no row
+// could be picked twice; the 40-card production run picked 0.
+console.log('\n  a back verdict seen before (cache or store)');
+{
+  const x = deals.vouchPhotos({ state: 'genuine-back', cached: true });
+  ok('a verdict with no photo count says "not known", never "0 photos"', !!x.skip && /not known/.test(x.skip) && !/0 photos/.test(x.skip), x.skip);
+  const src = require('fs').readFileSync(require('path').join(__dirname, 'server.js'), 'utf8').replace(/\r/g, '');
+  ok('the in-memory verdict keeps the photo count', /backVerdicts\.set\(k, \{[^}]*photos: v\.photos/.test(src));
+  ok('the deals bar asks for the count (needPhotos)', /backCheckItem\(card, l\.itemId, \{ background: true, needPhotos: true \}\)/.test(src));
+  const fn = src.slice(src.indexOf('async function backCheckItem('), src.indexOf('\n}\n', src.indexOf('async function backCheckItem(')));
+  ok('a cached verdict without a count fetches the listing (shared 15-min getItem cache)', /c\.photos == null && o && o\.needPhotos[\s\S]*ebayItemOnDemand\(itemId, cid, 'back', o\)[\s\S]*c\.photos = \(got\.hit\.images \|\| \[\]\)\.length/.test(fn));
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

@@ -186,6 +186,8 @@ function vouchFree(l, payload, ref) {
 // The photos: v is the back check's own answer for this row ({ state, photos, metal }).
 function vouchPhotos(v) {
   if (!v || v.error) return { skip: 'back check could not run' + (v && v.error ? ': ' + v.error : '') };
+  // An unknown count is not zero: say which (a stored verdict carries none).
+  if (v.photos == null) return { skip: 'photo count not known' + (v.photosError ? ': ' + v.photosError : '') };
   if (!(v.photos >= VOUCH.minPhotos)) return { skip: (v.photos || 0) + ' photo' + (v.photos === 1 ? '' : 's') + ' (needs ' + VOUCH.minPhotos + '+)' };
   if (v.metal) return { skip: 'a gold/black metal photo among the seller\'s' };
   if (v.state !== 'genuine-back') return { skip: 'back not vouched: ' + (v.state || 'no verdict') };

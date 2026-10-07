@@ -425,11 +425,21 @@ schtasks /Run   /TN "CardHunt nightly refresh"
   on yield (38% of listings lack a landed price). Measure with
   `/api/ebay/dealsprobe?bar=vouch` (PROGRESS 2026-10-07 (gate fixes)).
 
-## Page language — STARTED 2026-10-06 (T5)
-EN/JA button between currency and the bell; `ch_lang` set on `<html lang>` before
-paint. One exact-text table (`LANG_JA`): a node is translated only when its WHOLE
-text is a key — **never card data** (`i18n.test.js --db`: no key is any of 11,324
-names/sets/rarities). Not yet: ~90 sentences the page builds, server explanations.
+## Page language — EN/JA/zh-TW/zh-CN (T5; TASK-ui 2026-10-07)
+Picker between currency and bell; `ch_lang` set before paint. One exact-text table
+per language over ONE key set, whole-node match, **never card data**
+(`i18n.test.js --db`); split sentences in `LANG_GROUPS`: all or none. Coverage is
+counted (`i18n.test.js` prints it). Built sentences, server text: English.
+
+## Page layout — rules (TASK-ui, 2026-10-07)
+- A price control is `.price-only`: absent, never disabled. Check signed out AND in.
+- Card: image | ONE view area (boxes+bar OR history: `toggleCardView` fetches
+  nothing; both in one cell, no jump) + selector, level with the image; listings
+  full width below. Artist above the image; no details box (`cdlayout.test.js`).
+- Back restores scroll; a reopened card restores grade, tab, view, range, scroll
+  BEFORE its first listings call, else Raw NM (`restore.test.js`).
+- Home: search, deals (hidden while off), games, movers, alerts (`door.test.js`).
+- CardZon is display only; logo 42px nav, 30px at <=640 (`brand.test.js`).
 
 ## Accounts — step 1 (sign-in) and step 2 (roles) SHIPPED 2026-10-06 (T6)
 `auth.js` verifies the token: **ES256 via the project's JWKS** (legacy

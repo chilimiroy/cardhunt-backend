@@ -6223,6 +6223,19 @@ app.get('/app', (req, res) => {
   });
 });
 
+// The CardZon mark (T7, 2026-10-07): three prepared PNGs, each by name.
+// cardzon-logo-master.png is the source and is never served.
+const LOGO_FILES = ['cardzon-logo-96.png', 'cardzon-logo-144.png', 'cardzon-logo-256.png'];
+for (const f of LOGO_FILES) {
+  app.get('/' + f, (req, res) => {
+    res.type('image/png');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.sendFile(require('path').join(__dirname, f), err => {
+      if (err && !res.headersSent) res.status(404).end();
+    });
+  });
+}
+
 // ══════════════════════════════════════════════════════════════
 // GET /cardmatch.js  —  the query builder, for the browser
 //

@@ -524,6 +524,7 @@ node linkaudit.js swsh11 --name=Giratina --kept
 node querygap.js en [--dry|--resume|--set=a,b|--report]   # every set's query; ~230 calls live
 CARDHUNT_API=http://localhost:3001 node searchaudit.js en --json=sa.json --concurrency=4 [--resume]
 node sitecheck.js [card] [--grade=all]     # presses every button; 41-89 calls
+node testauth.js                           # does the live suites' APPROVED test session mint? (CARDZON_TEST_EMAIL, CARDZON_SUPABASE_SERVICE_KEY; without it priced checks SKIP)
 
 # after ANY edit carrying a backslash: count 0x08 bytes (must be 0).
 # grep -P does not run in this Git Bash and its failure reads as "no matches".

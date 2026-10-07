@@ -33,7 +33,12 @@ function ok(name, cond, detail) {
   if (cond) { pass++; console.log(`  PASS  ${name}`); }
   else { fail++; console.log(`  FAIL  ${name}${detail ? '  — ' + detail : ''}`); }
 }
-const get = p => fetch(BASE + p).then(r => r.json()).catch(e => ({ _err: e.message }));
+// Live calls carry the approved test account's session when one can be
+// minted (testauth.js, 2026-10-07); signed out, the door withholds prices and
+// the checks that need them SKIP, saying why — never pass on nothing.
+const testauth = require('./testauth');
+let AUTH = {}, SESSION = { token: null, why: 'not asked yet' };
+const get = p => fetch(BASE + p, AUTH).then(r => r.json()).catch(e => ({ _err: e.message }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Pull the page's own source so this tests the SHIPPED frontend, not a copy
@@ -163,6 +168,10 @@ const fnSrc = name => {
     /l\s*===\s*['"]en['"][\s\S]{0,80}loadAllSets\(\)/.test(setLangSrc));
 
   console.log('\n2. EVERY BROWSED SET RESOLVES  (the database list)');
+  SESSION = await testauth.testSession();
+  AUTH = testauth.authed(SESSION);
+  console.log(SESSION.token ? '        live checks signed in as the approved test account'
+                            : '        live checks run SIGNED OUT — priced checks will SKIP: ' + SESSION.why);
 
   const db = (await get('/api/sets/lang/en')).sets || [];
   ok('the database set list loads', db.length > 150, `${db.length} sets`);
@@ -220,8 +229,11 @@ const fnSrc = name => {
   // Compared NOTHING is not agreement (2026-10-07): signed out, the door
   // withholds every price, and this passed on "0 cards". Say so; and where
   // prices were NOT withheld, comparing nothing is a failure.
-  if (compared === 0 && withheld > 0) {
-    console.log(`  SKIP  set page vs card page price agreement — prices withheld signed out (${withheld} sets); needs an approved token`);
+  // Signed in as the APPROVED test account and still withheld: the session
+  // or the door is broken — a failure, never a skip.
+  if (withheld > 0 && SESSION.token) ok('the approved test session sees prices', false, `${withheld} set answers still withheld prices`);
+  else if (compared === 0 && withheld > 0) {
+    console.log(`  SKIP  set page vs card page price agreement — prices withheld signed out (${withheld} sets); no test session: ${SESSION.why}`);
   } else {
     ok(`set page and card page agree on price (${compared} cards)`, compared > 0 && disagreed === 0, compared ? `${disagreed} disagreed` : 'compared 0 cards');
     ok('a card with a database price never returns an estimate', compared > 0 && estimated === 0, `${estimated} estimated`);
@@ -270,9 +282,25 @@ const fnSrc = name => {
     .sort((a, b) => (Math.max(...b.map(c => c._price)) / Math.min(...b.map(c => c._price)))
                   - (Math.max(...a.map(c => c._price)) / Math.min(...a.map(c => c._price))))[0];
 
-  if (!collide) {
-    // A tool that cannot check something must say so.
-    console.log('  SKIP  no same-name variants with real prices in me02.5 right now');
+  // 2026-09-29: the page no longer calls /api/market at all, and the server
+  // no longer computes a name-matched aggregate — so no such number can
+  // reach the headline, and the badge is drawn from the card's own price.
+  // These read the page's SOURCE and need no price: they sat inside the
+  // price branch below and stopped running when the door withheld prices
+  // (2026-10-07; three of the five checks the live count lost). Run always.
+  const pageCode = html.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
+  ok('the frontend never fetches /api/market', !/\/api\/market/.test(pageCode));
+  ok('the confidence badge is drawn from the card\'s own price (updatePrices)',
+    /_priceIsReal/.test(fnSrc('updatePrices')) && /cd-chg/.test(fnSrc('updatePrices')));
+  ok('no "name match" headline exists to be shown', !/name match/.test(pageCode));
+
+  if (!collide && set.pricesWithheld && SESSION.token) {
+    ok('the approved test session sees me02.5\'s prices', false, 'still withheld with a session');
+  } else if (!collide) {
+    // A tool that cannot check something must say so — and say WHY.
+    console.log('  SKIP  /api/market vs the set listing — ' + (set.pricesWithheld
+      ? 'prices withheld signed out; no test session: ' + SESSION.why
+      : 'no same-name variants with real prices in me02.5 right now'));
   } else {
     const lo = collide.reduce((a, b) => a._price < b._price ? a : b);
     const hi = collide.reduce((a, b) => a._price > b._price ? a : b);
@@ -281,14 +309,6 @@ const fnSrc = name => {
       + '?set=' + encodeURIComponent((lo.set && lo.set.name) || '')
       + '&grade=Raw%20NM&cardId=' + encodeURIComponent(lo.id));
     console.log(`        /api/market says $${mk.marketValue} for cardId=${lo.id}`);
-    // 2026-09-29: the page no longer calls /api/market at all, and the server
-    // no longer computes a name-matched aggregate — so no such number can
-    // reach the headline, and the badge is drawn from the card's own price.
-    const pageCode = html.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
-    ok('the frontend never fetches /api/market', !/\/api\/market/.test(pageCode));
-    ok('the confidence badge is drawn from the card\'s own price (updatePrices)',
-      /_priceIsReal/.test(fnSrc('updatePrices')) && /cd-chg/.test(fnSrc('updatePrices')));
-    ok('no "name match" headline exists to be shown', !/name match/.test(pageCode));
 
     // The endpoint itself, now that it uses the cardId it is given. Two paths
     // that should agree, asserted to agree — the technique that has found

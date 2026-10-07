@@ -417,10 +417,13 @@ schtasks /Run   /TN "CardHunt nightly refresh"
 - **Movers** (`trending.js`): both ends `tcgdex_tcgplayer_*`, same printing and
   productId; pricequality-marked cards left out; window stated; `coverage` says
   when a list is thin and why.
-- **Best deals — OFF** (`deals.ENABLED`). A genuine back is required and was
-  not enough: #1 was a real gold Charizard ex 228 under Base Charizard — a real
-  card is not THIS card. On only with an "is this photo this card" answer
-  (PROGRESS 2026-10-05 (late)).
+- **Best deals — OFF, BLOCKED (not shelved)** (`deals.ENABLED`). The bar is now
+  the VOUCHING bar (`deals.vouchFree`/`vouchPhotos`, Roy): skip anything without
+  evidence to vouch for it. First run: 7 eligible of 2,966 listings on 80 cards,
+  5 of them wrong through three GATE holes (title condition, kit names,
+  "Brazilian") — fixed 2026-10-07. Blocked on a re-run with the clean gate and
+  on yield (38% of listings lack a landed price). Measure with
+  `/api/ebay/dealsprobe?bar=vouch` (PROGRESS 2026-10-07 (gate fixes)).
 
 ## Page language — STARTED 2026-10-06 (T5)
 EN/JA button between currency and the bell; `ch_lang` set on `<html lang>` before
@@ -661,6 +664,12 @@ reprints reusing number and set name). Reprints keyed by SET ID
 (`REPRINT_FAMILIES`, `REPRINT_OF`), never set name. *Archive:* "The master-ball mirror, found for the third time", "A reprint reuses the original numbering", "Ingesting a set can disable a gate that names it", "Superseded 2026-09-26: reprints are keyed by SET ID, both directions", "A collector number does not identify one card"
 
 **A lettered number is its own card** ("24a" ≠ "24"; `verifyLetterNumber`).
+
+**The title's condition beats eBay's dropdown — the worse claim stands**; a range
+("NM/LP") states its lower end (`worstStatedCondition`). It matters for the
+condition filter and the deals bar, NOT the headline: 0 of 9 cheapest changed.
+**A card's name is a word, outside a kit's product name** (`KIT_NAME_PAIRS`):
+"Latias & Latios" named 15 Magnemite under Latias #4. (PROGRESS 2026-10-07 (gate fixes))
 (PROGRESS 2026-10-04)
 
 **A set ingested once is never re-read — compare card by card** (`cardgap`);
@@ -718,6 +727,9 @@ writing path; a refused price is not stored. *Archive:* "Yuyu-tei quotes shop ti
 **Never substitute across languages; a localised name is not localised data;
 a marketplace is where a card is sold, not its language** — every eBay site
 needs its own vocabulary and aspect names. *Archive:* "Never substitute across languages", "A localised name does not mean localised data", "A marketplace is where a card is sold; a language is what it is (T1, 2026-09-30)", "Another eBay site shows US listings with MACHINE-TRANSLATED titles (2026-09-30)"
+**A country can name a language (Brazilian, PT-BR, Polish); a place cannot** —
+Taiwan / Hong Kong / Thailand count only beside "version/print/edition" (Roy,
+2026-10-07; `langwords.test.js`).
 
 **The size of an apparent win is a reason to check it harder.**
 

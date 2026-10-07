@@ -1,5 +1,30 @@
 # CardHunt — Progress Log
 
+## 2026-10-07 (gate fixes) — three holes the vouching bar found, closed and measured
+
+First vouching run (80 cards, /api/ebay/dealsprobe?bar=vouch): 2,966 listings
+examined, 7 eligible, 2 held up (Charizard GX 150, Giratina V 186). The other
+five passed through the GATE, not the bar:
+
+- **Condition** (3: MP, MP/HP, NM/LP in the title, eBay dropdown said NM).
+  Now the worse of dropdown and title stands; a range states its lower end
+  (`worstStatedCondition`, `conditionConflict` on the row). 939 rows: title-
+  stated condition 23 -> 36. **Headline price: 0 of 9 cheapest changed** — the
+  fix matters for the condition filter and the deals bar, not the headline
+  (Roy's price hypothesis, checked and wrong). condition.test.js (19).
+- **Kit names** (Magnemite 4/10 under Latias #4 via "Latias & Latios"). Name
+  check is a bounded word with the kit pair masked. 1,777 titles: 36 newly
+  refused, all different cards; 0 newly kept. kitname.test.js (11).
+- **Language words** (a "Brazilian" SM191). Added Brazilian/Brasil/PT-BR,
+  Polish (+ flag), Mandarin. Taiwan/Hong Kong/Thailand only beside a printing
+  word (Roy: a place is not a language); 🇭🇰 removed. 2,416 titles: 1 newly
+  refused, 0 newly kept. langwords.test.js (23).
+
+Skips on the first run: 1,122 shipping not stated, 703 not 15% under our price,
+427 photo not checked yet. Deals: OFF, blocked on a clean re-run plus yield.
+Quota: tooling 1,000 for 2026-10-07 UTC, authorised by Roy (fffa5ba); reserve
+and hourly cap unchanged.
+
 ## 2026-10-07 (language exclusion) — measured on five cards: neither route ships as a replacement
 
 marketprobe, EBAY_US, Raw NM, titles=1, sort=price, 75 x up to 3 pages;

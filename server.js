@@ -3261,20 +3261,48 @@ async function sourceEbayAll(card, grade, limit, opts = {}) {
   const want = opts.sites === 'all' ? EBAY_SITES.map(s => s.id)
     : (Array.isArray(opts.sites) && opts.sites.length ? opts.sites : ['EBAY_US']);
   const ask = EBAY_SITES.filter(s => want.includes(s.id) && !(st.sites[s.id] && st.sites[s.id].status === 'ok'));
+  // ZIP UNION — the deals probe only (?zip=union, branch zip-union,
+  // 2026-10-07; nothing in production sets opts.zipUnion). eBay US's first
+  // answer is asked TWICE: with a US buyer location (X-EBAY-C-ENDUSERCTX —
+  // calculated shipping stated, and cheaper calculated-shipping rows the price
+  // sort otherwise leaves off the page) and without (production's answer).
+  // Measured on 5 cards: the modes share 122 of 291 rows. Merged ZIP first,
+  // so its copy (shipping stated) wins where both hold a row. Two calls.
+  const zipUnion = /^[0-9]{5}$/.test(String(opts.zipUnion || '')) && !opts.offset ? String(opts.zipUnion) : null;
+  const jobs = [];
+  for (const site of ask) {
+    if (zipUnion && site.id === 'EBAY_US') jobs.push({ site, zip: zipUnion });
+    jobs.push({ site, zip: null });
+  }
   // eBay US's FIRST answer goes through the language union (one extra page,
   // only when it triggers — sourceEbayLanguageUnion); every other site, and
   // every later page, asks exactly as before.
-  const results = await Promise.allSettled(ask.map(site =>
-    (site.id === 'EBAY_US' && !opts.offset ? sourceEbayLanguageUnion : sourceEbay)(card, grade, limit,
-      Object.assign({}, opts, { state: undefined, marketplace: site.id, pageSize: EBAY_PAGE_MAX, maxPages: 1,
-                                unionPages: LANG_UNION_OPEN_PAGES }))));
+  const results = await Promise.allSettled(jobs.map(j =>
+    (j.site.id === 'EBAY_US' && !opts.offset ? sourceEbayLanguageUnion : sourceEbay)(card, grade, limit,
+      Object.assign({}, opts, { state: undefined, marketplace: j.site.id, pageSize: EBAY_PAGE_MAX, maxPages: 1,
+                                unionPages: LANG_UNION_OPEN_PAGES, zipUnion: undefined, endUserZip: j.zip || undefined }))));
   // Merge in EBAY_SITES order, US first, so a row on two sites keeps its
-  // US (USD, unconverted) copy.
-  ask.forEach((site, i) => {
+  // US (USD, unconverted) copy. Under the ZIP union a failed half is said
+  // (st.zipUnion) and the other half still stands; both failing fails US.
+  if (zipUnion) st.zipUnion = { zip: zipUnion, withZip: null, without: null };
+  jobs.forEach((j, i) => {
     const r = results[i];
-    if (r.status === 'fulfilled') mergeEbaySite(st, site.id, r.value);
-    else ebaySiteFailed(st, site.id, r.reason || {});
+    const half = zipUnion && j.site.id === 'EBAY_US' ? (j.zip ? 'withZip' : 'without') : null;
+    if (half) st.zipUnion[half] = r.status === 'fulfilled'
+      ? { ok: true, kept: (r.value.listings || []).length, calls: (r.value.pages && r.value.pages.fetched) || 0 }
+      : { ok: false, error: String((r.reason && r.reason.message) || r.reason).slice(0, 160) };
+    if (r.status === 'fulfilled') mergeEbaySite(st, j.site.id, r.value);
+    else if (!half || results.every((x, k) => jobs[k].site.id !== 'EBAY_US' || x.status === 'rejected'))
+      { if (!(st.sites[j.site.id] && st.sites[j.site.id].status === 'ok')) ebaySiteFailed(st, j.site.id, r.reason || {}); }
   });
+  // Which rows only the buyer-location half returned — so the probe can say
+  // whether a headline exists only because of the ZIP.
+  if (zipUnion) {
+    const k = jobs.findIndex(j => j.site.id === 'EBAY_US' && !j.zip), plain = results[k];
+    const plainIds = new Set(plain && plain.status === 'fulfilled' ? (plain.value.listings || []).map(l => l.itemId) : []);
+    for (const l of st.listings) if (l.marketplace === 'EBAY_US' && !plainIds.has(l.itemId)) l.zipOnly = true;
+    st.zipUnion.zipOnlyRows = st.listings.filter(l => l.zipOnly).length;
+  }
   // Every site failed on a first answer: the reason US gave is the source's
   // status, exactly as before sites existed — quota, busy, disabled,
   // unconfigured stay distinct.
@@ -4208,6 +4236,10 @@ async function rebuildView(card, requestedId, grade, printing, edition, vs, ropt
   const payload = buildListingsPayload(card, requestedId, grade, printing, j, sources,
     Date.now() - t0, progress, edition);
   payload.fetchedAt = new Date(ts).toISOString();
+  // ropts.isolated (the deals probe's ?zip= views, branch zip-union): judged
+  // and built like any view, but held only by the probe — never written to
+  // the listings cache, and no follow-up that would rebuild production's view.
+  if (ropts.isolated) return payload;
   listingCacheSet(card.api_card_id, viewCacheGrade(grade, printing, edition), payload, ts);
   if (!ropts.stamp) stampFollowUp(card, requestedId, grade, printing, edition, j.stampPending, j.stampPendingTop);
   if (!ropts.back) backFollowUp(card, requestedId, grade, printing, edition, payload.listings);
@@ -6097,6 +6129,100 @@ const aspectProbeCache = new Map();
 // shelf's own rule and DEAL_BACK_MAX: at most 2 getItem), then the UNCHANGED
 // deals.pickDeal against dealRefOf. Reports each check's state on the picked
 // row — never only its verdict. Nothing reaches a visitor; nothing stored.
+// The VOUCHING bar for one view (Roy, 2026-10-07) — skip anything without the
+// evidence to vouch for it. Cheapest first; every free criterion
+// (deals.vouchFree) before the one paid one (the back check's getItem, at most
+// DEAL_BACK_MAX a card); the first row clearing all is the pick. One
+// definition: the production view (?bar=vouch) and the probe's isolated
+// ?zip= views run exactly this.
+async function vouchBarOf(card, id, payload, t0, pendingOf) {
+    const ref = await dealRefOf(id);
+    const rows = (payload.listings || []).slice().sort((a, b) => Number(a.landed) - Number(b.landed));
+    const skipped = {}, reachedBack = [];
+    let pick = null, backsAsked = 0, backCalls = 0;
+    const brief = l => ({ title: String(l.title || '').slice(0, 110), landed: l.landed, url: l.url, imageUrl: l.imageUrl,
+      seller: l.seller, sellerFeedback: l.sellerFeedback || null, condition: l.sellerCondition || l.condition, conditionSource: l.conditionSource || null });
+    const skip = (why, l) => { const k = why.replace(/-?\d+(\.\d+)?/g, 'N'); skipped[k] = (skipped[k] || 0) + 1; if (l) reachedBack.push(Object.assign(brief(l), { skip: why })); };
+    for (const l of rows) {
+      const f = deals_.vouchFree(l, payload, ref);
+      if (f.skip) { skip(f.skip); continue; }
+      if (!backcheck.familyOf(id)) { skip('the back check does not cover this card', l); continue; }
+      if (backsAsked >= deals_.DEAL_BACK_MAX) { skip('back-check budget for this card spent', l); continue; }
+      backsAsked++;
+      const v = await backCheckItem(card, l.itemId, { background: true }).catch(e => ({ error: e.message }));
+      backCalls += (v && v.calls) || 0;
+      const p = deals_.vouchPhotos(v);
+      if (p.skip) { skip(p.skip, l); continue; }
+      pick = Object.assign(brief(l), { discount: +deals_.discountOf(l, ref).toFixed(3), cleared: f.cleared.concat(p.cleared),
+        identity: f.identity, stamp: l.stamp || null, back: { state: v.state, photos: v.photos } });
+      break;
+    }
+    const sg = payload.stampGate || {}, mc = payload.materialCheck || {};
+    return { bar: 'vouch', cardId: id, name: card.name, number: card.number, set: card.set_name_en || card.set_name,
+      ref, pick, examined: rows.length, skipped, reachedBack, backsAsked, backCalls,
+      checks: { photoGate: { applied: !!sg.applied, kind: sg.kind || null, notRun: sg.notRun || null, pending: sg.pending || 0 },
+                material: { applied: !!mc.applied, pending: mc.pending || 0, reason: mc.reason || null } },
+      langUnion: payload.sources && payload.sources.ebay && payload.sources.ebay.langUnion || null,
+      waitedMs: Date.now() - t0, stillPending: pendingOf(payload), stored: false, at: new Date().toISOString() };
+}
+
+// ?zip=none|union&bar=vouch (branch zip-union, 2026-10-07; NOT production):
+// the vouching bar on a view built outside the listings cache, so the two
+// modes are judged by one pipeline and production's views are never touched.
+//   none  — eBay US first page, as production asks it
+//   union — the same page asked twice, with and without a US buyer location
+//           (sourceEbayAll zipUnion), merged ZIP-first
+// The photo checks production would run on the view are queued here, with
+// production's classes and top-25 rule (the follow-ups would rebuild
+// production's view); the view is re-judged in private while they land.
+// Reports the headline (cheapestLive) row and why it was trusted.
+const DEALS_PROBE_ZIP = '10001';
+async function probeZipView(card, id, mode, waitMs) {
+  const grade = 'Raw NM', t0 = Date.now();
+  const gathered = await gatherListings(card, grade, 25, { background: true, sites: ['EBAY_US'],
+    zipUnion: mode === 'union' ? DEALS_PROBE_ZIP : null });
+  const st = gathered.ebayState;
+  if (!st) return { error: 'eBay did not answer', sources: gathered.sources };
+  const vs = { gathered, ts: Date.now(), t0 };
+  const judge = () => rebuildView(card, id, grade, null, null, vs, { noFetch: true, isolated: true });
+  let payload = await judge();
+  const reprints = await photoChecksFor(card);
+  const queued = { compare: 0, colour: 0 };
+  const queue = async p => {
+    for (const r of stampcheck.compareOrder(gathered.stampPendingTop || []))
+      { queued.compare++; stampcheck.checkItem(r.itemId, r.imageUrl, reprints, card.api_card_id, stampcheck.PRIO.compareTop); }
+    if (materialApplies(card)) {
+      await materialRefOf(card);
+      const rows = (p.listings || []).filter(r => materialPhotoOf(r) && !materialProfileOf(r));
+      const top = new Set(stampcheck.topOf(p.listings || []));
+      for (const r of stampcheck.compareOrder(rows)) {
+        queued.colour++;
+        const url = materialPhotoOf(r);
+        stampcheck.checkMaterialPhoto(r.imageUrl, top.has(r) ? stampcheck.PRIO.colourTop : stampcheck.PRIO.colourRest)
+          .then(v => { if (v && v.state === 'profiled') saveMaterialProfile(r.itemId, url, v); });
+      }
+    }
+  };
+  await queue(payload);
+  const waiting = p => ((p.stampGate && p.stampGate.pendingQueued) || 0) + ((p.materialCheck && p.materialCheck.pending) || 0);
+  while (waiting(payload) > 0 && Date.now() - t0 < waitMs) {
+    await new Promise(r => setTimeout(r, 2000));
+    payload = await judge();
+  }
+  // The headline: what buildListingsPayload names cheapestLive — the first
+  // live, unflagged, non-current-bid row of the cheapest-first list.
+  const h = (payload.listings || []).find(l => l.live && outlier.trustworthy(l)) || null;
+  const headline = h ? { landed: h.landed, price: h.price, shipping: h.shipping, title: String(h.title || '').slice(0, 110),
+    itemId: h.itemId, saleType: h.saleType, zipOnly: !!h.zipOnly,
+    trustedBecause: { outlierFlag: !!h.suspect, stamp: h.stamp ? h.stamp.state + (h.stamp.deferred ? ' (deferred)' : '') : 'no photo check applies',
+      colour: h.materialPending ? 'not profiled yet' : (h.material ? h.material.action || 'profiled' : 'profiled or n/a'),
+      back: h.back ? h.back.state : 'not checked', condition: h.sellerCondition || h.condition || null,
+      conditionSource: h.conditionSource || null, seller: h.seller || null, sellerFeedback: h.sellerFeedback || null } } : null;
+  return { payload, headline, cheapestLive: payload.cheapestLive, zipUnion: st.zipUnion || null,
+    calls: st.calls, pages: Object.fromEntries(Object.entries(st.sites).map(([m, x]) => [m, x.pagesFetched || 0])),
+    queued, stillWaiting: waiting(payload), outliers: payload.outliers || null };
+}
+
 app.get('/api/ebay/dealsprobe/:cardId', toolingKey.require, async (req, res) => {
   const t0 = Date.now(), grade = 'Raw NM';
   const waitMs = Math.max(0, Math.min(90, parseInt(req.query.wait, 10) || 60)) * 1000;
@@ -6104,44 +6230,24 @@ app.get('/api/ebay/dealsprobe/:cardId', toolingKey.require, async (req, res) => 
     const card = await resolveListingCard(req.params.cardId);
     if (!card) return res.status(404).json({ error: 'card not in catalogue' });
     const id = card.api_card_id;
-    let payload = await listingsFor(card, id, grade, null, {});
     const pendingOf = p => ((p && p.stampGate && p.stampGate.pending) || 0) + ((p && p.materialCheck && p.materialCheck.pending) || 0);
+    if (req.query.zip === 'none' || req.query.zip === 'union') {
+      if (req.query.bar !== 'vouch') return res.status(400).json({ error: '?zip= runs with ?bar=vouch only' });
+      const z = await probeZipView(card, id, req.query.zip, waitMs);
+      if (z.error) return res.status(502).json({ error: z.error, sources: z.sources });
+      const v = await vouchBarOf(card, id, z.payload, t0, p => ((p.stampGate && p.stampGate.pendingQueued) || 0) + ((p.materialCheck && p.materialCheck.pending) || 0));
+      return res.json(Object.assign(v, { zip: req.query.zip, headline: z.headline, cheapestLive: z.cheapestLive,
+        searchCalls: z.calls, pages: z.pages, zipUnion: z.zipUnion, queued: z.queued, stillWaiting: z.stillWaiting,
+        outliers: z.outliers, listings: z.payload.count, isolated: true }));
+    }
+    let payload = await listingsFor(card, id, grade, null, {});
     const reread = async () => { const p = await listingsFor(card, id, grade, null, { poll: true }); return p && !p.notFetched ? p : payload; };
     while (pendingOf(payload) > 0 && Date.now() - t0 < waitMs) { await new Promise(r => setTimeout(r, 2000)); payload = await reread(); }
     // ?bar=vouch (Roy, 2026-10-07): the VOUCHING bar — skip anything without
     // the evidence to vouch for it. Cheapest first; every free criterion
     // (deals.vouchFree) before the one paid one (the back check's getItem,
     // at most DEAL_BACK_MAX a card); the first row clearing all is the pick.
-    if (req.query.bar === 'vouch') {
-      const ref = await dealRefOf(id);
-      const rows = (payload.listings || []).slice().sort((a, b) => Number(a.landed) - Number(b.landed));
-      const skipped = {}, reachedBack = [];
-      let pick = null, backsAsked = 0, backCalls = 0;
-      const brief = l => ({ title: String(l.title || '').slice(0, 110), landed: l.landed, url: l.url, imageUrl: l.imageUrl,
-        seller: l.seller, sellerFeedback: l.sellerFeedback || null, condition: l.sellerCondition || l.condition, conditionSource: l.conditionSource || null });
-      const skip = (why, l) => { const k = why.replace(/-?\d+(\.\d+)?/g, 'N'); skipped[k] = (skipped[k] || 0) + 1; if (l) reachedBack.push(Object.assign(brief(l), { skip: why })); };
-      for (const l of rows) {
-        const f = deals_.vouchFree(l, payload, ref);
-        if (f.skip) { skip(f.skip); continue; }
-        if (!backcheck.familyOf(id)) { skip('the back check does not cover this card', l); continue; }
-        if (backsAsked >= deals_.DEAL_BACK_MAX) { skip('back-check budget for this card spent', l); continue; }
-        backsAsked++;
-        const v = await backCheckItem(card, l.itemId, { background: true }).catch(e => ({ error: e.message }));
-        backCalls += (v && v.calls) || 0;
-        const p = deals_.vouchPhotos(v);
-        if (p.skip) { skip(p.skip, l); continue; }
-        pick = Object.assign(brief(l), { discount: +deals_.discountOf(l, ref).toFixed(3), cleared: f.cleared.concat(p.cleared),
-          identity: f.identity, stamp: l.stamp || null, back: { state: v.state, photos: v.photos } });
-        break;
-      }
-      const sg = payload.stampGate || {}, mc = payload.materialCheck || {};
-      return res.json({ bar: 'vouch', cardId: id, name: card.name, number: card.number, set: card.set_name_en || card.set_name,
-        ref, pick, examined: rows.length, skipped, reachedBack, backsAsked, backCalls,
-        checks: { photoGate: { applied: !!sg.applied, kind: sg.kind || null, notRun: sg.notRun || null, pending: sg.pending || 0 },
-                  material: { applied: !!mc.applied, pending: mc.pending || 0, reason: mc.reason || null } },
-        langUnion: payload.sources && payload.sources.ebay && payload.sources.ebay.langUnion || null,
-        waitedMs: Date.now() - t0, stillPending: pendingOf(payload), stored: false, at: new Date().toISOString() });
-    }
+    if (req.query.bar === 'vouch') return res.json(await vouchBarOf(card, id, payload, t0, pendingOf));
     const backWork = dealBackFollowUp(card, id, grade, null, null, payload, { measure: true });
     if (backWork) { await backWork; payload = await reread(); }
     const ref = await dealRefOf(id);

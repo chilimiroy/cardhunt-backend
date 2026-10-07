@@ -36,8 +36,9 @@ const ns = L.languageExclusionFor(en151, 'EBAY_US', 'notspecified');
 ok('notspecified (measurement): asks for exactly the listings Language:{English} would drop', ns.applied && ns.aspect === 'Language:{Not Specified}' && ns.measurement === true);
 // Only marketprobe may pass a mode: every other caller of sourceEbay gets the
 // production default, so "Not Specified" can never become a live filter.
-const passers = (src.match(/langExclude, unionPages \}\)/g) || []).length;
-ok('only marketprobe passes a mode to sourceEbay', /background: true, allDropped: true, langExclude, unionPages \}\);/.test(src)
+// (Plain strings: marketprobe's call now also carries endUserZip and maxPages, 2026-10-07.)
+const passers = src.split('langExclude, unionPages').length - 1;
+ok('only marketprobe passes a mode to sourceEbay', src.includes('background: true, allDropped: true, langExclude, unionPages, endUserZip, maxPages: probePages });')
    && (src.match(/opts\.langExclude/g) || []).length === 1 && passers === 1, 'passed from marketprobe ' + passers + 'x');
 // The union's callers (2026-10-07, shipped at one page): marketprobe, and
 // eBay US's FIRST answer on a card open — never Load more or another site.
@@ -107,7 +108,7 @@ const se = src.slice(src.indexOf('async function sourceEbay('), src.indexOf('asy
 ok('the request uses the exclusion (q and aspect_filter)', /const qAsk = qMint \+ langEx\.q;/.test(se) && /aspectAsk \? '&aspect_filter='/.test(se));
 ok('every eBay source block states it (queryExclusion)', /queryExclusion: \{ mode: langEx\.mode, applied: langEx\.applied, terms: langEx\.terms/.test(se)
    && /sources\[s\.id\]\.queryExclusion = r\.value\.queryExclusion/.test(src));
-ok('marketprobe measures each mode, and caches them apart', /const langExclude = \['none', 'words', 'aspect', 'notspecified', 'union'\]/.test(src) && /langExclude \|\| null, unionPages \|\| null\]\);/.test(src));
+ok('marketprobe measures each mode, and caches them apart', /const langExclude = \['none', 'words', 'aspect', 'notspecified', 'union'\]/.test(src) && src.includes('langExclude || null, unionPages || null, endUserZip || null, probePages || null]);'));
 
 // The union checks above are async: the summary waits for them.
 function finish() {

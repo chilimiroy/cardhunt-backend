@@ -41,7 +41,7 @@ ok('per tab (sessionStorage), capped', /sessionStorage\.setItem\(CARD_VIEW_KEY/.
 console.log('\n  openCard: the saved grade is applied before the first listings request');
 const oc = fn('openCard');
 const at = s => oc.indexOf(s);
-ok('it reads the remembered view, unless the search asked for a grade', /var saved = S\.gradeFromSearch \? null : loadCardView\(id\);/.test(oc));
+ok('it reads the remembered view, unless the search asked for a grade', /var fromSearch = !!S\.gradeFromSearch;\s*var saved = fromSearch \? null : loadCardView\(id\);/.test(oc));
 ok('the selection, tab, view and range are set before the listings are asked',
    at('Object.assign(SEL, saved.sel') > 0 && at('Object.assign(SEL, saved.sel') < at('if (saved) selGrade(saved.grade, base); else renderListingFinder(c);'));
 ok('restored: ONE request, at the saved grade (selGrade) — not renderListingFinder and then selGrade',
@@ -49,7 +49,9 @@ ok('restored: ONE request, at the saved grade (selGrade) — not renderListingFi
    && (oc.match(/renderListingFinder\(/g) || []).length === 1 && (oc.match(/selGrade\(/g) || []).length === 1);
 ok('the history range and the scroll come back', /initChart\(base,S\.activeRange\)/.test(oc) && /if \(saved\) restoreScroll\(saved\.y\);/.test(oc));
 ok('the card on screen is saved before another one replaces it', at('saveCardView()') > 0 && at('saveCardView()') < at("SS('card')"));
-ok('a search that asked for a grade marks it', /LF\.grade = d\.grade; S\.gradeFromSearch = true;/.test(H));
+ok('a new card, neither remembered nor searched at a grade, asks Raw NM — never the previous card\'s grade',
+   /if \(!saved && !fromSearch\) LF\.grade = 'Raw NM';/.test(oc) && at("LF.grade = 'Raw NM'") < at('renderListingFinder(c)'));
+ok('a search that asked for a grade marks it',/LF\.grade = d\.grade; S\.gradeFromSearch = true;/.test(H));
 
 console.log('\n  every change is remembered; Back returns to the scroll');
 ok('selGrade, the tabs, the view toggle and the range save the view',

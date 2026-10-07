@@ -2086,16 +2086,19 @@ function fmtP(n){return n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+n.toFixed(2);}
 function SS(id,skipHistory){
   const cur=document.querySelector('.screen.on')?.id?.replace('screen-','');
   if(!skipHistory&&cur&&cur!==id) S.history.push(cur);
+  // T4: remember where this screen was scrolled (and a card's whole view)
+  // before leaving it; Back returns there rather than to the top.
+  if(cur&&cur!==id){ S.scrollMem=S.scrollMem||{}; S.scrollMem[cur]=window.scrollY; if(cur==='card') saveCardView(); }
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
   document.getElementById('screen-'+id)?.classList.add('on');
-  window.scrollTo(0,0);
+  if(skipHistory&&cur!==id&&S.scrollMem&&S.scrollMem[id]>0) restoreScroll(S.scrollMem[id]); else { SCROLL_SEQ++; window.scrollTo(0,0); }
   if(id==='home'&&!S.homeLoaded) loadHome();
   if(id==='sets'){if(!S.enSets.length) loadAllSets(); else renderSets();}
   if(id==='pokemon'){renderHomeSetRow();updateHeroStats();loadTrending();}
   if(id==='portfolio') renderPortfolio();
   if(id==='search') loadSearchTrending();
   if(id==='alerts'){renderAlertsList();updateAlertStats();updateAlertsBar();}
-  if(id==='card'&&S.currentCard) setTimeout(()=>initChart(S.activeGradeBase,'3M'),80);
+  if(id==='card'&&S.currentCard) setTimeout(()=>initChart(S.activeGradeBase,S.activeRange||'3M'),80);
 }
 function goBack(){
   if(S.history.length>0){const prev=S.history.pop();SS(prev,true);}
@@ -2272,7 +2275,7 @@ async function doSearch(q, lang) {
     document.getElementById('results-title').textContent = '"' + q + '"';
     document.getElementById('results-sub').textContent =
       'Matched ' + (top.name || '') + ' #' + (top.number || '') + ' \u00b7 ' + (top.setName || '');
-    if (d.grade && typeof LF !== 'undefined') LF.grade = d.grade;
+    if (d.grade && typeof LF !== 'undefined') { LF.grade = d.grade; S.gradeFromSearch = true; }
     openCard(d.resolved);
     return;
   }
@@ -3090,6 +3093,7 @@ function selGrade(grade,base){
     var cview = document.querySelector('.cview');
     if (cview) { cview.style.position = 'relative'; cview.appendChild(badge); }
   }
+  saveCardView();   // T4: the selection is part of the card's remembered view
 }
 
 // ── The price column's two views (TASK-ui T1, 2026-10-07) ─────────
@@ -3119,7 +3123,71 @@ function toggleCardView(){
   if (!pricesOpen()) return;
   S.cdView = S.cdView === 'chart' ? 'boxes' : 'chart';
   applyCardView();
+  saveCardView();   // T4 — sessionStorage only, no request
 }
+
+// ── Return to the same place (TASK-ui T4, 2026-10-07) ────────────
+// Leaving a screen and coming back restores the view, not a reset one.
+//  - Every screen: its scroll position, on Back (goBack -> SS(prev, true)).
+//  - A card, reopened in this tab: the grade and condition selection
+//    (SEL, and the exact grade string the listings were asked for), the
+//    Buy It Now / Auction tab, the T1 view (boxes or history), the history
+//    range, and the scroll position.
+// The grade matters most: openCard applies the saved selection BEFORE its
+// first listings request, so a return asks once, at the saved grade —
+// inside the server's 15-minute cache that is 0 eBay calls — instead of
+// asking Raw first and the grade again when it is re-picked.
+// Per tab (sessionStorage), identity and choices only — never a price.
+var CARD_VIEW_KEY = 'ch_cardview', CARD_VIEW_MAX = 30;
+function cardViews(){
+  try { var v = JSON.parse(sessionStorage.getItem(CARD_VIEW_KEY) || '{}'); return v && typeof v === 'object' ? v : {}; }
+  catch (e) { return {}; }
+}
+function saveCardView(){
+  var c = S.currentCard; if (!c || !c.id) return;
+  var all = cardViews(), onCard = document.getElementById('screen-card');
+  var prev = all[c.id] || {};
+  all[c.id] = {
+    grade: LF.grade, sel: Object.assign({}, SEL),
+    ltab: S.saleType === 'auction' ? 'auction' : 'live',
+    view: S.cdView === 'chart' ? 'chart' : 'boxes',
+    range: S.activeRange || '3M',
+    // The scroll is the card's only while the card is on screen.
+    y: onCard && onCard.classList.contains('on') ? Math.round(window.scrollY) : (prev.y || 0),
+    t: Date.now() };
+  var ids = Object.keys(all).sort(function (a, b) { return all[b].t - all[a].t; });
+  ids.slice(CARD_VIEW_MAX).forEach(function (k) { delete all[k]; });
+  try { sessionStorage.setItem(CARD_VIEW_KEY, JSON.stringify(all)); } catch (e) {}
+}
+function loadCardView(id){ var v = cardViews()[id]; return v && typeof v.grade === 'string' ? v : null; }
+// Scroll back to y once the page is tall enough — a card's listings and a
+// set's grid arrive after the screen is shown. Gives up after 5 s, when the
+// screen changes, or the moment the person scrolls or presses a key.
+var SCROLL_SEQ = 0;
+function restoreScroll(y){
+  var seq = ++SCROLL_SEQ, until = Date.now() + 5000;
+  if (!(y > 0)) { window.scrollTo(0, 0); return; }
+  var stop = function () { if (seq === SCROLL_SEQ) SCROLL_SEQ++; };
+  ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach(function (e) { window.addEventListener(e, stop, { once: true, passive: true }); });
+  (function step(){
+    if (seq !== SCROLL_SEQ) return;
+    var max = document.documentElement.scrollHeight - window.innerHeight;
+    window.scrollTo(0, Math.min(y, Math.max(0, max)));
+    if (max >= y || Date.now() > until) return;
+    requestAnimationFrame(step);
+  })();
+}
+function syncLTabs(){
+  var auction = S.saleType === 'auction';
+  document.querySelectorAll('.ltab').forEach(function (b) { b.classList.remove('on'); });
+  var on = document.getElementById(auction ? 'ltab-auction' : 'ltab-bin'); if (on) on.classList.add('on');
+}
+function syncRangeChips(){
+  document.querySelectorAll('.rc').forEach(function (b) {
+    b.classList.toggle('on', (b.getAttribute('onclick') || '').indexOf("'" + (S.activeRange || '3M') + "'") > 0);
+  });
+}
+window.addEventListener('pagehide', saveCardView);
 
 function toggleWatch(){S.watching=!S.watching;document.getElementById('watch-btn').textContent=S.watching?'❤️ Watching':'🤍 Watch';}
 
@@ -3129,10 +3197,15 @@ async function openCard(id){
   if (refuseForeignId(id, 'openCard')) return;
   perfMark('card:open', { id: id });
   var oldBadge = document.getElementById('grade-badge'); if (oldBadge) oldBadge.remove();
+  // T4: the card on screen keeps its view for when it is opened again.
+  if (S.currentCard && document.getElementById('screen-card').classList.contains('on')) saveCardView();
+  // A grade the search asked for wins over a remembered one.
+  var saved = S.gradeFromSearch ? null : loadCardView(id);
+  S.gradeFromSearch = false;
   SS('card');
   if(S.chart){S.chart.destroy();S.chart=null;}
   S.activeGrade='Raw NM';S.watching=false;
-  S.cdView='boxes'; applyCardView();
+  S.cdView='boxes'; applyCardView(); S.activeRange='3M';
   
   // A new card starts at Raw + All, and the selector is redrawn so it never
   // shows the previous card's selection against this card's listings.
@@ -3197,7 +3270,17 @@ async function openCard(id){
     document.getElementById('cd-name').textContent=c.name;
     renderCardSub(c);
     var base=getBase(c);S.activeGradeBase=base;
-    updateCardPrices('Raw NM',base);
+    if (saved) {
+      // T4: this card's remembered view, applied BEFORE the first listings
+      // request — selGrade asks once, at the saved grade, and draws the
+      // prices, the badge and the chart caption for it.
+      Object.assign(SEL, saved.sel || {});
+      S.saleType = saved.ltab === 'auction' ? 'auction' : 'buy-it-now';
+      S.ltab = saved.ltab === 'auction' ? 'auction' : 'live';
+      syncLTabs();
+      S.cdView = saved.view === 'chart' ? 'chart' : 'boxes'; applyCardView();
+      S.activeRange = saved.range || '3M';
+    } else updateCardPrices('Raw NM',base);
     // The price table that sat here is gone (Roy, TASK.md T4). Every row was
     // the raw price x a fixed multiplier - the same PSA 10 premium on every
     // card - where real premiums run from ~3x on a modern common to 40x+ on
@@ -3205,10 +3288,12 @@ async function openCard(id){
     // The 16-chip GRADES row is gone; renderSelector() draws the status and
     // condition boxes that replaced it.
     renderSelector();
-    try { renderListingFinder(c); }
+    try { if (saved) selGrade(saved.grade, base); else renderListingFinder(c); }
     catch (err) { console.warn('listing finder failed:', err.message); }
+    syncRangeChips();
     updateValueBar(base);
-    setTimeout(function(){initChart(base,'3M');},80);
+    setTimeout(function(){initChart(base,S.activeRange);},80);
+    if (saved) restoreScroll(saved.y);
   }catch(err){
     document.getElementById('cd-name').textContent='Could not load card';
     console.error(err);
@@ -4729,6 +4814,7 @@ function setLTab(el,tab){
   // T5: Buy It Now and Auctions are two views of ONE answer — the same
   // request, the same gate, the same filters; only the sale type differs.
   if(tab==='live'||tab==='auction'){ S.saleType = tab==='auction' ? 'auction' : 'buy-it-now';
+    saveCardView();   // T4
     renderListingFinder(S.currentCard||LF.card); return; }
   buildMockListings(S.currentCard,S.activeGradeBase,tab);
 }
@@ -4917,6 +5003,7 @@ function setR(el, r) {
   document.querySelectorAll('.rc').forEach(function (x) { x.classList.remove('on'); });
   el.classList.add('on');
   initChart(S.activeGradeBase, r);
+  saveCardView();   // T4: initChart has set S.activeRange
 }
 
 // COMPARE
@@ -7441,6 +7528,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-6a2939c-links &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-5bd2b27-restore &middot; click to hide</div>
 </body>
 </html>

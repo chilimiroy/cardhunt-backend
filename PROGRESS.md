@@ -63,6 +63,22 @@ background job and asks for comparisons of the rows it judges; not built.
   Blastoise $30.06 (69 @ 100%, 13.5% of market) — unexplained; several
   established sellers ask ~$25. Union NOT shipped.
 
+### Blastoise: the ~$25 rows are Celebrations reprints (Roy, by eye + eBay's Set)
+- Both rows carry eBay Set "Celebrations: Classic Collection" and link to
+  eBay's Classic Collection product; titles say "Base Set ... 1999".
+- `0ab77cb` (deployed) moves the reprint band check to item price, band and
+  rows. **That alone does not catch them.** My earlier "$23.99 sits inside
+  $16.06-$25.37" compared an item price with a band built from DELIVERED
+  prices. On item prices the CC001 band is **$13.59-$22.99** (median $18.03):
+  the reprints ask $23.99 and $25.00, the top of the reprint's own market.
+  Union headline still $30.06; the union is NOT shipped.
+- A third delivered-price threshold: `stampcheck.gate` hides an unchecked
+  row under 55% of market on the delivered price (`stampcheck.js:890`).
+  Reported, not changed.
+- eBay Set, Blastoise query (setprobe, 3 calls): not in the search summary;
+  a refinement aspect, multi-valued (counts sum to 129% of 1,684): Base Set
+  1,486, Celebrations: Classic Collection 217; filtered searches 1,457 / 199.
+
 ### Gate work, found by the picks (not fixed)
 - "PRERELEASE" in a Dark Gyarados 8/82 title passed as the base card — a
   prerelease stamp is another printing.

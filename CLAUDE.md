@@ -443,6 +443,10 @@ signed-in state AND the role. `user_access.email` is captured from the verified 
   (`rls.test.js --db` fails). Proof: `node rlsprobe.js [--token=<jwt>]`.
 - Pre-sign-in alerts move only when their browser claims its `ch_user` id.
 - **Tests cannot change the schema**: every test connects via `schemaguard.testPool()/testClient()` (refuses DDL before sending); schema comes from the server's first-use migration or a `migration-*.sql` Roy runs (`schemaguard.test.js`).
+- **Live suites run SIGNED OUT — decided (Roy, 2026-10-07)**: priced checks SKIP and say why;
+  prices for an approved account are checked by hand. **Never** a service_role key or a test
+  account on a dev machine (it bypasses RLS and can mint any session). Unattended priced checks
+  would need a separate Supabase project for testing, not production credentials.
 (PROGRESS 2026-10-06 (night).)
 
 ## Near you (local card shops) — PLANNED, needs a real data source
@@ -524,7 +528,6 @@ node linkaudit.js swsh11 --name=Giratina --kept
 node querygap.js en [--dry|--resume|--set=a,b|--report]   # every set's query; ~230 calls live
 CARDHUNT_API=http://localhost:3001 node searchaudit.js en --json=sa.json --concurrency=4 [--resume]
 node sitecheck.js [card] [--grade=all]     # presses every button; 41-89 calls
-node testauth.js                           # does the live suites' APPROVED test session mint? (CARDZON_TEST_EMAIL, CARDZON_SUPABASE_SERVICE_KEY; without it priced checks SKIP)
 
 # after ANY edit carrying a backslash: count 0x08 bytes (must be 0).
 # grep -P does not run in this Git Bash and its failure reads as "no matches".

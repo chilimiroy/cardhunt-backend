@@ -33,12 +33,11 @@ function ok(name, cond, detail) {
   if (cond) { pass++; console.log(`  PASS  ${name}`); }
   else { fail++; console.log(`  FAIL  ${name}${detail ? '  — ' + detail : ''}`); }
 }
-// Live calls carry the approved test account's session when one can be
-// minted (testauth.js, 2026-10-07); signed out, the door withholds prices and
-// the checks that need them SKIP, saying why — never pass on nothing.
-const testauth = require('./testauth');
-let AUTH = {}, SESSION = { token: null, why: 'not asked yet' };
-const get = p => fetch(BASE + p, AUTH).then(r => r.json()).catch(e => ({ _err: e.message }));
+// Live calls run SIGNED OUT, by decision (Roy, 2026-10-07): the door
+// withholds prices, so the checks that need them SKIP and say why — never
+// pass on nothing. Prices for an approved account are checked by hand.
+const WITHHELD = 'prices withheld signed out — checked by hand for an approved account (no test credentials, by decision)';
+const get = p => fetch(BASE + p).then(r => r.json()).catch(e => ({ _err: e.message }));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // Pull the page's own source so this tests the SHIPPED frontend, not a copy
@@ -168,10 +167,6 @@ const fnSrc = name => {
     /l\s*===\s*['"]en['"][\s\S]{0,80}loadAllSets\(\)/.test(setLangSrc));
 
   console.log('\n2. EVERY BROWSED SET RESOLVES  (the database list)');
-  SESSION = await testauth.testSession();
-  AUTH = testauth.authed(SESSION);
-  console.log(SESSION.token ? '        live checks signed in as the approved test account'
-                            : '        live checks run SIGNED OUT — priced checks will SKIP: ' + SESSION.why);
 
   const db = (await get('/api/sets/lang/en')).sets || [];
   ok('the database set list loads', db.length > 150, `${db.length} sets`);
@@ -229,11 +224,8 @@ const fnSrc = name => {
   // Compared NOTHING is not agreement (2026-10-07): signed out, the door
   // withholds every price, and this passed on "0 cards". Say so; and where
   // prices were NOT withheld, comparing nothing is a failure.
-  // Signed in as the APPROVED test account and still withheld: the session
-  // or the door is broken — a failure, never a skip.
-  if (withheld > 0 && SESSION.token) ok('the approved test session sees prices', false, `${withheld} set answers still withheld prices`);
-  else if (compared === 0 && withheld > 0) {
-    console.log(`  SKIP  set page vs card page price agreement — prices withheld signed out (${withheld} sets); no test session: ${SESSION.why}`);
+  if (compared === 0 && withheld > 0) {
+    console.log(`  SKIP  set page vs card page price agreement — ${WITHHELD} (${withheld} sets)`);
   } else {
     ok(`set page and card page agree on price (${compared} cards)`, compared > 0 && disagreed === 0, compared ? `${disagreed} disagreed` : 'compared 0 cards');
     ok('a card with a database price never returns an estimate', compared > 0 && estimated === 0, `${estimated} estimated`);
@@ -294,13 +286,10 @@ const fnSrc = name => {
     /_priceIsReal/.test(fnSrc('updatePrices')) && /cd-chg/.test(fnSrc('updatePrices')));
   ok('no "name match" headline exists to be shown', !/name match/.test(pageCode));
 
-  if (!collide && set.pricesWithheld && SESSION.token) {
-    ok('the approved test session sees me02.5\'s prices', false, 'still withheld with a session');
-  } else if (!collide) {
+  if (!collide) {
     // A tool that cannot check something must say so — and say WHY.
     console.log('  SKIP  /api/market vs the set listing — ' + (set.pricesWithheld
-      ? 'prices withheld signed out; no test session: ' + SESSION.why
-      : 'no same-name variants with real prices in me02.5 right now'));
+      ? WITHHELD : 'no same-name variants with real prices in me02.5 right now'));
   } else {
     const lo = collide.reduce((a, b) => a._price < b._price ? a : b);
     const hi = collide.reduce((a, b) => a._price > b._price ? a : b);

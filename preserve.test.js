@@ -43,11 +43,9 @@ function ok(name, cond, detail) {
     console.log('  FAIL  ' + name + (detail ? '  — ' + detail : ''));
   }
 }
-// Live calls carry the approved test account's session when one can be
-// minted (testauth.js, 2026-10-07); signed out, the door withholds prices.
-const testauth = require('./testauth');
-let AUTH = {}, SESSION = { token: null, why: 'not asked yet' };
-const get = p => fetch(BASE + p, AUTH).then(r => r.json()).catch(e => ({ _err: e.message }));
+// Live calls run SIGNED OUT, by decision (Roy, 2026-10-07): priced checks
+// SKIP and say why; prices for an approved account are checked by hand.
+const get = p => fetch(BASE + p).then(r => r.json()).catch(e => ({ _err: e.message }));
 
 // ── Slice one function's source ───────────────────────────────
 // Lifted deliberately from setlist.test.js rather than rewritten. That
@@ -923,10 +921,6 @@ if (stamp.length && headSha) {
 (async () => {
   if (!OFFLINE) {
     console.log('\n9. LIVE API — the set list the app can actually resolve');
-    SESSION = await testauth.testSession();
-    AUTH = testauth.authed(SESSION);
-    console.log(SESSION.token ? '  live checks signed in as the approved test account'
-                              : '  live checks run SIGNED OUT — priced checks will SKIP: ' + SESSION.why);
     const sets = await get('/api/sets/lang/en');
     ok('/api/sets/lang/en answers', !sets._err && Array.isArray(sets.sets), sets._err);
     if (sets.sets) {
@@ -955,8 +949,7 @@ if (stamp.length && headSha) {
         ok(id + ' signed out: no price field, and the answer says prices are withheld',
           !Object.keys(d).some(k => /price|tcgplayer|cardmarket/i.test(k)) && /approved/i.test(String(card.pricesWithheld)),
           Object.keys(d).join(','));
-        if (SESSION.token) ok(id + ' the approved test session sees its price', false, 'still withheld with a session');
-        else console.log('  SKIP  ' + id + ' real-vs-estimate flag — withheld signed out; no test session: ' + SESSION.why);
+        console.log('  SKIP  ' + id + ' real-vs-estimate flag — prices withheld signed out; checked by hand for an approved account (no test credentials, by decision)');
       } else if (d) {
         ok(id + ' carries an explicit real-vs-estimate flag',
           typeof d._priceIsReal === 'boolean',

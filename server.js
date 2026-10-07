@@ -3656,7 +3656,9 @@ async function judgeListings(card, grade, listings, opts, memo) {
           else rows = (await gatherListings(rcard, grade, 50,
                          Object.assign({}, opts, { noReprintCheck: true }))).listings;
         }
-        if (rows) prices = rows.filter(outlier.trustworthy).map(outlier.priceOf).filter(p => p != null);
+        // The reprint's band in ITEM prices — the rows are judged on item price
+        // too (outlier.flagReprintPriced, 2026-10-07): postage is no evidence of printing.
+        if (rows) prices = rows.filter(outlier.trustworthy).map(outlier.itemPriceOf).filter(p => p != null);
         if (prices) (memo.reprintPrices = memo.reprintPrices || {})[rc.cardId] = prices;
       } catch (e) { why = 'reprint listings failed: ' + String(e.message || e).slice(0, 120); }
       if (!prices) {

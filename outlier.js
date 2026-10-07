@@ -214,7 +214,10 @@ function flagReprintPriced(listings, reprint, opts) {
   const hi = +(quantile(rp, 0.75) * (1 + pad)).toFixed(2);
   stats.band = [lo, hi];
 
-  const above = out.map(priceOf).filter(p => p !== null && p > hi);
+  // Item prices, like the band (2026-10-07): a delivered price let a
+  // Celebrations Blastoise at $23.99 + $6.07 escape a $16.06-$25.37 band its
+  // $23.99 sits inside — the same laundering as the outlier floor.
+  const above = out.map(itemPriceOf).filter(p => p !== null && p > hi);
   stats.originalAbove = above.length;
   stats.originalAboveMedian = above.length ? median(above) : null;
   if (above.length < minAbove || stats.originalAboveMedian < stats.median * separation) {
@@ -254,7 +257,7 @@ function flagReprintPriced(listings, reprint, opts) {
   stats.applied = true;
   stats.exemptPlayed = 0;
   for (const l of out) {
-    const p = priceOf(l);
+    const p = itemPriceOf(l);   // item price, as the band (2026-10-07)
     if (p === null || l.suspect) continue;       // a stronger flag stands
     if (p >= lo && p <= hi) {
       // A played copy has an honest reason to sit low: "Zekrom 114/114 Holo
@@ -314,6 +317,6 @@ function sortWithSuspectsLast(listings) {
 }
 
 module.exports = { flagOutliers, flagReprintPriced, sortWithSuspectsLast, suspectRank, trustworthy, headlineEligible, sellerMeetsFloor, HEADLINE_SELLER,
-                   median, priceOf, isCurrentBid,
+                   median, priceOf, itemPriceOf, isCurrentBid,
                    REPRINT_BAND_PAD, REPRINT_SEPARATION, REPRINT_MIN_ABOVE,
                    SUSPECT_RATIO, IMPLAUSIBLE_RATIO, MIN_SAMPLE, MIN_MEDIAN };

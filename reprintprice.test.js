@@ -182,5 +182,27 @@ ok(server.includes('{ marketPrice }') && server.includes('mp && mp.isReal ? mp.p
    'gatherListings passes the stored REAL price, never an estimate');
 ok((server.match(/flagReprintPriced\(/g) || []).length === 1, 'one call site, inside gatherListings, so /api/listings and /api/search agree');
 
+// ── Item price, not price + postage (2026-10-07) ──────────────
+// Base Set Blastoise 2/102, Raw NM, union view: two Celebrations Classic
+// Collection reprints (eBay's Set aspect says so; Roy checked by eye) at
+// $23.99 + $6.07 and $25.00 + $5.38 escaped the CC001 band $16.06-$25.37,
+// because the band test read the delivered price ($30.06, $30.38).
+{
+  const cc001 = { cardId: 'en-cel25cc-CC001', label: 'Celebrations (2021)',
+    prices: [16.5, 18, 19, 19.5, 20, 20.5, 21, 22, 22.5, 23, 24] };      // median $20.50, as measured
+  const genuine = [180, 190, 200, 205, 210, 213.5, 215, 220, 230, 240].map(p => ({ title: 'genuine', price: p, shipping: 5, landed: p + 5 }));
+  const reprints = [{ title: 'cardspread', price: 23.99, shipping: 6.07, landed: 30.06 }, { title: 'erwill6713', price: 25, shipping: 5.38, landed: 30.38 }];
+  const { listings, stats } = outlier.flagReprintPriced(genuine.concat(reprints), cc001, { marketPrice: 222.49 });
+  const flagged = t => listings.find(l => l.title === t).suspect === 'reprint-priced';
+  ok(stats.applied && flagged('cardspread') && flagged('erwill6713'),
+     'Blastoise: $23.99 + $6.07 and $25.00 + $5.38 are reprint-priced — the band judges what the seller asks', JSON.stringify(stats.band));
+  ok(listings.filter(l => l.title === 'genuine').every(l => !l.suspect), '...and every genuine Blastoise ($180-$240) is kept');
+  // The old rule, for the record: delivered prices sit above the band.
+  ok(reprints.every(r => r.landed > stats.band[1]) && reprints.every(r => r.price <= stats.band[1]),
+     'the delivered prices ($30.06, $30.38) are above the band its item prices sit inside — the bug, reproduced');
+  ok(/rows\.filter\(outlier\.trustworthy\)\.map\(outlier\.itemPriceOf\)/.test(server),
+     'the reprint\'s own band is built from ITEM prices too (server.js)');
+}
+
 console.log(`\nreprintprice.test.js — ${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

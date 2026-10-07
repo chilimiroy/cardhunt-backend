@@ -20,7 +20,23 @@ const start = H.indexOf('var LANG_JA = {'), end = H.indexOf('\n};', start);
 ok('the page holds one table, LANG_JA', start > 0 && end > start && H.indexOf('var LANG_JA = {', start + 1) < 0);
 let LANG_JA = {};
 try { LANG_JA = new Function(H.slice(start, end + 3) + '; return LANG_JA;')(); } catch (e) { ok('LANG_JA parses', false, e.message); }
-const keys = Object.keys(LANG_JA);
+// TASK-ui T5 (2026-10-07): Traditional and Simplified Chinese, the same English keys.
+const table = name => { const s = H.indexOf('var ' + name + ' = {'), e = H.indexOf('\n};', s);
+  try { return s > 0 ? new Function(H.slice(s, e + 3) + '; return ' + name + ';')() : null; } catch (err) { return null; } };
+const TABLES = { ja: LANG_JA, 'zh-TW': table('LANG_ZH_TW'), 'zh-CN': table('LANG_ZH_CN') };
+ok('a table per language: ja, zh-TW, zh-CN', Object.values(TABLES).every(t => t && Object.keys(t).length >= 100));
+const groups = (() => { const s = H.indexOf('var LANG_GROUPS = '), e = H.indexOf('];', s);
+  try { return new Function('return ' + H.slice(s + 18, e + 1))(); } catch (err) { return []; } })();
+ok('the split sentences are named (LANG_GROUPS)', groups.length >= 3, groups.length);
+const union = [...new Set([].concat(...Object.values(TABLES).map(t => Object.keys(t || {}))))];
+console.log('\n  coverage, per language, of the ' + union.length + ' page strings any table translates');
+for (const [l, t] of Object.entries(TABLES)) {
+  const tr = union.filter(k => t && t[k]).length;
+  console.log('    ' + l.padEnd(6) + tr + ' translated, ' + (union.length - tr) + ' fall back to English (' + Math.floor(100 * tr / union.length) + '%)');
+  ok(l + ': every value is in its script', Object.values(t || {}).every(v => /[぀-ヿ一-鿿]/.test(v) || /^[^A-Za-z]*$/.test(v)));
+  ok(l + ': a split sentence is all in the table or none of it (never spliced)', groups.every(g => g.every(k => k in t) || g.every(k => !(k in t))));
+}
+const keys = union;
 ok('the table is the static text (100+ entries)', keys.length >= 100, keys.length + ' keys');
 ok('every value is Japanese, never empty', keys.every(k => LANG_JA[k] && /[぀-ヿ一-龯]|^[^A-Za-z]*$/.test(LANG_JA[k]) || /eBay|TCGPlayer|Amazon|TCGdex|CardHunt|A–Z|Z–A|PSA/.test(LANG_JA[k])),
    keys.filter(k => !LANG_JA[k]).join(', '));
@@ -41,9 +57,15 @@ ok('"any card" is not a key — the alert form compares that text (ap-card)', !(
 
 console.log('\n  how the page applies it');
 const fn = name => { const i = H.indexOf('function ' + name + '('); return i < 0 ? '' : H.slice(i, H.indexOf('\n}', i) + 2); };
-ok('the head sets lang before paint from localStorage ch_lang', /<head>[\s\S]*localStorage\.getItem\('ch_lang'\)==='ja'[\s\S]*<\/head>/.test(H)
+ok('the head sets lang before paint from localStorage ch_lang — ja, zh-TW or zh-CN, else English',
+   /<head>[\s\S]*var l=localStorage\.getItem\('ch_lang'\);if\(l==='ja'\|\|l==='zh-TW'\|\|l==='zh-CN'\)document\.documentElement\.setAttribute\('lang',l\)[\s\S]*<\/head>/.test(H)
    && H.indexOf("getItem('ch_lang')") < H.indexOf('<body'));
-ok('a node is translated only when its WHOLE trimmed text is a key', /key = raw\.replace\(\/\\s\+\/g, ' '\)\.trim\(\), ja = key && LANG_JA\[key\]/.test(fn('langNode')));
+ok('a node is translated only when its WHOLE trimmed text is a key of the active table', /key = raw\.replace\(\/\\s\+\/g, ' '\)\.trim\(\), tr = key && LANG_T\[key\]/.test(fn('langNode')));
+ok('a table holding part of a split sentence loses all of it at load (English, never spliced)',
+   /if \(!g\.every\(function \(k\) \{ return k in T; \}\)\) g\.forEach\(function \(k\) \{ delete T\[k\]; \}\);/.test(H));
+ok('switching language starts from English every time (no table over another)',
+   fn('applyLang').indexOf('LANG_ORIG.forEach') < fn('applyLang').indexOf('LANG_T = LANG_TABLES[l]'));
+ok('coverage is counted from the tables, and the menu shows it', /function langCoverage\(l\)/.test(H) && /c\.pct \+ '%'/.test(fn('pickRender')));
 ok('an <option> without a value gets its English pinned first (select.value stays English)',
    /p\.tagName === 'OPTION' && !p\.hasAttribute\('value'\)\) p\.setAttribute\('value', key\)/.test(fn('langNode')));
 ok('switching back restores only nodes still showing what was written', /n\.nodeValue === v\[1\]\) n\.nodeValue = v\[0\]/.test(fn('applyLang')));
@@ -51,10 +73,17 @@ ok('re-rendered content is read the same way (MutationObserver, Japanese only)',
 ok('scripts and styles are never walked', /SCRIPT\|STYLE/.test(fn('langWalk')));
 
 console.log('\n  the control: top bar, between the currency tool and the alert bell');
-const nav1 = H.slice(H.indexOf('id="currency-btn"') - 60, H.indexOf('id="currency-btn"') + 600);
+// TASK-ui T5: both are the same picker; currency carries a coin (no blue globe) and is .price-only.
+const nav1 = H.slice(H.indexOf('id="cur-pick"') - 60, H.indexOf('id="cur-pick"') + 1600);
 ok('main nav: currency, then language, then the bell', /id="currency-btn"[^]*?id="lang-btn"[^]*?notif-bell/.test(nav1));
-const nav2 = H.slice(H.indexOf('id="currency-btn2"') - 60, H.indexOf('id="currency-btn2"') + 400);
+const nav2 = H.slice(H.indexOf('id="cur-pick2"') - 60, H.indexOf('id="cur-pick2"') + 1400);
 ok('portfolio nav: currency, then language, then the bell', /id="currency-btn2"[^]*?id="lang-btn2"[^]*?&#128276;/.test(nav2));
+ok('one component: both pickers are .npick with an .npick-b button and a menu',
+   ['cur-pick', 'cur-pick2', 'lang-pick', 'lang-pick2'].every(id => new RegExp('<div class="npick[^"]*" id="' + id + '"><button class="btn npick-b"').test(H)));
+ok('currency: a coin icon, no globe, and absent without prices (.price-only)',
+   /<div class="npick price-only" id="cur-pick"><button[^>]*><svg class="npick-i coin"/.test(H) && /<div class="npick price-only" id="cur-pick2">/.test(H)
+   && !/🌐|&#127760;/.test(H.slice(H.indexOf('<body')).replace(/<!--[\s\S]*?-->/g, '')));
+ok('the old cycling controls are gone, not left dormant', !/function toggleCurrency|function cycleLang/.test(H));
 ok('the theme toggle is untouched, before currency', H.indexOf('id="theme-btn"') < H.indexOf('id="currency-btn"'));
 
 (async () => {

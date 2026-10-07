@@ -14,7 +14,7 @@
      falls back to the system. -->
 <script>
 (function(){try{var t=localStorage.getItem('ch_theme');if(t==='light'||t==='dark')document.documentElement.setAttribute('data-theme',t);}catch(e){}})();
-(function(){try{if(localStorage.getItem('ch_lang')==='ja')document.documentElement.setAttribute('lang','ja');}catch(e){}})();
+(function(){try{var l=localStorage.getItem('ch_lang');if(l==='ja'||l==='zh-TW'||l==='zh-CN')document.documentElement.setAttribute('lang',l);}catch(e){}})();
 // The door (T1, 2026-10-07): the catalogue is public to everyone; prices,
 // listings and links are for approved accounts. They start CLOSED here,
 // before the first paint, and authCheck() opens them only on /api/me's
@@ -603,6 +603,22 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .eq-d div{display:flex;justify-content:space-between;gap:12px}
 .lq-pause{padding:12px 14px;margin:0 0 12px;border-radius:10px;border:1px solid var(--crit);background:var(--crit-soft);font-size:12px;line-height:1.6;color:var(--ink)}
 .lq-pause strong{color:var(--crit)}
+/* ── The language and currency pickers (TASK-ui T5): one component. The
+   currency carries a coin where the blue globe was; the menu states each
+   language's coverage. ── */
+.npick{position:relative;display:inline-flex}
+.npick-b{gap:6px}
+.npick-i{width:15px;height:15px;flex-shrink:0}
+.npick-i.coin{color:var(--money)}
+.npick-c{font-size:10px;color:var(--mu)}
+.npick-m{position:absolute;top:calc(100% + 6px);right:0;z-index:300;min-width:170px;padding:6px;background:var(--surface);
+  border:1px solid var(--bd);border-radius:12px;box-shadow:var(--sh3);display:flex;flex-direction:column;gap:2px}
+.npick-m[hidden]{display:none}
+.npick-o{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:8px 10px;border:none;border-radius:8px;
+  background:none;color:var(--tx);font-size:13px;text-align:left;cursor:pointer}
+.npick-o:hover,.npick-o:focus-visible{background:var(--surface-2);outline:none}
+.npick-o.on{color:var(--t);font-weight:600}
+.npick-n{font-size:11px;color:var(--fa);font-variant-numeric:tabular-nums}
 /* ══ THE DOOR (T1, 2026-10-07) ══ the catalogue is public; prices, listings
    and links are for approved accounts. The SERVER withholds them
    (access.optional / access.priced): this only swaps the blocks that would
@@ -628,7 +644,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
     <button class="nl" onclick="SS('portfolio')">Portfolio</button>
     <div class="nav-r">
       <div class="nsearch"><span class="nsearch-i">🔍</span><input id="nav-q" placeholder="Search any card…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
-      <button class="btn" onclick="cycleTheme()" id="theme-btn" title="Theme: follows your device">◐ Auto</button><button class="btn" onclick="toggleCurrency()" id="currency-btn">🌐 USD</button><button class="btn" onclick="cycleLang()" id="lang-btn" title="Page language">EN</button><button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--re);color:var(--accent-ink);font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button><button class="btn auth-btn" onclick="authOpen()" id="auth-btn" style="display:none" title="Sign in with Google or an emailed link">Sign in</button>
+      <button class="btn" onclick="cycleTheme()" id="theme-btn" title="Theme: follows your device">◐ Auto</button><div class="npick price-only" id="cur-pick"><button class="btn npick-b" id="currency-btn" onclick="pickOpen('cur-pick',event)" aria-haspopup="menu" aria-expanded="false" title="Currency"><svg class="npick-i coin" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg><span class="npick-v">USD</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m" role="menu" hidden></div></div><div class="npick" id="lang-pick"><button class="btn npick-b" id="lang-btn" onclick="pickOpen('lang-pick',event)" aria-haspopup="menu" aria-expanded="false" title="Page language"><span class="npick-v">EN</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m" role="menu" hidden></div></div><button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--re);color:var(--accent-ink);font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button><button class="btn auth-btn" onclick="authOpen()" id="auth-btn" style="display:none" title="Sign in with Google or an emailed link">Sign in</button>
     </div>
   </nav>
   <div class="hero">
@@ -1083,8 +1099,8 @@ html:not(.ch-noprice) .price-door { display: none !important; }
     <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
     <button class="nl" onclick="SS('sets')">Sets</button><button class="nl on">Portfolio</button>
     <div class="nav-r">
-      <button class="btn" onclick="toggleCurrency()" id="currency-btn2">&#127760; USD</button>
-      <button class="btn" onclick="cycleLang()" id="lang-btn2" title="Page language">EN</button>
+      <div class="npick price-only" id="cur-pick2"><button class="btn npick-b" id="currency-btn2" onclick="pickOpen('cur-pick2',event)" aria-haspopup="menu" aria-expanded="false" title="Currency"><svg class="npick-i coin" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg><span class="npick-v">USD</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m" role="menu" hidden></div></div>
+      <div class="npick" id="lang-pick2"><button class="btn npick-b" id="lang-btn2" onclick="pickOpen('lang-pick2',event)" aria-haspopup="menu" aria-expanded="false" title="Page language"><span class="npick-v">EN</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m" role="menu" hidden></div></div>
       <button class="btn" onclick="SS('alerts')">&#128276;</button>
       <button class="btn auth-btn" onclick="authOpen()" id="auth-btn2" style="display:none" title="Sign in with Google or an emailed link">Sign in</button>
     </div>
@@ -3686,10 +3702,9 @@ function renderListingFinder(card) {
   // towels, fan art, the wrong card, a 100-card lot. Nothing verifies it,
   // because nothing can: the results never come back to us.
   html += '<div style="font-size:11px;color:var(--mu);margin-bottom:10px;line-height:1.6">'
-    + 'These open a search on the marketplace itself. <strong>The results are not '
-    + 'checked by us</strong> &mdash; a search box returns whatever it matches, '
-    + 'including merchandise, fan art and other cards with the same name. '
-    + 'The listings above are the ones confirmed to be this exact card.'
+    // One literal per text node: each is a page-language key (TASK-ui T5).
+    + 'These open a search on the marketplace itself. <strong>The results are not checked by us</strong> '
+    + '&mdash; a search box returns whatever it matches, including merchandise, fan art and other cards with the same name. The listings above are the ones confirmed to be this exact card.'
     + '</div>';
 
   ['Global','US','EU','JP','Local','Reference'].forEach(function(reg){
@@ -3711,10 +3726,7 @@ function renderListingFinder(card) {
 
   html += '<div style="margin-top:12px;padding:10px 12px;background:var(--bg);border-radius:8px;'
     + 'font-size:11px;color:var(--mu);line-height:1.6">'
-    + 'Each link carries this card’s collector number and set, and the eBay links '
-    + 'also spend eBay’s negative keywords against lots, proxies and the wrong '
-    + 'grades — the only filtering a link can have. What comes back is the '
-    + 'marketplace’s answer, not ours.'
+    + 'Each link carries this card’s collector number and set, and the eBay links also spend eBay’s negative keywords against lots, proxies and the wrong grades — the only filtering a link can have. What comes back is the marketplace’s answer, not ours.'
     + '</div>';
   html += '</div>';
 
@@ -6578,11 +6590,13 @@ var CURRENCY_SYMBOLS = {USD:'$',EUR:'€',GBP:'£',JPY:'¥',ILS:'₪',AUD:'A$',C
 var CURRENCY_RATES = {USD:1,EUR:0.92,GBP:0.79,JPY:157,ILS:3.72,AUD:1.52,CAD:1.36};
 var currentCurrency = 'USD';
 
-function toggleCurrency(){
-  var idx = CURRENCIES.indexOf(currentCurrency);
-  currentCurrency = CURRENCIES[(idx+1) % CURRENCIES.length];
-  var btn = document.getElementById('currency-btn');
-  if(btn) btn.textContent = '🌐 ' + currentCurrency;
+// Chosen from the currency picker (TASK-ui T5), the same component as the
+// language picker. A price control: .price-only, absent without prices.
+function setCurrency(code){
+  if (CURRENCIES.indexOf(code) < 0 || code === currentCurrency) return;
+  currentCurrency = code;
+  document.querySelectorAll('#currency-btn .npick-v, #currency-btn2 .npick-v').forEach(function (v) { v.textContent = code; });
+  pickRender('cur');
   // Re-render current screen with new currency
   var active = document.querySelector('.screen.on');
   if(active){
@@ -6616,7 +6630,7 @@ document.addEventListener('DOMContentLoaded', function(){
   if (b) { b.textContent = THEME_LABEL[t]; b.title = THEME_TITLE[t]; }
 });
 
-// ══ PAGE LANGUAGE (T5, 2026-10-06): English and Japanese, UI strings only ══
+// ══ PAGE LANGUAGE (T5, 2026-10-06; Chinese added TASK-ui T5, 2026-10-07): UI strings only ══
 // NEVER card data. Search, the gates and every matcher work on the English
 // card names, set names, rarities and grades; translating "Charizard" or
 // "Rare" would break them. So this is an exact-text table of the page's own
@@ -6698,28 +6712,275 @@ var LANG_JA = {
   'With Google, or with a one-time link sent to your email.': 'Google、またはメールで届く1回限りのリンクでログイン。',
   'Continue with Google': 'Googleで続ける', 'Email': 'メールアドレス', 'Email me a sign-in link': 'ログインリンクをメールで送る',
   'Sign in with Google or an emailed link': 'Googleまたはメールのリンクでログイン', 'Opening Google…': 'Googleを開いています…',
-  'Sending…': '送信中…', 'Enter an email address.': 'メールアドレスを入力してください。'
+  'Sending…': '送信中…', 'Enter an email address.': 'メールアドレスを入力してください。',
+  // TASK-ui (2026-10-07): the card page's view toggle, the artist, the two pickers
+  'History': '推移', 'Prices': '価格', 'Show the price history': '価格推移を表示', 'Show the price boxes': '価格ボックスを表示',
+  'Artist': 'イラスト', 'looking up…': '検索中…', 'not recorded': '記録なし', 'Currency': '通貨',
+  // TASK-ui T5 (2026-10-07): card-page labels and notes, the links block, the price note
+  'Status': 'ステータス',
+  'Condition': '状態',
+  'Edition': 'エディション',
+  'Printing': '仕様',
+  'Every ungraded listing. No slabs.': '鑑定されていない出品すべて。スラブは含みません。',
+  'Every edition, each row labelled with what its title states.': 'すべてのエディション。各行にタイトルの記載どおりのラベルを付けています。',
+  'Every printing, each row labelled with what its title states.': 'すべての仕様。各行にタイトルの記載どおりのラベルを付けています。',
+  'Not enough history': '履歴が足りません',
+  'No measured price has been recorded for this card': 'このカードの実測価格はまだ記録されていません',
+  'No price history to draw — nothing measured has been recorded for this card.': '描ける価格推移がありません — このカードの実測値はまだ記録されていません。',
+  'no licensed sold source · see eBay sold link': '正規の落札データ源なし · eBayの落札リンクを参照',
+  'no market data held — estimate': '相場データなし — 推定値',
+  'These open a search on the marketplace itself.': 'これらは各マーケット自体の検索を開きます。',
+  'The results are not checked by us': '検索結果は当サイトでは確認していません',
+  '— a search box returns whatever it matches, including merchandise, fan art and other cards with the same name. The listings above are the ones confirmed to be this exact card.': '— 検索ボックスは一致するものを何でも返します。グッズ、ファンアート、同名の別カードも含まれます。上の出品は、このカードそのものと確認できたものです。',
+  'Global': 'グローバル',
+  'Local': 'ローカル',
+  'Reference': '参考',
+  'Each link carries this card’s collector number and set, and the eBay links also spend eBay’s negative keywords against lots, proxies and the wrong grades — the only filtering a link can have. What comes back is the marketplace’s answer, not ours.': '各リンクにはこのカードのコレクター番号とセットが含まれ、eBayのリンクはまとめ売り・プロキシ・違うグレードを除外するeBayの除外キーワードも使います — リンクにできる絞り込みはこれだけです。表示される結果はマーケットの回答であり、当サイトのものではありません。',
+  'Prices are for approved accounts.': '価格は承認済みアカウント向けです。',
+  'Sign in to see market prices, price history and live listings from every marketplace, each linking to the exact card. New accounts are approved by CardHunt.': 'ログインすると、各マーケットの相場、価格推移、出品中の商品を見られます。どれもそのカードそのものにリンクします。新しいアカウントはCardHuntが承認します。',
+  'No cards in your portfolio. Adding cards is not built yet — nothing here is sample data.': 'ポートフォリオにカードはありません。カードの追加機能はまだありません — ここにサンプルデータはありません。'
 };
+var LANG_ZH_TW = {
+  'Home': '首頁', 'Search': '搜尋', 'Sets': '系列', 'Portfolio': '收藏組合',
+  '◐ Auto': '◐ 自動', '☀ Light': '☀ 淺色', '☾ Dark': '☾ 深色',
+  'Find the best deal on': '尋找最划算的', 'any': '任何', 'Pokémon card.': '寶可夢卡牌。',
+  'Language:': '語言：', '🌍 All': '🌍 全部', '🇺🇸 English': '🇺🇸 英文', '🇯🇵 Japanese': '🇯🇵 日文', '🇨🇳 Chinese': '🇨🇳 中文',
+  'Recent searches': '最近搜尋', 'Clear': '清除', 'Search →': '搜尋 →',
+  'Sets tracked': '追蹤中的系列', 'Cards indexed': '已收錄卡牌', 'Browse by game': '依遊戲瀏覽',
+  'Not tracked yet': '尚未追蹤', 'EN · JA · Chinese': '英文 · 日文 · 中文',
+  '🔔 My card alerts': '🔔 我的卡牌提醒', 'Live price tracking — click any card to view listings': '即時價格追蹤 — 點擊任一卡牌查看刊登',
+  'Manage alerts →': '管理提醒 →', 'Add alert': '新增提醒', 'Track any card price': '追蹤任何卡牌的價格',
+  '📊 Biggest movers': '📊 漲跌幅最大', 'TCGdex market prices, the same printing and product at both ends': 'TCGdex 市場價格（前後皆為同一版本、同一商品）',
+  'See all →': '查看全部 →', '🚀 Gainers — %': '🚀 上漲 — %', '📉 Fallers — %': '📉 下跌 — %',
+  '🚀 Gainers — value': '🚀 上漲 — 金額', '📉 Fallers — value': '📉 下跌 — 金額',
+  '💎 Best deals right now': '💎 目前最划算',
+  'Cheapest trusted Buy It Now below the measured price — cards opened in the last 15 minutes': '低於實測價格、最便宜的可信直購刊登 — 最近 15 分鐘內開啟的卡牌',
+  '← Back': '← 返回', 'Choose language': '選擇語言', '🇹🇼 Chinese Traditional': '🇹🇼 繁體中文', '🇨🇳 Chinese Simplified': '🇨🇳 簡體中文',
+  'Latest sets': '最新系列', 'Newest first — every set in the CardHunt database': '由新到舊 — CardHunt 資料庫中的所有系列',
+  '🔥 Trending right now': '🔥 現正熱門', 'Loading…': '載入中…',
+  'Sort': '排序', 'Sort:': '排序：', 'Price: high to low': '價格：由高到低', 'Price: low to high': '價格：由低到高',
+  'Biggest movers — % gain': '漲幅最大 — %', 'Biggest fallers — %': '跌幅最大 — %',
+  'Biggest movers — value gain': '漲幅最大 — 金額', 'Biggest fallers — value': '跌幅最大 — 金額',
+  'Over': '期間', '24 hours': '24 小時', '7 days': '7 天', '30 days': '30 天',
+  '🔍 Search': '🔍 搜尋', 'Choose a game, then search by card name, set or grade': '選擇遊戲，再依卡名、系列或評級搜尋',
+  'Choose a game': '選擇遊戲', 'English, Japanese, Chinese': '英文、日文、中文', 'Coming soon': '即將推出',
+  'Pokémon — Trending': '寶可夢 — 熱門', 'Results': '搜尋結果', 'Best match': '最相符',
+  'Price ↑': '價格 ↑', 'Price ↓': '價格 ↓', '⚖️ Compare': '⚖️ 比較',
+  'Number ↑': '編號 ↑', 'Number ↓': '編號 ↓', 'Name A–Z': '名稱 A–Z', 'Name Z–A': '名稱 Z–A',
+  'Price: High → Low': '價格：高 → 低', 'Price: Low → High': '價格：低 → 高',
+  'Rarity': '稀有度', 'Rarity:': '稀有度：', 'Type:': '類型：', 'All': '全部',
+  '🔔 Set Alert': '🔔 設定提醒', '🤍 Watch': '🤍 關注', 'Set': '系列',
+  'Market value': '市場價值', 'Lowest listing': '最低刊登', 'Last sold': '最近成交', 'PRICE POSITION': '價格位置',
+  'Recorded low:': '紀錄最低：', 'Recorded high:': '紀錄最高：', 'Price history —': '價格走勢 —',
+  'Loading recorded prices…': '正在載入紀錄價格…', '30-day avg': '30 日平均', '90-day avg': '90 日平均',
+  'Highest recorded': '紀錄最高', 'Lowest recorded': '紀錄最低',
+  'Buy It Now': '直購', 'Auctions': '拍賣', 'Recent sales': '最近成交', 'Near you': '附近店家',
+  'My Portfolio': '我的收藏組合', 'Track your collection value over time': '追蹤收藏價值的變化',
+  '+ Add card': '+ 新增卡牌', 'Total value': '總價值', 'Total cost': '總成本', 'Profit / Loss': '損益',
+  'Cards': '卡牌', 'Grade': '評級', 'Paid': '購入價', 'Value': '價值',
+  'View this listing on eBay ↗': '在 eBay 查看此刊登 ↗',
+  'Images are the seller’s, from eBay, shown with their listing.': '圖片屬於賣家，來自 eBay，與其刊登一同顯示。',
+  '🔔 Alerts': '🔔 提醒', 'Price Alerts': '價格提醒',
+  'Get notified when a card drops below your target price': '卡牌跌破目標價時通知你',
+  '+ New Alert': '+ 新增提醒', 'Active alerts': '啟用中的提醒', 'Triggered today': '今日觸發',
+  'Cards watching': '關注中的卡牌', 'All alerts': '所有提醒', 'Active': '啟用中', 'Triggered': '已觸發', 'Paused': '已暫停',
+  'No alerts yet': '尚無提醒',
+  'Set a price alert on any card to get notified when it drops below your target.': '為任一卡牌設定價格提醒，跌破目標價時就會通知你。',
+  '+ Create your first alert': '+ 建立第一個提醒',
+  '⚖️ Compare cards': '⚖️ 比較卡牌', 'Side by side, at the grade each one is currently showing.': '並排比較，各自以目前顯示的評級呈現。',
+  '🔔 Create Price Alert': '🔔 建立價格提醒', 'Get notified when a new listing matches your criteria': '有符合條件的新刊登時通知你',
+  'Click to choose a card…': '點擊選擇卡牌…', 'Grade / Condition': '評級 / 品相', 'Any grade': '任何評級',
+  'Alert type': '提醒類型', 'Price drops below': '價格低於', 'Price rises above': '價格高於',
+  'New listing appears': '出現新刊登', 'Deal % below market': '低於市價的百分比', 'Target price ($)': '目標價格（$）',
+  'Marketplace': '市集', 'All markets': '所有市集', 'eBay only': '僅 eBay', 'TCGPlayer only': '僅 TCGPlayer',
+  'Mercari only': '僅 Mercari', 'Yahoo Japan only': '僅 Yahoo 日本', 'Amazon only': '僅 Amazon',
+  'Notify via': '通知方式', 'In-app + Email': '應用程式內 + 電子郵件', 'Email only': '僅電子郵件', 'In-app only': '僅應用程式內',
+  'Push notification': '推播通知', 'Alert preview:': '提醒預覽：', '🔔 Create Alert': '🔔 建立提醒',
+  'Search any card…': '搜尋任何卡牌…', 'Try: Charizard Base Set PSA 9…': '例如：Charizard Base Set PSA 9…',
+  'e.g. Charizard Holo Base Set PSA 9…': '例如：Charizard Holo Base Set PSA 9…', 'Refine…': '縮小範圍…',
+  'Search sets…': '搜尋系列…', 'Search in set…': '在系列中搜尋…',
+  'Theme: follows your device': '主題：跟隨裝置設定', 'Theme: always light': '主題：一律淺色', 'Theme: always dark': '主題：一律深色',
+  'Pokémon TCG — sets, trending cards and prices': '寶可夢集換式卡牌 — 系列、熱門卡牌與價格',
+  'Not in the CardHunt catalogue — no cards or prices are held for this game': '不在 CardHunt 目錄中 — 未收錄此遊戲的卡牌或價格',
+  'Close': '關閉', 'eBay calls today — click for detail': '今日 eBay 呼叫次數 — 點擊查看詳情',
+  'Click to hide': '點擊隱藏', 'Page language': '頁面語言',
+  'Sign in': '登入', 'Sign out': '登出', 'Signed in': '已登入', 'Sign in to CardHunt': '登入 CardHunt',
+  'With Google, or with a one-time link sent to your email.': '使用 Google，或寄到你電子郵件的一次性連結。',
+  'Continue with Google': '使用 Google 繼續', 'Email': '電子郵件', 'Email me a sign-in link': '寄送登入連結給我',
+  'Sign in with Google or an emailed link': '使用 Google 或電子郵件連結登入', 'Opening Google…': '正在開啟 Google…',
+  'Sending…': '傳送中…', 'Enter an email address.': '請輸入電子郵件地址。',
+  // TASK-ui (2026-10-07): the card page's view toggle, the artist, the two pickers
+  'History': '走勢', 'Prices': '價格', 'Show the price history': '顯示價格走勢', 'Show the price boxes': '顯示價格方塊',
+  'Artist': '繪師', 'looking up…': '查詢中…', 'not recorded': '未記錄', 'Currency': '幣別',
+  // TASK-ui T5 (2026-10-07): card-page labels and notes, the links block, the price note
+  'Status': '狀態',
+  'Condition': '品相',
+  'Edition': '版次',
+  'Printing': '印刷版本',
+  'Every ungraded listing. No slabs.': '所有未鑑定的刊登，不含鑑定盒。',
+  'Every edition, each row labelled with what its title states.': '所有版次，每一列依標題所述標示。',
+  'Every printing, each row labelled with what its title states.': '所有印刷版本，每一列依標題所述標示。',
+  'Not enough history': '歷史資料不足',
+  'No measured price has been recorded for this card': '此卡尚無實測價格紀錄',
+  'No price history to draw — nothing measured has been recorded for this card.': '沒有可繪製的價格走勢 — 此卡尚無任何實測紀錄。',
+  'no licensed sold source · see eBay sold link': '沒有授權的成交資料來源 · 請見 eBay 成交連結',
+  'no market data held — estimate': '沒有市場資料 — 估計值',
+  'These open a search on the marketplace itself.': '這些連結會在市集本身開啟搜尋。',
+  'The results are not checked by us': '搜尋結果未經我們檢查',
+  '— a search box returns whatever it matches, including merchandise, fan art and other cards with the same name. The listings above are the ones confirmed to be this exact card.': '— 搜尋框會回傳所有相符的結果，包括周邊商品、同人創作與同名的其他卡牌。上方的刊登才是確認為這張卡本身的。',
+  'Global': '全球',
+  'Local': '在地',
+  'Reference': '參考',
+  'Each link carries this card’s collector number and set, and the eBay links also spend eBay’s negative keywords against lots, proxies and the wrong grades — the only filtering a link can have. What comes back is the marketplace’s answer, not ours.': '每個連結都帶有此卡的收藏編號與系列，eBay 連結另外使用 eBay 的排除關鍵字來排除批售、代理卡與錯誤評級 — 這是連結唯一能有的篩選。回傳的是市集的結果，不是我們的。',
+  'Prices are for approved accounts.': '價格僅供已核准的帳號查看。',
+  'Sign in to see market prices, price history and live listings from every marketplace, each linking to the exact card. New accounts are approved by CardHunt.': '登入即可查看各市集的市場價格、價格走勢與現有刊登，每一筆都連到這張卡本身。新帳號由 CardHunt 核准。',
+  'No cards in your portfolio. Adding cards is not built yet — nothing here is sample data.': '你的收藏組合中沒有卡牌。新增卡牌的功能尚未完成 — 這裡沒有任何範例資料。'
+};
+var LANG_ZH_CN = {
+  'Home': '首页', 'Search': '搜索', 'Sets': '系列', 'Portfolio': '收藏组合',
+  '◐ Auto': '◐ 自动', '☀ Light': '☀ 浅色', '☾ Dark': '☾ 深色',
+  'Find the best deal on': '寻找最划算的', 'any': '任何', 'Pokémon card.': '宝可梦卡牌。',
+  'Language:': '语言：', '🌍 All': '🌍 全部', '🇺🇸 English': '🇺🇸 英文', '🇯🇵 Japanese': '🇯🇵 日文', '🇨🇳 Chinese': '🇨🇳 中文',
+  'Recent searches': '最近搜索', 'Clear': '清除', 'Search →': '搜索 →',
+  'Sets tracked': '追踪中的系列', 'Cards indexed': '已收录卡牌', 'Browse by game': '按游戏浏览',
+  'Not tracked yet': '尚未追踪', 'EN · JA · Chinese': '英文 · 日文 · 中文',
+  '🔔 My card alerts': '🔔 我的卡牌提醒', 'Live price tracking — click any card to view listings': '实时价格追踪 — 点击任一卡牌查看在售',
+  'Manage alerts →': '管理提醒 →', 'Add alert': '添加提醒', 'Track any card price': '追踪任何卡牌的价格',
+  '📊 Biggest movers': '📊 涨跌幅最大', 'TCGdex market prices, the same printing and product at both ends': 'TCGdex 市场价格（前后均为同一版本、同一商品）',
+  'See all →': '查看全部 →', '🚀 Gainers — %': '🚀 上涨 — %', '📉 Fallers — %': '📉 下跌 — %',
+  '🚀 Gainers — value': '🚀 上涨 — 金额', '📉 Fallers — value': '📉 下跌 — 金额',
+  '💎 Best deals right now': '💎 当前最划算',
+  'Cheapest trusted Buy It Now below the measured price — cards opened in the last 15 minutes': '低于实测价格、最便宜的可信一口价在售 — 最近 15 分钟内打开的卡牌',
+  '← Back': '← 返回', 'Choose language': '选择语言', '🇹🇼 Chinese Traditional': '🇹🇼 繁体中文', '🇨🇳 Chinese Simplified': '🇨🇳 简体中文',
+  'Latest sets': '最新系列', 'Newest first — every set in the CardHunt database': '由新到旧 — CardHunt 数据库中的所有系列',
+  '🔥 Trending right now': '🔥 当前热门', 'Loading…': '加载中…',
+  'Sort': '排序', 'Sort:': '排序：', 'Price: high to low': '价格：从高到低', 'Price: low to high': '价格：从低到高',
+  'Biggest movers — % gain': '涨幅最大 — %', 'Biggest fallers — %': '跌幅最大 — %',
+  'Biggest movers — value gain': '涨幅最大 — 金额', 'Biggest fallers — value': '跌幅最大 — 金额',
+  'Over': '期间', '24 hours': '24 小时', '7 days': '7 天', '30 days': '30 天',
+  '🔍 Search': '🔍 搜索', 'Choose a game, then search by card name, set or grade': '选择游戏，再按卡名、系列或评级搜索',
+  'Choose a game': '选择游戏', 'English, Japanese, Chinese': '英文、日文、中文', 'Coming soon': '即将推出',
+  'Pokémon — Trending': '宝可梦 — 热门', 'Results': '搜索结果', 'Best match': '最相关',
+  'Price ↑': '价格 ↑', 'Price ↓': '价格 ↓', '⚖️ Compare': '⚖️ 比较',
+  'Number ↑': '编号 ↑', 'Number ↓': '编号 ↓', 'Name A–Z': '名称 A–Z', 'Name Z–A': '名称 Z–A',
+  'Price: High → Low': '价格：高 → 低', 'Price: Low → High': '价格：低 → 高',
+  'Rarity': '稀有度', 'Rarity:': '稀有度：', 'Type:': '类型：', 'All': '全部',
+  '🔔 Set Alert': '🔔 设置提醒', '🤍 Watch': '🤍 关注', 'Set': '系列',
+  'Market value': '市场价值', 'Lowest listing': '最低在售', 'Last sold': '最近成交', 'PRICE POSITION': '价格位置',
+  'Recorded low:': '记录最低：', 'Recorded high:': '记录最高：', 'Price history —': '价格走势 —',
+  'Loading recorded prices…': '正在加载记录价格…', '30-day avg': '30 日平均', '90-day avg': '90 日平均',
+  'Highest recorded': '记录最高', 'Lowest recorded': '记录最低',
+  'Buy It Now': '一口价', 'Auctions': '拍卖', 'Recent sales': '最近成交', 'Near you': '附近店铺',
+  'My Portfolio': '我的收藏组合', 'Track your collection value over time': '追踪收藏价值的变化',
+  '+ Add card': '+ 添加卡牌', 'Total value': '总价值', 'Total cost': '总成本', 'Profit / Loss': '盈亏',
+  'Cards': '卡牌', 'Grade': '评级', 'Paid': '买入价', 'Value': '价值',
+  'View this listing on eBay ↗': '在 eBay 查看此在售 ↗',
+  'Images are the seller’s, from eBay, shown with their listing.': '图片属于卖家，来自 eBay，与其在售信息一同显示。',
+  '🔔 Alerts': '🔔 提醒', 'Price Alerts': '价格提醒',
+  'Get notified when a card drops below your target price': '卡牌跌破目标价时通知你',
+  '+ New Alert': '+ 新建提醒', 'Active alerts': '启用中的提醒', 'Triggered today': '今日触发',
+  'Cards watching': '关注中的卡牌', 'All alerts': '所有提醒', 'Active': '启用中', 'Triggered': '已触发', 'Paused': '已暂停',
+  'No alerts yet': '暂无提醒',
+  'Set a price alert on any card to get notified when it drops below your target.': '为任一卡牌设置价格提醒，跌破目标价时就会通知你。',
+  '+ Create your first alert': '+ 创建第一个提醒',
+  '⚖️ Compare cards': '⚖️ 比较卡牌', 'Side by side, at the grade each one is currently showing.': '并排比较，各自按当前显示的评级呈现。',
+  '🔔 Create Price Alert': '🔔 创建价格提醒', 'Get notified when a new listing matches your criteria': '有符合条件的新在售时通知你',
+  'Click to choose a card…': '点击选择卡牌…', 'Grade / Condition': '评级 / 品相', 'Any grade': '任何评级',
+  'Alert type': '提醒类型', 'Price drops below': '价格低于', 'Price rises above': '价格高于',
+  'New listing appears': '出现新在售', 'Deal % below market': '低于市价的百分比', 'Target price ($)': '目标价格（$）',
+  'Marketplace': '市场', 'All markets': '所有市场', 'eBay only': '仅 eBay', 'TCGPlayer only': '仅 TCGPlayer',
+  'Mercari only': '仅 Mercari', 'Yahoo Japan only': '仅 Yahoo 日本', 'Amazon only': '仅 Amazon',
+  'Notify via': '通知方式', 'In-app + Email': '应用内 + 电子邮件', 'Email only': '仅电子邮件', 'In-app only': '仅应用内',
+  'Push notification': '推送通知', 'Alert preview:': '提醒预览：', '🔔 Create Alert': '🔔 创建提醒',
+  'Search any card…': '搜索任何卡牌…', 'Try: Charizard Base Set PSA 9…': '例如：Charizard Base Set PSA 9…',
+  'e.g. Charizard Holo Base Set PSA 9…': '例如：Charizard Holo Base Set PSA 9…', 'Refine…': '缩小范围…',
+  'Search sets…': '搜索系列…', 'Search in set…': '在系列中搜索…',
+  'Theme: follows your device': '主题：跟随设备设置', 'Theme: always light': '主题：始终浅色', 'Theme: always dark': '主题：始终深色',
+  'Pokémon TCG — sets, trending cards and prices': '宝可梦集换式卡牌 — 系列、热门卡牌与价格',
+  'Not in the CardHunt catalogue — no cards or prices are held for this game': '不在 CardHunt 目录中 — 未收录此游戏的卡牌或价格',
+  'Close': '关闭', 'eBay calls today — click for detail': '今日 eBay 调用次数 — 点击查看详情',
+  'Click to hide': '点击隐藏', 'Page language': '页面语言',
+  'Sign in': '登录', 'Sign out': '退出登录', 'Signed in': '已登录', 'Sign in to CardHunt': '登录 CardHunt',
+  'With Google, or with a one-time link sent to your email.': '使用 Google，或发送到你邮箱的一次性链接。',
+  'Continue with Google': '使用 Google 继续', 'Email': '电子邮件', 'Email me a sign-in link': '给我发送登录链接',
+  'Sign in with Google or an emailed link': '使用 Google 或邮件链接登录', 'Opening Google…': '正在打开 Google…',
+  'Sending…': '发送中…', 'Enter an email address.': '请输入电子邮件地址。',
+  // TASK-ui (2026-10-07): the card page's view toggle, the artist, the two pickers
+  'History': '走势', 'Prices': '价格', 'Show the price history': '显示价格走势', 'Show the price boxes': '显示价格方块',
+  'Artist': '画师', 'looking up…': '查询中…', 'not recorded': '未记录', 'Currency': '币种',
+  // TASK-ui T5 (2026-10-07): card-page labels and notes, the links block, the price note
+  'Status': '状态',
+  'Condition': '品相',
+  'Edition': '版次',
+  'Printing': '印刷版本',
+  'Every ungraded listing. No slabs.': '所有未评级的在售，不含评级盒。',
+  'Every edition, each row labelled with what its title states.': '所有版次，每一行按标题所述标注。',
+  'Every printing, each row labelled with what its title states.': '所有印刷版本，每一行按标题所述标注。',
+  'Not enough history': '历史数据不足',
+  'No measured price has been recorded for this card': '此卡尚无实测价格记录',
+  'No price history to draw — nothing measured has been recorded for this card.': '没有可绘制的价格走势 — 此卡尚无任何实测记录。',
+  'no licensed sold source · see eBay sold link': '没有授权的成交数据来源 · 请见 eBay 成交链接',
+  'no market data held — estimate': '没有市场数据 — 估计值',
+  'These open a search on the marketplace itself.': '这些链接会在市场本身打开搜索。',
+  'The results are not checked by us': '搜索结果未经我们检查',
+  '— a search box returns whatever it matches, including merchandise, fan art and other cards with the same name. The listings above are the ones confirmed to be this exact card.': '— 搜索框会返回所有匹配的结果，包括周边商品、同人作品和同名的其他卡牌。上方的在售才是确认为这张卡本身的。',
+  'Global': '全球',
+  'Local': '本地',
+  'Reference': '参考',
+  'Each link carries this card’s collector number and set, and the eBay links also spend eBay’s negative keywords against lots, proxies and the wrong grades — the only filtering a link can have. What comes back is the marketplace’s answer, not ours.': '每个链接都带有此卡的收藏编号和系列，eBay 链接还使用 eBay 的排除关键词来排除批量、代理卡和错误评级 — 这是链接唯一能有的筛选。返回的是市场的结果，不是我们的。',
+  'Prices are for approved accounts.': '价格仅供已批准的账号查看。',
+  'Sign in to see market prices, price history and live listings from every marketplace, each linking to the exact card. New accounts are approved by CardHunt.': '登录即可查看各市场的市场价格、价格走势和当前在售，每一条都链接到这张卡本身。新账号由 CardHunt 批准。',
+  'No cards in your portfolio. Adding cards is not built yet — nothing here is sample data.': '你的收藏组合中没有卡牌。添加卡牌的功能尚未完成 — 这里没有任何示例数据。'
+};
+// ── The languages (TASK-ui T5, 2026-10-07) ──────────────────────
+// English is the page's own text and the default. Every other language is an
+// exact-text table over the SAME English keys; a key a table lacks shows its
+// English. A text node is translated only when its whole trimmed text is a
+// key, so a string is either the target language or English, never spliced.
+// A sentence the markup splits across nodes is a LANG_GROUPS entry: a table
+// holding only some of its pieces loses them all, and the whole sentence
+// shows in English. Coverage is counted from the tables, never typed.
+var LANG_TABLES = { ja: LANG_JA, 'zh-TW': LANG_ZH_TW, 'zh-CN': LANG_ZH_CN };
+var LANGS = [ { code: 'en', name: 'English', short: 'EN' }, { code: 'ja', name: '日本語', short: '日本語' },
+              { code: 'zh-TW', name: '繁體中文', short: '繁中' }, { code: 'zh-CN', name: '简体中文', short: '简中' } ];
+var LANG_GROUPS = [ ['Find the best deal on', 'any', 'Pokémon card.'],
+  ['Prices are for approved accounts.', 'Sign in to see market prices, price history and live listings from every marketplace, each linking to the exact card. New accounts are approved by CardHunt.'],
+  ['These open a search on the marketplace itself.', 'The results are not checked by us', '— a search box returns whatever it matches, including merchandise, fan art and other cards with the same name. The listings above are the ones confirmed to be this exact card.'] ];
+Object.keys(LANG_TABLES).forEach(function (l) {
+  var T = LANG_TABLES[l];
+  LANG_GROUPS.forEach(function (g) { if (!g.every(function (k) { return k in T; })) g.forEach(function (k) { delete T[k]; }); });
+});
+// Every English string any table translates: the inventory a language is counted against.
+var LANG_KEYS = Object.keys(Object.keys(LANG_TABLES).reduce(function (all, l) {
+  Object.keys(LANG_TABLES[l]).forEach(function (k) { all[k] = 1; }); return all; }, {}));
+function langCoverage(l){
+  var T = LANG_TABLES[l], total = LANG_KEYS.length;
+  var translated = T ? LANG_KEYS.filter(function (k) { return T[k]; }).length : total;
+  return { translated: translated, fallback: total - translated, total: total, pct: Math.floor(100 * translated / total) };
+}
 var LANG_ATTRS = ['placeholder', 'title', 'aria-label'];
 var LANG_ORIG = new Map();     // text node -> [its English text, what was written]
 var LANG_ATTR_ORIG = new Map(); // element -> { attr: English }
 var LANG_OBS = null;
-function currentLang(){ return document.documentElement.getAttribute('lang') === 'ja' ? 'ja' : 'en'; }
+var LANG_T = null;             // the active table; null = English
+function currentLang(){ var a = document.documentElement.getAttribute('lang'); return LANG_TABLES[a] ? a : 'en'; }
 function langNode(n){
-  var raw = n.nodeValue, key = raw.replace(/\s+/g, ' ').trim(), ja = key && LANG_JA[key];
-  if (!ja) return;
+  if (!LANG_T) return;
+  var raw = n.nodeValue, key = raw.replace(/\s+/g, ' ').trim(), tr = key && LANG_T[key];
+  if (!tr) return;
   var p = n.parentElement;
   if (p && p.tagName === 'OPTION' && !p.hasAttribute('value')) p.setAttribute('value', key);
-  var out = raw.replace(key, ja);
+  var out = raw.replace(key, tr);
   LANG_ORIG.set(n, [raw, out]);
   n.nodeValue = out;
 }
 function langAttrs(el){
+  if (!LANG_T) return;
   for (var i = 0; i < LANG_ATTRS.length; i++) {
-    var a = LANG_ATTRS[i], v = el.getAttribute(a), ja = v && LANG_JA[v.trim()];
-    if (!ja) continue;
+    var a = LANG_ATTRS[i], v = el.getAttribute(a), tr = v && LANG_T[v.trim()];
+    if (!tr) continue;
     var o = LANG_ATTR_ORIG.get(el) || {}; o[a] = v; LANG_ATTR_ORIG.set(el, o);   // the latest English
-    el.setAttribute(a, ja);
+    el.setAttribute(a, tr);
   }
 }
 function langWalk(root){
@@ -6734,17 +6995,25 @@ function langWalk(root){
   }
 }
 function langButtons(){
+  var cur = LANGS.filter(function (x) { return x.code === currentLang(); })[0] || LANGS[0];
+  // The button names the language it shows; written raw, never through the table.
   ['lang-btn', 'lang-btn2'].forEach(function (id) {
-    var b = document.getElementById(id); if (!b) return;
-    // The button names the language it shows; written raw, never through the table.
-    b.firstChild ? (b.firstChild.nodeValue = currentLang() === 'ja' ? '日本語' : 'EN') : (b.textContent = currentLang() === 'ja' ? '日本語' : 'EN');
+    var v = document.querySelector('#' + id + ' .npick-v'); if (v) v.textContent = cur.short;
   });
+  pickRender('lang');
 }
 function applyLang(l){
-  if (l === 'ja') document.documentElement.setAttribute('lang', 'ja'); else document.documentElement.setAttribute('lang', 'en');
-  try { if (l === 'ja') localStorage.setItem('ch_lang', 'ja'); else localStorage.removeItem('ch_lang'); } catch (e) {}
+  if (!LANG_TABLES[l]) l = 'en';
+  document.documentElement.setAttribute('lang', l);
+  try { if (l === 'en') localStorage.removeItem('ch_lang'); else localStorage.setItem('ch_lang', l); } catch (e) {}
   if (LANG_OBS) { LANG_OBS.disconnect(); LANG_OBS = null; }
-  if (l === 'ja') {
+  // Back to English first — only a node still showing what was written: one
+  // the page has since rewritten keeps the page's own text.
+  LANG_ORIG.forEach(function (v, n) { if (n.isConnected && n.nodeValue === v[1]) n.nodeValue = v[0]; });
+  LANG_ATTR_ORIG.forEach(function (o, el) { for (var a in o) el.setAttribute(a, o[a]); });
+  LANG_ORIG.clear(); LANG_ATTR_ORIG.clear();
+  LANG_T = LANG_TABLES[l] || null;
+  if (LANG_T) {
     langWalk(document.body);
     // The page re-renders constantly; whatever it writes is read the same way.
     LANG_OBS = new MutationObserver(function (ms) {
@@ -6756,17 +7025,54 @@ function applyLang(l){
       }
     });
     LANG_OBS.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: LANG_ATTRS });
-  } else {
-    // Only a node still showing what was written: one the page has since
-    // rewritten keeps the page's own text.
-    LANG_ORIG.forEach(function (v, n) { if (n.isConnected && n.nodeValue === v[1]) n.nodeValue = v[0]; });
-    LANG_ATTR_ORIG.forEach(function (o, el) { for (var a in o) el.setAttribute(a, o[a]); });
-    LANG_ORIG.clear(); LANG_ATTR_ORIG.clear();
   }
   langButtons();
 }
-function cycleLang(){ applyLang(currentLang() === 'ja' ? 'en' : 'ja'); }
-document.addEventListener('DOMContentLoaded', function(){ if (currentLang() === 'ja') applyLang('ja'); else langButtons(); });
+document.addEventListener('DOMContentLoaded', function(){ if (currentLang() !== 'en') applyLang(currentLang()); else langButtons(); pickRender('cur'); });
+
+// ── The two pickers: language and currency (TASK-ui T5) ─────────────
+// One component, so the currency control matches the language control.
+// The menu lists each language with its coverage, so a language that is
+// mostly English does not look the same as one that is complete.
+var PICKS = { lang: ['lang-pick', 'lang-pick2'], cur: ['cur-pick', 'cur-pick2'] };
+function pickRender(kind){
+  PICKS[kind].forEach(function (id) {
+    var m = document.querySelector('#' + id + ' .npick-m'); if (!m) return;
+    var h = '';
+    if (kind === 'lang') LANGS.forEach(function (x) {
+      var on = x.code === currentLang(), c = langCoverage(x.code);
+      h += '<button role="menuitemradio" aria-checked="' + on + '" class="npick-o' + (on ? ' on' : '') + '" onclick="pickClose();applyLang(&quot;' + x.code + '&quot;)">'
+        + '<span>' + x.name + '</span><span class="npick-n" title="' + c.translated + ' of ' + c.total + ' page strings translated; the rest show in English">'
+        + (x.code === 'en' ? '' : c.pct + '%') + '</span></button>';
+    });
+    else CURRENCIES.forEach(function (k) {
+      var on = k === currentCurrency;
+      h += '<button role="menuitemradio" aria-checked="' + on + '" class="npick-o' + (on ? ' on' : '') + '" onclick="pickClose();setCurrency(&quot;' + k + '&quot;)">'
+        + '<span>' + k + '</span><span class="npick-n">' + CURRENCY_SYMBOLS[k] + '</span></button>';
+    });
+    m.innerHTML = h;
+  });
+}
+function pickOpen(id, ev){
+  if (ev) ev.stopPropagation();
+  var el = document.getElementById(id); if (!el) return;
+  var open = !el.classList.contains('open');
+  pickClose();
+  if (!open) return;
+  el.classList.add('open');
+  el.querySelector('.npick-b').setAttribute('aria-expanded', 'true');
+  var m = el.querySelector('.npick-m'); m.hidden = false;
+  var on = m.querySelector('.on') || m.querySelector('button'); if (on) on.focus();
+}
+function pickClose(){
+  document.querySelectorAll('.npick.open').forEach(function (el) {
+    el.classList.remove('open');
+    el.querySelector('.npick-b').setAttribute('aria-expanded', 'false');
+    el.querySelector('.npick-m').hidden = true;
+  });
+}
+document.addEventListener('click', function (e) { if (!e.target.closest || !e.target.closest('.npick')) pickClose(); });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') pickClose(); });
 
 // ══ SIGN-IN (T6 step 1, 2026-10-06): Google, or a one-time link by email ══
 // Supabase Auth signs the person in; the page keeps the session it returns.
@@ -6813,8 +7119,7 @@ function priceDoorHtml(){
   if (DOOR.kind && DOOR.kind !== 'checking') return '<b>' + DOOR_TEXT[DOOR.kind][0] + '.</b> ' + DOOR_TEXT[DOOR.kind][1]
     + (DOOR.kind === 'unconfirmed' ? '<br><button class="btn" onclick="location.reload()">Try again</button>' : '');
   if (DOOR.kind === 'checking') return DOOR_TEXT.checking[0];
-  return '<b>Prices are for approved accounts.</b> Sign in to see market prices, price history and live listings from every marketplace, '
-    + 'each linking to the exact card. New accounts are approved by CardHunt.'
+  return '<b>Prices are for approved accounts.</b> Sign in to see market prices, price history and live listings from every marketplace, each linking to the exact card. New accounts are approved by CardHunt.'
     + (AUTH.sb ? '<br><button class="btn" onclick="authOpen()">Sign in</button>' : '');
 }
 function renderPriceDoors(){
@@ -7528,6 +7833,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-5bd2b27-restore &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-24981be-language &middot; click to hide</div>
 </body>
 </html>

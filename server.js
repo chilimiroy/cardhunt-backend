@@ -362,14 +362,18 @@ function backFollowUp(card, requestedId, grade, printing, edition, rows) {
 // no candidate or its candidates' verdicts are stored). Then re-judged.
 const dealBackSpent = new Map();   // view key -> { n, at }: calls spent within one view's life
 const dealBackRunning = new Set();
-function dealBackFollowUp(card, requestedId, grade, printing, edition, payload) {
-  if (!deals_.ENABLED || printing || edition || !jpf.isRawGrade(grade) || !backcheck.familyOf(card.api_card_id)) return;
+// opts.measure (2026-10-07, /api/ebay/dealsprobe only): run while deals are
+// OFF, and hand back the work so the probe can wait for it. The rule, the
+// candidates and the DEAL_BACK_MAX budget are the shelf's own.
+function dealBackFollowUp(card, requestedId, grade, printing, edition, payload, opts) {
+  const measure = !!(opts && opts.measure);
+  if ((!deals_.ENABLED && !measure) || printing || edition || !jpf.isRawGrade(grade) || !backcheck.familyOf(card.api_card_id)) return null;
   const cid = card.api_card_id, vkey = listingKey(cid, viewCacheGrade(grade, printing, edition));
   const spent = dealBackSpent.get(vkey);
   const used = spent && Date.now() - spent.at < LISTING_TTL ? spent.n : 0;
-  if (dealBackRunning.has(vkey) || used >= deals_.DEAL_BACK_MAX) return;
+  if (dealBackRunning.has(vkey) || used >= deals_.DEAL_BACK_MAX) return null;
   dealBackRunning.add(vkey);
-  (async () => {
+  return (async () => {
     const ref = await marketRefOf(card, {});
     const todo = deals_.backCandidates(payload, ref && Object.assign({ isReal: true }, ref), deals_.DEAL_BACK_MAX - used)
       .filter(r => !backVerdicts.has(backKey(r.itemId, cid)));
@@ -1136,6 +1140,21 @@ app.get('/api/trending', access.priced, async (req, res) => {
 // The cheapest trusted Buy It Now against the card's current measured price,
 // drawn ONLY from views opened in the last 15 minutes (the listing cache).
 // Reads the cache and the database; never gathers listings — 0 eBay calls.
+// The price a deal is measured against: the card's number-matched stored
+// price, and whether it is current and measured (pricequality). One
+// definition for the shelf and its measurement (/api/ebay/dealsprobe).
+async function dealRefOf(cardId) {
+  try {
+    const mp = await numberMatchedPrice(cardId);
+    if (!mp) return null;
+    const q = await pricequality.annotate(db, [{ id: mp.cardId, price: mp.price, source: mp.source,
+      recordedAt: mp.recordedAt, meta: mp.meta }]);
+    const pq = q.get(mp.cardId);
+    return { price: mp.price, isReal: mp.isReal, source: mp.source, recordedAt: mp.recordedAt,
+             current: !!(pq && pq.kind === 'measured' && !pq.flags.length), quality: pq ? pq.label : 'unknown' };
+  } catch (e) { return null; }
+}
+
 app.get('/api/deals', access.priced, async (req, res) => {
   // Off (deals.ENABLED) answers that it is off and why — never an empty
   // shelf that reads as "no deals right now".
@@ -1151,17 +1170,7 @@ app.get('/api/deals', access.priced, async (req, res) => {
   }
   const deals = [], skipped = {}, excluded = {};
   for (const v of views) {
-    let ref = null;
-    try {
-      const mp = await numberMatchedPrice(v.cardId);
-      if (mp) {
-        const q = await pricequality.annotate(db, [{ id: mp.cardId, price: mp.price, source: mp.source,
-          recordedAt: mp.recordedAt, meta: mp.meta }]);
-        const pq = q.get(mp.cardId);
-        ref = { price: mp.price, isReal: mp.isReal, source: mp.source, recordedAt: mp.recordedAt,
-                current: !!(pq && pq.kind === 'measured' && !pq.flags.length), quality: pq ? pq.label : 'unknown' };
-      }
-    } catch (e) { ref = null; }
+    const ref = await dealRefOf(v.cardId);
     const r = deals_.pickDeal(v.payload, ref);
     for (const [k, n] of Object.entries(r.excluded || {})) excluded[k] = (excluded[k] || 0) + n;
     if (!r.deal) { const why = r.why.replace(/-?\d+/g, 'N'); skipped[why] = (skipped[why] || 0) + 1; continue; }
@@ -5997,6 +6006,54 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
 // only, never a URL. Cached 30 min; nothing stored.
 // ══════════════════════════════════════════════════════════════
 const aspectProbeCache = new Map();
+// ═══════════════════════════════════════════════════════════════
+// GET /api/ebay/dealsprobe/:cardId  — MEASUREMENT ONLY (2026-10-07)
+//
+// Deals are OFF and stay off; this answers "what would the shelf pick for
+// this card right now, and did every check on that row actually RUN?".
+// Opens the card's raw view exactly as a visitor's open does (1 search, +1
+// when the language union triggers), waits up to ?wait= seconds (default
+// 60) for the photo checks, runs the deal candidates' back checks (the
+// shelf's own rule and DEAL_BACK_MAX: at most 2 getItem), then the UNCHANGED
+// deals.pickDeal against dealRefOf. Reports each check's state on the picked
+// row — never only its verdict. Nothing reaches a visitor; nothing stored.
+app.get('/api/ebay/dealsprobe/:cardId', toolingKey.require, async (req, res) => {
+  const t0 = Date.now(), grade = 'Raw NM';
+  const waitMs = Math.max(0, Math.min(90, parseInt(req.query.wait, 10) || 60)) * 1000;
+  try {
+    const card = await resolveListingCard(req.params.cardId);
+    if (!card) return res.status(404).json({ error: 'card not in catalogue' });
+    const id = card.api_card_id;
+    let payload = await listingsFor(card, id, grade, null, {});
+    const pendingOf = p => ((p && p.stampGate && p.stampGate.pending) || 0) + ((p && p.materialCheck && p.materialCheck.pending) || 0);
+    const reread = async () => { const p = await listingsFor(card, id, grade, null, { poll: true }); return p && !p.notFetched ? p : payload; };
+    while (pendingOf(payload) > 0 && Date.now() - t0 < waitMs) { await new Promise(r => setTimeout(r, 2000)); payload = await reread(); }
+    const backWork = dealBackFollowUp(card, id, grade, null, null, payload, { measure: true });
+    if (backWork) { await backWork; payload = await reread(); }
+    const ref = await dealRefOf(id);
+    const r = deals_.pickDeal(payload, ref);
+    const row = r.deal ? (payload.listings || []).find(l => l.itemId === r.deal.listing.itemId) || r.deal.listing : null;
+    const sg = payload.stampGate || {}, mc = payload.materialCheck || {};
+    res.json({ cardId: id, name: card.name, number: card.number, set: card.set_name_en || card.set_name, grade,
+      ref, deal: r.deal ? { discount: r.deal.discount, solidCount: r.deal.solidCount } : null, why: r.deal ? null : r.why,
+      excluded: r.excluded || {},
+      row: row ? { title: row.title, landed: row.landed, price: row.price, shipping: row.shipping, url: row.url,
+        imageUrl: row.imageUrl, itemId: row.itemId, condition: row.condition, sellerCondition: row.sellerCondition,
+        sellerStated: row.sellerStated, source: row.source, marketplace: row.marketplace,
+        suspect: row.suspect || null, suspectReason: row.suspectReason || null,
+        stamp: row.stamp || null, back: row.back || null, materialPending: !!row.materialPending } : null,
+      checks: {   // what APPLIED to this view, and what is still waiting
+        photoGate: { applied: !!sg.applied, kind: sg.kind || null, checks: (sg.reprints || []).map(c => c.cardId + ':' + (c.kind || 'reprint') + (c.notRun ? ':NOT-RUN' : '')),
+                     notRun: sg.notRun || null, pending: sg.pending || 0, reason: sg.reason || null },
+        material: { applied: !!mc.applied, pending: mc.pending || 0, reason: mc.reason || null, reference: mc.reference || null },
+        backFamily: backcheck.familyOf(id) || null,
+        outliers: payload.outliers || null },
+      waitedMs: Date.now() - t0, stillPending: pendingOf(payload), listings: payload.count,
+      langUnion: payload.sources && payload.sources.ebay && payload.sources.ebay.langUnion || null,
+      stored: false, at: new Date().toISOString() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/ebay/aspects/:cardId', toolingKey.require, async (req, res) => {
   const mp = String(req.query.mp || 'EBAY_US').toUpperCase();
   if (!MARKETPROBE_SITES.includes(mp) || /_NO/.test(mp)) return res.status(400).json({ error: 'unknown marketplace', allowed: MARKETPROBE_SITES.filter(m => !/_NO/.test(m)) });

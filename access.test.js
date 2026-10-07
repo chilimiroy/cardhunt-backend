@@ -80,6 +80,7 @@ const ROUTES = [
   ['get', '/api/stamp/:cardId', 'priced', null],
   ['get', '/api/ebay/gradecost/:cardId', 'tooling', null],
   ['get', '/api/ebay/marketprobe/:cardId', 'tooling', null],
+  ['get', '/api/ebay/dealsprobe/:cardId', 'tooling', null],
   ['get', '/api/ebay/aspects/:cardId', 'tooling', null],
   ['get', '/api/ebay/quota', 'public', 'eBay spend so far, read from the ledger (spends nothing); no user data. ?probe=1 asks eBay and needs the tooling key (toolingkey.test.js)'],
   ['get', '/app', 'public', 'the page itself — anonymous visitors browse it'],

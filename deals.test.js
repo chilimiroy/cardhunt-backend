@@ -104,7 +104,13 @@ ok(/different card/.test(deals.OFF_REASON), 'the off state names why');
 {
   const s = fs.readFileSync(__dirname + '/server.js', 'utf8');
   const f = s.slice(s.indexOf('function dealBackFollowUp'), s.indexOf('function dealBackFollowUp') + 200);
-  ok(f.length > 100 && /if \(!deals_\.ENABLED/.test(f), 'switched off, dealBackFollowUp returns before any getItem');
+  const g = s.slice(s.indexOf('function dealBackFollowUp'), s.indexOf('function dealBackFollowUp') + 400);
+  ok(g.length > 100 && /if \(\(!deals_\.ENABLED && !measure\)/.test(g), 'switched off, dealBackFollowUp returns before any getItem — unless measuring');
+  // Measuring (2026-10-07): only the tooling-keyed probe passes it.
+  const probe = s.slice(s.indexOf("app.get('/api/ebay/dealsprobe/:cardId'"), s.indexOf("app.get('/api/ebay/aspects/:cardId'"));
+  ok((s.match(/\{ measure: true \}/g) || []).length === 1 && /\{ measure: true \}/.test(probe)
+     && /app\.get\('\/api\/ebay\/dealsprobe\/:cardId', toolingKey\.require/.test(s),
+     '...and only /api/ebay/dealsprobe (tooling key) measures — nothing reaches a visitor');
 }
 ok(/switched off/.test(deals.OFF_REASON), 'the off state still carries its reason, should it be switched off again');
 ok(/genuine card/.test(deals.describeRule()) && /at most 2/.test(deals.describeRule()), 'the rule states the back and what it costs');
@@ -118,7 +124,14 @@ ok(/listingCache\.entries\(\)/.test(h) && /LISTING_TTL/.test(h), 'it reads only 
 ok(!/(gatherListings|listingsFor|sourceEbay|fetchEbay|ebayCall|ebayItemOnDemand)\(/.test(h), 'it never gathers listings — 0 eBay calls');
 ok(/ebayCalls: 0/.test(h), 'and says so in the payload');
 ok(/parts\.length !== 2/.test(h) && /isRawGrade/.test(h), 'raw views without a printing or edition filter only');
-ok(/deals_\.pickDeal\(v\.payload, ref\)/.test(h) && /pricequality\.annotate/.test(h), 'the price end is the current, measured, number-matched price');
+{
+  // The price end, one definition for the shelf and its probe (dealRefOf).
+  const S2 = fs.readFileSync(__dirname + '/server.js', 'utf8').split('\r\n').join('\n');
+  const dr = S2.slice(S2.indexOf('async function dealRefOf('), S2.indexOf("app.get('/api/deals'"));
+  ok(/deals_\.pickDeal\(v\.payload, ref\)/.test(h) && /const ref = await dealRefOf\(v\.cardId\)/.test(h)
+     && /numberMatchedPrice\(cardId\)/.test(dr) && /pricequality\.annotate/.test(dr),
+     'the price end is the current, measured, number-matched price');
+}
 ok(/materialPending: true/.test(src), 'rows the novelty check has not reached are marked, so no deal is an unchecked gold card');
 const fu = src.slice(src.indexOf('function dealBackFollowUp'), src.indexOf('// ── What does ONE listing'));
 ok(fu.length > 200, 'dealBackFollowUp exists');

@@ -350,6 +350,7 @@ one-day raises in `ebayquota.TOOLING_OVERRIDES` keyed on the UTC day.
 | home movers (4 × `/api/trending`) · best deals (`/api/deals`, cache only) | 0 |
 | search resolving to one card · ambiguous | 1 per card (+reprints) · 0 |
 | `/api/ebay/conditions?items=N` · `marketprobe` default | 1+N · 11 per card |
+| `/api/ebay/dealsprobe/:card` (measurement; deals stay off) | ≤ 4 per card: 1 search, +1 language union, ≤ 2 back getItem |
 | `node sitecheck.js` default · `node querygap.js en` · `linkaudit --live` | 41-89 · ~230 · 1 per card |
 | every `node ingest.js` command, the test suite | 0 |
 

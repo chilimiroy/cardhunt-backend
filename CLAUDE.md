@@ -341,7 +341,7 @@ one-day raises in `ebayquota.TOOLING_OVERRIDES` keyed on the UTC day.
 |---|---|
 | nightly refresh, alert evaluation, idle server, page left open, home page | **0** |
 | token exchange | 1 per process per 2 h / cold start, shared single-flight (`bf49963`) |
-| open a card (any) | **1** (US page 1); **+1 per reprint** on the 55 `REPRINT_OF` originals |
+| open a card (any) | **1** (US page 1); **+1 per reprint** on the 55 `REPRINT_OF` originals; **+1 language union** on an English card whose page 1 hit the cap with >50% language refusals (one `Language:{English}` page; share measured in `listing_views.lang`) |
 | same card + grade within 15 min | 0 |
 | "Search 7 more marketplaces" · "Load more" | 7 · 1 per site with more |
 | Verify (cert) · Photos (same item) · "Check card back" | 1 getItem · 0 · 1 (0 if fetched in 15 min or stored) |

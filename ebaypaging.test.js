@@ -47,7 +47,11 @@ const fnNorm = slice('function normaliseListing(');
 // deployed module always has it; this extraction must carry it too — without
 // it the run crashed here with "languageExclusionFor is not defined".
 const fnLang = (src.match(/\nconst LANG_EXCLUDE_DEFAULT = [^\n]*\nconst LANG_ASPECT_SITES = [^\n]*/) || [''])[0]
-  + '\n' + slice('function languageExclusionFor(');
+  + '\n' + slice('function languageExclusionFor(')
+  // The language union (2026-10-07): eBay US's first answer goes through it.
+  + '\n' + (src.match(/\nconst LANG_UNION_SHARE = [^\n]*/) || [''])[0]
+  + '\n' + (src.match(/\nconst LANG_UNION_OPEN_PAGES = [^\n]*/) || [''])[0]
+  + '\n' + slice('async function sourceEbayLanguageUnion(');
 ok(/const LANG_EXCLUDE_DEFAULT = 'none';/.test(fnLang) && /function languageExclusionFor\(/.test(fnLang),
    'the language exclusion (default and helper) is extracted with sourceEbay');
 ok(!/\nasync function |\nfunction /.test(fnEbay.slice(1)), 'the sourceEbay slice holds one function');
@@ -101,8 +105,8 @@ function build(total, opts = {}) {
       const n = Math.max(0, Math.min(limit, site.total - offset));
       const itemSummaries = Array.from({ length: n }, (_, k) => {
         const i = offset + k - (opts.overlap && offset ? opts.overlap : 0);
-        return { itemId: site.idFor ? site.idFor(i) : 'v1|' + i,
-                 title: site.titleFor ? site.titleFor(i) : title(i),
+        return { itemId: site.idFor ? site.idFor(i, u) : 'v1|' + i,
+                 title: site.titleFor ? site.titleFor(i, u) : title(i),
                  price: { value: String(100 + i), currency: site.currency || 'USD' },
                  shippingOptions: [{ shippingCost: { value: '5.00', currency: site.currency || 'USD' } }],
                  condition: 'Graded', itemWebUrl: 'https://www.ebay.com/itm/' + i };
@@ -405,6 +409,31 @@ async function fullView(b) {
   ok(!/listings: listings\.slice\(0, (limit|25)\)/.test(src), 'no listings response is sliced to a row limit');
   ok(/const lp = await listingsFor\(card, top\.cardId, grade, null, \{\}\);/.test(src),
      '/api/search answers through listingsFor — never a trimmed copy in the shared cache');
+
+  // ── The language union on a card's first US answer (2026-10-07) ──
+  // Unfiltered: Japanese copies fill the page (refused). Filtered
+  // (Language:{English}): English copies. The real sourceEbayAll must spend
+  // exactly ONE extra call, ask for the English aspect on one 200-row page,
+  // keep the English rows, and lose nothing the first query kept.
+  {
+    const lang = u => /Language:\{English\}/.test(u.searchParams.get('aspect_filter') || '');
+    const sites = { EBAY_US: { total: 1300,
+      titleFor: (i, u) => lang(u) ? title(i) : '1999 Pokemon Japanese Charizard 4/102 Holo PSA 10 #' + (5000 + i),
+      idFor: (i, u) => (lang(u) ? 'v1|en' : 'v1|ja') + i } };
+    const b = build(0, { sites });
+    const r = await b.sourceEbayAll(CARD, 'PSA 10', 25, { background: false });
+    ok(b.calls.length === 2, 'a polluted first answer costs exactly ONE extra call: ' + b.calls.length);
+    ok(b.calls[1] && /Language:\{English\}/.test(b.calls[1].aspect || '') && b.calls[1].limit === 200 && b.calls[1].offset === 0,
+       'the extra call asks Language:{English}, one 200-row page');
+    ok(r.kept > 0 && r.listings.every(l => /^v1\|en/.test(l.itemId)), 'it keeps the English copies (' + r.kept + ')');
+    ok(r.pages.calls === 2 && r.union && r.union.triggered && r.union.extraPages === 1, 'the cost is counted and reported (pages.calls, union)');
+    const pg = b.listingsProgress(r.ebayState, r.kept);
+    ok(pg && JSON.stringify(pg).length > 0, 'progress still builds');
+    // A clean first answer (no language refusals): one call, exactly as before.
+    const b2 = build(0, { sites: { EBAY_US: { total: 1300 } } });
+    await b2.sourceEbayAll(CARD, 'PSA 10', 25, { background: false });
+    ok(b2.calls.length === 1, 'a clean first answer: still exactly one call');
+  }
 
   console.log(`\nebaypaging: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

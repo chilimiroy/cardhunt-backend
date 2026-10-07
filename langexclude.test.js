@@ -39,7 +39,11 @@ ok('notspecified (measurement): asks for exactly the listings Language:{English}
 const passers = (src.match(/langExclude, unionPages \}\)/g) || []).length;
 ok('only marketprobe passes a mode to sourceEbay', /background: true, allDropped: true, langExclude, unionPages \}\);/.test(src)
    && (src.match(/opts\.langExclude/g) || []).length === 1 && passers === 1, 'passed from marketprobe ' + passers + 'x');
-ok('...and only marketprobe runs the union (one caller)', (src.match(/sourceEbayLanguageUnion/g) || []).length === 2);
+// The union's callers (2026-10-07, shipped at one page): marketprobe, and
+// eBay US's FIRST answer on a card open — never Load more or another site.
+ok('...the union runs from marketprobe and eBay US\'s first answer only', (src.match(/\? sourceEbayLanguageUnion : sourceEbay\)/g) || []).length === 2
+   && /site\.id === 'EBAY_US' && !opts\.offset \? sourceEbayLanguageUnion : sourceEbay/.test(src)
+   && /unionPages: LANG_UNION_OPEN_PAGES/.test(src) && /const LANG_UNION_OPEN_PAGES = 1;/.test(src));
 
 
 console.log('\n  the language UNION (server.js sourceEbayLanguageUnion, run as written)');
@@ -49,10 +53,11 @@ const mk = (ids, keptN, langN, cap, pages) => ({
   dropped: ids.slice(keptN).map((i, k) => ({ itemId: i, reason: k < langN ? 'title says ja, this card is en — a different language printing' : 'not a single card' })),
   rejected: ids.length - keptN, languageRefused: langN, scanned: ids.length, scannedIds: ids,
   pages: { fetched: pages, stoppedAtCap: cap, ebayTotal: 1000 }, queryExclusion: { mode: 'none', applied: false } });
-const runUnion = async (base, extra, opts) => {
+const runUnion = async (base, extra, opts, lang) => {
   const calls = [];
   const fakeSource = async (c, g, l, o) => { calls.push(o.langExclude + (o.maxPages ? ':' + o.maxPages : '')); return o.langExclude === 'aspect' ? extra : base; };
-  const U = new Function('sourceEbay', useg + '\nreturn sourceEbayLanguageUnion;')(fakeSource);
+  const fakeMatch = () => ({ cardId: (lang || 'en') + '-x-1', setId: 'x', lang: lang || 'en' });
+  const U = new Function('sourceEbay', 'cm', 'ebayMatchCard', useg + '\nreturn sourceEbayLanguageUnion;')(fakeSource, cm, fakeMatch);
   return { r: await U({}, 'Raw', 25, Object.assign({ allDropped: true }, opts || {})), calls };
 };
 (async () => { try {
@@ -72,6 +77,9 @@ const runUnion = async (base, extra, opts) => {
   ok('a kept item is never also counted refused; a twice-refused item once', !x.r.dropped.some(d => ['b2', 'e1', 'e2'].includes(d.itemId)) && x.r.dropped.filter(d => d.itemId === 'j1').length === 1);
   ok('cost reported: the extra pages', x.r.union.extraPages === 1 && x.r.pages.fetched === 4);
   ok('stated on the source block', x.r.queryExclusion.mode === 'union' && x.r.queryExclusion.applied && x.r.queryExclusion.aspect === 'Language:{English}');
+  ok('refusedIds: both runs\' refusals, never a kept item', x.r.refusedIds === undefined || !x.r.refusedIds.some(i => ['b1', 'b2', 'e1', 'e2'].includes(i)));
+  x = await runUnion(mk(['b1', 'b2', 'j1', 'j2', 'j3', 'j4', 'j5'], 2, 5, true, 3), null, { unionPages: 1 }, 'ja');
+  ok('a JAPANESE card never triggers (the "filtered" query would ask the same again)', x.calls.join() === 'none' && !x.r.union.triggered && /not an English card/.test(x.r.union.why));
   ok('the gate is not touched: language refusals counted in sourceEbay over ALL refusals', /languageRefused: dropped\.filter\(d => cm\.refusalLanguage\(d\.reason\)\)\.length/.test(src));
   } catch (e) { ok('the union checks ran to the end', false, String(e && e.message).slice(0, 80)); }
   finish();

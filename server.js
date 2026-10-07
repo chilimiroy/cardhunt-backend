@@ -3170,14 +3170,23 @@ function ebayStateResult(st) {
 // rows added by item id. Cost: the filtered query's pages, on polluted cards
 // only (unionPages caps them). marketprobe ?lang=union measures it.
 const LANG_UNION_SHARE = 0.5;
+// In production (Roy, 2026-10-07): on a card's FIRST eBay US answer only,
+// the filtered query takes ONE page — 200 rows, +1 call, about the 225-row
+// window the 11 -> 180 gain was measured in. listing_views.lang records the
+// trigger on every view, so its real share of opens is measured.
+const LANG_UNION_OPEN_PAGES = 1;
 async function sourceEbayLanguageUnion(card, grade, limit, opts = {}) {
   const base = await sourceEbay(card, grade, limit, Object.assign({}, opts, { langExclude: 'none' }));
   const capHit = !!(base.pages && base.pages.stoppedAtCap);
   const share = base.rejected ? (base.languageRefused || 0) / base.rejected : 0;
-  const triggered = capHit && share > LANG_UNION_SHARE;
+  // English cards only: for any other card the "filtered" query would be the
+  // same question again (cm.otherLanguageExclusions is empty).
+  const english = cm.otherLanguageExclusions(ebayMatchCard(card)).length > 0;
+  const triggered = english && capHit && share > LANG_UNION_SHARE;
   const union = { triggered, capHit, languageRefused: base.languageRefused || 0, rejected: base.rejected || 0,
     share: +share.toFixed(3), threshold: LANG_UNION_SHARE, extraPages: 0, gained: 0,
-    why: !capHit ? 'the unfiltered query did not hit the cap'
+    why: !english ? 'not an English card'
+       : !capHit ? 'the unfiltered query did not hit the cap'
        : !triggered ? 'language refusals are not most of the refusals' : 'cap hit and language refusals dominate' };
   if (!triggered) return Object.assign({}, base, { union,
     queryExclusion: Object.assign({}, base.queryExclusion, { mode: 'union', applied: false, why: union.why }) });
@@ -3196,7 +3205,10 @@ async function sourceEbayLanguageUnion(card, grade, limit, opts = {}) {
   union.gained = added.length;
   union.filteredQuery = { ebayTotal: extra.pages && extra.pages.ebayTotal, scanned: extra.scanned, kept: extra.kept,
                           stoppedAtCap: !!(extra.pages && extra.pages.stoppedAtCap) };
-  return Object.assign({}, base, { listings, kept: listings.length, dropped,
+  // Every item either run scanned and the union did not keep (mergeEbaySite
+  // reads these: a refusal on an English-titled site stands everywhere).
+  const refusedIds = [...new Set((base.refusedIds || []).concat(extra.refusedIds || []))].filter(id => !keptIds.has(id));
+  return Object.assign({}, base, { listings, kept: listings.length, dropped, refusedIds,
     rejected: opts.allDropped ? dropped.length : (base.rejected || 0) + (extra.rejected || 0),
     scanned: (base.scanned || 0) + (extra.scanned || 0),
     scannedIds: base.scannedIds && extra.scannedIds ? [...new Set(base.scannedIds.concat(extra.scannedIds))] : base.scannedIds,
@@ -3215,9 +3227,13 @@ async function sourceEbayAll(card, grade, limit, opts = {}) {
   const want = opts.sites === 'all' ? EBAY_SITES.map(s => s.id)
     : (Array.isArray(opts.sites) && opts.sites.length ? opts.sites : ['EBAY_US']);
   const ask = EBAY_SITES.filter(s => want.includes(s.id) && !(st.sites[s.id] && st.sites[s.id].status === 'ok'));
+  // eBay US's FIRST answer goes through the language union (one extra page,
+  // only when it triggers — sourceEbayLanguageUnion); every other site, and
+  // every later page, asks exactly as before.
   const results = await Promise.allSettled(ask.map(site =>
-    sourceEbay(card, grade, limit, Object.assign({}, opts, { state: undefined,
-      marketplace: site.id, pageSize: EBAY_PAGE_MAX, maxPages: 1 }))));
+    (site.id === 'EBAY_US' && !opts.offset ? sourceEbayLanguageUnion : sourceEbay)(card, grade, limit,
+      Object.assign({}, opts, { state: undefined, marketplace: site.id, pageSize: EBAY_PAGE_MAX, maxPages: 1,
+                                unionPages: LANG_UNION_OPEN_PAGES }))));
   // Merge in EBAY_SITES order, US first, so a row on two sites keeps its
   // US (USD, unconverted) copy.
   ask.forEach((site, i) => {
@@ -3393,6 +3409,8 @@ async function gatherListings(card, grade, limit, opts) {
         }
         if (r.value.query) sources[s.id].query = r.value.query;
         if (r.value.queryExclusion) sources[s.id].queryExclusion = r.value.queryExclusion;
+        // The language union on this view: triggered or not, why, its extra page.
+        if (r.value.union) sources[s.id].langUnion = r.value.union;
         // Two readers of one title that should agree. Surfaced, not swallowed.
         if (r.value.parserDisagreements && r.value.parserDisagreements.length) {
           sources[s.id].parserDisagreements = r.value.parserDisagreements;

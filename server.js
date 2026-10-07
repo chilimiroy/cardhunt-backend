@@ -2732,12 +2732,18 @@ async function sourceEbay(card, grade, limit, opts = {}) {
   // /api/ebay/marketprobe does (T1, 2026-09-30: measuring what the other
   // sites add before deciding whether /api/listings should ask them).
   const mp = opts.marketplace || 'EBAY_US';
+  // marketprobe ?zip= only (2026-10-07): a buyer's location, so eBay can
+  // quote CALCULATED shipping, which it leaves out of a search without one
+  // (38% of the deals pool had no stated shipping). Same call, one header.
+  // A quote to one ZIP is an estimate for every other buyer.
+  const ctxHeaders = /^[0-9]{5}$/.test(String(opts.endUserZip || ''))
+    ? { 'X-EBAY-C-ENDUSERCTX': 'contextualLocation=' + encodeURIComponent('country=US,zip=' + opts.endUserZip) } : undefined;
   // marketprobe only: the same search without category_ids=183454, to ask
   // whether US listings filed in another category are what other sites add.
 
   const call = await ebay.fetchEbay(db, {
     url, token, kind: 'search', background,
-    dryRun,
+    dryRun, headers: ctxHeaders,
     meta: { cardId: card.api_card_id, grade, query: q, marketplace: mp,
             page: Math.floor(startOffset / pageSize) + 1 },
     countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0)
@@ -2777,7 +2783,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
          && ebayTotal > nextAt() && lastLen >= pageSize
          && nextAt() + pageSize <= EBAY_OFFSET_CEILING) {
     const more = await ebay.fetchEbay(db, {
-      url: pageUrl(nextAt()), token, kind: 'search', background,
+      url: pageUrl(nextAt()), token, kind: 'search', background, headers: ctxHeaders,
       meta: { cardId: card.api_card_id, grade, query: q, page: Math.floor(nextAt() / pageSize) + 1, marketplace: mp },
       countFrom: x => (x && x.itemSummaries ? x.itemSummaries.length : 0)
     });
@@ -5884,7 +5890,12 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
   const langExclude = ['none', 'words', 'aspect', 'notspecified', 'union'].includes(String(req.query.lang)) ? String(req.query.lang) : undefined;
   // ?lang=union&unionPages=1..3: how many pages the filtered query may take.
   const unionPages = req.query.unionPages ? Math.max(1, Math.min(3, parseInt(req.query.unionPages, 10) || 3)) : undefined;
-  const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1', shape, req.query.titles === '1', langExclude || null, unionPages || null]);
+  // ?zip=NNNNN (2026-10-07): send a US buyer location (X-EBAY-C-ENDUSERCTX)
+  // and count how many kept rows then state shipping. ?pages=1 holds a probe
+  // to one call per site. Five digits or nothing — never passed through raw.
+  const endUserZip = /^[0-9]{5}$/.test(String(req.query.zip || '')) ? String(req.query.zip) : undefined;
+  const probePages = req.query.pages === '1' ? 1 : undefined;
+  const key = JSON.stringify([cardId, grade, sites, req.query.rows === '1', shape, req.query.titles === '1', langExclude || null, unionPages || null, endUserZip || null, probePages || null]);
   const hit = marketProbeCache.get(key);
   if (hit && Date.now() - hit.at < 30 * 60 * 1000 && req.query.refresh !== '1') return res.json(hit.body);
   try {
@@ -5896,7 +5907,7 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
       try {
         const r = await (langExclude === 'union' ? sourceEbayLanguageUnion : sourceEbay)(card, grade, 25, { marketplace: mp.replace(/_NO(CAT|SET)$/, ''),
           noCategory: /_NOCAT$/.test(mp), noSetInQuery: /_NOSET$/.test(mp), numberForm: shape,
-          background: true, allDropped: true, langExclude, unionPages });
+          background: true, allDropped: true, langExclude, unionPages, endUserZip, maxPages: probePages });
         const reasons = {};
         for (const d of r.dropped) {
           // cm.refusalLanguage: only the gate's language reasons are "language:"
@@ -5916,6 +5927,7 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
         // T3: do search results carry the seller's other photos?
         const photoCounts = r.listings.map(l => (l.extraPhotos || []).length);
         per[mp] = { scanned: r.scanned, kept: r.kept, rejected: r.rejected, pages: r.pages, scannedIds: r.scannedIds || [],
+                    shippingStated: { rows: kept.length, stated: kept.filter(k => k.shippingUsd != null).length, zip: endUserZip || null },
                     extraPhotos: { rows: photoCounts.length, withAny: photoCounts.filter(n => n > 0).length,
                                    total: photoCounts.reduce((a, b) => a + b, 0) },
                     rejectReasons: reasons, keptRows: kept, query: r.query, queryExclusion: r.queryExclusion, langUnion: r.union,

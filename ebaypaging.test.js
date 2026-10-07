@@ -94,7 +94,7 @@ function build(total, opts = {}) {
       const offset = +(u.searchParams.get('offset') || 0);
       const mp = (req.meta && req.meta.marketplace) || 'EBAY_US';
       calls.push({ offset, limit, mp, background: !!req.background, q: u.searchParams.get('q'),
-                   aspect: u.searchParams.get('aspect_filter') });
+                   aspect: u.searchParams.get('aspect_filter'), ctx: (req.headers || {})['X-EBAY-C-ENDUSERCTX'] || null });
       if (req.dryRun) return { dryRun: true, request: req.url };
       const site = sites[mp];
       if (!site) return { ok: false, reason: 'HTTP 409 marketplace not supported' };
@@ -433,6 +433,22 @@ async function fullView(b) {
     const b2 = build(0, { sites: { EBAY_US: { total: 1300 } } });
     await b2.sourceEbayAll(CARD, 'PSA 10', 25, { background: false });
     ok(b2.calls.length === 1, 'a clean first answer: still exactly one call');
+  }
+  {
+    // The buyer-location probe (marketprobe ?zip=, 2026-10-07): the header on
+    // EVERY page of the call, never without a valid ZIP, never on production.
+    const b = build(450);
+    await run(b, CARD, 'PSA 10', 25, { pageSize: 200, maxPages: 3, endUserZip: '10001' });
+    ok(b.calls.length === 3 && b.calls.every(c => c.ctx === 'contextualLocation=country%3DUS%2Czip%3D10001'),
+       'a ZIP puts the buyer location on every page (' + b.calls.map(c => c.ctx).join(' | ') + ')');
+    for (const bad of [undefined, '1000', '10001; x', 'abcde']) {
+      const b2 = build(10);
+      await run(b2, CARD, 'PSA 10', 25, { endUserZip: bad });
+      ok(b2.calls.length === 1 && b2.calls[0].ctx === null, 'no header for ZIP ' + JSON.stringify(bad));
+    }
+    const b3 = build(10);
+    await b3.sourceEbayAll(CARD, 'PSA 10', 25, { background: false });
+    ok(b3.calls.every(c => c.ctx === null), 'production (sourceEbayAll) sends no buyer location');
   }
 
   console.log(`\nebaypaging: ${pass} passed, ${fail} failed`);

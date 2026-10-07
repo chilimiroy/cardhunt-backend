@@ -113,14 +113,6 @@ async function waitForBoot(server, ms = 20000) {
         'typeof window.' + WINDOW_GLOBAL[m] + ' = ' + typeof w[WINDOW_GLOBAL[m]]);
     }
 
-    // T7 (2026-10-07): the CardZon mark, three prepared PNGs by name.
-    for (const f of ['cardzon-logo-96.png', 'cardzon-logo-144.png', 'cardzon-logo-256.png']) {
-      const r = await fetch(BASE + '/' + f);
-      const buf = Buffer.from(await r.arrayBuffer());
-      ok('/' + f + ' returns 200 as a PNG', r.status === 200 && (r.headers.get('content-type') || '').includes('image/png')
-        && buf.slice(1, 4).toString() === 'PNG', 'got ' + r.status + ' ' + r.headers.get('content-type'));
-    }
-
     const root = await get('/');
     ok('/ still answers', root.status === 200, 'got ' + root.status);
     ok('/ points at /app', root.body.includes('"/app"'));
@@ -146,8 +138,10 @@ async function waitForBoot(server, ms = 20000) {
       // T1 (2026-10-02): the stamp matcher, its templates and their builder.
       '/stampcheck.js', '/stamps.json', '/stampbuild.js', '/setyield.js',
       '/server.js.bak-v4.1-20260820',
-      // T7: the logo's source and the JPG it was cut from — never served.
-      '/cardzon-logo-master.png', '/logo.jpg',
+      // The logo is inline SVG (#cz-mark): no logo file is served — not the
+      // old PNGs, not the render they were cut from, not the SVG's source.
+      '/cardzon-logo-96.png', '/cardzon-logo-144.png', '/cardzon-logo-256.png',
+      '/cardzon-logo-master.png', '/logo.jpg', '/cardzon-mark.svg',
       // traversal, both spellings a client can send
       '/app/../package.json', '/app%2f..%2fpackage.json',
       '/static/../CLAUDE.md', '/..%2fCLAUDE.md'

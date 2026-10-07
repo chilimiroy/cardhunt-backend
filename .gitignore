@@ -96,3 +96,6 @@ scratchpad/
 
 # costmeter.js output and stub control (measurement scratch)
 costmeter.*.json
+
+# Roy's source artwork for the CZ mark (544 KB render); nothing serves it
+logo.jpg

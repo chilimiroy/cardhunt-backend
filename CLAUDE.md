@@ -425,7 +425,11 @@ counted (`i18n.test.js` prints it). Built sentences, server text: English.
 - Back restores scroll; a reopened card restores grade, tab, view, range, scroll
   BEFORE its first listings call, else Raw NM (`restore.test.js`).
 - Home: search, deals (hidden while off), games, movers, alerts (`door.test.js`).
-- CardZon is display only; logo 42px nav, 30px at <=640 (`brand.test.js`).
+- CardZon is display only; the CZ mark is ONE inline `<symbol id="cz-mark">` (no
+  image file), 42px nav, 30px at <=900 (`brand.test.js`). Colours, sampled from
+  Roy's render: mark C `#C62128` both themes, Z `#686858` light / `#EBE7DB` dark;
+  wordmark Card `#C62128` light / `#C54748` dark, Zon as the Z. Hairline edge in
+  dark only (the C is 2.86:1 on the bar).
 
 ## Accounts — step 1 (sign-in) and step 2 (roles) SHIPPED 2026-10-06 (T6)
 `auth.js` verifies the token (ES256 via JWKS). `/api/me` is the ONLY source of the

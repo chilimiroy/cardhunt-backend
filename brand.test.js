@@ -2,9 +2,11 @@
 //
 //   node brand.test.js
 //
-// T7: every nav carries the prepared transparent PNG (never logo.jpg, never
-// the master), with no coloured plate behind it, at the sizes measured to
-// leave the bar's height unchanged: 42px above 640px, 30px at or below.
+// T7: every nav carries the CZ mark drawn clean (cardzon-mark.svg) as ONE
+// inline <symbol> its uses point at — no image file, no plate, colours by
+// token — at the sizes measured to leave the bar's height unchanged: 42px
+// above 900px, 30px at or below (641-900 already overflowed sideways, so
+// there the mark may be no wider than the old 42px-wide glyph).
 // T6: the wordmark is a display name only — ids, the cardhunt_db tag and the
 // Render hostname are untouched.
 'use strict';
@@ -17,31 +19,36 @@ console.log('\n  T7: the logo');
 const navs = H.match(/<nav class="nav">[\s\S]*?<\/nav>/g) || [];
 ok('nine navs', navs.length === 9, navs.length);
 const logos = navs.map(n => (n.match(/<div class="logo"[^>]*>([\s\S]*?)<\/div>/) || [])[1] || '');
-// ?v=2: the plinth-free mark (2026-10-07) replaced the files under the same
-// names, and the route caches a day — the query makes browsers fetch it.
-ok('every nav logo is the 96px PNG with the 144px one for 2x, versioned',
-   logos.every(l => /<img class="logo-i" src="cardzon-logo-96\.png\?v=2" srcset="cardzon-logo-96\.png\?v=2 1x, cardzon-logo-144\.png\?v=2 2x" alt="">/.test(l)), logos.length);
-// The plinth is gone: the files are the C/Z mark alone, wider than tall.
-const png = f => { const b = fs.readFileSync(__dirname + '/' + f); return [b.readUInt32BE(16), b.readUInt32BE(20)]; };
-ok('no plinth: each file is the C/Z mark alone (134x96, 201x144, 358x256)',
-   String(png('cardzon-logo-96.png')) === '134,96' && String(png('cardzon-logo-144.png')) === '201,144' && String(png('cardzon-logo-256.png')) === '358,256');
-ok('a hairline edge per theme: dark on light (the cream Z), light on dark (the deep red C)',
-   /--logo-edge:drop-shadow\(0 0 \.6px rgba\(20,22,28,\.7\)\)/.test(H) && (H.match(/--logo-edge:drop-shadow\(0 0 \.6px rgba\(236,237,243,\.55\)\);/g) || []).length === 2
-   && /@media\(max-width:900px\)\{\.logo\{--logo-sz:30px\}\}/.test(H)
-   && /\.logo-i\{[^}]*filter:var\(--logo-edge\)\}/.test(H) && /\.llogo-i\{[^}]*filter:var\(--logo-edge\)\}/.test(H));
+const USE = '<svg class="logo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"/></svg>';
+ok('every nav logo is the inline mark, a <use> of #cz-mark', logos.every(l => l.startsWith(USE)), logos.length);
+const syms = H.match(/<symbol id="cz-mark"[\s\S]*?<\/symbol>/g) || [];
+ok('ONE definition of the mark', syms.length === 1, syms.length);
+const sym = syms[0] || '';
+ok('the symbol is cardzon-mark.svg\'s drawing: its viewBox and both paths',
+   /viewBox="0 0 124 92"/.test(sym) && sym.includes('d="M58 22 A 26 26 0 1 0 58 70"') && sym.includes('d="M62 22 H112 L76 70 H116"'));
+ok('its colours are the tokens, nothing hardcoded beyond the fallback',
+   sym.includes('stroke="var(--cz-c, #C62128)"') && sym.includes('stroke="var(--cz-z, #EBE7DB)"'));
+const cz = [...H.matchAll(/--cz-c:(#[0-9A-F]{6}); --cz-z:(#[0-9A-F]{6});/g)].map(m => m[1] + '/' + m[2]);
+ok('tokens per theme block: light #C62128/#686858, both dark #C62128/#EBE7DB',
+   cz.join(' ') === '#C62128/#686858 #C62128/#EBE7DB #C62128/#EBE7DB', cz.join(' '));
+ok('no logo image anywhere on the page: no PNG, no logo.jpg, no master',
+   !/cardzon-logo|cardzon-mark[^"]*\.png|logo\.jpg/.test(H.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '')));
 ok('no glyph left in any nav', !/⚡/.test(navs.join('')));
-ok('never logo.jpg or the master on the page', !/logo\.jpg|cardzon-logo-master/.test(H.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '')));
 const rule = (H.match(/\n\.logo-i\{[^}]*\}/) || [''])[0];
-ok('no plate: .logo-i has no background and no border-radius', rule && !/background|border-radius/.test(rule), rule.trim());
-ok('42px above 640px', /\n\.logo\{--logo-sz:42px\}/.test(H));
+ok('width follows the mark: --logo-sz * 124/92', /width:calc\(var\(--logo-sz\)\*124\/92\)/.test(rule), rule.trim());
+ok('no plate: .logo-i has no background and no border-radius', rule && !/background|border-radius/.test(rule));
+ok('42px above 900px', /\n\.logo\{--logo-sz:42px\}/.test(H));
+ok('30px at 641-900px: 40.4px wide, no wider than the old 42px glyph',
+   /@media\(max-width:900px\)\{\.logo\{--logo-sz:30px\}\}/.test(H) && 30 * 124 / 92 <= 42);
 const phone = H.slice(H.indexOf('@media(max-width:640px){\n  .nav{'), H.indexOf('}\n', H.indexOf('.nav-r .tbq{width:auto')) + 2);
 ok('30px at or below 640px, inside the nav media block', /\.logo\{--logo-sz:30px\}/.test(phone));
-ok('the sign-in panel shows the 256px file', /<div class="llogo"><img class="llogo-i" src="cardzon-logo-256\.png\?v=2" alt=""><\/div>\s*<div id="auth-body">/.test(H));
+ok('the sign-in panel shows the same mark',
+   /<div class="llogo"><svg class="llogo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"\/><\/svg><\/div>\s*<div id="auth-body">/.test(H));
 const ll = (H.match(/\n\.llogo-i\{[^}]*\}/) || [''])[0];
 ok('no plate on the sign-in mark either', ll && !/background|border-radius/.test(ll), ll.trim());
 const S = fs.readFileSync(__dirname + '/server.js', 'utf8');
-ok('the server serves exactly the three prepared PNGs, by name',
-   /const LOGO_FILES = \['cardzon-logo-96\.png', 'cardzon-logo-144\.png', 'cardzon-logo-256\.png'\];/.test(S) && !/app\.use\(\s*express\.static/.test(S));
+ok('the server serves no logo file, and never the whole folder',
+   !/cardzon-logo|cardzon-mark|LOGO_FILES/.test(S) && !/app\.use\(\s*express\.static/.test(S));
 
 console.log('\n  T6: the wordmark');
 ok('every nav reads CardZon as ONE span (the flex gap split Card from Hunt)',

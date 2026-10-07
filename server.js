@@ -3981,7 +3981,14 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
   // $800 is not an answer — it is the wrong card, a proxy or a scam.
   // The flagged rows are still returned, last, with their reason.
   const listings = j.listings;
-  const trusted = listings.filter(outlier.trustworthy);
+  // The headline rows: unflagged, not a current bid, and from a seller with a
+  // record (outlier.headlineEligible — HEADLINE_SELLER, Roy 2026-10-07). A row
+  // that fails only the seller floor is still listed; the payload says how
+  // many cheaper rows the headline stepped over for it (headlineFloor).
+  const trusted = listings.filter(outlier.headlineEligible);
+  const headLive = trusted.find(l => l.live);
+  const sellerSkipped = listings.filter(l => l.live && outlier.trustworthy(l) && !outlier.sellerMeetsFloor(l)
+    && (!headLive || Number(l.landed) < Number(headLive.landed))).length;
   sources = withStampRefusals(sources, j.stamp);
   sources = withBackRefusals(sources, j.back);
   sources = withMaterialRefusals(sources, j.material);
@@ -4032,7 +4039,9 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
     })(),
     liveCount: j.liveCount,
     cheapest: trusted.length ? trusted[0].landed : null,
-    cheapestLive: (trusted.find(l => l.live) || {}).landed ?? null,
+    cheapestLive: (headLive || {}).landed ?? null,
+    headlineFloor: { minScore: outlier.HEADLINE_SELLER.minScore, minPercent: outlier.HEADLINE_SELLER.minPercent,
+                     skippedCheaper: sellerSkipped },
     // T5: how many live rows the page's two tabs hold. cheapest above is
     // Buy It Now only — trustworthy() never takes a current bid.
     saleTypes: {
@@ -6211,7 +6220,7 @@ async function probeZipView(card, id, mode, waitMs, wantRows) {
   }
   // The headline: what buildListingsPayload names cheapestLive — the first
   // live, unflagged, non-current-bid row of the cheapest-first list.
-  const h = (payload.listings || []).find(l => l.live && outlier.trustworthy(l)) || null;
+  const h = (payload.listings || []).find(l => l.live && outlier.headlineEligible(l)) || null;
   const headline = h ? { landed: h.landed, price: h.price, shipping: h.shipping, title: String(h.title || '').slice(0, 110),
     itemId: h.itemId, saleType: h.saleType, zipOnly: !!h.zipOnly,
     trustedBecause: { outlierFlag: !!h.suspect, stamp: h.stamp ? h.stamp.state + (h.stamp.deferred ? ' (deferred)' : '') : 'no photo check applies',

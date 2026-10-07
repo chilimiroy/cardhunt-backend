@@ -284,6 +284,22 @@ function suspectRank(l) {
 // answer to "what does this card cost".
 function trustworthy(l) { return !l.suspect && !isCurrentBid(l); }
 
+// ── The headline needs a seller with a record (Roy, 2026-10-07) ──
+// Measured on 40 cards: 19 of the 40 headlines came from sellers under 10
+// feedback, most at 0 — Umbreon VMAX $800 from a 0-feedback seller against a
+// $2,292 market; Charizard ex 151 $78.35 from one at -4 (0%). Below the
+// vouching bar (100 @ 98%) on purpose: this does not hide the listing, it
+// only stops it being "what this card costs". A shop's ask carries no
+// feedback and passes; an eBay seller whose record we cannot see does not.
+const HEADLINE_SELLER = { minScore: 10, minPercent: 95 };
+function sellerMeetsFloor(l) {
+  if (!l || l.source !== 'ebay') return true;
+  const fb = l.sellerFeedback;
+  if (!fb || fb.score == null || fb.percent == null) return false;
+  return Number(fb.score) >= HEADLINE_SELLER.minScore && Number(fb.percent) >= HEADLINE_SELLER.minPercent;
+}
+function headlineEligible(l) { return trustworthy(l) && sellerMeetsFloor(l); }
+
 // Sort so flagged listings land last regardless of price, since the whole
 // point of a cheapest-first list is that the top row is trustworthy.
 function sortWithSuspectsLast(listings) {
@@ -297,7 +313,7 @@ function sortWithSuspectsLast(listings) {
   });
 }
 
-module.exports = { flagOutliers, flagReprintPriced, sortWithSuspectsLast, suspectRank, trustworthy,
+module.exports = { flagOutliers, flagReprintPriced, sortWithSuspectsLast, suspectRank, trustworthy, headlineEligible, sellerMeetsFloor, HEADLINE_SELLER,
                    median, priceOf, isCurrentBid,
                    REPRINT_BAND_PAD, REPRINT_SEPARATION, REPRINT_MIN_ABOVE,
                    SUSPECT_RATIO, IMPLAUSIBLE_RATIO, MIN_SAMPLE, MIN_MEDIAN };

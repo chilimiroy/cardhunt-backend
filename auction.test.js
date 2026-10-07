@@ -27,7 +27,10 @@ ok('the bid is not flagged as a fake (it is not judged at all)', !j.listings.fin
 ok('the bid is never trustworthy, so never the cheapest', !outlier.trustworthy(j.listings.find(l => l.itemId === 'a1')));
 ok('a Buy It Now row stays trustworthy', outlier.trustworthy(j.listings.find(l => l.itemId === 'b0')));
 ok('an auction WITH a Buy It Now price is an ordinary price', outlier.trustworthy({ price: 50, listingType: 'auction', priceKind: null }));
-ok('the payload\'s cheapest is drawn from trustworthy rows', /const trusted = listings\.filter\(outlier\.trustworthy\)/.test(src) && /cheapest: trusted\.length \? trusted\[0\]\.landed/.test(src));
+// 2026-10-07: headlineEligible = trustworthy (no current bid, unflagged) + the seller floor.
+ok('the payload\'s cheapest is drawn from headline-eligible rows (trustworthy: never a current bid)',
+   /const trusted = listings\.filter\(outlier\.headlineEligible\)/.test(src) && /cheapest: trusted\.length \? trusted\[0\]\.landed/.test(src)
+   && !require('./outlier').headlineEligible({ source: 'ebay', priceKind: 'current-bid', landed: 1, live: true, sellerFeedback: { score: 999, percent: 100 } }));
 
 console.log('\n  the page says so');
 const page = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');

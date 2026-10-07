@@ -53,13 +53,16 @@ chk('the sort ranks suspects first of all',
 // sites — /api/listings and the /api/search chain — must skip flagged rows.
 // T1 (2026-09-30): ONE payload builder now, buildListingsPayload, reached by
 // both endpoints through listingsFor — stronger than two copies that agree.
-chk('one payload builder computes cheapest, filtering to trustworthy rows',
-    count(server, 'listings.filter(outlier.trustworthy)') === 1 &&
-    /function buildListingsPayload\([\s\S]*?const trusted = listings\.filter\(outlier\.trustworthy\);/.test(server));
+// 2026-10-07: the headline filter is outlier.headlineEligible — trustworthy()
+// AND the seller floor — still ONE place in ONE builder.
+chk('one payload builder computes cheapest, filtering to headline-eligible (trustworthy + seller floor) rows',
+    count(server, 'listings.filter(outlier.headlineEligible)') === 1 &&
+    /function buildListingsPayload\([\s\S]*?const trusted = listings\.filter\(outlier\.headlineEligible\);/.test(server)
+    && /function headlineEligible\(l\) \{ return trustworthy\(l\) && sellerMeetsFloor\(l\); \}/.test(require('fs').readFileSync(__dirname + '/outlier.js', 'utf8')));
 chk('cheapest is drawn from the trusted rows',
     count(server, 'cheapest: trusted.length ? trusted[0].landed : null') === 1);
 chk('cheapestLive is too',
-    count(server, "cheapestLive: (trusted.find(l => l.live) || {}).landed ?? null") === 1);
+    count(server, 'const headLive = trusted.find(l => l.live);') === 1 && count(server, 'cheapestLive: (headLive || {}).landed ?? null') === 1);
 chk('/api/listings and /api/search both answer through listingsFor',
     /const payload = await listingsFor\(card, cardId, grade, printing,/.test(server) &&
     /const lp = await listingsFor\(card, top\.cardId, grade, null, \{\}\);/.test(server) &&

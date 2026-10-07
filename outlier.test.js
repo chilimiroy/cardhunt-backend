@@ -110,4 +110,27 @@ chk('ranking still uses the DELIVERED price: cheapest trusted first by price + p
 chk('a row with no item price is judged on what it has (landed)', o.flagOutliers(feed.concat([{ id: 'x', landed: 3 }])).listings.find(l => l.id === 'x').suspect);
 }
 
+// ── The headline's seller floor (Roy, 2026-10-07) ──────────────
+console.log('\nThe headline needs a seller with a record\n');
+{
+const eb = (score, percent) => ({ source: 'ebay', price: 50, landed: 55, live: true, sellerFeedback: { score, percent } });
+chk('the floor is 10 feedback at 95% positive (below the vouching bar 100 @ 98%)',
+    o.HEADLINE_SELLER.minScore === 10 && o.HEADLINE_SELLER.minPercent === 95);
+chk('tonight\'s headline sellers fail it: 0 @ 0%, 1 @ 100%, 4 @ 100%, 5 @ 100%, -4 @ 0%, 78 @ 0%',
+    [[0, 0], [1, 100], [4, 100], [5, 100], [-4, 0], [78, 0]].every(([s, p]) => !o.headlineEligible(eb(s, p))));
+chk('KEEPS an established seller: 10 @ 95% (the edge), 69 @ 100%, 251 @ 100%, 2,906 @ 99.9%',
+    [[10, 95], [69, 100], [251, 100], [2906, 99.9]].every(([s, p]) => o.headlineEligible(eb(s, p))));
+chk('just under the edge fails: 9 @ 100%, 500 @ 94.9%', !o.headlineEligible(eb(9, 100)) && !o.headlineEligible(eb(500, 94.9)));
+chk('a shop\'s ask (no feedback exists) passes; an eBay seller we cannot see does not',
+    o.headlineEligible({ source: 'yuyutei', price: 50, landed: 50, live: true }) && !o.headlineEligible({ source: 'ebay', price: 50, landed: 55, live: true }));
+chk('the floor never rescues a flagged row or a current bid',
+    !o.headlineEligible(Object.assign(eb(5000, 100), { suspect: 'unusually-cheap' })) && !o.headlineEligible(Object.assign(eb(5000, 100), { priceKind: 'current-bid' })));
+const S = require('fs').readFileSync(__dirname + '/server.js', 'utf8');
+chk('the payload\'s headline fields come from headlineEligible, and it says how many cheaper rows it stepped over',
+    /const trusted = listings\.filter\(outlier\.headlineEligible\);/.test(S) && /cheapestLive: \(headLive \|\| \{\}\)\.landed \?\? null,/.test(S)
+    && /headlineFloor: \{ minScore: outlier\.HEADLINE_SELLER\.minScore/.test(S));
+const P = require('fs').readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
+chk('the page says so beside the headline', /d\.headlineFloor && d\.headlineFloor\.skippedCheaper/.test(P) && /listed but not counted/.test(P));
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

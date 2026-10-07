@@ -79,7 +79,7 @@ function notADeal(l, base) {
   if (l.saleType === 'auction' || !outlier.trustworthy(l)) return l.suspect ? 'flagged: ' + l.suspect : 'a current bid';
   if (!l.shippingKnown || !(Number(l.landed) > 0)) return 'shipping not stated';
   if (l.materialPending) return 'novelty check not run yet';
-  if (l.stamp && l.stamp.state === 'pending') return 'photo still being compared';
+  if (l.stamp && l.stamp.state === 'pending') return 'photo not checked yet';
   if (l.back && (l.back.state === 'other-back' || l.back.metal)) return 'back check marked it';
   if (l.sellerStated && BELOW_NM.has(l.sellerCondition)) return 'stated condition below near mint';
   if (l.printingStated && (/^reverse/.test(l.printing || '') || l.printing !== base)) return 'states another printing';
@@ -148,6 +148,50 @@ function backCandidates(payload, ref, budget) {
   return out;
 }
 
+// ── The VOUCHING bar (Roy, 2026-10-07) — measured; the shelf stays OFF ──
+// Every check above asks "is there evidence this is bad?", and a damaged or
+// wrong card with nothing visibly wrong passes it. This asks the other
+// question: "is there enough evidence to vouch for this one?" — and anything
+// without it is SKIPPED, never passed. Absence of evidence is a skip.
+// vouchFree: every criterion the view already answers (0 calls). The two
+// that need the seller's photos — at least VOUCH.minPhotos, and a genuine
+// back — come from ONE getItem (vouchPhotos), asked only of rows that
+// cleared everything free. Each returns the signals cleared, or why not.
+const VOUCH = { minFeedbackScore: 100, minFeedbackPercent: 98, minPhotos: 2 };
+function vouchFree(l, payload, ref) {
+  const cleared = [];
+  const no = notADeal(l, basePrintingOf(payload));
+  if (no) return { skip: no };
+  cleared.push('live Buy It Now, shipping stated, unflagged (outlier / reprint price / year / novelty), no other printing or edition stated');
+  if (!refUsable(ref) || discountOf(l, ref) < MIN_DISCOUNT) return { skip: 'not ' + Math.round(MIN_DISCOUNT * 100) + '% below a current measured price' };
+  cleared.push(Math.round(discountOf(l, ref) * 100) + '% below the current measured price');
+  const sg = (payload && payload.stampGate) || {};
+  if (sg.notRun && sg.notRun.length) return { skip: 'a photo check could not run on this card (' + sg.notRun.map(r => r.label).join(', ') + ')' };
+  if (sg.applied) {
+    if (!l.stamp || l.stamp.state !== 'not-visible') return { skip: 'photo check ' + (l.stamp ? l.stamp.state : 'not run') + ' (' + (sg.kind || '?') + ')' };
+    cleared.push('photo check ran and passed (' + sg.kind + ')');
+  } else cleared.push('no reprint, pair or sibling check applies to this card');
+  const mc = (payload && payload.materialCheck) || {};
+  if (!mc.applied) return { skip: 'novelty (colour) check cannot run on this card' + (mc.reason ? ': ' + mc.reason : '') };
+  if (l.materialPending) return { skip: 'novelty (colour) check not run on this row yet' };
+  cleared.push('novelty (colour) check ran and passed');
+  if (!l.sellerStated || !l.sellerCondition && l.conditionSource !== 'ebay') return { skip: 'no condition stated by the seller' };
+  cleared.push('condition stated near mint or better (' + (l.conditionSource === 'ebay' ? "eBay's Card Condition field" : 'title') + ')');
+  const fb = l.sellerFeedback || {};
+  if (!(fb.score >= VOUCH.minFeedbackScore && fb.percent >= VOUCH.minFeedbackPercent))
+    return { skip: 'seller feedback ' + (fb.score == null ? 'unknown' : fb.score + ' at ' + fb.percent + '%') + ' (needs ' + VOUCH.minFeedbackScore + '+ at ' + VOUCH.minFeedbackPercent + '%+)' };
+  cleared.push('seller feedback ' + fb.score + ' at ' + fb.percent + '%');
+  return { cleared, identity: sg.applied && /lookalike|sibling|both/.test(sg.kind || '') ? sg.kind : 'none' };
+}
+// The photos: v is the back check's own answer for this row ({ state, photos, metal }).
+function vouchPhotos(v) {
+  if (!v || v.error) return { skip: 'back check could not run' + (v && v.error ? ': ' + v.error : '') };
+  if (!(v.photos >= VOUCH.minPhotos)) return { skip: (v.photos || 0) + ' photo' + (v.photos === 1 ? '' : 's') + ' (needs ' + VOUCH.minPhotos + '+)' };
+  if (v.metal) return { skip: 'a gold/black metal photo among the seller\'s' };
+  if (v.state !== 'genuine-back') return { skip: 'back not vouched: ' + (v.state || 'no verdict') };
+  return { cleared: [v.photos + ' photos', 'genuine back found'] };
+}
+
 function rankDeals(deals) {
   return deals.slice().sort((a, b) => b.discount - a.discount || a.listing.landed - b.listing.landed);
 }
@@ -161,4 +205,5 @@ function describeRule() {
 }
 
 module.exports = { ENABLED, OFF_REASON, MIN_DISCOUNT, MIN_TRUSTED, DEAL_BACK_MAX, BELOW_NM, basePrintingOf, notADeal, noGenuineBack,
+  VOUCH, vouchFree, vouchPhotos, discountOf,
                    pickDeal, backCandidates, rankDeals, describeRule };

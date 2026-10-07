@@ -1989,6 +1989,9 @@ function normaliseListing(o) {
     landed: +(price + (shipping || 0)).toFixed(2),
     condition: o.condition || 'Raw',
     seller: o.seller || null,
+    // eBay's feedback for the seller, as the search returned it (2026-10-07;
+    // the vouching bar reads it). A label of this view, never stored.
+    sellerFeedback: o.sellerFeedback || null,
     url: o.url || null,
     imageUrl: o.imageUrl || null,
     endsAt: o.endsAt || null,
@@ -2918,6 +2921,8 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       marketplace: mp,
       condition: jpf.isRawGrade(grade) ? (it.condition || 'Raw') : String(grade),
       seller: it.seller && it.seller.username,
+      sellerFeedback: it.seller && it.seller.feedbackScore != null
+        ? { score: Number(it.seller.feedbackScore), percent: parseFloat(it.seller.feedbackPercentage) } : null,
       url: it.itemWebUrl,
       // eBay's own item id, so a row can be Verified on demand (certcheck.js).
       itemId: it.itemId || null,
@@ -6028,6 +6033,40 @@ app.get('/api/ebay/dealsprobe/:cardId', toolingKey.require, async (req, res) => 
     const pendingOf = p => ((p && p.stampGate && p.stampGate.pending) || 0) + ((p && p.materialCheck && p.materialCheck.pending) || 0);
     const reread = async () => { const p = await listingsFor(card, id, grade, null, { poll: true }); return p && !p.notFetched ? p : payload; };
     while (pendingOf(payload) > 0 && Date.now() - t0 < waitMs) { await new Promise(r => setTimeout(r, 2000)); payload = await reread(); }
+    // ?bar=vouch (Roy, 2026-10-07): the VOUCHING bar — skip anything without
+    // the evidence to vouch for it. Cheapest first; every free criterion
+    // (deals.vouchFree) before the one paid one (the back check's getItem,
+    // at most DEAL_BACK_MAX a card); the first row clearing all is the pick.
+    if (req.query.bar === 'vouch') {
+      const ref = await dealRefOf(id);
+      const rows = (payload.listings || []).slice().sort((a, b) => Number(a.landed) - Number(b.landed));
+      const skipped = {}, reachedBack = [];
+      let pick = null, backsAsked = 0, backCalls = 0;
+      const brief = l => ({ title: String(l.title || '').slice(0, 110), landed: l.landed, url: l.url, imageUrl: l.imageUrl,
+        seller: l.seller, sellerFeedback: l.sellerFeedback || null, condition: l.sellerCondition || l.condition, conditionSource: l.conditionSource || null });
+      const skip = (why, l) => { const k = why.replace(/-?\d+(\.\d+)?/g, 'N'); skipped[k] = (skipped[k] || 0) + 1; if (l) reachedBack.push(Object.assign(brief(l), { skip: why })); };
+      for (const l of rows) {
+        const f = deals_.vouchFree(l, payload, ref);
+        if (f.skip) { skip(f.skip); continue; }
+        if (!backcheck.familyOf(id)) { skip('the back check does not cover this card', l); continue; }
+        if (backsAsked >= deals_.DEAL_BACK_MAX) { skip('back-check budget for this card spent', l); continue; }
+        backsAsked++;
+        const v = await backCheckItem(card, l.itemId, { background: true }).catch(e => ({ error: e.message }));
+        backCalls += (v && v.calls) || 0;
+        const p = deals_.vouchPhotos(v);
+        if (p.skip) { skip(p.skip, l); continue; }
+        pick = Object.assign(brief(l), { discount: +deals_.discountOf(l, ref).toFixed(3), cleared: f.cleared.concat(p.cleared),
+          identity: f.identity, stamp: l.stamp || null, back: { state: v.state, photos: v.photos } });
+        break;
+      }
+      const sg = payload.stampGate || {}, mc = payload.materialCheck || {};
+      return res.json({ bar: 'vouch', cardId: id, name: card.name, number: card.number, set: card.set_name_en || card.set_name,
+        ref, pick, examined: rows.length, skipped, reachedBack, backsAsked, backCalls,
+        checks: { photoGate: { applied: !!sg.applied, kind: sg.kind || null, notRun: sg.notRun || null, pending: sg.pending || 0 },
+                  material: { applied: !!mc.applied, pending: mc.pending || 0, reason: mc.reason || null } },
+        langUnion: payload.sources && payload.sources.ebay && payload.sources.ebay.langUnion || null,
+        waitedMs: Date.now() - t0, stillPending: pendingOf(payload), stored: false, at: new Date().toISOString() });
+    }
     const backWork = dealBackFollowUp(card, id, grade, null, null, payload, { measure: true });
     if (backWork) { await backWork; payload = await reread(); }
     const ref = await dealRefOf(id);

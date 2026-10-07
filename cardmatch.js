@@ -351,6 +351,26 @@ function sellerCondition(title) {
   return { code: null, stated: false };
 }
 
+// The WORST condition a title states (2026-10-07). sellerCondition stops at
+// the first pattern in its order, so "NM/LP" read NM; a seller writing a
+// range states its lower end. Every pattern is tried and the worst kept:
+// "Near Mint" also matches the bare "mint" pattern, and NM is the worse of
+// the two, so it still reads NM; "Excellent-Mint" reads LP.
+const CONDITION_RANK = { M: 0, NM: 1, LP: 2, MP: 3, HP: 4, DMG: 5 };
+function worstStatedCondition(title) {
+  const t = stripHitPoints(title);
+  let worst = null;
+  for (const p of RAW_CONDITION_PATTERNS)
+    if (p.re.test(t) && (worst === null || CONDITION_RANK[p.code] > CONDITION_RANK[worst])) worst = p.code;
+  return { code: worst, stated: worst !== null };
+}
+// The worse of two claims (eBay's dropdown, the title); null when neither.
+function worseCondition(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  return CONDITION_RANK[b] > CONDITION_RANK[a] ? b : a;
+}
+
 // ── eBay's OWN card condition — structured, and filterable in search ──
 //
 // Measured 2026-09-27 through /api/ebay/conditions, superseding the title
@@ -2525,7 +2545,7 @@ const API = {
   OTHER_LANGUAGE_WORDS, SHARED_NUMBERING_JA_CODES, otherLanguageExclusions, refusalLanguage,
   statedYearConflict, statedYearIsReprintYear,
   normNum, numberPairsIn, gradesIn, parseGrade, yearsIn, conditionSaysGraded,
-  qualifiersIn, sellerCondition, stripHitPoints,
+  qualifiersIn, sellerCondition, worstStatedCondition, worseCondition, CONDITION_RANK, stripHitPoints,
   EBAY_CARD_CONDITION, EBAY_CONDITION_CODES, ebayConditionFilter, EBAY_SITE_ASPECTS, siteAspects,
   TITLE_ONLY_CONDITIONS, titleOnlyCondition,
   EBAY_GRADER, ebayGradeFilter, titleGradeClaims,

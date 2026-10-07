@@ -2052,6 +2052,8 @@ function normaliseListing(o) {
     conditionSource: o.conditionSource || null,
     gradeSource: o.gradeSource || null,
     titleCondition: o.titleCondition || null,
+    // eBay's dropdown said one condition, the title a worse one (2026-10-07).
+    conditionConflict: o.conditionConflict || null,
     // eBay Browse item id — the handle for an on-demand cert check. Served
     // with the row like the url is; never stored (eBay's terms).
     itemId: o.itemId || null,
@@ -2907,6 +2909,7 @@ async function sourceEbay(card, grade, limit, opts = {}) {
     // Seller-stated raw condition, parsed once per row. cardmatch owns it —
     // a second implementation here is the estimator split all over again.
     const sc = cm.sellerCondition ? cm.sellerCondition(it.title) : { code: null, stated: false };
+    const scWorst = cm.worstStatedCondition(it.title);
     listings.push(normaliseListing({
       source: 'ebay',
       sourceLabel: 'eBay',
@@ -2958,12 +2961,20 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       // nothing but "Ungraded" on every one of these — measured across 447
       // live rows. cardmatch owns the parsing, including the "120 HP is Hit
       // Points" and "Charizard ex is not Excellent" traps.
-      // Under a condition filter eBay has already answered, in its own
-      // structured field; the title is kept only as a second opinion.
-      sellerCondition: condFilter ? condFilter.code : sc.code,
-      sellerStated: condFilter ? true : sc.stated,
-      conditionSource: condFilter ? 'ebay' : (sc.stated ? 'title' : null),
-      titleCondition: sc.stated ? sc.code : null,
+      // Under a condition filter eBay has answered from the seller's
+      // DROPDOWN, which sellers set to "Near Mint or Better" freely while
+      // typing the honest condition in the title (2026-10-07: 23 of 939 kept
+      // Raw NM rows, 11% of Base Blastoise's). The WORSE of the two claims
+      // stands; a title range ("NM/LP") states its lower end
+      // (cm.worstStatedCondition). conditionConflict names the disagreement.
+      sellerCondition: condFilter ? cm.worseCondition(condFilter.code, scWorst.code) : scWorst.code,
+      sellerStated: condFilter ? true : scWorst.stated,
+      conditionSource: condFilter
+        ? (scWorst.stated && cm.CONDITION_RANK[scWorst.code] > cm.CONDITION_RANK[condFilter.code] ? 'title' : 'ebay')
+        : (scWorst.stated ? 'title' : null),
+      conditionConflict: condFilter && scWorst.stated && cm.CONDITION_RANK[scWorst.code] > cm.CONDITION_RANK[condFilter.code]
+        ? { ebay: condFilter.code, title: scWorst.code } : null,
+      titleCondition: scWorst.stated ? scWorst.code : null,
       // 'ebay' = the title named no grade and eBay's grade fields answered;
       // 'title+ebay' = both, and they agreed; 'title' = no filter applied.
       gradeSource: v.gradeSource || null,

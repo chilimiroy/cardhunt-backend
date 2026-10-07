@@ -34,6 +34,14 @@ console.log('\n  a name is a word, not a substring');
 const mew = card('en-sv03.5-151', 'Mew ex', '151', 165, '151', 'sv03.5', 2023);
 ok('"Mewtwo ex 151/165" does not name Mew', !v('Mewtwo ex 151/165 Pokemon 151', mew).ok);
 ok('"Mew ex 151/165" does', v('Mew ex 151/165 Pokemon 151 Double Rare NM', mew).ok);
+// The clean-checkout run caught both (variants.test.js): "Poké" flattened to
+// "pok", and a name run together has no boundary after its first word.
+const pb = card('en-sv01-185', 'Poké Ball', '185', 198, 'Scarlet & Violet', 'sv01', 2023);
+const mb = card('en-sv06-153', 'Master Ball', '153', 167, 'Twilight Masquerade', 'sv06', 2024);
+ok('"Poke Ball" names Poké Ball (accents folded)', v('Poke Ball 185/198 Scarlet & Violet', pb).ok);
+ok('"Poké Ball" names it too', v('Poké Ball 185/198 Scarlet & Violet', pb).ok);
+ok('"Masterball" names Master Ball (run together)', v('Pokemon Masterball 153/167 Twilight Masquerade', mb).ok);
+ok('"Mewtwo" is still not Mew run together', !v('Mewtwo 151/165 Pokemon 151', mew).ok);
 
 console.log('\n  the trade-off, stated: named ONLY through the kit is refused (either half could be meant)');
 ok('"EX Trainer Kit Latias & Latios 4/10 Holo" -> refused', !v('EX Trainer Kit Latias & Latios 4/10 Holo 2004', latias).ok);

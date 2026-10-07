@@ -2364,7 +2364,7 @@ function verifyCore(title, card, grade, opts) {
   // 3. Card name must be present
   const wantName = String(card.nameEn || card.name || '').toLowerCase();
   if (wantName) {
-    const core = wantName
+    const core = foldAccents(wantName)
       .replace(/\b(ex|gx|v|vmax|vstar|v-union|break|prime|lv\.?x|star)\b/g, '')
       .replace(/[^a-z0-9\s']/g, ' ').replace(/\s+/g, ' ').trim();
     const firstWord = core.split(' ')[0];
@@ -2375,8 +2375,12 @@ function verifyCore(title, card, grade, opts) {
     // passed with a genuine back. Kit pairs are masked first (KIT_NAME_PAIRS);
     // a card whose own name has "&" (TAG TEAM) is never masked. And
     // substring was never a name: "mew" is not in "Mewtwo" as a word.
-    const lowerForName = /&/.test(wantName) ? lower : maskKitNames(lower);
-    if (firstWord && firstWord.length > 2 && !new RegExp(boundedTerm(firstWord), 'i').test(lowerForName)) {
+    // Accents are stripped on both sides ("Poké" was "pok"), and the whole name
+    // run together also names it ("Masterball", "Pokeball").
+    const lowerForName = foldAccents(/&/.test(wantName) ? lower : maskKitNames(lower));
+    const joined = core.replace(/\s+/g, '');
+    if (firstWord && firstWord.length > 2 && !new RegExp(boundedTerm(firstWord), 'i').test(lowerForName)
+        && !(joined !== firstWord && new RegExp(boundedTerm(joined), 'i').test(lowerForName))) {
       return { ok: false, reason: `title does not name ${firstWord}` };
     }
     // Mechanic suffix must agree — a plain Charizard is not a Charizard VMAX

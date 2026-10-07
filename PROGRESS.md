@@ -47,6 +47,22 @@ compared until a visitor scrolls (`deb83b7`), so the shelf can never vouch
 for such a row. 7 is a floor, not the yield. Shape agreed with Roy: deals is a
 background job and asks for comparisons of the rows it judges; not built.
 
+### The fixes, measured on the same 40 (rows=1 capture, 136 calls)
+- **Item price for the floor** (`baff795`, deployed): both rules replayed on
+  identical rows of all 80 views — 7 rows newly flagged, **0 un-flagged**;
+  all 7 are union rows lifted by ZIP shipping (the four above, and three
+  Charizard GX 150 at $76-80 under a $80.61 line, sellers at 0-1 feedback).
+  Replay matched the live flag count on 70 of 80 views (in 10 the live view
+  flagged slightly more, rows later gates remove).
+- **Headline seller floor** (`e2b91c4`, branch only, threshold Roy's):
+  19 of 40 headlines were sellers under 10 feedback. At 10 @ 95%: 20 change,
+  median +123% (Umbreon VMAX $800 -> $1,981 against $2,292). 20 @ 97%: 23;
+  50 @ 98%: 27.
+- **Union drops** under both: 5 -> 2, both ZIP-only rows. Charizard VSTAR
+  SWSH262 $40.27 (251 @ 100%, 59% of market — plausibly a real cheaper ask);
+  Blastoise $30.06 (69 @ 100%, 13.5% of market) — unexplained; several
+  established sellers ask ~$25. Union NOT shipped.
+
 ### Gate work, found by the picks (not fixed)
 - "PRERELEASE" in a Dark Gyarados 8/82 title passed as the base card — a
   prerelease stamp is another printing.

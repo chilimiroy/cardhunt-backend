@@ -46,6 +46,11 @@ const box = page.slice(page.indexOf('id="cd-viewwrap"'), page.indexOf('id="cd-se
 ok(box.indexOf('id="cd-sold"') > 0 && box.indexOf('id="cd-vtog"') > box.indexOf('id="cd-chart"'), 'the toggle sits beside the views, after Last sold');
 ok(page.indexOf('id="cd-selector"') > page.indexOf('id="cd-vtog"') && page.indexOf('id="cd-selector"') < page.indexOf('<div class="lbox'),
    'the selector is below the toggle area, in the price column');
+// TASK-ui T3: the links area directly under the grid, full width, nothing between.
+ok(/<\/div><!-- \/\.cdgrid -->\s*<!-- 2\. the links area[\s\S]*?-->\s*<div class="lbox price-only">/.test(page),
+   'the listings panel follows the grid directly, at the grid\'s width');
+ok(['id="ltab-bin"', 'id="ltab-auction"', 'id="cd-listings"'].every(s => page.slice(page.indexOf('<div class="lbox price-only">')).indexOf(s) > 0
+   && page.indexOf(s) > page.indexOf('<div class="lbox price-only">')), 'its tabs and the listings host moved with it, ids unchanged');
 ok(!/id="cd-meta"/.test(page) && !/function renderCardInfo/.test(page), 'T2: the details box and its writer are gone, not left dormant');
 for (const id of ['cd-img', 'cd-mkt', 'cd-low', 'cd-sold', 'cd-trend-bar', 'cd-52low', 'cd-52high',
                   'cd-sub', 'cd-chart', 'cd-chart-src', 'cd-grade-lbl'])

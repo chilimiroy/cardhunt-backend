@@ -971,14 +971,15 @@ html:not(.ch-noprice) .price-door { display: none !important; }
   </nav>
   <div class="content" style="padding-top:28px">
     <div class="bc"><span class="lnk" id="cd-set-lnk" onclick="SS('setdetail')">Set</span> › <span id="cd-bc">—</span></div>
-    <!-- ══ CARD PAGE LAYOUT ══ Roy's spec (TASK.md T4), top to bottom:
-           1. card image | the three price boxes and the price position bar
-           2. information panel UNDER the image, its width | price history
-              graph beside it
-           3. status and condition, below those, full width
-           4. live listings
-         The price table is gone - Roy's call. Its rows were raw price x a
-         fixed multiplier, never measured.
+    <!-- ══ CARD PAGE LAYOUT ══ (TASK-ui, 2026-10-07; rules in CLAUDE.md)
+           above the image: name, then set · number · year · rarity · artist
+           1. the card image | the price column: ONE view area (the three
+              price boxes and the position bar, OR the price history - the
+              toggle beside Last sold swaps them), then the grade selector,
+              ending level with the image panel
+           2. the links area (live listings), full width under both
+         The details box under the image is gone (T2) and the price table
+         before it (Roy, TASK.md T4: raw price x a fixed multiplier).
 
          Every element id the logic addresses is unchanged. openCard(),
          selGrade(), updatePrices(), updateValueBar() and
@@ -1054,19 +1055,23 @@ html:not(.ch-noprice) .price-door { display: none !important; }
           <div id="cd-selector" class="price-only"></div>
           </div><!-- /.price-only (price column) -->
         </div>
-      </div>
+      </div><!-- /.cdgrid -->
 
-        <div class="lbox price-only">
-          <div class="lhdr">
-            <div class="ltabs2">
-              <button class="ltab on" id="ltab-bin" onclick="setLTab(this,'live')">Buy It Now</button>
-              <button class="ltab" id="ltab-auction" onclick="setLTab(this,'auction')">Auctions</button>
-              <button class="ltab" onclick="setLTab(this,'sold')">Recent sales</button>
-              <button class="ltab" onclick="setLTab(this,'local')">Near you</button>
-            </div>
+      <!-- 2. the links area (TASK-ui T3, 2026-10-07): directly under the
+           image and the price column, the full width of both — nothing
+           between them. Position only: the panel's tabs, photo-check
+           labels, refusal counts and "Load more" are unchanged. -->
+      <div class="lbox price-only">
+        <div class="lhdr">
+          <div class="ltabs2">
+            <button class="ltab on" id="ltab-bin" onclick="setLTab(this,'live')">Buy It Now</button>
+            <button class="ltab" id="ltab-auction" onclick="setLTab(this,'auction')">Auctions</button>
+            <button class="ltab" onclick="setLTab(this,'sold')">Recent sales</button>
+            <button class="ltab" onclick="setLTab(this,'local')">Near you</button>
           </div>
-          <div id="cd-listings"></div>
         </div>
+        <div id="cd-listings"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -7436,6 +7441,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-c53b78d-charttoggle &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-6a2939c-links &middot; click to hide</div>
 </body>
 </html>

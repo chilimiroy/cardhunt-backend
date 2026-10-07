@@ -114,6 +114,9 @@ try { document.documentElement.classList.add('ch-noprice'); } catch (e) {}
      #C62128 (5.75:1 on white); the cream #EBE7DB is 1.24:1 on white, so Zon
      takes the logo's own shadowed cream #686858 (5.66:1). */
   --brand-card:#C62128; --brand-zon:#686858;
+  /* The mark has no plinth: its cream Z is 1.24:1 on white and its deep red C
+     faint on the dark bar. A hairline edge per theme gives each its shape. */
+  --logo-edge:drop-shadow(0 0 .6px rgba(20,22,28,.7)) drop-shadow(0 1px 1px rgba(20,22,28,.25));
   --shadow:0 1px 2px rgba(20,22,28,.06),0 8px 24px -12px rgba(20,22,28,.18);
   --radius:14px;
 
@@ -141,7 +144,7 @@ try { document.documentElement.classList.add('ch-noprice'); } catch (e) {}
     --warn:#E0AA51; --warn-soft:#332711;
     --crit:#E27878; --crit-soft:#3A2222;
     --money:#E0B45C;
-    --brand-card:#C54748; --brand-zon:#EBE7DB;
+    --brand-card:#C54748; --brand-zon:#EBE7DB; --logo-edge:drop-shadow(0 0 .6px rgba(236,237,243,.55));
     --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.5);
   }
 }
@@ -157,7 +160,7 @@ try { document.documentElement.classList.add('ch-noprice'); } catch (e) {}
   --money:#E0B45C;
   /* Dark: #C62128 is 2.86:1 on the bar, under 3:1 for large text; the
      logo's lit-red highlight #C54748 is 3.43:1. The cream #EBE7DB, 13.3:1. */
-  --brand-card:#C54748; --brand-zon:#EBE7DB;
+  --brand-card:#C54748; --brand-zon:#EBE7DB; --logo-edge:drop-shadow(0 0 .6px rgba(236,237,243,.55));
   --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.5);
 }
 
@@ -185,7 +188,11 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
    plate behind it - the mark has its own shape. --logo-sz is the largest
    that leaves the bar's height unchanged at every width (CLAUDE.md). */
 .logo{--logo-sz:42px}
-.logo-i{height:var(--logo-sz);width:auto;aspect-ratio:98/96;flex-shrink:0;object-fit:contain}
+/* 641-900px the nav does not wrap and already overflowed sideways before the
+   mark changed (measured 2026-10-07); the plinth-free mark is wider, so here it
+   stays 30px tall = 42px wide, no wider than the old one. */
+@media(max-width:900px){.logo{--logo-sz:30px}}
+.logo-i{height:var(--logo-sz);width:auto;aspect-ratio:134/96;flex-shrink:0;object-fit:contain;filter:var(--logo-edge)}
 /* The wordmark (T6): Card in the logo's red, Zon in its cream, as tokens per
    theme (--brand-card, --brand-zon). A display name only. */
 /* One word: .logo is a flex row with a 10px gap, which split Card from its second half. */
@@ -239,7 +246,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
    it the full column. Dead CSS is not inert when the name collides. */
 /* The sign-in panel's mark (T7): the 256px file, shown at 88px. */
 .llogo{display:flex;justify-content:center;margin:-4px 0 14px}
-.llogo-i{height:88px;width:auto;aspect-ratio:260/256}
+.llogo-i{height:88px;width:auto;aspect-ratio:358/256;filter:var(--logo-edge)}
 .lh{font-size:24px;font-weight:700;color:#fff;margin-bottom:6px;text-align:center;letter-spacing:-.4px}
 .lsub{font-size:14px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:32px;line-height:1.6}
 .lf{margin-bottom:14px}.lf label{display:block;font-size:11px;font-weight:700;color:rgba(255,255,255,.45);margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em}
@@ -637,7 +644,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 <!-- ══ HOME ══ -->
 <div id="screen-home" class="screen on">
   <nav class="nav">
-    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png" srcset="cardzon-logo-96.png 1x, cardzon-logo-144.png 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
+    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png?v=2" srcset="cardzon-logo-96.png?v=2 1x, cardzon-logo-144.png?v=2 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
     <button class="nl on" onclick="SS('home')">Home</button>
     <button class="nl" onclick="SS('search')">Search</button>
     <button class="nl" onclick="SS('sets')">Sets</button>
@@ -779,7 +786,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 <div id="screen-pokemon" class="screen">
   <nav class="nav">
     <button class="btn" onclick="goBack()" style="padding:7px 12px;font-size:13px;margin-right:8px">← Back</button>
-    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png" srcset="cardzon-logo-96.png 1x, cardzon-logo-144.png 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
+    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png?v=2" srcset="cardzon-logo-96.png?v=2 1x, cardzon-logo-144.png?v=2 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
     <button class="nl" onclick="SS('home')">Home</button><button class="nl on">Pokémon</button>
     <button class="nl" onclick="SS('sets')">Sets</button><button class="nl" onclick="SS('portfolio')">Portfolio</button>
     <div class="nav-r"></div>
@@ -843,7 +850,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 <div id="screen-search" class="screen">
   <nav class="nav">
     <button class="btn" onclick="goBack()" style="padding:7px 12px;font-size:13px;margin-right:8px">← Back</button>
-    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png" srcset="cardzon-logo-96.png 1x, cardzon-logo-144.png 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
+    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png?v=2" srcset="cardzon-logo-96.png?v=2 1x, cardzon-logo-144.png?v=2 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
     <button class="nl" onclick="SS('home')">Home</button><button class="nl on">Search</button>
     <button class="nl" onclick="SS('sets')">Sets</button><button class="nl" onclick="SS('portfolio')">Portfolio</button>
     <div class="nav-r"><div class="nsearch"><span class="nsearch-i">🔍</span><input id="search-q" placeholder="Search any card…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
@@ -891,7 +898,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 <div id="screen-results" class="screen">
   <nav class="nav">
     <button class="btn" onclick="goBack()" style="padding:7px 12px;font-size:13px;margin-right:8px">← Back</button>
-    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png" srcset="cardzon-logo-96.png 1x, cardzon-logo-144.png 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
+    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png?v=2" srcset="cardzon-logo-96.png?v=2 1x, cardzon-logo-144.png?v=2 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
     <button class="nl" onclick="SS('home')">Home</button><button class="nl on" onclick="SS('search')">Search</button>
     <button class="nl" onclick="SS('sets')">Sets</button>
     <div class="nav-r"><div class="nsearch"><span class="nsearch-i">🔍</span><input id="results-refine" placeholder="Refine…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
@@ -922,7 +929,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 <!-- ══ SETS ══ -->
 <div id="screen-sets" class="screen">
   <nav class="nav">
-    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png" srcset="cardzon-logo-96.png 1x, cardzon-logo-144.png 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
+    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png?v=2" srcset="cardzon-logo-96.png?v=2 1x, cardzon-logo-144.png?v=2 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
     <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
     <button class="nl on">Sets</button><button class="nl" onclick="SS('portfolio')">Portfolio</button>
     <div class="nav-r"><input class="tbq" id="sets-q" style="width:210px;padding:8px 14px" placeholder="Search sets…" oninput="filterSets(this.value)"></div>
@@ -945,7 +952,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 <div id="screen-setdetail" class="screen">
   <nav class="nav">
     <button class="btn" onclick="goBack()" style="padding:7px 12px;font-size:13px;margin-right:8px">← Back</button>
-    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png" srcset="cardzon-logo-96.png 1x, cardzon-logo-144.png 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
+    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png?v=2" srcset="cardzon-logo-96.png?v=2 1x, cardzon-logo-144.png?v=2 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
     <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
     <button class="nl on" onclick="SS('sets')">Sets</button>
     <div class="nav-r"></div>
@@ -975,7 +982,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 <div id="screen-card" class="screen">
   <nav class="nav">
     <button class="btn" onclick="goBack()" style="padding:7px 12px;font-size:13px;margin-right:8px">← Back</button>
-    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png" srcset="cardzon-logo-96.png 1x, cardzon-logo-144.png 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
+    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png?v=2" srcset="cardzon-logo-96.png?v=2 1x, cardzon-logo-144.png?v=2 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
     <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
     <button class="nl on">Card</button>
     <div class="nav-r">
@@ -1095,7 +1102,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 <!-- ══ PORTFOLIO ══ -->
 <div id="screen-portfolio" class="screen">
   <nav class="nav">
-    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png" srcset="cardzon-logo-96.png 1x, cardzon-logo-144.png 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
+    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png?v=2" srcset="cardzon-logo-96.png?v=2 1x, cardzon-logo-144.png?v=2 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
     <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
     <button class="nl" onclick="SS('sets')">Sets</button><button class="nl on">Portfolio</button>
     <div class="nav-r">
@@ -7666,7 +7673,7 @@ function cleanSeries(name) {
 <div id="auth-overlay" class="overlay">
   <div class="modal" style="max-width:420px">
     <button class="modal-x" onclick="closeM('auth-overlay')" aria-label="Close">&#10005;</button>
-    <div class="llogo"><img class="llogo-i" src="cardzon-logo-256.png" alt=""></div>
+    <div class="llogo"><img class="llogo-i" src="cardzon-logo-256.png?v=2" alt=""></div>
     <div id="auth-body"></div>
   </div>
 </div>
@@ -7693,7 +7700,7 @@ function cleanSeries(name) {
 <!-- ══ ALERTS SCREEN ══ -->
 <div id="screen-alerts" class="screen">
   <nav class="nav">
-    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png" srcset="cardzon-logo-96.png 1x, cardzon-logo-144.png 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
+    <div class="logo" onclick="SS('home')"><img class="logo-i" src="cardzon-logo-96.png?v=2" srcset="cardzon-logo-96.png?v=2 1x, cardzon-logo-144.png?v=2 2x" alt=""><span class="wm">Card<em>Zon</em></span></div>
     <button class="nl" onclick="SS('home')">Home</button>
     <button class="nl" onclick="SS('search')">Search</button>
     <button class="nl" onclick="SS('sets')">Sets</button>
@@ -7839,6 +7846,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-195c2fb-rawstart &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-fb5fe5c-markonly &middot; click to hide</div>
 </body>
 </html>

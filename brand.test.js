@@ -17,8 +17,18 @@ console.log('\n  T7: the logo');
 const navs = H.match(/<nav class="nav">[\s\S]*?<\/nav>/g) || [];
 ok('nine navs', navs.length === 9, navs.length);
 const logos = navs.map(n => (n.match(/<div class="logo"[^>]*>([\s\S]*?)<\/div>/) || [])[1] || '');
-ok('every nav logo is the 96px PNG with the 144px one for 2x',
-   logos.every(l => /<img class="logo-i" src="cardzon-logo-96\.png" srcset="cardzon-logo-96\.png 1x, cardzon-logo-144\.png 2x" alt="">/.test(l)), logos.length);
+// ?v=2: the plinth-free mark (2026-10-07) replaced the files under the same
+// names, and the route caches a day — the query makes browsers fetch it.
+ok('every nav logo is the 96px PNG with the 144px one for 2x, versioned',
+   logos.every(l => /<img class="logo-i" src="cardzon-logo-96\.png\?v=2" srcset="cardzon-logo-96\.png\?v=2 1x, cardzon-logo-144\.png\?v=2 2x" alt="">/.test(l)), logos.length);
+// The plinth is gone: the files are the C/Z mark alone, wider than tall.
+const png = f => { const b = fs.readFileSync(__dirname + '/' + f); return [b.readUInt32BE(16), b.readUInt32BE(20)]; };
+ok('no plinth: each file is the C/Z mark alone (134x96, 201x144, 358x256)',
+   String(png('cardzon-logo-96.png')) === '134,96' && String(png('cardzon-logo-144.png')) === '201,144' && String(png('cardzon-logo-256.png')) === '358,256');
+ok('a hairline edge per theme: dark on light (the cream Z), light on dark (the deep red C)',
+   /--logo-edge:drop-shadow\(0 0 \.6px rgba\(20,22,28,\.7\)\)/.test(H) && (H.match(/--logo-edge:drop-shadow\(0 0 \.6px rgba\(236,237,243,\.55\)\);/g) || []).length === 2
+   && /@media\(max-width:900px\)\{\.logo\{--logo-sz:30px\}\}/.test(H)
+   && /\.logo-i\{[^}]*filter:var\(--logo-edge\)\}/.test(H) && /\.llogo-i\{[^}]*filter:var\(--logo-edge\)\}/.test(H));
 ok('no glyph left in any nav', !/⚡/.test(navs.join('')));
 ok('never logo.jpg or the master on the page', !/logo\.jpg|cardzon-logo-master/.test(H.replace(/<!--[\s\S]*?-->/g, '').replace(/\/\*[\s\S]*?\*\//g, '')));
 const rule = (H.match(/\n\.logo-i\{[^}]*\}/) || [''])[0];
@@ -26,7 +36,7 @@ ok('no plate: .logo-i has no background and no border-radius', rule && !/backgro
 ok('42px above 640px', /\n\.logo\{--logo-sz:42px\}/.test(H));
 const phone = H.slice(H.indexOf('@media(max-width:640px){\n  .nav{'), H.indexOf('}\n', H.indexOf('.nav-r .tbq{width:auto')) + 2);
 ok('30px at or below 640px, inside the nav media block', /\.logo\{--logo-sz:30px\}/.test(phone));
-ok('the sign-in panel shows the 256px file', /<div class="llogo"><img class="llogo-i" src="cardzon-logo-256\.png" alt=""><\/div>\s*<div id="auth-body">/.test(H));
+ok('the sign-in panel shows the 256px file', /<div class="llogo"><img class="llogo-i" src="cardzon-logo-256\.png\?v=2" alt=""><\/div>\s*<div id="auth-body">/.test(H));
 const ll = (H.match(/\n\.llogo-i\{[^}]*\}/) || [''])[0];
 ok('no plate on the sign-in mark either', ll && !/background|border-radius/.test(ll), ll.trim());
 const S = fs.readFileSync(__dirname + '/server.js', 'utf8');

@@ -1437,9 +1437,11 @@ const CJK = /[぀-ヿ㐀-䶿一-鿿가-힯]/;
 const LANG_WORDS = {
   ja: /\b(japanese|japan|jpn|jp\b|nihongo|japanische?|japonais|japonaise|giapponese|giapponesi|japon[eé]s|japonesa|japoneses|japonesas)\b/i,
   ko: /\b(korean|korea|kor\b|koreanische?|coréen|coreen|coreano|coreana)\b/i,
-  // Traditional Chinese prints are sold by where they are printed for
-  // (2026-10-07): "Taiwan version", "Hong Kong".
-  zh: /\b(chinese|china|traditional chinese|simplified chinese|t-chinese|s-chinese|chinesische?|chinois|cinese|taiwan|taiwanese|hong\s*kong|mandarin)\b/i,
+  // A PLACE is where a card is sold, not what it is (Roy, 2026-10-07): "ships
+  // from Hong Kong" on an English card must not refuse it. Taiwan / Hong
+  // Kong count only beside a printing or language claim — "Taiwan version",
+  // "Hong Kong print". "Mandarin" names a language and stands alone.
+  zh: /\b(chinese|china|traditional chinese|simplified chinese|t-chinese|s-chinese|chinesische?|chinois|cinese|mandarin|(?:taiwan(?:ese)?|hong\s*kong)\s+(?:version|ver\.?|print(?:ing)?|edition|language|lang))\b/i,
   de: /\b(german|deutsch|deutsche|deutsches|ger|allemand|allemande|tedesco|tedesca|tedeschi|tedesche|alem[aá]n|alemana|alemanes|alemanas)\b/i,
   // "VF" is "version française" — how French sellers mark a French card.
   fr: /\b(french|francais|français|française|francaise|vf|franz[öo]sische?|francese|francesi|franc[eé]s|francesa|franceses|francesas)\b/i,
@@ -1460,7 +1462,9 @@ const LANG_WORDS = {
   // by sitecheck.js's independent reader. Across 4,097 kept rows on 13 cards
   // those 4 were the only titles carrying either word.
   id: /\b(indonesian|indonesia|bahasa)\b/i,
-  th: /\b(thai|thailand)\b/i,
+  // "Thai" names the language; "Thailand" is a place — only beside a
+  // printing or language claim (2026-10-07).
+  th: /\b(thai|thailand\s+(?:version|ver\.?|print(?:ing)?|edition|language|lang))\b/i,
   // Pokémon prints Polish cards (2026-10-07). Bounded: "polished" is not it.
   pl: /\b(polish|polski|polska|polnische?|polacco|polacca|polaco|polaca|polonais|polonaise)\b/i
 };
@@ -1511,7 +1515,7 @@ const JA_SET_CODE = /(?<![A-Za-z0-9])(?:sv|s|sm)\d{1,2}[a-z](?![A-Za-z0-9])/i;
 const LANG_FLAGS = [
   ['🇩🇪', 'de'], ['🇦🇹', 'de'], ['🇫🇷', 'fr'], ['🇮🇹', 'it'], ['🇪🇸', 'es'], ['🇵🇹', 'pt'],
   ['🇧🇷', 'pt'], ['🇳🇱', 'nl'], ['🇯🇵', 'ja'], ['🇰🇷', 'ko'], ['🇨🇳', 'zh'], ['🇹🇼', 'zh'],
-  ['🇮🇩', 'id'], ['🇹🇭', 'th'], ['🇵🇱', 'pl'], ['🇭🇰', 'zh']
+  ['🇮🇩', 'id'], ['🇹🇭', 'th'], ['🇵🇱', 'pl']
 ];
 
 // What language does this title claim? null when it says nothing, and

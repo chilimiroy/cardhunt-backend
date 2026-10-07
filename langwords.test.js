@@ -2,14 +2,15 @@
 //
 // "Mewtwo & Mew GX SM191 ... Pokemon Brazilian Card Mint NM+" reached the
 // deals bar as an English card: the Portuguese list named the language, never
-// the country Brazilian sellers write. Added: Brazilian / Brazil / Brasil /
-// brasileiro / PT-BR; Taiwan / Hong Kong / Mandarin (Traditional Chinese);
-// Thailand; Polish (polski, polska, ...); the 🇵🇱 and 🇭🇰 flags. All on \b
-// boundaries — an unanchored language word once ate Giratina ("ita") and
-// Destined Rivals. Measured on 2,416 titles, old gate vs new: 1 newly refused
-// (that listing), 0 newly kept; the new words are rare on eBay US — only that
-// one title carried any of them — so the English-side risk ("ships from Hong
-// Kong" on an English card) is unobserved, not measured as zero.
+// the country Brazilian sellers write. Added as claims about the CARD:
+// Brazilian / Brazil / Brasil / brasileiro / PT-BR; Polish (polski, polska,
+// ...) and the 🇵🇱 flag; Mandarin. PLACES — Taiwan, Hong Kong, Thailand — are
+// where a card is sold, not what it is (Roy, 2026-10-07): they count ONLY
+// beside a printing or language claim ("Taiwan version"); alone, and the 🇭🇰
+// flag, they say nothing, so "ships from Hong Kong" never refuses an English
+// card. All on \b boundaries — an unanchored language word once ate Giratina
+// ("ita") and Destined Rivals. Measured on 2,416 titles, old gate vs new: 1
+// newly refused (that listing), 0 newly kept.
 
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;
@@ -19,14 +20,16 @@ const lang = t => cm.languageOf ? cm.languageOf(t) : null;
 console.log('\n  foreign copies, named by country');
 for (const [t, want] of [['Mewtwo & Mew GX SM191 Pokemon Brazilian Card Mint NM+', 'pt'], ['Charizard VSTAR 174/172 Brasil', 'pt'],
   ['Pikachu VMAX 188/185 carta brasileira', 'pt'], ['Umbreon VMAX 215/203 PT-BR', 'pt'], ['Giratina V 186/196 Taiwan version', 'zh'],
-  ['Mew ex 232/091 Hong Kong', 'zh'], ['Charizard 4/102 Thailand print', 'th'], ['Pikachu 58/102 karta polska', 'pl'],
-  ['Pikachu Polish edition', 'pl'], ['Charizard 🇵🇱', 'pl'], ['Charizard 🇭🇰', 'zh']])
+  ['Mew ex 232/091 Hong Kong print', 'zh'], ['Charizard 4/102 Thailand print', 'th'], ['Pikachu 58/102 karta polska', 'pl'],
+  ['Pikachu Polish edition', 'pl'], ['Charizard 🇵🇱', 'pl']])
   ok(want + ': ' + t, lang(t) === want, 'read ' + lang(t));
 
 console.log('\n  English titles are not touched (the \\b lesson)');
 for (const t of ['Giratina V 186/196 Lost Origin Alt Art', 'Destined Rivals Team Rocket Mewtwo ex', 'Charizard 4/102 Base Set Holo polished',
   'Pikachu VMAX 188/185 Vivid Voltage English NM', 'Mewtwo & Mew GX SM191 Promo',
-  'Kingdra ex 94/101 Dragon Frontiers'])
+  'Kingdra ex 94/101 Dragon Frontiers',
+  // PLACES are where a card is sold (Roy, 2026-10-07): alone they say nothing.
+  'Charizard 4/102 ships from Hong Kong', 'Giratina V 186/196 Taiwan seller', 'Umbreon VMAX 215/203 Thailand', 'Charizard 🇭🇰 seller'])
   ok('not foreign: ' + t, !['pt', 'zh', 'th', 'pl'].includes(lang(t)), 'read ' + lang(t));
 ok('...and a title that does name the country reads it (stated: the seller wrote it)', lang('Brazilian Jiu-Jitsu? no — Charizard 4/102') === 'pt');
 

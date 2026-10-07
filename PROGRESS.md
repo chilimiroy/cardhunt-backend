@@ -1,5 +1,46 @@
 # CardHunt — Progress Log
 
+## 2026-10-08 (Set split) — eBay's Set field cannot refuse; and the deals bar could not pick twice
+
+### Option S, measured both ways (`setprobe ?split=1`, `114d87b`; ~150 tooling calls)
+54 originals (55 REPRINT_OF pairs): production raw query (1 call) plus the same
+query filtered to each reprint-sounding Set value (<=3 a card). Scored on the
+card's OWN family's values only (Celebrations / 30th); "EX-01 Booster: Classic
+Collection" and "McDonald's 25th Anniversary" are not our families. Photos:
+reprint-stamp check run locally (0 calls, nothing stored), then by eye.
+- Rows filed under the reprint's Set: 3,036; the title gate keeps 349 today.
+  Stamp found on 307 (reprints, already refused by the photo gate).
+- **False refusals: the other 42, looked at one by one — 25 GENUINE originals**
+  (Base Charizard $1,000, Birthday Pikachu $420/$550, Shining Magikarp
+  $400-$850, Blastoise $46-$232, 1st Edition Cleffa, Reshiram FA x3, ...), 16
+  reprints with the stamp plainly visible, 1 unclear. Sellers file real
+  originals under Celebrations: Classic Collection. **Refusing on Set would
+  remove 25 genuine rows of 42 that no photo check can vouch either way.**
+- **Misses: 1,264 of the 1,464 kept rows the stamp check finds reprinted (86%)
+  are NOT filed under the reprint's Set.** Set catches 14% of visible reprints.
+- The compound rule ("reprint Set and not the original's") cannot be measured
+  this way: inside a Set-filtered search eBay's Set histogram lists only the
+  filtered value, at count 0.
+- Coverage gaps: 6 cards (30th family) never had their own value fetched (the
+  probe took the top 3 by count); some filtered results capped at 200.
+- **Second finding: the stamp check said "not-visible" on 16 photos with the
+  25th stamp plainly visible** (Blastoise $16.52-$60, Venusaur $28, Rocket's
+  Zapdos x3, M Rayquaza x2, Umbreon, Tapu Lele, Mewtwo EX, Groudon $2.50,
+  Dark Gyarados $10) — ~5% of the 324 reprints in this sample, consistent with
+  the measured 92.5%. Both Blastoise rows Roy settled are among them.
+
+### Deals: no row could be picked twice (`1616a53`)
+The production-path run (40 cards, zip=none, current build) picked **0** — run
+2 picked 1, run 1 four. Cause: a back verdict from the cache or the store kept
+no photo count, and the bar read the absence as "0 photos (needs 2+)" — every
+row whose back had been checked once was skipped forever after. The cache now
+keeps the count; a stored verdict gets it from the shared 15-min getItem when
+the bar asks (within DEAL_BACK_MAX); unknown says "not known".
+
+### Also (`fd42266`)
+The stampcheck hide line judges the item price (third laundered threshold);
+the deals discount stays delivered, pinned by a test.
+
 ## 2026-10-07 (ZIP union) — more deals, and shipping that launders a too-cheap row
 
 Probe only, not production: `/api/ebay/dealsprobe/:id?zip=none|union&bar=vouch`

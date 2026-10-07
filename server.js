@@ -3909,13 +3909,16 @@ function stampFollowUpWith(card, requestedId, grade, printing, edition, pendingR
   const soon = () => { if (!timer) timer = setTimeout(rebuild, Math.max(0, STAMP_REBUILD_MS - (Date.now() - last))); };
   // Queued cheapest Buy It Now first (stampcheck.compareOrder): the gate
   // returns pending rows in gathered order, not the order anyone reads them.
-  // The view's top rows (stampcheck.topOf) in the worker's class 1, every
-  // other row in class 3 — after the top rows' comparisons and the other
-  // rows' colour (stampcheck PRIO, Roy 2026-10-07).
-  pendingRows = stampcheck.compareOrder(pendingRows);
+  // Only the rows the gate chose (pendingTop: the view's top rows and its
+  // hidden rows), in the worker's class 1. Every other row waits, shown
+  // "Not checked yet", until the page asks for it as it comes into view
+  // (POST /api/listings/:cardId/compare) or a stored verdict answers it
+  // (stampcheck PRIO; Roy, 2026-10-07).
   const top = new Set((topRows || []).map(r => r.itemId));
+  pendingRows = stampcheck.compareOrder(pendingRows).filter(r => top.has(r.itemId));
+  if (!pendingRows.length) return;
   Promise.all(pendingRows.map(r => stampcheck.checkItem(r.itemId, r.imageUrl, reprints, card.api_card_id,
-    top.has(r.itemId) ? stampcheck.PRIO.compareTop : stampcheck.PRIO.compareRest).then(soon)))
+    stampcheck.PRIO.compareTop).then(soon)))
     .then(() => { clearTimeout(timer); return rebuild(); })
     .catch(e => console.warn('[stamp] follow-up failed:', e.message));
 }
@@ -4399,6 +4402,44 @@ function withTimeout(promise, ms, label) {
 // ══════════════════════════════════════════════════════════════
 // GET /api/listings/:cardId?grade=PSA+10&limit=25[&refresh=1]
 // ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// POST /api/listings/:cardId/compare  { grade, printing, edition, items }
+//
+// The rows that came into view (photo speed, 2026-10-07). A view compares
+// only its top rows and its hidden rows on its own; every other row waits,
+// "Not checked yet", until the page sends it here as it scrolls into view.
+// Queued with the top rows' comparisons (class 1), and the view is re-judged
+// as they land — the page re-reads with ?poll=1. Only rows still pending in
+// the view the caller has open; at most COMPARE_TOP a request. Zero eBay
+// calls: the photos come from eBay's image CDN.
+// ══════════════════════════════════════════════════════════════
+app.post('/api/listings/:cardId/compare', access.priced, async (req, res) => {
+  const { cardId } = req.params, b = req.body || {};
+  const base = { cardId, queued: 0, ebayCalls: 0 };
+  const items = Array.isArray(b.items) ? [...new Set(b.items.map(String))].slice(0, stampcheck.COMPARE_TOP) : [];
+  if (!items.length) return res.status(400).json(Object.assign(base, { error: 'items: the eBay item ids that came into view' }));
+  try {
+    const card = await resolveListingCard(cardId);
+    if (!card) return res.status(404).json(Object.assign(base, { error: 'card not in catalogue' }));
+    const grade = String(b.grade || 'Raw'), printing = cm.parsePrintingParam(b.printing), edition = cm.parseEditionParam(b.edition);
+    const vs = viewStateGet(listingKey(card.api_card_id, viewCacheGrade(grade, printing, edition)));
+    if (!vs || !vs.gathered.ebayState) return res.status(404).json(Object.assign(base, { error: 'this view is no longer in the 15-minute cache — reopen the card' }));
+    // The view's rows as they are now (as rebuildView reads them: "Load more"
+    // adds to them); a row already answered costs nothing — checkItem's cache.
+    const want = new Set(items);
+    const rows = (vs.gathered.otherRows || []).concat(vs.gathered.ebayState.listings || [])
+      .filter(r => r && r.source === 'ebay' && want.has(r.itemId));
+    if (rows.length) {
+      const reprints = await photoChecksFor(card);
+      stampFollowUpWith(card, cardId, grade, printing, edition, rows, reprints, rows);
+      // Re-judge now, so the next re-read already counts them as queued.
+      rebuildView(card, cardId, grade, printing, edition, vs, { noFetch: true, stamp: true })
+        .catch(e => console.warn('[compare] rebuild failed:', e.message));
+    }
+    res.json(Object.assign(base, { queued: rows.length, asked: items.length }));
+  } catch (e) { res.status(500).json(Object.assign(base, { error: e.message })); }
+});
+
 app.get('/api/listings/:cardId', access.priced, async (req, res, next) => {
   const { cardId } = req.params;
   const grade = req.query.grade || 'Raw';

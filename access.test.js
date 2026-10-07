@@ -59,6 +59,7 @@ const ROUTES = [
   ['get', '/api/history/:cardId', 'priced', null],
   ['get', '/api/listings-log', 'public', 'calls per card view, aggregated; listing_views holds no user id'],
   ['get', '/api/listings/:cardId', 'priced', null],
+  ['post', '/api/listings/:cardId/compare', 'priced', null],
   ['get', '/api/search', 'catalogue', null],
   ['get', '/api/listings/:cardName', 'public', 'refuses: an unidentifiable card gets no listings'],
   ['get', '/api/graded/:cardName', 'priced', null],
@@ -249,20 +250,20 @@ async function ask(method, p, tok, body) {
     const pricedR = found.filter(f => f.level === 'priced');
     console.log('\n  live: every priced route (' + pricedR.length + ') — prices, listings, links — every kind of caller');
     for (const f of pricedR) {
-      const p = sample(f.path), k = 'GET ' + f.path;
-      let r = await ask('get', p, null);
+      const p = sample(f.path), k = f.method.toUpperCase() + ' ' + f.path;   // a priced POST is probed as a POST
+      let r = await ask(f.method, p, null);
       ok(`${k}  no token -> 401, nothing but the refusal`, r.status === 401 && r.body && r.body.error === 'sign-in required' && Object.keys(r.body).length <= 2, r.status + ' ' + r.text.slice(0, 80));
-      r = await ask('get', p, TOK.pending);
+      r = await ask(f.method, p, TOK.pending);
       ok(`${k}  pending -> 403`, r.status === 403 && r.body.state === 'pending', r.status + ' ' + r.text.slice(0, 60));
-      r = await ask('get', p, TOK.forged);
+      r = await ask(f.method, p, TOK.forged);
       ok(`${k}  pending with forged role claims -> 403`, r.status === 403, String(r.status));
-      r = await ask('get', p, TOK.rejected);
+      r = await ask(f.method, p, TOK.rejected);
       ok(`${k}  rejected -> 403`, r.status === 403 && r.body.state === 'rejected', String(r.status));
-      r = await ask('get', p, TOK.approved);
+      r = await ask(f.method, p, TOK.approved);
       ok(`${k}  approved -> past the gate`, r.status !== 401 && r.status !== 403, r.status + ' ' + r.text.slice(0, 60));
-      r = await fetch(BASE + p, { headers: { 'X-CardHunt-Key': TKEY } }).then(x => x.status);
+      r = await fetch(BASE + p, { method: f.method.toUpperCase(), headers: { 'X-CardHunt-Key': TKEY, 'Content-Type': 'application/json' }, body: f.method === 'get' ? undefined : '{}' }).then(x => x.status);
       ok(`${k}  tooling key -> past the gate`, r !== 401 && r !== 403, String(r));
-      r = await fetch(BASE + p, { headers: { 'X-CardHunt-Key': TKEY + 'x', 'X-CardHunt-Origin': 'tooling' } }).then(x => x.status);
+      r = await fetch(BASE + p, { method: f.method.toUpperCase(), headers: { 'X-CardHunt-Key': TKEY + 'x', 'X-CardHunt-Origin': 'tooling', 'Content-Type': 'application/json' }, body: f.method === 'get' ? undefined : '{}' }).then(x => x.status);
       ok(`${k}  wrong tooling key with the origin claim -> 401`, r === 401, String(r));
     }
     let tr = await fetch(BASE + '/api/alerts', { headers: { 'X-CardHunt-Key': TKEY } });

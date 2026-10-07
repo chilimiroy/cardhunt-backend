@@ -270,10 +270,12 @@ ok('chips: not visible / unreadable — no "found" (refused); "pending" only as 
 ok('nothing on the page calls a stamp result "verified" or "original"', !/STAMP_CHIP[\s\S]{0,400}(verified|genuine original)/i.test(H));
 ok('the panel says how many the stamp check refused', /liveStampNote\(d\)/.test(fn('excludedNote')) && /refused &mdash; the seller&rsquo;s photo shows the/.test(fn('liveStampNote')));
 ok('the panel says how many are shown and how many are not checked yet',
-   /liveStampPending\(g, 'not checked yet &mdash; queued to be checked for the ' \+ liveEsc\(names\) \+ ' stamp'\)/.test(fn('liveStampNote'))
+   /liveStampPending\(g, 'not checked yet &mdash; ' \+ liveQueuedWords\(g\) \+ ' checked for the ' \+ liveEsc\(names\) \+ ' stamp'\)/.test(fn('liveStampNote'))
    && /shown meanwhile/.test(fn('liveStampPending')) && /hidden until checked/.test(fn('liveStampPending')));
 ok('every row hidden behind its check is not called "No listing matched"', /pause \|\| stampWaiting \? ''/.test(H) && /var stampWaiting = !!\(d && d\.stampGate && d\.stampGate\.pending > 0\)/.test(H));
-ok('the panel re-reads while photos are pending, with ?poll=1', /stampGate\.pending > 0/.test(fn('scheduleStampPoll')) && /poll: true/.test(fn('scheduleStampPoll')) && /scheduleStampPoll\(card, grade, d\)/.test(H));
+// Photo speed (2026-10-07): while photos are QUEUED (pendingQueued; rows past
+// the top 25 wait to be seen and re-reading would not change them).
+ok('the panel re-reads while photos are queued, with ?poll=1', /g\.pendingQueued != null \? g\.pendingQueued : g\.pending/.test(fn('scheduleStampPoll')) && /poll: true/.test(fn('scheduleStampPoll')) && /scheduleStampPoll\(card, grade, d\)/.test(H));
 ok('the stamp line sits inside the row\'s own line (one writer)', /\+ stampLine\(l\)/.test(fn('certLine')));
 live();
 }

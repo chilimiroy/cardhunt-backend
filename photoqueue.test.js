@@ -33,14 +33,15 @@ sc._setFetch(async url => { fetched.push(url.match(/\/g\/(\w+)\//)[1]);
   ok('Buy It Now by price, then auctions by price, unpriced last; ties keep their order', order === '5,3,7,1,4,6,2', order);
   ok('compareOrder does not mutate the view\'s rows', gathered[0].itemId === 'v1|1|0');
   ok('the server queues a view\'s pending rows in that order, not gathered order',
-     /pendingRows = stampcheck\.compareOrder\(pendingRows\);[^]{0,200}?Promise\.all\(pendingRows\.map\(r => stampcheck\.checkItem\(/.test(fnS('stampFollowUpWith')));
+     /pendingRows = stampcheck\.compareOrder\(pendingRows\)[^]{0,200}?Promise\.all\(pendingRows\.map\(r => stampcheck\.checkItem\(/.test(fnS('stampFollowUpWith')));
   sc._clearCache(); fetched = [];
   await Promise.all(sc.compareOrder(gathered).map(r => sc.checkItem(r.itemId, r.imageUrl, LUG)));
   ok('…and the pool fetches them in that order', fetched.join(',') === 'p5,p3,p7,p1,p4,p6,p2', fetched.join(','));
 
-  console.log('\n  2. classes: top colour, top comparisons, other colour, other comparisons');
-  ok('the classes, lowest first: colour top 0 · comparisons top / back / asked 1 · colour rest 2 · comparisons rest 3',
-     sc.PRIO.colourTop === 0 && sc.PRIO.compareTop === 1 && sc.PRIO.back === 1 && sc.PRIO.asked === 1 && sc.PRIO.colourRest === 2 && sc.PRIO.compareRest === 3);
+  console.log('\n  2. classes: top colour, top comparisons, other colour');
+  ok('the classes, lowest first: colour top 0 · comparisons top / back / asked 1 · colour rest 2 — no class for other comparisons',
+     sc.PRIO.colourTop === 0 && sc.PRIO.compareTop === 1 && sc.PRIO.back === 1 && sc.PRIO.asked === 1 && sc.PRIO.colourRest === 2
+     && Object.keys(sc.PRIO).length === 5);
   ok('the top rows are the first 25 in compareOrder', sc.COMPARE_TOP === 25
      && sc.topOf(Array.from({ length: 40 }, (_, i) => row(100 + i, 40 - i))).map(r => r.price).join(',') === Array.from({ length: 25 }, (_, i) => i + 1).join(','));
   {
@@ -51,24 +52,24 @@ sc._setFetch(async url => { fetched.push(url.match(/\/g\/(\w+)\//)[1]);
     sc._setFetch(async () => ({ ok: true, status: 200, headers: { get: () => 'image/jpeg' }, arrayBuffer: async () => JPEG.buffer.slice(JPEG.byteOffset, JPEG.byteOffset + JPEG.length) }));
     const track = (name, p) => p.then(() => done.push(name));
     sc._hold(true);
-    const all = [track('cmpRest', sc.checkItem('v1|901|0', U('cr1'), LUG, null, sc.PRIO.compareRest))];
-    all.push(track('colRest', sc.checkMaterialPhoto(U('mr1'), sc.PRIO.colourRest)));
+    const all = [track('colRest', sc.checkMaterialPhoto(U('mr1'), sc.PRIO.colourRest))];
     all.push(track('cmpTop', sc.checkItem('v1|902|0', U('ct1'), LUG, null, sc.PRIO.compareTop)));
     all.push(track('colTop', sc.checkMaterialPhoto(U('mt1'), sc.PRIO.colourTop)));
-    all.push(track('raised', sc.checkItem('v1|903|0', U('rz1'), LUG, null, sc.PRIO.compareRest)));
-    sc.checkItem('v1|903|0', U('rz1'), LUG, null, sc.PRIO.compareTop);   // asked again, more urgently
+    all.push(track('raised', sc.checkMaterialPhoto(U('rz1'), sc.PRIO.colourRest)));
+    sc.checkMaterialPhoto(U('rz1'), sc.PRIO.colourTop);                // asked again, more urgently
     await new Promise(r => setTimeout(r, 50));                          // every download lands in the worker queue
     const byClass = sc.poolState().queuedByClass;
     sc._hold(false);
     await Promise.all(all);
-    ok('the queue reports itself by class', byClass && byClass[0] === 1 && byClass[1] === 2 && byClass[2] === 1 && byClass[3] === 1, JSON.stringify(byClass));
-    ok('run in class order: top colour, top comparisons (first-come), other colour, other comparisons',
-       done.join(',') === 'colTop,cmpTop,raised,colRest,cmpRest', done.join(','));
-    ok('a job asked for again more urgently moves up its class (raised from 3 to 1)', done.indexOf('raised') < done.indexOf('colRest'));
+    ok('the queue reports itself by class', byClass && byClass[0] === 2 && byClass[1] === 1 && byClass[2] === 1, JSON.stringify(byClass));
+    ok('run in class order: top colour (first-come), top comparisons, other colour',
+       done.join(',') === 'colTop,raised,cmpTop,colRest', done.join(','));
+    ok('a job asked for again more urgently moves up (raised from class 2 to 0)', done.indexOf('raised') < done.indexOf('cmpTop'));
   }
   const fu = fnS('stampFollowUpWith'), mf = fnS('materialFollowUp');
-  ok('the server queues the view\'s top rows in class 1 and the rest in class 3',
-     /top\.has\(r\.itemId\) \? stampcheck\.PRIO\.compareTop : stampcheck\.PRIO\.compareRest/.test(fu));
+  ok('the server queues ONLY the rows the gate chose, in class 1',
+     /pendingRows = stampcheck\.compareOrder\(pendingRows\)\.filter\(r => top\.has\(r\.itemId\)\);/.test(fu)
+     && /stampcheck\.checkItem\(r\.itemId, r\.imageUrl, reprints, card\.api_card_id,\s*stampcheck\.PRIO\.compareTop\)/.test(fu));
   ok('…the top rows come from the gate (pendingTop), on the first answer and on every rebuild',
      /stampFollowUp\(card, requestedId, grade, printing, edition, gathered\.stampPending, gathered\.stampPendingTop\)/.test(S)
      && /stampFollowUp\(card, requestedId, grade, printing, edition, j\.stampPending, j\.stampPendingTop\)/.test(S));
@@ -98,6 +99,46 @@ sc._setFetch(async url => { fetched.push(url.match(/\/g\/(\w+)\//)[1]);
     const png = await sc.checkItem('v1|952|0', U('png'), LUG, null, sc.PRIO.compareTop);
     ok('an eBay photo served as PNG under a comparison is unreadable, never judged', png.state === 'unreadable' && /not a JPEG/.test(png.says), png.says);
     if (never) never({ ok: false, status: 599, headers: { get: () => '' } });
+  }
+
+  console.log('\n  4. only the top 25 (and hidden rows) are compared on their own; the rest when seen');
+  {
+    sc._clearCache();
+    const view = Array.from({ length: 40 }, (_, i) => row(200 + i, 50 + i));                 // 40 Buy It Now rows
+    const cheapAuctions = [row(300, 5, 'auction'), row(301, 6, 'auction')];                   // beyond the top 25, below 55% of $60
+    const g = sc.gate(view.concat(cheapAuctions), LUG, { hideBelow: 60 * sc.SIBLING_HIDE_FRACTION });
+    const r = g.report, st = id => (g.listings.find(l => l.itemId === 'v1|' + id + '|0') || {}).stamp || {};
+    ok('the top 25 are queued, the other 15 shown and waiting to be seen', r.pendingQueued === 27 && r.pendingDeferred === 15, r.pendingQueued + ' queued, ' + r.pendingDeferred + ' deferred');
+    ok('…a hidden row is always compared (nobody can scroll to it; the swaps sat there)',
+       g.pendingTop.some(x => x.itemId === 'v1|300|0') && g.pendingTop.some(x => x.itemId === 'v1|301|0') && !g.listings.some(l => l.itemId === 'v1|300|0'));
+    ok('a top row says it is queued; a later row says it is compared when seen — both "pending", neither claims a check',
+       st(200).state === 'pending' && !st(200).deferred && st(239).state === 'pending' && st(239).deferred === true
+       && /compared when this row comes into view/.test(st(239).says) && !/compared when/.test(st(200).says));
+    ok('the summary counts the rows compared when scrolled to', /15 compared when scrolled to/.test(r.summary), r.summary);
+    sc._setFetch(async () => ({ ok: true, status: 200, headers: { get: () => 'image/jpeg' }, arrayBuffer: async () => JPEG.buffer.slice(JPEG.byteOffset, JPEG.byteOffset + JPEG.length) }));
+    sc._hold(true);
+    const asked = sc.checkItem('v1|239|0', view[39].imageUrl, LUG, null, sc.PRIO.asked);   // the page asked for it
+    const g2 = sc.gate(view.concat(cheapAuctions), LUG, { hideBelow: 60 * sc.SIBLING_HIDE_FRACTION });
+    const st2 = (g2.listings.find(l => l.itemId === 'v1|239|0') || {}).stamp || {};
+    ok('a row asked for on scroll counts as queued while it is compared', g2.report.pendingDeferred === 14 && st2.deferred === false, g2.report.pendingDeferred + ' deferred');
+    sc._hold(false); await asked;
+  }
+  {
+    const route = S.slice(S.indexOf("app.post('/api/listings/:cardId/compare'"), S.indexOf("app.get('/api/listings/:cardId'"));
+    ok('the compare route is priced (access.priced on its declaration line)', /^app\.post\('\/api\/listings\/:cardId\/compare', access\.priced, /m.test(S));
+    ok('…takes at most COMPARE_TOP items, only rows of the view the caller has open, and never fetches eBay',
+       /\.slice\(0, stampcheck\.COMPARE_TOP\)/.test(route) && /viewStateGet\(listingKey\(card\.api_card_id, viewCacheGrade\(grade, printing, edition\)\)\)/.test(route)
+       && !/ebaycall|ebayFetch|gatherListings|ebayItemOnDemand/.test(route));
+    ok('…queues them with the top comparisons and re-judges the view at once (no new photo follow-up)',
+       /stampFollowUpWith\(card, cardId, grade, printing, edition, rows, reprints, rows\)/.test(route) && /rebuildView\([^)]*\{ noFetch: true, stamp: true \}\)/.test(route));
+    const P = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8').replace(/\r/g, '');
+    const fnP = name => { const i = P.indexOf('function ' + name + '('); return i < 0 ? '' : P.slice(i, P.indexOf('\n}', i) + 2); };
+    ok('the page re-reads only while something is queued (or just asked for) — not while rows wait to be seen',
+       /var queued = g \? \(g\.pendingQueued != null \? g\.pendingQueued : g\.pending\) : 0;/.test(fnP('scheduleStampPoll')) && /DEFER\.until/.test(fnP('scheduleStampPoll')));
+    ok('a waiting row carries its item id; rows coming into view are sent to /compare, once each, prices open only',
+       /data-defer-item=/.test(fnP('liveRow')) && /new IntersectionObserver/.test(fnP('watchDeferredRows')) && /pricesOpen\(\)/.test(fnP('watchDeferredRows'))
+       && /DEFER\.asked\[key \+ '\|' \+ id\]/.test(fnP('watchDeferredRows')) && /'\/compare'/.test(fnP('sendDeferred')) && /items\.forEach\(function \(id\) \{ delete DEFER\.asked/.test(fnP('sendDeferred')));
+    ok('…watched after every draw of the panel', (P.match(/applyMeasuredGrade\(d\);\n\s*watchDeferredRows\(card, grade\);/g) || []).length === 2);
   }
 
   console.log('\n  photoqueue.test.js — ' + pass + ' passed, ' + fail + ' failed');

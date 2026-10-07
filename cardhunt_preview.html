@@ -3974,7 +3974,8 @@ function liveRow(l){
         + (l.endsAt ? ' · auction ' + liveEndsIn(l.endsAt) : '')
       : 'buy it now';
   var bids = (l.bids != null && l.bids > 0) ? ' \u00b7 ' + l.bids + ' bid' + (l.bids === 1 ? '' : 's') : '';
-  return '<div class="lrow-wrap"><a href="' + liveEsc(l.url) + '" target="_blank" rel="noopener" '
+  var defer = l.stamp && l.stamp.state === 'pending' && l.stamp.deferred;
+  return '<div class="lrow-wrap"' + (defer ? ' data-defer-item="' + liveEsc(l.itemId) + '"' : '') + '><a href="' + liveEsc(l.url) + '" target="_blank" rel="noopener" '
     + 'class="lrow2" style="display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--bd);'
     + 'text-decoration:none;color:inherit'
     + (l.suspect ? ';opacity:.55;background:rgba(245,158,11,.06)' : '') + '">'
@@ -4139,6 +4140,14 @@ function liveCountNoun(n){ n = n || 0; return n + ' listing' + (n === 1 ? '' : '
 // T0 (2026-10-06): an unchecked row is SHOWN, marked, unless it is priced
 // well below this card's price — then hidden until its photo is checked.
 // The note says which, so an empty-looking panel is never a mystery.
+// Which unchecked rows are queued now and which wait to be seen
+// (photo speed, 2026-10-07: only the top 25 and the hidden rows are compared
+// on their own).
+function liveQueuedWords(g){
+  var later = g.pendingDeferred || 0, now = (g.pending || 0) - later;
+  if (!later) return 'queued to be';
+  return (now ? now + ' queued, ' : '') + later + ' as you scroll to ' + (later === 1 ? 'it,' : 'them,') + ' to be';
+}
 function liveStampPending(g, doing){
   var hid = (g.pending || 0) - (g.pendingShown || 0);
   return g.pending + ' photo' + (g.pending === 1 ? '' : 's') + ' ' + doing
@@ -4170,7 +4179,8 @@ function liveStampNote(d){
     return '<div id="cd-stamp-note" style="font-size:11px;color:var(--fa);margin-top:4px">'
       + (g.refused ? g.refused + ' listing' + (g.refused === 1 ? '' : 's') + ' refused &mdash; the seller&rsquo;s photo matches '
           + 'another card of this name in the set (' + liveEsc(names) + ') better than this one. ' : '')
-      + (g.pending ? g.pending + ' photo' + (g.pending === 1 ? '' : 's') + ' not checked yet &mdash; queued to be compared with ' + liveEsc(names)
+      + (g.pending ? g.pending + ' photo' + (g.pending === 1 ? '' : 's') + ' not checked yet &mdash; '
+          + liveQueuedWords(g) + ' compared with ' + liveEsc(names)
           + (hid ? '; ' + hid + ' priced well below this card&rsquo;s price ' + (hid === 1 ? 'is' : 'are')
               + ' hidden until checked' : '') + '. '
         : 'Every photo was compared with ' + liveEsc(names) + '. ')
@@ -4181,7 +4191,7 @@ function liveStampNote(d){
   if (g.kind === 'lookalike') return '<div id="cd-stamp-note" style="font-size:11px;color:var(--fa);margin-top:4px">'
     + (g.refused ? g.refused + ' listing' + (g.refused === 1 ? '' : 's') + ' refused &mdash; the seller&rsquo;s photo matches '
         + liveEsc(names) + ' better than this card. ' : '')
-    + (g.pending ? liveStampPending(g, 'not checked yet &mdash; queued to be compared with ' + liveEsc(names))
+    + (g.pending ? liveStampPending(g, 'not checked yet &mdash; ' + liveQueuedWords(g) + ' compared with ' + liveEsc(names))
       : 'Every photo was compared with ' + liveEsc(names) + (g.refused ? '' : ' and none clearly matched it')
         + '. Not clearly the other card is not proof of this one. ')
     + liveNotRun(g)
@@ -4189,7 +4199,7 @@ function liveStampNote(d){
   return '<div id="cd-stamp-note" style="font-size:11px;color:var(--fa);margin-top:4px">'
     + (g.refused ? g.refused + ' listing' + (g.refused === 1 ? '' : 's') + ' refused &mdash; the seller&rsquo;s photo shows the '
         + liveEsc(names) + ' reprint stamp. ' : '')
-    + (g.pending ? liveStampPending(g, 'not checked yet &mdash; queued to be checked for the ' + liveEsc(names) + ' stamp')
+    + (g.pending ? liveStampPending(g, 'not checked yet &mdash; ' + liveQueuedWords(g) + ' checked for the ' + liveEsc(names) + ' stamp')
       : 'Every photo was checked for the ' + liveEsc(names) + ' stamp' + (g.refused ? '' : ' and none showed it')
         + '. No stamp visible is not proof of the original. ')
     + liveNotRun(g)
@@ -4201,7 +4211,13 @@ function liveStampNote(d){
 var STAMP_POLL = null;
 function scheduleStampPoll(card, grade, d){
   clearTimeout(STAMP_POLL); STAMP_POLL = null;
-  if (!(d && d.stampGate && d.stampGate.pending > 0)) return;
+  // Only while a comparison is queued: rows the server queued, or rows
+  // just sent for comparison as they came into view (photo speed, 2026-10-07).
+  // A row waiting to be seen has no comparison queued — re-reading would not
+  // change it.
+  var g = d && d.stampGate;
+  var queued = g ? (g.pendingQueued != null ? g.pendingQueued : g.pending) : 0;
+  if (!(queued > 0) && !(Date.now() < DEFER.until)) return;
   var printing = SEL.printing || 'all', edition = SEL.edition || 'all';
   STAMP_POLL = setTimeout(function () {
     if (!LF.card || LF.card.id !== card.id || LF.grade !== grade) return;
@@ -4212,6 +4228,52 @@ function scheduleStampPoll(card, grade, d){
         renderLiveListings(card, grade, { quiet: true });
       }).catch(function () {});
   }, 2500);
+}
+// ── Rows compared as they come into view (photo speed, 2026-10-07) ──
+// The server compares a view's top 25 rows, and its hidden ones, on its own;
+// every other row says "Not checked yet" until it is on screen. Rows coming
+// into view are sent, up to 25 at a time, to POST /api/listings/:id/compare
+// (zero eBay calls) and the panel re-reads while they are compared. Each row
+// is asked for once per card and selection.
+var DEFER = { obs: null, asked: {}, batch: [], timer: null, until: 0 };
+function deferKey(card, grade){ return card.id + '|' + grade + '|' + (SEL.printing || 'all') + '|' + (SEL.edition || 'all'); }
+function watchDeferredRows(card, grade){
+  if (DEFER.obs) { DEFER.obs.disconnect(); DEFER.obs = null; }
+  if (!pricesOpen() || typeof IntersectionObserver !== 'function') return;
+  var rows = document.querySelectorAll('#cd-listings [data-defer-item]');
+  if (!rows.length) return;
+  var key = deferKey(card, grade);
+  DEFER.obs = new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      var id = e.target.getAttribute('data-defer-item');
+      if (DEFER.obs) DEFER.obs.unobserve(e.target);
+      if (DEFER.asked[key + '|' + id]) return;
+      DEFER.asked[key + '|' + id] = 1; DEFER.batch.push(id);
+    });
+    if (DEFER.batch.length && !DEFER.timer) DEFER.timer = setTimeout(function () { sendDeferred(card, grade); }, 300);
+  }, { rootMargin: '200px 0px' });
+  rows.forEach(function (r) { DEFER.obs.observe(r); });
+}
+function sendDeferred(card, grade){
+  DEFER.timer = null;
+  var items = DEFER.batch.splice(0, 25);
+  if (!items.length || !LF.card || LF.card.id !== card.id || LF.grade !== grade) { DEFER.batch = []; return; }
+  if (DEFER.batch.length) DEFER.timer = setTimeout(function () { sendDeferred(card, grade); }, 300);
+  fetch(BACKEND + '/api/listings/' + encodeURIComponent(card.id) + '/compare', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ grade: grade, printing: SEL.printing || 'all', edition: SEL.edition || 'all', items: items }) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (!j || !(j.queued > 0)) return;
+      DEFER.until = Date.now() + 60000;
+      scheduleStampPoll(card, grade, null);
+    })
+    .catch(function () {
+      // Not sent: forget them, so the next time they come into view they are asked again.
+      var key = deferKey(card, grade);
+      items.forEach(function (id) { delete DEFER.asked[key + '|' + id]; });
+    });
 }
 function certResultHtml(r){
   var state = CERT_CHIP[r.state] ? r.state : 'error';
@@ -4727,6 +4789,7 @@ async function renderLiveListings(card, grade, opts){
     html += excludedNote() + unstatedBlock() + liveOutlierNote(d) + liveRefusedBlock(d) + liveSourceNote(d) + '</div>';
     host.innerHTML = html;
     applyMeasuredGrade(d);
+    watchDeferredRows(card, grade);
     return;
   }
   if (d.cheapestLive != null) {
@@ -4762,6 +4825,7 @@ async function renderLiveListings(card, grade, opts){
         + liveOutlierNote(d) + liveRefusedBlock(d) + liveSourceNote(d) + '</div>';
   host.innerHTML = html;
   applyMeasuredGrade(d);
+  watchDeferredRows(card, grade);
 }
 
 // Kept as a name other code calls. The SELECTOR owns the grade now, so this
@@ -7846,6 +7910,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-44843ed-rename &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261007-6835bc2-top25 &middot; click to hide</div>
 </body>
 </html>

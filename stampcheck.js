@@ -382,11 +382,13 @@ const _jobs = new Map();         // itemId -> its job, while queued (a later, mo
 //     novelty check needs them on the rows anyone looks at (5160962's reason)
 //   1 comparisons of the top rows, a back photo, a check someone asked for
 //   2 colour of every other row — colour alone only FLAGS, so it can wait
-//   3 comparisons of every other row — a comparison can REFUSE, but nobody
-//     reads row 180 before it lands
+// Every other row's comparison is NOT queued (Roy, 2026-10-07): it waits,
+// shown "Not checked yet", until the page says the row came into view
+// (POST /api/listings/:cardId/compare, class 1) or a stored verdict answers
+// it next visit. 57% of views have under 25 rows; nobody reads row 180.
 // The top rows: the first COMPARE_TOP of compareOrder (cheapest Buy It Now
 // first) — what sets the headline and opens the default tab.
-const PRIO = { colourTop: 0, compareTop: 1, back: 1, asked: 1, colourRest: 2, compareRest: 3 };
+const PRIO = { colourTop: 0, compareTop: 1, back: 1, asked: 1, colourRest: 2 };
 const COMPARE_TOP = 25;
 // Every job is downloaded first, in the download lanes, OFF the worker
 // (photo speed, 2026-10-07): a comparison used to hold the one worker for its
@@ -858,7 +860,7 @@ function gate(rows, reprints, opts) {
   const onlySiblings = usable.every(isSibling);
   const hideBelow = opts.hideBelow > 0 ? opts.hideBelow : null;
   if (onlySiblings) report.kind = 'sibling';
-  report.hideBelow = hideBelow; report.pendingShown = 0;
+  report.hideBelow = hideBelow; report.pendingShown = 0; report.pendingQueued = 0; report.pendingDeferred = 0;
   const out = [], pending = [], pendingTop = [];
   const top = new Set(topOf(rows));
   for (const row of rows) {
@@ -867,12 +869,21 @@ function gate(rows, reprints, opts) {
     if (!url) { report.unreadable++; out.push(Object.assign({}, row, { stamp: { state: 'unreadable', says: 'No eBay photo to check.' } })); continue; }
     const hit = cacheGet(verdictKey(row.itemId, reprints), url);
     if (!hit) {
-      report.pending++; pending.push(row); if (top.has(row)) pendingTop.push(row);
+      report.pending++; pending.push(row);
       const price = Number(row.landed != null ? row.landed : row.price);
-      if (!(hideBelow != null && price > 0 && price < hideBelow)) {
+      const hidden = hideBelow != null && price > 0 && price < hideBelow;
+      // Compared now: the view's top rows, and every HIDDEN row — nobody can
+      // scroll to it, and the swaps measured sat there (~14% of market).
+      // Queued already (asked for on scroll, or by another view): compared too.
+      const chosen = top.has(row) || hidden;
+      if (chosen) pendingTop.push(row);
+      const queued = chosen || _inflight.has(verdictKey(row.itemId, reprints));
+      if (queued) report.pendingQueued++; else report.pendingDeferred++;
+      if (!hidden) {
         report.pendingShown++;
-        out.push(Object.assign({}, row, { stamp: { state: 'pending', kind: report.kind,
-          says: onlySiblings ? 'Photo not yet compared with the other cards of this name in the set.'
+        out.push(Object.assign({}, row, { stamp: { state: 'pending', kind: report.kind, deferred: !queued,
+          says: !queued ? 'Photo not compared yet — it is compared when this row comes into view.'
+              : onlySiblings ? 'Photo not yet compared with the other cards of this name in the set.'
               : onlyLook ? 'Photo not yet compared with the card it is most often confused with.'
               : 'Photo not yet checked for a reprint’s stamp.' } }));
       }
@@ -899,10 +910,11 @@ function gate(rows, reprints, opts) {
                                               : ' refused (the seller’s photo shows a reprint’s stamp or another card), ')
     + report.notVisible + (onlyLook ? ' not clearly the other card, ' : ' no stamp visible, ') + report.unreadable + ' unreadable'
     + (report.pending ? ', ' + (report.pending - (report.pendingShown || 0)) + ' hidden until checked'
-                        + (report.pendingShown ? ', ' + report.pendingShown + ' shown while checked' : '') : '')
+                        + (report.pendingShown ? ', ' + report.pendingShown + ' shown while checked' : '')
+                        + (report.pendingDeferred ? ', ' + report.pendingDeferred + ' compared when scrolled to' : '') : '')
     + (notRunText ? '; ' + notRunText : '');
-  // Pending rows in the order they should be compared, and which of them are
-  // among the view's top COMPARE_TOP rows (photo speed, 2026-10-07).
+  // Pending rows in the order they should be compared, and the ones compared
+  // now: the view's top COMPARE_TOP rows and its hidden rows (photo speed, 2026-10-07).
   return { listings: out, report, pending: compareOrder(pending), pendingTop: compareOrder(pendingTop) };
 }
 

@@ -108,7 +108,9 @@ ok(sc.PNG_SCAN_HOST.test('https://images.pokemontcg.io/cel25c/4_A.png') && sc.PN
 ok(!sc.PNG_SCAN_HOST.test('https://images.pokemontcg.io.evil.com/a/b.png') && !sc.PNG_SCAN_HOST.test('https://i.ebayimg.com/images/g/abc/s-l225.png')
    && !sc.PNG_SCAN_HOST.test('https://images.pokemontcg.io/a/b.png?x=1'), 'no other host, no query string');
 const sjob = fs.readFileSync(__dirname + '/stampcheck.js', 'utf8');
-ok(/const scanPng = job\.material && PNG_SCAN_HOST\.test\(job\.url\) && \/png\/i\.test\(type\)/.test(sjob),
+// Since photo speed (2026-10-07) every job downloads in fetchJob; executed for a
+// comparison in photoqueue.test.js.
+ok(/!\(job\.material && PNG_SCAN_HOST\.test\(job\.url\) && \/png\/i\.test\(type\)\)/.test(sjob.slice(sjob.indexOf('async function fetchJob'))),
    'a PNG is accepted only for OUR scan — an eBay photo is still JPEG or nothing');
 ok(/m\.material \? decodeImage\(/.test(sjob), 'the worker decodes a scan as PNG or JPEG');
 const sb = fs.readFileSync(__dirname + '/stampbuild.js', 'utf8');

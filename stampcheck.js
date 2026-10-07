@@ -388,10 +388,15 @@ const _jobs = new Map();         // itemId -> its job, while queued (a later, mo
 // first) — what sets the headline and opens the default tab.
 const PRIO = { colourTop: 0, compareTop: 1, back: 1, asked: 1, colourRest: 2, compareRest: 3 };
 const COMPARE_TOP = 25;
+// Every job is downloaded first, in the download lanes, OFF the worker
+// (photo speed, 2026-10-07): a comparison used to hold the one worker for its
+// whole download — 129 ms of ~1,040 ms per sibling job on Render. Only a
+// downloaded photo reaches the worker queue.
 function enqueue(job) {
   job.prio = job.prio == null ? PRIO.compareTop : job.prio;
   _jobs.set(job.itemId, job);
-  _queue.push(job);
+  _fetchQueue.push(job);
+  pumpFetch();
 }
 // A job already queued, asked for again more urgently, moves up its class.
 function raise(itemId, prio) {
@@ -449,41 +454,27 @@ function settle(job, verdict) {
     job.resolve(v);
   }
 }
-async function runJob(slot, job) {
-  // A colour profile arrives already downloaded (fetchMaterial): straight
-  // to the worker, which holds the slot for milliseconds, not a download.
-  if (job.buf) {
-    slot.timer = setTimeout(() => finish(slot, { state: 'unreadable', retryable: true, scores: [],
-      says: 'The photo check took too long and was stopped.' }, true), JOB_TIMEOUT_MS);
-    const buf = job.buf; job.buf = null;
-    slot.w.postMessage({ jpeg: buf, reprints: job.reprints, back: !!job.back, material: !!job.material });
-    return;
-  }
-  job.t0 = Date.now();
-  let r = null;
-  try { r = await _fetch(job.url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }); } catch (e) { r = null; }
-  const type = (r && r.headers && r.headers.get('content-type')) || '';
-  if (!r || !r.ok) return finish(slot, { state: 'unreadable', retryable: true, scores: [],
-    says: 'eBay’s image server did not return the photo' + (r ? ' (HTTP ' + r.status + ')' : '') + '.' });
-  // eBay photos are JPEG; only OUR scan may be a PNG (pokemontcg.io art).
-  const scanPng = job.material && PNG_SCAN_HOST.test(job.url) && /png/i.test(type);
-  if (!/jpe?g/i.test(type) && !scanPng) return finish(slot, { state: 'unreadable', scores: [], says: 'The photo is not a JPEG (' + type.slice(0, 30) + ').' });
-  const buf = Buffer.from(await r.arrayBuffer());
-  job.fetchMs = Date.now() - job.t0;
+function runJob(slot, job) {
+  // The photo arrives downloaded (fetchJob): the worker holds the slot for
+  // the decode and the comparison only, never a download.
   slot.timer = setTimeout(() => finish(slot, { state: 'unreadable', retryable: true, scores: [],
     says: 'The photo check took too long and was stopped.' }, true), JOB_TIMEOUT_MS);
+  const buf = job.buf; job.buf = null;
   slot.w.postMessage({ jpeg: buf, reprints: job.reprints, back: !!job.back, material: !!job.material });
 }
+let _held = false;   // tests only (_hold): let downloads land without the worker taking them
 function pump() {
-  while (_queue.length) {
+  while (_queue.length && !_held) {
     let slot = _workers.find(s => !s.job);
     if (!slot && _workers.length < POOL_SIZE) slot = spawnWorker();
     if (!slot) return;
     const job = nextJob(_queue);
     slot.job = job;
-    runJob(slot, job).catch(e => finish(slot, { state: 'unreadable', retryable: true, scores: [],
-      says: 'The photo check failed: ' + String(e && e.message || e).slice(0, 80) }));
+    try { runJob(slot, job); }
+    catch (e) { finish(slot, { state: 'unreadable', retryable: true, scores: [],
+      says: 'The photo check failed: ' + String(e && e.message || e).slice(0, 80) }); }
   }
+  pumpFetch();   // the worker took one: the lanes may download the next
 }
 
 // The one way to check an item: the cache, else the job already running,
@@ -607,12 +598,12 @@ function queueMaterial(key, url, prio) {
   prio = prio == null ? PRIO.colourTop : prio;
   if (_inflight.has(key)) { raise(key, prio); return _inflight.get(key); }
   const p = new Promise(resolve => { const job = { itemId: key, url, reprints: [], material: true, prio, resolve };
-    _jobs.set(key, job); _matFetchQueue.push(job); });
+    _jobs.set(key, job); _fetchQueue.push(job); });
   _inflight.set(key, p);
-  pumpMaterialFetch();
+  pumpFetch();
   return p;
 }
-// ── Colour profiles: downloads overlapped (speed, 2026-10-07) ──
+// ── Downloads overlapped (speed, 2026-10-07; every photo job since photo speed, 2026-10-07) ──
 // Measured on Render (poolState split, 101 jobs): a colour job was 136 ms of
 // download and 22 ms of work, 7 ms of it CPU — 86% waiting on eBay's CDN
 // while holding the one worker. So the download runs here, in
@@ -621,34 +612,39 @@ function queueMaterial(key, url, prio) {
 // first, as 5160962 put every colour job — it costs milliseconds and must not
 // wait behind a page of comparisons — and every other row's after the top
 // rows' comparisons (photo speed, 2026-10-07).
+// Comparisons and back photos download here too (they used to hold the
+// worker through theirs). The lanes run ahead of the worker by at most
+// READY_MAX photos, most urgent class first, so a big view cannot fill memory
+// with downloads and a later, more urgent job is never stuck behind them.
 // Every row is still profiled; nothing is skipped. A network error, a
 // timeout, 429 or 5xx pauses every lane, doubling from 2 s to 60 s; a
 // success resets it. The failed row gets the same retryable verdict as before.
 const MATERIAL_FETCH_LANES = Math.max(1, Math.min(6, parseInt(process.env.MATERIAL_FETCH_LANES, 10) || 5));
 const MATERIAL_PAUSE_MIN = 2000, MATERIAL_PAUSE_MAX = 60000;
-const _matFetchQueue = [];
+const _fetchQueue = [];
+const READY_MAX = 12;   // downloaded + downloading, waiting for the worker
 const _mat = { fetching: 0, pause: 0, pausedUntil: 0, timer: null, backoffs: 0 };
-function pumpMaterialFetch() {
-  while (_mat.fetching < MATERIAL_FETCH_LANES && _matFetchQueue.length) {
+function pumpFetch() {
+  while (_mat.fetching < MATERIAL_FETCH_LANES && _fetchQueue.length && _queue.length + _mat.fetching < READY_MAX) {
     const wait = _mat.pausedUntil - Date.now();
     if (wait > 0) {
       // Not unref'd: it exists only while jobs wait, and a caller awaiting
       // them must not see the process end with their promises unsettled.
-      if (!_mat.timer) _mat.timer = setTimeout(() => { _mat.timer = null; pumpMaterialFetch(); }, wait);
+      if (!_mat.timer) _mat.timer = setTimeout(() => { _mat.timer = null; pumpFetch(); }, wait);
       return;
     }
-    const job = nextJob(_matFetchQueue);
+    const job = nextJob(_fetchQueue);
     _mat.fetching++;
-    fetchMaterial(job).catch(e => settle(job, { state: 'unreadable', retryable: true, scores: [],
+    fetchJob(job).catch(e => settle(job, { state: 'unreadable', retryable: true, scores: [],
       says: 'The photo check failed: ' + String(e && e.message || e).slice(0, 80) }))
-      .finally(() => { _mat.fetching--; pumpMaterialFetch(); });
+      .finally(() => { _mat.fetching--; pumpFetch(); });
   }
 }
 function materialBackoff() {
   _mat.pause = Math.min(MATERIAL_PAUSE_MAX, _mat.pause ? _mat.pause * 2 : MATERIAL_PAUSE_MIN);
   _mat.pausedUntil = Date.now() + _mat.pause; _mat.backoffs++;
 }
-async function fetchMaterial(job) {
+async function fetchJob(job) {
   job.t0 = Date.now();
   let r = null, buf = null;
   try { r = await _fetch(job.url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }); } catch (e) { r = null; }
@@ -661,7 +657,7 @@ async function fetchMaterial(job) {
   _mat.pause = 0;
   const type = (r.headers && r.headers.get('content-type')) || '';
   // eBay photos are JPEG; only OUR scan may be a PNG (pokemontcg.io art).
-  if (!/jpe?g/i.test(type) && !(PNG_SCAN_HOST.test(job.url) && /png/i.test(type)))
+  if (!/jpe?g/i.test(type) && !(job.material && PNG_SCAN_HOST.test(job.url) && /png/i.test(type)))
     return settle(job, { state: 'unreadable', scores: [], says: 'The photo is not a JPEG (' + type.slice(0, 30) + ').' });
   job.buf = buf; job.fetchMs = Date.now() - job.t0;
   _queue.push(job);
@@ -728,7 +724,7 @@ function poolState() {
            queuedByClass: _queue.reduce((o, j) => { o[j.prio] = (o[j.prio] || 0) + 1; return o; }, {}),
            cachedItems: _cache.size, checked: _stats.checked, failed: _stats.failed, cacheHits: _stats.cacheHits,
            meanMs: _stats.checked ? Math.round(_stats.msTotal / _stats.checked) : null, split, host: cpuQuota(),
-           materialFetch: { lanes: MATERIAL_FETCH_LANES, fetching: _mat.fetching, queued: _matFetchQueue.length,
+           materialFetch: { lanes: MATERIAL_FETCH_LANES, readyMax: READY_MAX, fetching: _mat.fetching, queued: _fetchQueue.length,
              backoffs: _mat.backoffs, pausedForMs: Math.max(0, _mat.pausedUntil - Date.now()) } };
 }
 
@@ -937,5 +933,5 @@ if (!wt.isMainThread && wt.workerData && wt.workerData.pool) {
 module.exports = { MATERIAL_VERSION, MATERIAL_GOLD_EXCESS, MATERIAL_PHOTO_SIZE, colourProfile, checkMaterialPhoto, checkMaterialScan, metalPhotoOf, materialJudge,
                    THRESHOLD, PHOTO_SIZE, MIN_SIDE, MATCH, decodeJpeg, decodeImage, PNG_SCAN_HOST, crop, resize, rotate90, nccMax, bestScore,
                    judge, checkItem, checkBackPhoto, compareOrder, topOf, PRIO, COMPARE_TOP, gate, verdictKey, wholeScore, WHOLE_TW: WHOLE.maxTw, LOOKALIKE_MARGIN, SIBLING_MARGIN, SIBLING_HIDE_FRACTION, poolState, loadVerdicts, setStore, itemKey, photoKey, VERDICT_VERSION, photoUrl, templates, cacheGet, cacheSet, TTL_MS, RETRY_MS,
-                   _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; },
+                   _setTemplates: t => { _templates = t; }, _setFetch: f => { _fetch = f; }, _hold: on => { _held = !!on; if (!on) pump(); },
                    _clearCache: () => { _cache.clear(); _missed.clear(); } };

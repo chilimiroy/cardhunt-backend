@@ -1,5 +1,60 @@
 # CardHunt — Progress Log
 
+## 2026-10-07 (ZIP union) — more deals, and shipping that launders a too-cheap row
+
+Probe only, not production: `/api/ebay/dealsprobe/:id?zip=none|union&bar=vouch`
+(`15bd02d`) builds an isolated view (no cache write, no production follow-up);
+`union` asks eBay US twice, with and without `X-EBAY-C-ENDUSERCTX`
+(ZIP 10001), merged ZIP-first. 40 cards recorded in `zipunion-cards.json`
+(the 80 of runs 1-2 were never written down). 172 tooling calls in all.
+
+### Five cards, both modes (marketprobe, US page 1, 20 calls)
+Blastoise 2/102, Base Charizard, Dark Charizard 4/82, Charizard GX 150,
+Giratina V 186: no-ZIP kept 183 rows, 93 with stated shipping; ZIP kept
+230, 229 stated. Shared 122; no-ZIP only 61 (dearer), ZIP only 108 (every
+one inside the no-ZIP page's price range). Union 291 rows, 282 stated.
+
+### 40 cards, vouching bar, both modes
+| | no ZIP | union |
+|---|---|---|
+| eligible picks | 4 | 7 |
+| rows examined | 3,441 | 4,174 |
+| "shipping not stated" skips | 1,426 | 73 |
+| "photo not checked yet" skips | 168 | 707 |
+| search calls per view | 1.00 | 2.00 (2.25 with reprint/language pages) |
+
+Headlines (cheapestLive): 6 unchanged, 28 up 1-25% (shipping now in the
+delivered price), Lugia Aquapolis $230 -> $8,674 (enough rows for the outlier
+check to flag the $230), and **5 down**.
+
+### Shipping launders a too-cheap row
+The cheap floor flags a row under 10% of the median, judged on the DELIVERED
+price. Four of the five drops were rows the no-ZIP view had flagged, lifted
+over the line by the ZIP's shipping quote: Blastoise $20 (< $26) -> $25.82
+(> $21.52); Dragonite ex $50 (< $52.49) -> $55.71; Pikachu SM162 $10 (< $17)
+-> $18.80 (> $18.00, by 80 cents); Charizard VSTAR SWSH262 $8 (< $9.70) ->
+$14.07, title "GOLD FOIL". Gameable by any seller: move money from price
+into postage. The fifth, Charizard CC002 $35.72, is a ZIP-only row from a
+seller at 78 feedback, 0% positive.
+
+### The headline never looks at the seller
+Headline rows tonight came from sellers at feedback 1, 4, 5, -4 (0%) and 78
+(0%) on cards worth $150-$525. `outlier.trustworthy` is the whole test.
+
+### Deals and the top-25 rule
+707 rows skipped "photo not checked yet": past a view's top 25 nothing is
+compared until a visitor scrolls (`deb83b7`), so the shelf can never vouch
+for such a row. 7 is a floor, not the yield. Shape agreed with Roy: deals is a
+background job and asks for comparisons of the rows it judges; not built.
+
+### Gate work, found by the picks (not fixed)
+- "PRERELEASE" in a Dark Gyarados 8/82 title passed as the base card — a
+  prerelease stamp is another printing.
+- "Rare Regular" on Dark Gyarados 8/82 — may name the non-holo version.
+- "Alakazam EX 125/124 HP" — HP after the number may mean Heavily Played,
+  not hit points. A genuine ambiguity; needs a rule (the condition gate reads
+  "120 HP" as hit points by design).
+
 ## 2026-10-07 (two sessions) — one branch, two writers
 
 The photo-speed session and the logo session both had `server.js` open on

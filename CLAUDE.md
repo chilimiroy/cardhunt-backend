@@ -557,6 +557,13 @@ Confirm the version banner before running anything.
 `git add -A ; git commit -m "..." ; git push` — Render redeploys from `main`.
 Check the build stamp at `/app` and `GET /` for the version.
 
+**ONE session on `main` at a time, or separate branches.** The Claude Code tab
+inside the desktop app is a full session with write access to this repo, not
+just the app; "I closed the terminals" does not mean one session. Two on one
+branch cost interleaved commits, a mutual test break and a near-miss on
+`server.js` (PROGRESS 2026-10-07 (two sessions)). Before committing, check the
+parent is the commit you expect and that `git diff HEAD~1` holds only your work.
+
 ---
 
 # LESSONS — the rule, why, and where the full story is

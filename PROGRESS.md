@@ -1,5 +1,22 @@
 # CardHunt — Progress Log
 
+## 2026-10-07 (two sessions) — one branch, two writers
+
+The photo-speed session and the logo session both had `server.js` open on
+`main`. Roy: it cost interleaved commits, a mutual test break, and a near-miss
+on `server.js`. The Claude Code tab in the desktop app was one of the writers —
+it is a full session with write access, so closing the terminals did not leave
+one. Rule in CLAUDE.md (Deploying): one session on `main` at a time, or
+separate branches.
+
+Checked after the logo push (`a10ccdc`): its parent is `51b0486`, the speed
+session's last commit; `git diff 51b0486 a10ccdc -- server.js` removes only
+the three logo routes; the page diff touches only the logo, its tokens and the
+stamp. The speed work is present in `a10ccdc` (`POST
+/api/listings/:cardId/compare`, `stampcheck.PRIO`, s-l400 comparisons); no
+other branch, stash, worktree or commit outside `main`. Full suite on a clean
+checkout of `a10ccdc`: 95 suites, all exit 0.
+
 ## 2026-10-07 (vouching bar, run 2) — the same 80 cards with the clean gate
 
 128 tooling calls (views partly cached), no ZIP (production path). 2,906

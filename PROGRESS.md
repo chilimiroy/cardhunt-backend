@@ -1,5 +1,23 @@
 # CardHunt — Progress Log
 
+## 2026-10-07 (vouching bar, run 2) — the same 80 cards with the clean gate
+
+128 tooling calls (views partly cached), no ZIP (production path). 2,906
+listings examined, **3 eligible** (Blastoise 2/102 $119, 47% under; Base
+Charizard $725.08, 20%; Dark Charizard 4/82 $307.74, 19%). Skips: shipping not
+stated 1,143 · not 15% under 1,069 · current bid 163 · other printing 110 ·
+implausible 93 · condition below NM 55 · unusually-cheap 48 · year-stated 47 ·
+counterfeit-likely 22 · seller feedback 19 · other edition 6 · reprint-priced 6
+· too few photos 4 · back no-claim 1 · metal photo 1.
+- None of run 1's five wrong picks returned (MP Blastoise, MP/HP Dark
+  Charizard, NM/LP M Charizard EX, Brazilian SM191, Magnemite: gone or refused).
+- **Defect in the bar:** run 1's two valid picks (Charizard GX 150, Giratina
+  V 186) are still listed and now skip "0 photos (needs 2+)" with 0 back calls —
+  the back verdict was stored, the getItem not re-read, and the photo count read
+  0 from absent data. Absence of a READ is not absence of photos. Not fixed.
+- Blastoise looked at by eye: the right card (Unlimited), visible holo
+  scratches under eBay's "NM" field.
+
 ## 2026-10-07 (buyer location) — a ZIP states shipping AND changes which listings come back
 
 `marketprobe ?zip=10001&pages=1` sends `X-EBAY-C-ENDUSERCTX:

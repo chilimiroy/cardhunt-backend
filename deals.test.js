@@ -28,6 +28,10 @@ r = deals.pickDeal(view([row(40, { suspect: 'implausible' }), row(80), row(90), 
 ok(r.deal && r.deal.listing.landed === 80, 'an outlier is skipped — a deal is the bottom of TRUST, not below it');
 r = deals.pickDeal(view([row(30, { suspect: 'counterfeit-likely' }), row(84), row(90), row(95)]), ref);
 ok(r.deal && r.deal.listing.landed === 84, 'a row the novelty check flagged is skipped');
+// The ONE threshold that stays on the DELIVERED price (Roy, 2026-10-08):
+// a deal is what the buyer pays. The gates judge the item price (outlier.js).
+r = deals.pickDeal(view([row(90, { price: 60 }), row(90), row(95)]), ref);
+ok(!r.deal, 'a $60 item + $30 shipping is 10% below, not 40%: the discount is on the DELIVERED price');
 
 console.log('\n  what it refuses, and says why');
 const why = (rows, rf) => deals.pickDeal(view(rows), rf || ref).why || '';

@@ -887,8 +887,10 @@ function gate(rows, reprints, opts) {
     const hit = cacheGet(verdictKey(row.itemId, reprints), url);
     if (!hit) {
       report.pending++; pending.push(row);
-      const price = Number(row.landed != null ? row.landed : row.price);
-      const hidden = hideBelow != null && price > 0 && price < hideBelow;
+      // The ITEM price: shipping must not lift a cheap row over the line
+      // (the laundering the outlier floor and reprint band had; outlier.js).
+      const price = require('./outlier.js').itemPriceOf(row);
+      const hidden = hideBelow != null && price != null && price < hideBelow;
       // Compared now: the view's top rows, and every HIDDEN row — nobody can
       // scroll to it, and the swaps measured sat there (~14% of market).
       // Queued already (asked for on scroll, or by another view): compared too.

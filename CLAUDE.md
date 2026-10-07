@@ -644,6 +644,15 @@ different printing** — on stated evidence only; CJK is ambiguous on a JP path.
 never remove**; a price band is evidence only where the card prices apart.
 *Archive:* "The price is evidence about the title when the title carries none", "A price band is evidence only where the card prices apart (2026-09-27)"
 
+**A threshold judges the ITEM price; shipping launders a cheap row over it**
+(`outlier.itemPriceOf`: outlier floor, reprint band, stampcheck hide line).
+Only the deals discount is delivered — it is what the buyer pays. (PROGRESS 2026-10-07 (ZIP union))
+
+**A price band cannot separate two cards whose markets overlap at the edges**
+— a top-of-market reprint and a bottom-of-market original look identical to
+it (Blastoise CC rows at $23.99/$25 over a $13.59-$22.99 band). That is what
+a structured field (eBay Set) is worth a call for. (PROGRESS 2026-10-07 (ZIP union))
+
 **A median of mostly-fake listings is not a baseline** — judge against the
 stored current raw price when it is higher, never to lower the bar.
 (PROGRESS 2026-10-04)

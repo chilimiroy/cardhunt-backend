@@ -74,6 +74,18 @@ ok('rows at or above the line are SHOWN while checked', g.listings.filter(l => l
    && g.listings.every(l => l.stamp && l.stamp.state === 'pending'), g.listings.map(l => l.price).join(','));
 ok('every unchecked row is still queued for checking', g.pending.length === 4);
 ok('the report counts hidden and shown apart', g.report.pending === 4 && g.report.pendingShown === 2 && g.report.kind === 'sibling');
+// Laundering: $95 + $10 shipping is $105 delivered — over the $100.04 line
+// on the delivered price, under it on the item price. Hidden either way it
+// is judged now: shipping must not lift a cheap row into view unchecked.
+sc._clearCache();
+const shipped = Object.assign(row(5, 95), { landed: 105 });
+g = sc.gate([shipped], checksFor(A125), { hideBelow });
+ok('the hide line judges the ITEM price: $95 + $10 shipping stays hidden', g.listings.length === 0 && g.pending.length === 1,
+   JSON.stringify(g.listings.map(l => [l.price, l.landed])));
+sc._clearCache();
+g = sc.gate([Object.assign(row(6, 105), { landed: 115 })], checksFor(A125), { hideBelow });
+ok('…and a $105 item is shown whatever its shipping', g.listings.length === 1);
+sc._clearCache();
 g = sc.gate(rows, checksFor(A125), { hideBelow: null });
 ok('no stored price: NOTHING is hidden (no baseline, as outlier.js)', g.listings.length === 4 && g.pending.length === 4);
 const stampToo = checksFor(A125).concat([{ cardId: 'en-30th-c-029', family: { label: '30th' } }]);

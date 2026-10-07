@@ -551,9 +551,12 @@ console.log('\n6. GATED LISTINGS VS UNFILTERED DEEP LINKS');
 // towels and fakes, and they were coming from there, sitting beside the
 // gated rows looking equally trustworthy.
 ok('deep links sit under an UNFILTERED SEARCHES heading', /UNFILTERED/.test(html));
+// Read from the panel's own builder: since TASK-ui T5 the page-language
+// tables carry this sentence as a key, so a page-wide search would still
+// find it after the panel stopped saying it (preservebreak caught that).
 ok('...and say the results are not checked by us',
-  /results are not checked by us/i.test(flatText),
-  'asserted against the flattened prose, not the raw source');
+  /results are not checked by us/i.test(sliceFn(html, 'renderListingFinder').replace(/['"]\s*\+\s*['"]/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')),
+  'asserted against the flattened prose of renderListingFinder, not the raw source');
 ok('renderListingFinder owns the listings element',
   /renderListingFinder/.test(codeOnly));
 ok('the ungated renderRealListings writer is GONE from #cd-listings',

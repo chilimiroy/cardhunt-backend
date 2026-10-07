@@ -6225,16 +6225,19 @@ app.get('/app', (req, res) => {
 
 // The CardZon mark (T7, 2026-10-07): three prepared PNGs, each by name.
 // cardzon-logo-master.png is the source and is never served.
+// One readable line each: access.test.js classifies every route by its
+// declaration, and a route made in a loop would be invisible to it.
 const LOGO_FILES = ['cardzon-logo-96.png', 'cardzon-logo-144.png', 'cardzon-logo-256.png'];
-for (const f of LOGO_FILES) {
-  app.get('/' + f, (req, res) => {
-    res.type('image/png');
-    res.set('Cache-Control', 'public, max-age=86400');
-    res.sendFile(require('path').join(__dirname, f), err => {
-      if (err && !res.headersSent) res.status(404).end();
-    });
+const sendLogo = f => (req, res) => {
+  res.type('image/png');
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.sendFile(require('path').join(__dirname, f), err => {
+    if (err && !res.headersSent) res.status(404).end();
   });
-}
+};
+app.get('/cardzon-logo-96.png', sendLogo(LOGO_FILES[0]));
+app.get('/cardzon-logo-144.png', sendLogo(LOGO_FILES[1]));
+app.get('/cardzon-logo-256.png', sendLogo(LOGO_FILES[2]));
 
 // ══════════════════════════════════════════════════════════════
 // GET /cardmatch.js  —  the query builder, for the browser

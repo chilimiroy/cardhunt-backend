@@ -87,6 +87,9 @@ const ROUTES = [
   ['get', '/gradeprice.js', 'public', 'a module the page loads'],
   ['get', '/estimator.js', 'public', 'a module the page loads'],
   ['get', '/cardmatch.js', 'public', 'a module the page loads'],
+  ['get', '/cardzon-logo-96.png', 'public', 'the CardZon mark in every nav (TASK-ui T7) — an image, no data'],
+  ['get', '/cardzon-logo-144.png', 'public', 'the same mark for 2x screens'],
+  ['get', '/cardzon-logo-256.png', 'public', 'the same mark on the sign-in panel'],
   ['get', '/api/probe/sources', 'public', 'which sources answer from Render; registered ids only, no URL; no user data'],
   ['get', '/ebay/status', 'public', 'eBay credential check; no user data'],
 ];

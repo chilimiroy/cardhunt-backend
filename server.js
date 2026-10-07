@@ -1303,7 +1303,7 @@ app.get('/api/price/:cardId', access.priced, async (req, res) => {
     if (!c) return res.status(404).json({
       error: 'Not found',
       requestedId: cardId,
-      note: 'Not in the CardHunt database and not found on pokemontcg.io'
+      note: 'Not in the CardZon database and not found on pokemontcg.io'
     });
 
     const t = (c.tcgplayer && c.tcgplayer.prices) || {};

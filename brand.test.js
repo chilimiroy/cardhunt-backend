@@ -53,6 +53,11 @@ ok('a pair per theme block: light, device-dark, chosen-dark', pairs.length === 3
 ok('light: #C62128 / #686858 (cream is 1.24:1 on white)', pairs[0] === '#C62128/#686858');
 ok('dark, both blocks: #C54748 / #EBE7DB', pairs[1] === '#C54748/#EBE7DB' && pairs[2] === '#C54748/#EBE7DB');
 ok('the wordmark uses only the tokens', /\.logo \.wm\{color:var\(--brand-card\)\}/.test(H) && /\.logo em\{color:var\(--brand-zon\);/.test(H));
+// The rename covers everything a person reads; comments may keep the history.
+const visible = H.split('\n').filter(l => !/^\s*(\/\/|\*|\/\*|<!--)/.test(l)).join('\n');
+const left = visible.split('\n').filter(l => /CardHunt/.test(l));
+ok('no CardHunt a person can read: title, sign-in heading, approval text, notes, translations', left.length === 0, left.map(l => l.trim().slice(0, 60)).join(' | '));
+ok('the page title is CardZon', /<title>CardZon<\/title>/.test(H));
 ok('structural names stay: the Render hostname, the cardhunt_db tag',
    /https:\/\/cardhunt-backend\.onrender\.com/.test(H) && /source === 'cardhunt_db'/.test(H));
 

@@ -130,7 +130,8 @@ chk('the payload\'s headline fields come from headlineEligible, and it says how 
     /const trusted = listings\.filter\(outlier\.headlineEligible\);/.test(S) && /cheapestLive: \(headLive \|\| \{\}\)\.landed \?\? null,/.test(S)
     && /headlineFloor: \{ minScore: outlier\.HEADLINE_SELLER\.minScore/.test(S));
 const P = require('fs').readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
-chk('the page says so beside the headline', /d\.headlineFloor && d\.headlineFloor\.skippedCheaper/.test(P) && /listed but not counted/.test(P));
+chk('the page says plainly beside the headline: how many, why, and that they are still listed',
+    /d\.headlineFloor && d\.headlineFloor\.skippedCheaper/.test(P) && /not used for this price because the seller/.test(P) && /still listed below/.test(P));
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

@@ -4225,3 +4225,153 @@ says "no licensed sold source" until one exists.
 - **English names are thin**: Japanese `name_en` 36%, `set_name_en` 4.7% — eBay
   answers nothing for ~64% of Japanese cards. `node ingest.js names ja` is the
   highest-yield data job outstanding.
+
+## MOVED FROM CLAUDE.md, 2026-10-07 (budget, second pass)
+
+Moved verbatim when CLAUDE.md reached 58,976 of its 60,000 characters. Each rule
+these carried stays in CLAUDE.md in one or two lines; this is the measurement
+and the PROGRESS block names behind them. (Superseded on the way out: "an
+unchecked row is hidden" — since T0 an unchecked row is SHOWN "Not checked yet".)
+
+| `refscans.js` | the sibling check's references, built AHEAD by `refbuild.js` into `card_reference_scans` (24 px, identical scores): a visitor's request never waits on a third-party host; missing = `notRun`, reported, never a pass |
+
+---
+
+| `stampcheck.js` (material) | gold/black NOVELTY card? photo colour vs OUR scan + outlier flag + a metal photo among the seller's others: two refuse, one flags, a genuine back never refuses (`materialJudge`, 0.40) |
+
+---
+
+Settled — do not retry (full story: *Archive:* "Known blemishes, measured
+today"):
+- Aquapolis 50a/50b-style pairs (8): pokemontcg.io has one image for two
+  cards — blank is correct (fold-merge lesson).
+- McDonald's 2014-2018 and 2023/2024 (78 cards) have no host. **DECIDED
+  2026-10-02 (Roy): leave blank; do not fill from TCGplayer's CDN.**
+- Data changes of 2026-10-01 have backup JSONs in the project root.
+
+---
+
+**What the query asks decides what the gate can see** (2026-10-04): a slab
+asks the bare number (PSA's label prints no total), raw keeps the pair; label
+set names by set id (`SET_WRITTEN_AS`); auctions asked via `buyingOptions`;
+"PSA 8 Card" is a grade not a lot; `δ` empties an eBay search (not asked);
+lettered numbers are their own card. Re-run `node querygap.js en` (~200
+tooling calls) after any change to `buildQuery` or a set's vocabulary.
+Open: raw titles with the pair and no set name are never fetched (unmeasured).
+A card that prints no number is asked by name only (`cm.PRINTS_NO_NUMBER`, Ancient
+Mew); a slab is one card whatever is sealed inside (Roy); a punctuation number
+(Unown ! ?) must stand alone; TCGdex is asked via `cardid.tcgdexLocalId`; an
+empty panel says none-returned / all-refused / no market (`payload.market`).
+
+---
+
+| 30th / Celebrations reprint | stamp template from OUR scan, 0.70 + title words + price band | 55 originals (`30th-c-020` no stamp) | 92.5% of reprint photos; 2026-10-06: 186/186 refusals were reprints; 0/491 genuine Base Charizard (max 0.613); a visible 30th stamp missed at 0.68 |
+| a different card listed under ours, both scans held | lookalike, per-pair margin (`LOOKALIKES`) | bubble Mew ↔ 30th Mew (0.40); Mewtwo ☆ and Dragonite ex ↔ their Evolutions cards (0.30); Base Charizard ← gold Charizard ex 228 (**one way**, 0.10) | 2026-10-06, both ways: Mew 113/178 at 0.40 (a genuine binder photo hit 0.352); Evolutions 22/22 refusals right; 228 28/60, 0/491 genuine |
+| same-name card of the same set | sibling, margin 0.40 | 6,962 English cards (2026-10-06) | JPEG refs: 7/11 swaps, 0/~1,470 genuine. **PNG refs (86 cards): ONE direction only** — 0/111 genuine refused, no swap seen; catching untested, NOT equivalent to JPEG |
+
+---
+
+| gold/black/silver metal novelty, title silent (2026-10-05) | material check: colour vs our scan, outlier flag, metal photo — two refuse, one flags | English cards with a scan (TCGdex .jpg, or pokemontcg.io .png for 806) | labelled: 51/95 refused + 22 flagged, **0/195 genuine refused**; 12 cards, 1,990 rows: 68 refused, all looked at, 0 genuine |
+
+---
+
+  measured raw price. Hiding all of them emptied 49 of 54 originals' panels on a
+  cold open (T0, PROGRESS 2026-10-06). A check that could not run is NAMED
+
+---
+
+  `check_kind 'material'`. A repeated-photo hash was measured and NOT built: no
+  novelty template recurred across cards in 19,054 photos (PROGRESS 2026-10-05).
+
+---
+
+  Charizard (22/22 metal, 0/13 genuine hidden), Base Charizard (6/6, 1 doubtful);
+  NOT Pikachu VMAX (10/72 genuine) or M&W GX (~21%). Measure both ways to add one.
+
+---
+
+- **FALSIFIED — do not retry without a new idea** (PROGRESS 2026-10-05/06 blocks):
+  artwork template ("THE STAMP MATCHER ON THE ARTWORK…": overlaps at the floor);
+  SIFT ("IS THIS PHOTO THIS CARD AT ALL?…", "SPLIT BY KIND…": 0/916 right, but
+  **no opencv.js build ships SIFT** — "SIFT ON RENDER…"); Japanese layout by
+  template ("CAN THE STAMP MATCHER TELL A JAPANESE COPY?…": 10.5 s a photo, 1 row);
+  sibling+price rule (2/14); **"which card is this" over 20,360 scans — STOPPED**
+  ("WHICH CARD IS THIS?…": true card shortlisted 1 of 21); **OCR — CLOSED**
+  ("T1 — OCR": 0/38 numbers on different-card photos). Base Set 2's mark needs
+  alignment first.
+
+---
+
+(*Archive:* "EX-ERA PRICES — diagnosed 2026-10-02 (T2)".) A `normal` TCGdex
+block on a holo-only card was read first — fixed `af2f2c0` (a block is used
+only for a printing the card lists); 93 ghost headlines -> 7. Gold Stars:
+TCGplayer's "market" is a stale sale on 0 listings; only a sold-price source
+fixes them.
+
+---
+
+- **Best deals — OFF, BLOCKED (not shelved)** (`deals.ENABLED`). The bar is now
+  the VOUCHING bar (`deals.vouchFree`/`vouchPhotos`, Roy): skip anything without
+  evidence to vouch for it. First run: 7 eligible of 2,966 listings on 80 cards,
+  5 of them wrong through three GATE holes (title condition, kit names,
+  "Brazilian") — fixed 2026-10-07. Blocked on a re-run with the clean gate and
+  on yield (38% of listings lack a landed price). Measure with
+  `/api/ebay/dealsprobe?bar=vouch` (PROGRESS 2026-10-07 (gate fixes)).
+
+---
+
+- **Live suites run SIGNED OUT — decided (Roy, 2026-10-07)**: priced checks SKIP and say why;
+  prices for an approved account are checked by hand. **Never** a service_role key or a test
+  account on a dev machine (it bypasses RLS and can mint any session). Unattended priced checks
+  would need a separate Supabase project for testing, not production credentials.
+
+---
+
+nothing — then verify that, not the code.** Three cases: a sibling timeout that
+was not firing, yet the check still never produced a verdict within a visit; a
+gate correct on all 213 refusals while the query spent the budget on cards it
+would refuse; a suite green in a working tree and red on a clean checkout
+(PROGRESS 2026-10-06 (late night), 2026-10-07 (night)).
+
+---
+
+which direction a number is. (PROGRESS 2026-10-04) A shortlist that keeps the
+right card 91.5% on genuine photos kept it 4.8% on the photos it exists for
+(PROGRESS 2026-10-06).
+
+---
+
+English query** (Mew ex 151/165 = en/ja SV2a/ko: 208 of 225 scanned were
+foreign, every refusal right; sort=price puts them first). **Neither exclusion
+is safe, measured both ways on 5 cards**: eBay `-term` matches beyond the title
+(dropped 4/11, 41/130, 40/112, 51/130, 1/7 genuine English rows with no excluded
+word — 51 on English-only Evolutions); `Language:{English}` dropped 0, 9, 3, 9,
+0; `Language:{Not Specified}` is not a filterable value (eBay ignores it).
+Production asks with no exclusion (`LANG_EXCLUDE_DEFAULT = 'none'`)
+(PROGRESS 2026-10-07 (language exclusion)).
+
+---
+
+listings**: with `X-EBAY-C-ENDUSERCTX` (ZIP 10001) every row stated shipping and
+38 of 69 were different, cheaper rows (one card, reproducible; `marketprobe
+?zip=`). Production sends none — open, Roy's (PROGRESS 2026-10-07 (buyer location)).
+
+---
+
+- Measure a check's time where it runs; a timeout is not a verdict.
+- A verdict that cannot change is stored, not cached; an unchecked row is hidden.
+- A zero-false threshold is set by the hardest genuine photo, not the medians.
+- Where both answers are held, ask which wins (margin above the hardest genuine).
+- A title can state the right number over a photo of another card — look at
+  the cheapest rows' photos before deciding which layer failed.
+- Know what a matcher cannot see (NCC reads structure, not colour); say it
+  where the claim is made, pin it in a test.
+- One card's sample is not a rate; widen before quoting one.
+- Split a mixed denominator by kind before judging a technique.
+- Where a technique and a label disagree, look again (zoom) before blaming it.
+- A fold that helps matching can merge two cards (fold only padding).
+- A "known correct" sample is labelled by eye, not by the gate that kept it.
+- Widen before shipping a threshold: 0.35 was clean on 378 labelled rows and
+  refused a genuine SIR on 1,990 more; set it above the hardest one found (0.40).
+- Compare to the card's own scan, never a fixed colour: a gold Mew ex photo is
+  gold, and 0 of 118 were touched.

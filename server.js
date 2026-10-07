@@ -5968,7 +5968,7 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
       summary[mp] = {
         ebayTotal: p.pages && p.pages.ebayTotal, scanned: p.scanned, kept: p.kept, rejected: p.rejected, extraPhotos: p.extraPhotos,
         stoppedAtCap: p.pages && p.pages.stoppedAtCap, pagesFetched: p.pages && p.pages.fetched,
-        notOnUs: fresh.length, newVsAllEarlier: freshAll.length,
+        notOnUs: fresh.length, newVsAllEarlier: freshAll.length, shippingStated: p.shippingStated,
         notOnUsUnflagged: clean.length,
         notOnUsInUsRange: usCapped ? clean.filter(k => k.usd <= usMax).length : clean.length,
         // Of the rows not kept on US: how many US RETURNED and refused (the
@@ -6009,7 +6009,7 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
     // refused with the reason — how "what do sellers write for this set?"
     // is read from eBay's own answer, at no extra call.
     const titles = req.query.titles === '1' ? Object.fromEntries(sites.map(mp => [mp, {
-      kept: ((per[mp] && per[mp].keptRows) || []).map(k => ({ usd: k.usd, title: k.title })),
+      kept: ((per[mp] && per[mp].keptRows) || []).map(k => ({ itemId: k.itemId, usd: k.usd, shippingUsd: k.shippingUsd, title: k.title })),
       refused: ((per[mp] && per[mp].droppedRows) || []).map(d => ({ title: d.title, reason: d.reason })) }])) : undefined;
     const body = { cardId, grade, sites, summary, crossRefused, titles,
                    query: Object.fromEntries(sites.map(mp => [mp, per[mp] && per[mp].query])),

@@ -64,6 +64,16 @@ function numberPairsIn(title) {
 // like "+1" would make a leading \b mean the opposite of what was
 // intended, and that is precisely the class of silent breakage the long
 // comment above NOT_A_SINGLE_CARD_TERMS is about.
+// The trainer-kit product names that name BOTH halves' mascots (2026-10-07,
+// from the catalogue's tk-* sets). Masked out of a title before the name
+// check, in either order and with "&", "and" or "/" between them.
+const KIT_NAME_PAIRS = [['latias', 'latios'], ['plusle', 'minun'], ['lucario', 'manaphy'], ['excadrill', 'zoroark'],
+  ['gyarados', 'raichu'], ['lycanroc', 'alolan raichu'], ['bisharp', 'wigglytuff'], ['noivern', 'sylveon'],
+  ['pikachu libre', 'suicune']];
+const KIT_NAME_RE = new RegExp(KIT_NAME_PAIRS.flatMap(([a, b]) => [[a, b], [b, a]])
+  .map(([a, b]) => boundedTerm(a) + '\\s*(?:&|and|\\/)\\s*' + boundedTerm(b)).join('|'), 'gi');
+function maskKitNames(s) { return String(s || '').replace(KIT_NAME_RE, ' ~ '); }
+
 function boundedTerm(term) {
   const esc = String(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
                           .replace(/\s+/g, '\\s+');
@@ -2347,7 +2357,15 @@ function verifyCore(title, card, grade, opts) {
       .replace(/\b(ex|gx|v|vmax|vstar|v-union|break|prime|lv\.?x|star)\b/g, '')
       .replace(/[^a-z0-9\s']/g, ' ').replace(/\s+/g, ' ').trim();
     const firstWord = core.split(' ')[0];
-    if (firstWord && firstWord.length > 2 && !lower.includes(firstWord)) {
+    // As a WORD, outside a kit's product name (2026-10-07). A trainer kit's
+    // two halves are each numbered from 1, and the product name — "EX
+    // Trainer Kit 1: Latias & Latios" — puts BOTH mascots in every title of
+    // either half: "Magnemite 4/10 ... Latias & Latios" named Latias #4 and
+    // passed with a genuine back. Kit pairs are masked first (KIT_NAME_PAIRS);
+    // a card whose own name has "&" (TAG TEAM) is never masked. And
+    // substring was never a name: "mew" is not in "Mewtwo" as a word.
+    const lowerForName = /&/.test(wantName) ? lower : maskKitNames(lower);
+    if (firstWord && firstWord.length > 2 && !new RegExp(boundedTerm(firstWord), 'i').test(lowerForName)) {
       return { ok: false, reason: `title does not name ${firstWord}` };
     }
     // Mechanic suffix must agree — a plain Charizard is not a Charizard VMAX

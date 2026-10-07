@@ -33,5 +33,18 @@ const S = fs.readFileSync(__dirname + '/server.js', 'utf8');
 ok('the server serves exactly the three prepared PNGs, by name',
    /const LOGO_FILES = \['cardzon-logo-96\.png', 'cardzon-logo-144\.png', 'cardzon-logo-256\.png'\];/.test(S) && !/app\.use\(\s*express\.static/.test(S));
 
+console.log('\n  T6: the wordmark');
+ok('every nav reads CardZon as ONE span (the flex gap split Card from Hunt)',
+   logos.every(l => /<span class="wm">Card<em>Zon<\/em><\/span>$/.test(l.trim())), logos.length);
+ok('no CardHunt wordmark left in a nav', !/Card<em>Hunt<\/em>/.test(H));
+const tokens = /--brand-card:(#[0-9A-F]{6}); --brand-zon:(#[0-9A-F]{6});/g;
+const pairs = [...H.matchAll(tokens)].map(m => m[1] + '/' + m[2]);
+ok('a pair per theme block: light, device-dark, chosen-dark', pairs.length === 3, pairs.join(' '));
+ok('light: #C62128 / #686858 (cream is 1.24:1 on white)', pairs[0] === '#C62128/#686858');
+ok('dark, both blocks: #C54748 / #EBE7DB', pairs[1] === '#C54748/#EBE7DB' && pairs[2] === '#C54748/#EBE7DB');
+ok('the wordmark uses only the tokens', /\.logo \.wm\{color:var\(--brand-card\)\}/.test(H) && /\.logo em\{color:var\(--brand-zon\);/.test(H));
+ok('structural names stay: the Render hostname, the cardhunt_db tag',
+   /https:\/\/cardhunt-backend\.onrender\.com/.test(H) && /source === 'cardhunt_db'/.test(H));
+
 console.log('\n  brand.test.js — ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

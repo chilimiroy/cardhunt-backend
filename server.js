@@ -5578,7 +5578,7 @@ app.get('/api/ebay/setprobe/:cardId', toolingKey.require, async (req, res) => {
     return res.status(400).json({ error: 'unknown marketplace' });
   const single = Math.max(0, Math.min(40, parseInt(req.query.single, 10) || 0));
   const verifyFilter = req.query.verify === '1';
-  const key = JSON.stringify([cardId, mp, single, verifyFilter, req.query.epidSearch || 0]);
+  const key = JSON.stringify([cardId, mp, single, verifyFilter, req.query.epidSearch || 0, req.query.split === '1']);
   const hit = setProbeCache.get(key);
   if (hit && Date.now() - hit.at < 30 * 60 * 1000) return res.json(hit.body);
   try {
@@ -5676,6 +5676,39 @@ app.get('/api/ebay/setprobe/:cardId', toolingKey.require, async (req, res) => {
       }
     }
 
+    // ?split=1 (2026-10-08, Option S, measured before it is built): the
+    // same query filtered to each Set value that names a reprint family —
+    // the rows Option S would refuse — with each filtered result's OWN Set
+    // histogram (how many also carry the original's Set). Rows carry the
+    // photo URL so the reprint stamp can be checked locally (0 calls);
+    // the response is the only copy, nothing stored. 1 call per value, ≤3.
+    const split = [];
+    if (req.query.split === '1' && histograms.Set) {
+      const REPRINT_SET_WORDS = /celebrations|classic collection|30th|anniversary/i;
+      const own = histograms.Set.top.filter(x => !/^not specified$/i.test(x.value) && !REPRINT_SET_WORDS.test(x.value))[0];
+      for (const v of histograms.Set.top.filter(x => REPRINT_SET_WORDS.test(x.value)).slice(0, 3)) {
+        const f = 'categoryId:183454,Set:{' + v.value + '}';
+        const fr = await ebay.fetchEbay(db, { url: base + '&fieldgroups=ASPECT_REFINEMENTS,MATCHING_ITEMS&aspect_filter=' + encodeURIComponent(f),
+          token: auth.token, kind: 'search', background: true,
+          meta: { cardId, probe: 'setprobe-split', marketplace: mp },
+          countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
+        calls++;
+        if (!fr.ok) { split.push({ value: v.value, error: fr.reason || fr.blocked }); if (fr.blocked) break; continue; }
+        const inner = ((fr.data.refinement || {}).aspectDistributions || []).find(a => a.localizedAspectName === 'Set');
+        split.push({ value: v.value, histogramCount: v.count, filteredTotal: fr.data.total,
+          alsoOwnSet: own ? { value: own.value, count: ((inner && inner.aspectValueDistributions) || [])
+            .filter(x => x.localizedAspectValue === own.value).reduce((s, x) => s + x.matchCount, 0) } : null,
+          setsWithin: ((inner && inner.aspectValueDistributions) || []).slice(0, 8).map(x => ({ value: x.localizedAspectValue, count: x.matchCount })),
+          rows: (fr.data.itemSummaries || []).map(it => {
+            const g = cm.verify(it.title, mc, 'Raw');
+            return { itemId: it.itemId, title: String(it.title || '').slice(0, 120), price: it.price && +it.price.value,
+                     image: (it.image || {}).imageUrl || null, kept: !!g.ok, reason: g.ok ? null : g.reason };
+          }) });
+      }
+    }
+    const baseRows = req.query.split === '1'
+      ? its.map((it, i) => Object.assign({}, rows[i], { image: (it.image || {}).imageUrl || null })) : undefined;
+
     // Per epid, the Set eBay's getItem gives on the sampled rows — the
     // cross-check of epid against the seller's Set field.
     for (const s of sampled) {
@@ -5704,7 +5737,7 @@ app.get('/api/ebay/setprobe/:cardId', toolingKey.require, async (req, res) => {
     const body = { cardId, marketplace: mp, query: q, ebayTotal: total, returned: its.length,
       summaryKeys, aspectNames, histograms, epids, epidTotals,
       getItem: { sampled: sampled.length, keptSampled: sampled.filter(s => s.kept).length, present },
-      filterTests, kept: rows.filter(x => x.kept).length, calls, stored: false, sampled,
+      filterTests, split, baseRows, kept: rows.filter(x => x.kept).length, calls, stored: false, sampled,
       at: new Date().toISOString() };
     setProbeCache.set(key, { at: Date.now(), body });
     res.json(body);

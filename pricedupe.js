@@ -26,6 +26,24 @@
 // ══════════════════════════════════════════════════════════════
 'use strict';
 const FLOOR = 5.00;
+// Why 5 (measured 2026-10-09, not a feel). The rule applies only to prices
+// WITHOUT a product id, from one source, at >= $5. In that population:
+//   * Yahoo medians (yahoojp_*), the source it mainly governs: at most 4
+//     cards at one exact price on any day — 3,884 prices over 45 days.
+//   * The 08/10 nightly: 274 cards priced without a product id, at most 3 at
+//     one exact price from one source.
+// So real data of this kind has not reached 5. Two cases it must NOT be
+// stretched to cover, both measured the same day:
+//   * Prices WITH a product id do repeat genuinely: 6 different products at
+//     exactly $6.49 holofoil from TCGdex on 08/10. That is why they are judged
+//     by product id, never by equality.
+//   * Yuyu-tei prices on fixed yen points: 71 cards at exactly $6.24 on 08/28.
+//     Yuyu-tei writes through ingest.js yuyuteiIngest, not safePriceFor, so
+//     this guard never sees it — keep it that way, or this threshold refuses
+//     thousands of genuine prices.
+// Older TCGplayer-search rows from before product ids were recorded (Aug-Sep)
+// reached 10 at $99.99 in a day; whether genuine is unknown — those rows now
+// carry product ids and take the product rule.
 const EXACT_MIN_CARDS = 5;
 
 const cents = p => Math.round(Number(p) * 100);

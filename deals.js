@@ -9,8 +9,7 @@
 //   listing end  live, Buy It Now (never a current bid), not flagged by any
 //                check (outlier.trustworthy — price, reprint band, novelty),
 //                landed cost KNOWN (shipping stated), not still waiting for
-//                its photo check, and the cheapest of at least MIN_TRUSTED
-//                such rows in its view
+//                its photo check
 //   price end    the card's stored, number-matched, ungraded price, real and
 //                CURRENT (pricequality: no old / thin / unsettled mark) — the
 //                same reference outlier.js judges by
@@ -41,7 +40,8 @@
 // Absence (no back photo, a metal back, not checked yet) keeps a row OFF the
 // shelf — it says nothing against the row in the listings panel.
 // The check is paid (1 getItem), so server.js asks it for the deal CANDIDATES
-// of a raw view only: backCandidates() below, at most DEAL_BACK_MAX a view.
+// of a raw view only, at most DEAL_BACK_MAX a card. (Since 2026-10-08 the
+// refresh job asks it, through pickVouched; the shelf itself asks nothing.)
 'use strict';
 const outlier = require('./outlier');
 
@@ -72,7 +72,6 @@ const EXCLUDED = {
   'en-base5-8': { reason: 'the PRERELEASE stamp on Dark Gyarados is not detectable yet',
                   removeWhen: 'a PRERELEASE stamp template in stampcheck catches it, measured both ways' }
 };
-const MIN_TRUSTED = 3;
 // getItem calls a raw view may spend checking its deal candidates' backs.
 const DEAL_BACK_MAX = 2;
 // Stated below near mint: the stored price is the card's ungraded market price,
@@ -102,75 +101,16 @@ function notADeal(l, base) {
   return null;
 }
 
-// Why this row, otherwise solid, still is not a deal: no genuine back seen.
-// A row the back check has not reached and one it found nothing on are told
-// apart — the first may become a deal, the second will not.
-function noGenuineBack(l) {
-  if (l.back && l.back.state === 'genuine-back') return null;
-  return l.back ? "no genuine back in the seller's photos" : 'back not checked yet';
-}
-
-// The rows that clear every bar except the back, cheapest first, and the
-// discount each would be. Shared by pickDeal and backCandidates.
-function solidRows(payload, ref, excluded) {
-  const base = basePrintingOf(payload), solid = [];
-  for (const l of (payload && payload.listings) || []) {
-    const no = notADeal(l, base);
-    if (no) { if (excluded) excluded[no] = (excluded[no] || 0) + 1; } else solid.push(l);
-  }
-  return solid.sort((a, b) => Number(a.landed) - Number(b.landed));
-}
 const discountOf = (l, ref) => 1 - Number(l.landed) / ref.price;
-// The discount always NAMES what it is measured against (Roy, 2026-10-08):
-// "41% below the TCGplayer market price" — a named third party's price,
-// plainly not one we propose for the eBay item (API licence §9.5). Our stored
-// prices come from TCGplayer (via TCGdex, or TCGplayer directly); anything
-// else is named by its own source rather than passed off as "market".
+// The discount is INTERNAL — it chooses, it is never shown or stored (Roy,
+// 2026-10-08). What IS shown is our own price, named: "TCGplayer market". Our
+// stored prices come from TCGplayer (via TCGdex, or TCGplayer directly);
+// anything else is named by its own source rather than passed off as "market".
 function refLabel(ref) {
   const src = String((ref && ref.source) || '');
   return /tcgplayer/i.test(src) ? 'TCGplayer market price' : 'stored price (' + (src || 'unknown source') + ')';
 }
 const refUsable = ref => ref && ref.isReal !== false && ref.price > 0 && ref.current;
-
-// One view's best candidate. payload: a cached /api/listings payload; ref:
-// { price, current, isReal } for the card. Returns { deal } or { why },
-// and `excluded`: how many rows each reason kept out.
-function pickDeal(payload, ref) {
-  if (!ref || !ref.isReal || !(ref.price > 0)) return { why: 'no measured price for this card' };
-  if (!ref.current) return { why: 'the stored price is ' + (ref.quality || 'not current') };
-  const excluded = {}, solid = solidRows(payload, ref, excluded);
-  if (solid.length < MIN_TRUSTED) return { why: `${solid.length} solid listing${solid.length === 1 ? '' : 's'} (needs ${MIN_TRUSTED})`, excluded };
-  if (discountOf(solid[0], ref) < MIN_DISCOUNT) return { why: `cheapest solid listing is ${Math.round(discountOf(solid[0], ref) * 100)}% below the price`, excluded };
-  // The genuine-back rule: the cheapest solid row WITH a genuine back seen.
-  let best = null;
-  for (const l of solid) {
-    const no = noGenuineBack(l);
-    if (!no) { best = l; break; }
-    excluded[no] = (excluded[no] || 0) + 1;
-  }
-  if (!best) return { why: 'no solid listing has a genuine back seen', excluded };
-  const discount = discountOf(best, ref);
-  if (discount < MIN_DISCOUNT) return { why: `cheapest listing with a genuine back is ${Math.round(discount * 100)}% below the price`, excluded };
-  return { deal: { listing: best, price: ref.price, discount: Math.round(discount * 1000) / 1000, solidCount: solid.length }, excluded };
-}
-
-// Which rows' backs a raw view should check so the shelf can judge it: the
-// solid rows at least MIN_DISCOUNT below the price, cheapest first, with no
-// back verdict yet, up to the first row already holding a genuine back (it
-// is the deal; nothing dearer matters). `budget` is what the view may still
-// spend (DEAL_BACK_MAX minus what it has). 0 calls when there is no deal to make.
-function backCandidates(payload, ref, budget) {
-  if (!refUsable(ref) || !(budget > 0)) return [];
-  const solid = solidRows(payload, ref);
-  if (solid.length < MIN_TRUSTED) return [];
-  const out = [];
-  for (const l of solid) {
-    if (discountOf(l, ref) < MIN_DISCOUNT || out.length >= budget) break;
-    if (l.back && l.back.state === 'genuine-back') break;
-    if (!l.back && l.source === 'ebay' && l.itemId) out.push(l);
-  }
-  return out;
-}
 
 // ── The VOUCHING bar (Roy, 2026-10-07) — measured; the shelf stays OFF ──
 // Every check above asks "is there evidence this is bad?", and a damaged or
@@ -275,6 +215,6 @@ function describeRule() {
     + 'opening a card checks the backs of at most ' + DEAL_BACK_MAX + ' of its candidates (one eBay item lookup each, once).';
 }
 
-module.exports = { ENABLED, OFF_REASON, MIN_DISCOUNT, MAX_DISCOUNT, EXCLUDED, MIN_TRUSTED, DEAL_BACK_MAX, BELOW_NM, basePrintingOf, notADeal, noGenuineBack,
+module.exports = { ENABLED, OFF_REASON, MIN_DISCOUNT, MAX_DISCOUNT, EXCLUDED, DEAL_BACK_MAX, BELOW_NM, basePrintingOf, notADeal,
   VOUCH, vouchFree, vouchPhotos, discountOf, refLabel, hpAmbiguous, pickVouched,
-                   pickDeal, backCandidates, rankDeals, describeRule };
+                   rankDeals, describeRule };

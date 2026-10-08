@@ -12,95 +12,58 @@ let pass = 0, fail = 0;
 function ok(c, m) { if (c) { pass++; console.log('  ok    ' + m); } else { fail++; console.log('  FAIL  ' + m); } }
 console.log('\n  deals.test.js\n');
 
-// Every row carries a genuine back unless a test says otherwise: the bars
-// below are each tested alone; the genuine-back rule has its own section.
+// The bars a row must clear before the vouching bar looks at it (deals.notADeal,
+// read by deals.vouchFree). pickDeal, backCandidates and solidRows — the
+// cached-view shelf's own picker — were DELETED 2026-10-08 with that shelf;
+// what they tested about a ROW is tested here directly, both ways.
 let _id = 0;
 const row = (landed, o) => Object.assign({ source: 'ebay', live: true, saleType: 'buy-it-now', shippingKnown: true,
   landed, price: landed, suspect: null, priceKind: 'listing', itemId: 'v1|' + (++_id) + '|0',
   back: { state: 'genuine-back' } }, o || {});
-const ref = { price: 100, isReal: true, current: true };
-const view = rows => ({ listings: rows });
+const ref = { price: 100, isReal: true, current: true, source: 'tcgdex_tcgplayer_holofoil' };
+const holoBase = deals.basePrintingOf({ listings: [], printings: [{ key: 'holo' }, { key: 'reverse' }] });
+const no = (l, base) => deals.notADeal(l, base === undefined ? holoBase : base);
 
 console.log('  what it keeps');
-let r = deals.pickDeal(view([row(70), row(90), row(95)]), ref);
-ok(r.deal && r.deal.listing.landed === 70 && r.deal.discount === 0.3, 'the cheapest solid listing, 30% below a current measured price');
-r = deals.pickDeal(view([row(40, { suspect: 'implausible' }), row(80), row(90), row(95)]), ref);
-ok(r.deal && r.deal.listing.landed === 80, 'an outlier is skipped — a deal is the bottom of TRUST, not below it');
-r = deals.pickDeal(view([row(30, { suspect: 'counterfeit-likely' }), row(84), row(90), row(95)]), ref);
-ok(r.deal && r.deal.listing.landed === 84, 'a row the novelty check flagged is skipped');
-// The ONE threshold that stays on the DELIVERED price (Roy, 2026-10-08):
-// a deal is what the buyer pays. The gates judge the item price (outlier.js).
-r = deals.pickDeal(view([row(90, { price: 60 }), row(90), row(95)]), ref);
-ok(!r.deal, 'a $60 item + $30 shipping is 10% below, not 40%: the discount is on the DELIVERED price');
+ok(no(row(70)) === null, 'a live Buy It Now, shipping stated, unflagged row clears');
+ok(no(row(50, { sellerStated: true, sellerCondition: 'NM' })) === null, 'KEPT: a stated near-mint copy');
+ok(no(row(50, { sellerStated: true, sellerCondition: 'M' })) === null, 'KEPT: a stated mint copy');
+ok(no(row(50, { printingStated: true, printing: 'holo' })) === null, 'KEPT: the stated printing IS the priced one');
+ok(no(row(50, { printingStated: false, printing: null })) === null, 'KEPT: a title that states no printing');
+ok(no(row(50, { editionStated: true, editionKey: 'unlimited' })) === null, 'KEPT: a stated Unlimited');
+ok(no(row(50, { stamp: { state: 'not-visible' } })) === null, 'KEPT: a photo checked and clear');
+ok(no(row(50, { back: { state: 'genuine-back' } })) === null, 'KEPT: a genuine back seen');
 
 console.log('\n  what it refuses, and says why');
-const why = (rows, rf) => deals.pickDeal(view(rows), rf || ref).why || '';
-ok(/measured/.test(why([row(50), row(90), row(95)], { price: 100, isReal: false, current: true })), 'an estimate is no price to beat');
-ok(/old|current/.test(why([row(50), row(90), row(95)], { price: 100, isReal: true, current: false, quality: 'old' })), 'an old / thin / unsettled price is no price to beat');
-ok(/needs 3/.test(why([row(50), row(90)])), 'fewer than three solid listings: no bottom of trust to stand on');
-ok(/below the price/.test(why([row(90), row(95), row(99)])), 'under 15% below: not a deal');
-ok(/needs 3/.test(why([row(50, { saleType: 'auction' }), row(90), row(95)])), 'an auction (a current bid) is never a deal');
-ok(/needs 3/.test(why([row(50, { shippingKnown: false }), row(90), row(95)])), 'unknown shipping: the landed cost is not solid');
-ok(/needs 3/.test(why([row(50, { materialPending: true }), row(90), row(95)])), 'a row still waiting for its photo check is not offered');
-ok(/needs 3/.test(why([row(50, { live: false }), row(90), row(95)])), 'an ended listing is not a deal');
-ok(deals.MIN_DISCOUNT === 0.15 && deals.MIN_TRUSTED === 3, 'the thresholds are the stated ones');
-
-console.log('\n  the bar after the live look (2026-10-05): like for like only');
-const holoCard = rows => ({ listings: rows, printings: [{ key: 'holo' }, { key: 'reverse' }] });
-const pick = (rows, v) => deals.pickDeal((v || holoCard)(rows), ref);
-const cheapest = rows => (pick(rows).deal || { listing: {} }).listing.landed;
-const solid3 = [row(80), row(90), row(95)];
-ok(cheapest([row(50, { sellerStated: true, sellerCondition: 'DMG' })].concat(solid3)) === 80, 'stated damage ("Damaged", "DMG/PEELING") is not a deal');
-ok(cheapest([row(50, { sellerStated: true, sellerCondition: 'MP' })].concat(solid3)) === 80, 'stated MP is not a deal against a near-mint price');
-ok(cheapest([row(50, { sellerStated: true, sellerCondition: 'LP' })].concat(solid3)) === 80, 'stated LP neither');
-ok(cheapest([row(50, { sellerStated: true, sellerCondition: 'NM' })].concat(solid3)) === 50, 'KEPT: a stated near-mint copy');
-ok(cheapest([row(50, { sellerStated: true, sellerCondition: 'M' })].concat(solid3)) === 50, 'KEPT: a stated mint copy');
-ok(cheapest([row(50, { printingStated: true, printing: 'reverse' })].concat(solid3)) === 80, 'a stated reverse holo is not the holo price\'s deal');
-ok(cheapest([row(50, { printingStated: true, printing: 'normal' })].concat(solid3)) === 80, 'a stated "Non-Holo" is not the holo price\'s deal');
-ok(cheapest([row(50, { printingStated: true, printing: 'holo' })].concat(solid3)) === 50, 'KEPT: the stated printing IS the priced one');
-ok(cheapest([row(50, { printingStated: false, printing: null })].concat(solid3)) === 50, 'KEPT: a title that states no printing');
-ok(deals.pickDeal({ listings: [row(50, { printingStated: true, printing: 'holo' })].concat(solid3), printings: [{ key: 'normal' }, { key: 'holo' }] }, ref).deal.listing.landed === 80,
+ok(/flagged/.test(no(row(40, { suspect: 'implausible' }))), 'an outlier is skipped — a deal is the bottom of TRUST, not below it');
+ok(/flagged/.test(no(row(30, { suspect: 'counterfeit-likely' }))), 'a row the novelty check flagged is skipped');
+ok(no(row(50, { saleType: 'auction' })) !== null, 'an auction (a current bid) is never a deal');
+ok(/shipping/.test(no(row(50, { shippingKnown: false }))), 'unknown shipping: the landed cost is not solid');
+ok(/novelty/.test(no(row(50, { materialPending: true }))), 'a row still waiting for its novelty check is not offered');
+ok(/ended/.test(no(row(50, { live: false }))), 'an ended listing is not a deal');
+ok(/below near mint/.test(no(row(50, { sellerStated: true, sellerCondition: 'DMG' }))), 'stated damage ("Damaged", "DMG/PEELING") is not a deal');
+ok(/below near mint/.test(no(row(50, { sellerStated: true, sellerCondition: 'MP' }))), 'stated MP is not a deal against a near-mint price');
+ok(/below near mint/.test(no(row(50, { sellerStated: true, sellerCondition: 'LP' }))), 'stated LP neither');
+ok(/another printing/.test(no(row(50, { printingStated: true, printing: 'reverse' }))), 'a stated reverse holo is not the holo price\'s deal');
+ok(/another printing/.test(no(row(50, { printingStated: true, printing: 'normal' }))), 'a stated "Non-Holo" is not the holo price\'s deal');
+ok(/another printing/.test(no(row(50, { printingStated: true, printing: 'holo' }),
+     deals.basePrintingOf({ listings: [], printings: [{ key: 'normal' }, { key: 'holo' }] }))),
    'a card in normal AND holo: a stated printing cannot be shown to be the priced one');
-ok(cheapest([row(50, { editionStated: true, editionKey: '1st-edition' })].concat(solid3)) === 80, 'a stated 1st Edition is not the unlimited price\'s deal');
-ok(cheapest([row(50, { editionStated: true, editionKey: 'unlimited' })].concat(solid3)) === 50, 'KEPT: a stated Unlimited');
-ok(cheapest([row(50, { stamp: { state: 'pending', kind: 'sibling' } })].concat(solid3)) === 80, 'a photo still being compared is not a deal');
-ok(cheapest([row(50, { stamp: { state: 'not-visible' } })].concat(solid3)) === 50, 'KEPT: a photo checked and clear');
-ok(cheapest([row(50, { back: { state: 'no-claim', metal: true } })].concat(solid3)) === 80, 'a metal photo among the seller\'s is not a deal');
-ok(cheapest([row(50, { back: { state: 'genuine-back' } })].concat(solid3)) === 50, 'KEPT: a genuine back seen');
-const ex = pick([row(50, { sellerStated: true, sellerCondition: 'DMG' }), row(55, { printingStated: true, printing: 'reverse' })].concat(solid3)).excluded;
-ok(ex && ex['stated condition below near mint'] === 1 && ex['states another printing'] === 1, 'every excluded row is counted by its reason');
+ok(/another edition/.test(no(row(50, { editionStated: true, editionKey: '1st-edition' }))), 'a stated 1st Edition is not the unlimited price\'s deal');
+ok(/photo not checked/.test(no(row(50, { stamp: { state: 'pending', kind: 'sibling' } }))), 'a photo still being compared is not a deal');
+ok(/back check marked/.test(no(row(50, { back: { state: 'no-claim', metal: true } }))), 'a metal photo among the seller\'s is not a deal');
+ok(/back check marked/.test(no(row(50, { back: { state: 'other-back' } }))), 'another language family\'s back is not a deal');
 
-console.log('\n  the genuine-back rule (TASK T1, 2026-10-05): evidence it is real, not only no evidence it is fake');
-const noBack = o => Object.assign({ back: undefined }, o || {});
-// The gold Shining Charizard: no mark anywhere, back no-claim, 89% below.
-const goldCharizard = row(180.17, { back: { state: 'no-claim', metal: false }, title: 'Shining Charizard 107/105 Neo Destiny' });
-const shining = { price: 1701, isReal: true, current: true };
-const sc = deals.pickDeal(view([goldCharizard, row(1400), row(1500), row(1600)]), shining);
-ok(sc.deal && sc.deal.listing.landed === 1400, 'the gold Shining Charizard (no-claim back) is NOT the deal; the cheapest genuine-back row is');
-ok(sc.excluded && sc.excluded["no genuine back in the seller's photos"] === 1, 'and it is counted under its reason');
-r = deals.pickDeal(view([row(50, noBack()), row(80), row(95)]), ref);
-ok(r.deal && r.deal.listing.landed === 80 && r.excluded['back not checked yet'] === 1, 'a row the back check has not reached is not a deal yet, and says so');
-r = deals.pickDeal(view([row(50, noBack()), row(60, noBack()), row(70, noBack())]), ref);
-ok(!r.deal && /genuine back/.test(r.why), 'no solid row with a genuine back: no deal, and the reason names the back');
-r = deals.pickDeal(view([row(50, { back: { state: 'no-claim' } }), row(90), row(95)]), ref);
-ok(!r.deal && /genuine back is 10% below/.test(r.why), 'the next genuine-back row under 15% below: no deal at all');
-r = deals.pickDeal(view([row(50, { back: { state: 'no-claim' } }), row(80), row(95)]), ref);
-ok(r.deal && r.deal.listing.landed === 80, 'the next row with a genuine back, still 15% below, becomes the deal');
-ok(cheapest([row(50, { back: { state: 'other-back' } })].concat(solid3)) === 80, 'another language family\'s back is not a deal');
-
-console.log('\n  which backs a view checks for the shelf (backCandidates)');
-const cand = (rows, budget, rf) => deals.backCandidates(view(rows), rf || ref, budget == null ? deals.DEAL_BACK_MAX : budget).map(l => l.landed);
-const js = a => JSON.stringify(a);
-ok(deals.DEAL_BACK_MAX === 2, 'at most two getItem calls a view');
-ok(js(cand([row(50, noBack()), row(60, noBack()), row(70, noBack()), row(95, noBack())])) === '[50,60]', 'the cheapest unchecked candidates, cheapest first, capped');
-ok(js(cand([row(50, noBack()), row(60, noBack()), row(70, noBack())], 1)) === '[50]', 'capped by what the view may still spend');
-ok(js(cand([row(50, { back: { state: 'no-claim' } }), row(60, noBack()), row(70), row(80, noBack())])) === '[60]', 'a row already judged is not checked again; nothing dearer than a genuine-back row is');
-ok(js(cand([row(50), row(60, noBack()), row(70, noBack())])) === '[]', 'the cheapest row already has a genuine back: 0 calls');
-ok(js(cand([row(90, noBack()), row(95, noBack()), row(99, noBack())])) === '[]', 'nothing 15% below the price: 0 calls');
-ok(js(cand([row(50, noBack()), row(60, noBack())])) === '[]', 'fewer than three solid rows: 0 calls');
-ok(js(cand([row(50, noBack({ shippingKnown: false })), row(60, noBack()), row(70), row(80)])) === '[60]', 'a row failing another bar is never checked');
-ok(js(cand([row(50, noBack()), row(60), row(70)], 2, { price: 100, isReal: true, current: false })) === '[]', 'no current measured price: 0 calls');
-ok(js(cand([row(50, noBack()), row(60), row(70)], 0)) === '[]', 'budget spent: 0 calls');
+console.log('\n  the price end and the thresholds');
+// The ONE threshold that stays on the DELIVERED price (Roy, 2026-10-08):
+// a deal is what the buyer pays. The gates judge the item price (outlier.js).
+ok(Math.abs(deals.discountOf(row(90, { price: 60 }), ref) - 0.10) < 1e-9, 'a $60 item + $30 shipping is 10% below, not 40%: the discount is on the DELIVERED price');
+ok(/below the TCGplayer market price/.test(deals.vouchFree(row(90, { price: 60 }), { listings: [] }, ref).skip || ''), '...so it is skipped as under 15%');
+ok(/below the/.test(deals.vouchFree(row(50), { listings: [] }, { price: 100, isReal: false, current: true }).skip || ''), 'an estimate is no price to beat');
+ok(/below the/.test(deals.vouchFree(row(50), { listings: [] }, { price: 100, isReal: true, current: false }).skip || ''), 'an old / thin / unsettled price is no price to beat');
+ok(deals.MIN_DISCOUNT === 0.15 && deals.MAX_DISCOUNT === 0.60 && deals.DEAL_BACK_MAX === 2, 'the thresholds are the stated ones');
+ok(typeof deals.pickDeal === 'undefined' && typeof deals.backCandidates === 'undefined' && typeof deals.MIN_TRUSTED === 'undefined',
+   'the cached-view picker is deleted, not left dormant');
 
 console.log('\n  on (Roy, 2026-10-08), with its own supply');
 ok(deals.ENABLED === true, 'deals.ENABLED is ON — on the vouching bar, approved accounts');

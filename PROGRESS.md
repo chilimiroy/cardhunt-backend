@@ -25,8 +25,28 @@
   the same probe answered. Not applied for (Roy); the click design needs none.
 - **Removed while building:** the view-time deals back follow-up (it spent
   getItem calls for the old cached-view shelf) and the probe's legacy pickDeal
-  path. Still owed: `deals.pickDeal`, `backCandidates`, `solidRows` and their
-  tests in `deals.test.js` are dormant pure functions — delete them.
+  path. Then (same day) `deals.pickDeal`, `backCandidates`, `solidRows`,
+  `noGenuineBack`, `MIN_TRUSTED` deleted; their row-level cases moved onto
+  `deals.notADeal` both ways (deals.test.js 85 -> 68 assertions: the 17 gone
+  tested only the deleted picker).
+
+### QUEUED — after the UI task (TASK-reports-and-pages.md), in this order (Roy, 2026-10-08)
+1. **PRERELEASE stamp template** in stampcheck (same machinery as the 25th
+   stamp), measured both ways before it ships; first count how many cards
+   have a prerelease printing at all. It is the removal condition for
+   `deals.EXCLUDED['en-base5-8']` (Dark Gyarados).
+2. **Set headline flag** — stashed (`git stash list`: "WIP set headline
+   flag"): `sourceEbay` asks the reprint family's eBay Set values (+1 call, US
+   page 1, the 55 originals), rows filed there cannot set the headline (still
+   listed, still deal candidates). Option S (refusing on Set) is FALSIFIED.
+3. **Lugia sibling-check investigation** — 185/195 sold as 186/195 passed
+   the sibling check: was 185 in the reference set, or is the comparison too
+   tolerant? Then how widespread: cards with same-name, same-set siblings of
+   different artwork, and what the check scores on deliberate swaps.
+4. **40-size stamp grid** on the 55 REPRINT_OF originals only (the reprint
+   stamp check applies nowhere else); re-measure the 0.70 threshold against
+   the 491 genuine photos before shipping (`stampmiss.fixture.json`: 9/16
+   misses recovered at 40 scales, genuine max unchanged at 0.592).
 - **§9.5, found while building:** card tiles (Latest searches, My alerts)
   showed "avg listing $X median of N" — an eBay median computed IN THE PAGE.
   Removed (`cardListingAvg`, `fillListingAvg`, the cache); tiles keep a

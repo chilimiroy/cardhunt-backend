@@ -6371,9 +6371,9 @@ const aspectProbeCache = new Map();
 // this card right now, and did every check on that row actually RUN?".
 // Opens the card's raw view exactly as a visitor's open does (1 search, +1
 // when the language union triggers), waits up to ?wait= seconds (default
-// 60) for the photo checks, runs the deal candidates' back checks (the
-// shelf's own rule and DEAL_BACK_MAX: at most 2 getItem), then the UNCHANGED
-// deals.pickDeal against dealRefOf. Reports each check's state on the picked
+// 60) for the photo checks, then the shelf's own bar, deals.pickVouched, with
+// the back asked (DEAL_BACK_MAX: at most 2 getItem), against dealRefOf — the
+// same run the refresh job makes. Reports each check's state on the picked
 // row — never only its verdict. Nothing reaches a visitor; nothing stored.
 // The VOUCHING bar for one view (Roy, 2026-10-07) — skip anything without the
 // evidence to vouch for it. Cheapest first; every free criterion

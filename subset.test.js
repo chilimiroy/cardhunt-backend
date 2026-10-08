@@ -8,6 +8,7 @@
 // this must NOT change.
 //
 //   node subset.test.js
+require('./testcount')(42);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;
 function ok(cond, msg) { if (cond) { pass++; } else { fail++; console.log('  FAIL ' + msg); } }

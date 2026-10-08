@@ -10,6 +10,7 @@
 //     claimed by two cards is trusted for neither (tcgdexprice.productConflicts).
 // Each half asserts what it KEEPS as well as what it refuses.
 'use strict';
+require('./testcount')(56);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const S = require('./tcgsetname.js');
 const T = require('./tcgdexprice.js');

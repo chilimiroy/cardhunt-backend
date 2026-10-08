@@ -7,6 +7,7 @@
 //   en-30th-c-029  30th Classic Collection Lugia    32 kept
 // 14 of the 28 "Aquapolis" rows sit at $350-$500 and name no reprint.
 'use strict';
+require('./testcount')(102);   // assertions in a plain run — fewer fails the file (testcount.js)
 const outlier = require('./outlier');
 const cm = require('./cardmatch');
 

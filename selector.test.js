@@ -15,6 +15,7 @@
 // they can produce into the REAL cardmatch. A grade the box can offer but the
 // gate cannot parse would return an empty list and look like "no listings".
 
+require('./testcount')(531);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const path = require('path');
 const cm = require('./cardmatch.js');

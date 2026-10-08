@@ -10,6 +10,7 @@
 // the search resolver fixed and the endpoint's guard still refusing first.
 // Each assertion below names a path and the thing it must reach.
 'use strict';
+require('./testcount')(62);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? pass++ : fail++; console.log('  ' + (c ? 'ok  ' : 'FAIL') + '  ' + n + (c || !d ? '' : '  — ' + d)); };

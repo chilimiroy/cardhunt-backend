@@ -7,6 +7,7 @@
 //
 //   node noautoexpand.test.js
 //   node noautoexpand.test.js <server.js> <page.html>   (e.g. files from git show, to watch it fail)
+require('./testcount')(19);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const serverFile = process.argv[2] || 'server.js';
 const pageFile = process.argv[3] || 'cardhunt_preview.html';

@@ -11,6 +11,7 @@
 // CLAUDE.md records why. This pins the rule so a later edit cannot quietly
 // put the shared rows, the second margin or the split column back.
 'use strict';
+require('./testcount')(31);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const page = fs.readFileSync('cardhunt_preview.html', 'utf8');
 let pass = 0, fail = 0;

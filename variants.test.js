@@ -6,6 +6,7 @@
 // 2026-09-29), not the documented shape — which hid the Poké Ball and Master
 // Ball mirrors behind a bare `reverse: true`.
 'use strict';
+require('./testcount')(81);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const cm = require('./cardmatch');
 const tdx = require('./tcgdexprice');

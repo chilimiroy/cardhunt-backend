@@ -10,6 +10,7 @@
 //
 //   node search.test.js
 'use strict';
+require('./testcount')(40);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };

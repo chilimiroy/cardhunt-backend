@@ -25,6 +25,7 @@
 // Read the whole output. A commit in this project was once pushed green
 // because only the last four lines were read.
 
+require('./testcount')(129);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');

@@ -10,6 +10,7 @@
 // type, textured full arts). On all 1,010 rows the change refused 43 wrong
 // cards and 0 right ones.
 'use strict';
+require('./testcount')(48);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch');
 let pass = 0, fail = 0;
 const C = (id, name, number, setTotal, setName, extra) => Object.assign(

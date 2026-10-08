@@ -12,6 +12,7 @@
 // the URL, the three states, and the wiring — and, with --live, the same
 // detector on clean scans of four originals and their reprints.
 'use strict';
+require('./testcount')(109);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const sc = require('./stampcheck');
 let pass = 0, fail = 0;

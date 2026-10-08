@@ -10,6 +10,7 @@
 // Offline: the "photos" here are our own scans from stamps.json, shrunk and
 // degraded, so the test needs no network.
 
+require('./testcount')(46);   // assertions in a plain run — fewer fails the file (testcount.js)
 const sc = require('./stampcheck.js');
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;

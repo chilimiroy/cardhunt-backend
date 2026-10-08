@@ -11,6 +11,7 @@
 // delete anyone's alert and approve itself (PROGRESS 2026-10-06 (night)).
 // A table created later without RLS fails --db here.
 
+require('./testcount')(13);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), crypto = require('crypto');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };

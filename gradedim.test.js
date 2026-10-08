@@ -14,6 +14,7 @@
 // blocked. Here it would mean a Black Label search that returns nothing at
 // all and looks like a working filter.
 
+require('./testcount')(68);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch');
 
 let pass = 0, fail = 0;

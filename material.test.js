@@ -15,6 +15,7 @@
 //
 //   node material.test.js
 'use strict';
+require('./testcount')(60);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const sc = require('./stampcheck.js');
 let pass = 0, fail = 0;

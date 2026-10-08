@@ -9,6 +9,7 @@
 //   §8.1(d) derived statistics need written permission -> the per-view
 //           outlier medians stay inside the server, never in a payload
 'use strict';
+require('./testcount')(17);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), path = require('path');
 let pass = 0, fail = 0;
 const ok = (what, cond, got) => { if (cond) { pass++; console.log('  ok    ' + what); } else { fail++; console.log('  FAIL  ' + what + (got ? '   ' + got : '')); } };

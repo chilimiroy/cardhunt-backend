@@ -9,6 +9,7 @@
 // 3. Futsal prints 002/005, and sellers do not write "Pokémon Futsal 2020".
 // Titles are real (eBay US, marketprobe ?titles=1, 2026-10-04) where marked.
 
+require('./testcount')(17);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (cond || !extra ? '' : '  — ' + extra)); };

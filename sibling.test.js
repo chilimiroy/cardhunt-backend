@@ -15,6 +15,7 @@
 // Offline: the "photos" are our own scans (sibling.fixture.json), framed and
 // degraded as a seller's shot would be.
 
+require('./testcount')(51);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const sc = require('./stampcheck.js');
 let pass = 0, fail = 0;

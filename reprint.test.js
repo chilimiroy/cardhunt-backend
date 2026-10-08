@@ -26,6 +26,7 @@
 //   4. the table itself is consistent, and (with DATABASE_URL) agrees with
 //      the catalogue it names
 
+require('./testcount')(126);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch');
 const fs = require('fs');
 

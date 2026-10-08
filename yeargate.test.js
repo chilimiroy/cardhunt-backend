@@ -9,6 +9,7 @@
 // REPRINT_FAMILIES[].year); otherwise keep the row, flagged. Graded, a reprint
 // card, and any caller that does not say the view is raw keep the refusal.
 
+require('./testcount')(18);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;

@@ -19,6 +19,7 @@
 // global scope, with the page's own 144 top-level identifiers already
 // declared in it — and proves the export appears.
 // ══════════════════════════════════════════════════════════════
+require('./testcount')(28);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const vm = require('vm');
 const path = require('path');

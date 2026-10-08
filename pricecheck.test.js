@@ -12,6 +12,7 @@
 //      stays deleted; the internal search has exactly one definition.
 //
 //   node pricecheck.test.js        (SKIP of part 2-3 where ingest.js is absent)
+require('./testcount')(34);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const tdxp = require('./tcgdexprice.js');
 let pass = 0, fail = 0;

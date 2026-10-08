@@ -9,6 +9,7 @@
 // at all — there is nothing left to order. What this pins now: no market
 // request, and one listings request per card+grade. Runs the REAL function.
 'use strict';
+require('./testcount')(15);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? pass++ : fail++; console.log('  ' + (c ? 'ok  ' : 'FAIL') + '  ' + n + (c || !d ? '' : '  — ' + d)); };

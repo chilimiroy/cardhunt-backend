@@ -14,6 +14,7 @@
 // (listingparse labels rows with it). Measured on 5,000 real titles from
 // those sets: the old listingparse reader missed every European form.
 'use strict';
+require('./testcount')(76);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const cm = require('./cardmatch');
 const lp = require('./listingparse');

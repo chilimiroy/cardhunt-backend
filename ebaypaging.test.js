@@ -17,6 +17,7 @@
 // of server.js, against a stubbed eBay — so it measures what the functions
 // do, not what their source says.
 'use strict';
+require('./testcount')(80);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const cm = require('./cardmatch');
 const lp = require('./listingparse');

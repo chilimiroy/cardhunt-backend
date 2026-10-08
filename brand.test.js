@@ -10,6 +10,7 @@
 // T6: the wordmark is a display name only — ids, the cardhunt_db tag and the
 // Render hostname are untouched.
 'use strict';
+require('./testcount')(25);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };

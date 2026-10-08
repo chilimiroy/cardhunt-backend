@@ -2,6 +2,7 @@
 //   node certcheck.test.js
 // Fixtures are the two live getItem descriptor sets measured 2026-09-28 on
 // Base Set Charizard PSA 9 (one with a cert number, one without).
+require('./testcount')(47);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cc = require('./certcheck');
 const fs = require('fs');
 let pass = 0, fail = 0;

@@ -5,6 +5,7 @@
 // piece of evidence from an otherwise-vouchable row and expects a skip naming
 // it. Offline; the shelf stays off.
 
+require('./testcount')(45);   // assertions in a plain run — fewer fails the file (testcount.js)
 const deals = require('./deals.js');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };

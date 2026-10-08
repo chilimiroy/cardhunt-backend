@@ -1,3 +1,4 @@
+require('./testcount')(31);   // assertions in a plain run — fewer fails the file (testcount.js)
 const e = require('./estimator');
 const fs = require('fs');
 let pass=0, fail=0;

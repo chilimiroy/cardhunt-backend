@@ -7,6 +7,7 @@
 // Runs the page's REAL priceAgeHtml (extracted from cardhunt_preview.html),
 // and checks the badge is the one place that calls it with _priceDate.
 'use strict';
+require('./testcount')(11);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const H = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8').replace(/\r\n/g, '\n');   // CRLF-tolerant
 let pass = 0, fail = 0;

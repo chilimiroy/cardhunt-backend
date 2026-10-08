@@ -1,3 +1,4 @@
+require('./testcount')(26);   // assertions in a plain run — fewer fails the file (testcount.js)
 const lp = require('./listingparse');
 let pass=0, fail=0;
 const chk=(l,c)=>{ c?pass++:fail++; console.log('  '+(c?'PASS':'FAIL')+'  '+l); };

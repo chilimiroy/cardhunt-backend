@@ -7,6 +7,7 @@
 // cm.refusalLanguage matches the gate's own wording; run here on the gate's
 // REAL reasons (cm.verify), never on retyped strings.
 
+require('./testcount')(6);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;

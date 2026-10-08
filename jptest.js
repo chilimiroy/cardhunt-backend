@@ -16,6 +16,7 @@
  * live in the file being replaced disappear exactly when they are needed.
  * ══════════════════════════════════════════════════════════════
  */
+require('./testcount')(88);   // assertions in a plain run — fewer fails the file (testcount.js)
 const jpf = require('./jpfilter');
 
 const CARD_CAT   = { category: { name: jpf.JP_CARD_CATEGORY } };

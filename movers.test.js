@@ -10,6 +10,7 @@
 //   node movers.test.js          offline
 //   node movers.test.js --db     + the real query: no ranked row from another source
 'use strict';
+require('./testcount')(23);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const tr = require('./trending.js');
 let pass = 0, fail = 0;

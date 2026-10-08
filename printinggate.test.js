@@ -22,6 +22,7 @@
 //   3. the gate can actually REACH its inputs on the real code path — the
 //      failure above was never about the gate's logic.
 
+require('./testcount')(116);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch');
 const fs = require('fs');
 const path = require('path');

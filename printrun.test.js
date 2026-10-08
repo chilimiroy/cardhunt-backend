@@ -17,6 +17,7 @@
 //   3. a flagged-implausible row never moves a run's median
 //   4. the page calls the grouping, and falls back to one list
 
+require('./testcount')(48);   // assertions in a plain run — fewer fails the file (testcount.js)
 const gp = require('./gradeprice');
 const fs = require('fs');
 

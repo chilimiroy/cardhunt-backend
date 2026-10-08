@@ -7,6 +7,7 @@
 // printing, edition) apply to both, because the split happens first and the
 // rest of the panel runs unchanged. 19 of these fail on the code before T5.
 
+require('./testcount')(22);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const vm = require('vm');
 const outlier = require('./outlier.js');

@@ -14,6 +14,7 @@
  * the raw-condition stripper was leaving "near" in the card name.
  * ══════════════════════════════════════════════════════════════
  */
+require('./testcount')(156);   // assertions in a plain run — fewer fails the file (testcount.js)
 const { parseCardQuery, resolveCard } = require('./cardparse');
 
 let pass = 0, fail = 0;

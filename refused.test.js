@@ -8,6 +8,7 @@
 //
 // Runs the REAL refusedRowsOf (server.js) and liveRefusedBlock (page).
 
+require('./testcount')(24);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const vm = require('vm');
 let pass = 0, fail = 0;

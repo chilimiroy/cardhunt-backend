@@ -4,6 +4,7 @@
 // Tests what the mover rules ALLOW as well as what they block: a filter
 // tested only on refusals passes by refusing everything.
 
+require('./testcount')(39);   // assertions in a plain run — fewer fails the file (testcount.js)
 const T = require('./trending');
 const fs = require('fs');
 const { execSync } = require('child_process');

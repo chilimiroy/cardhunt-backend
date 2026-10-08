@@ -8,6 +8,7 @@
 // with when listings return, and that an ordinary answer shows no banner.
 // ══════════════════════════════════════════════════════════════
 'use strict';
+require('./testcount')(24);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const vm = require('vm');
 const src = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8').replace(/\r\n/g, '\n');

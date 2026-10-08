@@ -11,6 +11,7 @@
 //   node ownname.test.js          offline
 //   node ownname.test.js --db     + every English card's own identity (needs DATABASE_URL)
 
+require('./testcount')(27);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;
 function check(label, cond, extra) {

@@ -16,6 +16,7 @@
 // the REFUSE half: a gate tested on refusals passes by refusing everything.
 // Language cases live in printinggate.test.js section 6.
 'use strict';
+require('./testcount')(80);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch');
 
 let pass = 0, fail = 0;

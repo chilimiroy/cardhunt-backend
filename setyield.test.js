@@ -6,6 +6,7 @@
 // once, even with a refusal — is NOT. A report that names every set is as
 // useless as one that names none.
 'use strict';
+require('./testcount')(42);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const sy = require('./setyield');
 let pass = 0, fail = 0;

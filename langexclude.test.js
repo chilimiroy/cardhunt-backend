@@ -6,6 +6,7 @@
 // the gate, so it can never be counted as refused — every source block must
 // state the exclusion. English cards only. Offline.
 
+require('./testcount')(33);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;

@@ -26,6 +26,7 @@
  */
 
 'use strict';
+require('./testcount')(62);   // assertions in a plain run — fewer fails the file (testcount.js)
 
 let pass = 0, fail = 0;
 const failures = [];

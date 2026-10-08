@@ -6,6 +6,7 @@
 // token) and what it refuses. Offline: keys are generated here and the
 // JWKS fetch is stubbed.
 
+require('./testcount')(29);   // assertions in a plain run — fewer fails the file (testcount.js)
 const crypto = require('crypto');
 const fs = require('fs');
 let pass = 0, fail = 0;

@@ -16,6 +16,7 @@
 // passes by blocking everything — which is exactly what happened.
 // ══════════════════════════════════════════════════════════════
 
+require('./testcount')(44);   // assertions in a plain run — fewer fails the file (testcount.js)
 const m = require('./cardmatch');
 let pass = 0, fail = 0;
 const chk = (l, c) => { c ? pass++ : fail++;

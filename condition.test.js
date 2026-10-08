@@ -8,6 +8,7 @@
 // stated lower (first condition read), 36 with every stated condition read
 // (13 were slash ranges). Now the WORSE of the two claims stands.
 
+require('./testcount')(19);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;

@@ -17,6 +17,7 @@
 // .bak files; express.static(__dirname) would publish every one, so the
 // exposure check requests them rather than reading the route table.
 
+require('./testcount')(77);   // assertions in a plain run — fewer fails the file (testcount.js)
 const { spawn } = require('child_process');
 const path = require('path');
 const vm = require('vm');

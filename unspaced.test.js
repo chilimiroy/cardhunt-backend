@@ -19,6 +19,7 @@
 // the strict boundary — that strictness is what keeps TAG TEAM and ACE SPEC
 // reachable, and not one sampled title wrote "TAG10".
 'use strict';
+require('./testcount')(41);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch');
 const jpf = require('./jpfilter');
 

@@ -11,6 +11,7 @@
 //   node pslabel.test.js            the shipped cardmatch.js
 //   CARDMATCH=path node pslabel.test.js   another copy (e.g. git show HEAD~1:)
 
+require('./testcount')(29);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require(process.env.CARDMATCH || './cardmatch.js');
 let pass = 0, fail = 0;
 const ok = (name, cond) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name); };

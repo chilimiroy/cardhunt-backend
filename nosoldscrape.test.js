@@ -8,6 +8,7 @@
 // 2026-09-29. This fails if it, or anything like it, comes back — and checks
 // that the page SAYS there is no sold source rather than showing a number.
 'use strict';
+require('./testcount')(17);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? pass++ : fail++; console.log('  ' + (c ? 'ok  ' : 'FAIL') + '  ' + n + (c || !d ? '' : '  — ' + d)); };

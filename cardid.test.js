@@ -7,6 +7,7 @@
 // the rule, both of its directions, every producer closed, and — when
 // DATABASE_URL is set — that no row in `cards` fails the pattern.
 'use strict';
+require('./testcount')(56);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const cardid = require('./cardid');
 

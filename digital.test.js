@@ -12,6 +12,7 @@
 //    series — 15 sets, 2,480 cards measured 2026-09-27 — and nothing else,
 //    and TCGdex's own `tcgp` series names the same set ids.
 'use strict';
+require('./testcount')(49);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const digital = require('./digital');
 

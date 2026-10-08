@@ -7,6 +7,7 @@
 // process.exitCode and lets the process end. This runs the real CLI against
 // a local server: a 200 must exit 0, a 401 must exit 1, neither may abort.
 
+require('./testcount')(3);   // assertions in a plain run — fewer fails the file (testcount.js)
 const http = require('http');
 const { spawnSync } = require('child_process');
 const fs = require('fs');

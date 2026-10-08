@@ -7,6 +7,7 @@
 // different card (15 Magnemite under Latias #4, 7 Combusken under Latios #2,
 // 3 Machoke, 11 Suicune / Pikachu Libre across) — and 0 newly kept.
 
+require('./testcount')(15);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };

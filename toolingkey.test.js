@@ -15,6 +15,7 @@
 //
 //   node toolingkey.test.js
 'use strict';
+require('./testcount')(49);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), os = require('os'), path = require('path'), crypto = require('crypto');
 const { spawn } = require('child_process');
 const tk = require('./toolingkey');

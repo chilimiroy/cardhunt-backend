@@ -17,6 +17,7 @@
 //      what belongs there are written at the top of the file itself.
 //
 //   node claudesplit.test.js
+require('./testcount')(25);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.log('  FAIL ' + m); } }

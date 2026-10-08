@@ -5,6 +5,7 @@
 // auctions we never listed. Now asked. An auction's number is its CURRENT
 // bid — shown and labelled, but never the cheapest and never a baseline.
 
+require('./testcount')(10);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const outlier = require('./outlier.js');
 let pass = 0, fail = 0;

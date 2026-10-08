@@ -7,6 +7,7 @@
 // host (network error, timeout, 429, 5xx) pauses every lane.
 // Offline: a fake CDN with a 150 ms download.
 
+require('./testcount')(8);   // assertions in a plain run — fewer fails the file (testcount.js)
 const sc = require('./stampcheck.js');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };

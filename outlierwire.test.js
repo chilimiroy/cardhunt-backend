@@ -17,6 +17,7 @@
 // can be run, source where it cannot.
 // ══════════════════════════════════════════════════════════════
 
+require('./testcount')(34);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const outlier = require('./outlier');
 const gp = require('./gradeprice');

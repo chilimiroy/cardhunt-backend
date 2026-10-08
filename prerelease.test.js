@@ -5,6 +5,7 @@
 // reprint stamps), 0 newly kept; the 3 early-copy SIRs of sets released
 // within 12 months stay.
 'use strict';
+require('./testcount')(10);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;
 const ok = (what, cond, got) => { if (cond) { pass++; console.log('  ok    ' + what); } else { fail++; console.log('  FAIL  ' + what + (got ? '   ' + got : '')); } };

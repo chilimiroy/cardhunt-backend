@@ -9,6 +9,7 @@
 // Executed here through the real pool, with the CDN stubbed: the order the
 // photos are fetched is the order the queue serves them.
 'use strict';
+require('./testcount')(34);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const sc = require('./stampcheck.js');
 const cm = require('./cardmatch.js');

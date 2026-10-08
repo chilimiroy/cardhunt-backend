@@ -12,6 +12,7 @@
 // ("ita") and Destined Rivals. Measured on 2,416 titles, old gate vs new: 1
 // newly refused (that listing), 0 newly kept.
 
+require('./testcount')(23);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };

@@ -9,6 +9,7 @@
 // only on refusals passes by refusing everything.
 // ══════════════════════════════════════════════════════════════
 
+require('./testcount')(71);   // assertions in a plain run — fewer fails the file (testcount.js)
 const q = require('./ebayquota');
 // One-day lifts (TOOLING_OVERRIDES, HOURLY_OVERRIDES) are keyed on the real
 // UTC day; the suite tests the standing limits, so clear them here.

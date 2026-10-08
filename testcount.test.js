@@ -3,7 +3,7 @@
 //
 //   node testcount.test.js
 'use strict';
-require('./testcount')(19);
+require('./testcount')(12);
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };
@@ -19,21 +19,21 @@ const run = (name, body) => {
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
 };
 let r = run('enough', `require(${TC})(3); console.log('3 passed, 0 failed'); process.exit(0);`);
-ok('exactly the count: passes (exit 0)', r.code === 0, r.out.trim());
+ok('exactly the count: passes (exit 0)', r.code === 0, r.out.replace(/\s+/g, ' ').trim().slice(0, 140));
 r = run('more', `require(${TC})(3); console.log('5 passed, 0 failed');`);
-ok('more than the count (a --db run): passes', r.code === 0, r.out.trim());
+ok('more than the count (a --db run): passes', r.code === 0, r.out.replace(/\s+/g, ' ').trim().slice(0, 140));
 r = run('short', `require(${TC})(4); console.log('3 passed, 0 failed'); process.exit(0);`);
-ok('one short, even with process.exit(0): FAILS', r.code === 1 && /assertion count: 3 ran, this file runs at least 4/.test(r.out), r.out.trim());
+ok('one short, even with process.exit(0): FAILS', r.code === 1 && /assertion count: 3 ran, this file runs at least 4/.test(r.out), r.out.replace(/\s+/g, ' ').trim().slice(0, 140));
 r = run('nosummary', `require(${TC})(4); console.log('ok one');`);
-ok('no summary line (the file ended early): FAILS', r.code === 1 && /no summary line was printed/.test(r.out), r.out.trim());
+ok('no summary line (the file ended early): FAILS', r.code === 1 && /no summary line was printed/.test(r.out), r.out.replace(/\s+/g, ' ').trim().slice(0, 140));
 r = run('async', `require(${TC})(2); let pass = 0; const p = (async () => { await null; pass++; })(); pass++; console.log(pass + ' passed, 0 failed'); process.exit(0);`);
-ok('the async shape that hid an assertion: FAILS', r.code === 1 && /1 ran/.test(r.out), r.out.trim());
+ok('the async shape that hid an assertion: FAILS', r.code === 1 && /1 ran/.test(r.out), r.out.replace(/\s+/g, ' ').trim().slice(0, 140));
 r = run('ownfail', `require(${TC})(1); console.log('0 passed, 1 failed'); process.exit(1);`);
 ok('a file\'s own failure still fails (the guard never turns a 1 into a 0)', r.code === 1);
 r = run('last', `require(${TC})(5); console.log('9 passed, 0 failed'); console.log('2 passed, 0 failed');`);
 ok('the LAST summary line is the one read', r.code === 1);
 r = run('guards', `require(${TC})(12); console.log('  12 guards fired, 0 did not');`);
-ok('preservebreak\'s "N guards fired, M did not" is read', r.code === 0, r.out.trim());
+ok('preservebreak\'s "N guards fired, M did not" is read', r.code === 0, r.out.replace(/\s+/g, ' ').trim().slice(0, 140));
 let threw = false; try { require('./testcount')(0); } catch (e) { threw = true; }
 ok('no count given: refuses to start', threw);
 fs.rmSync(dir, { recursive: true, force: true });

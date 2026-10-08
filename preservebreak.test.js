@@ -2,6 +2,7 @@
 // one thing in the page, run the suite, and confirm it goes red on the
 // EXPECTED assertion — then restore. A guard that has never fired is
 // indistinguishable from one that cannot.
+require('./testcount')(12);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const { execSync } = require('child_process');
 const PAGE = 'C:/Users/chili/cardhunt/cardhunt_preview.html';

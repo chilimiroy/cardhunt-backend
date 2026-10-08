@@ -9,6 +9,7 @@
 // mode anything but grades. Each case below is asked of BOTH a specific
 // grade and the grader-wide mode: the two must agree about the card.
 'use strict';
+require('./testcount')(27);   // assertions in a plain run — fewer fails the file (testcount.js)
 const cm = require('./cardmatch');
 
 let pass = 0, fail = 0;

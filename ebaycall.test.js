@@ -16,6 +16,7 @@
 // ══════════════════════════════════════════════════════════════
 
 'use strict';
+require('./testcount')(103);   // assertions in a plain run — fewer fails the file (testcount.js)
 
 const ebay = require('./ebaycall');
 const quota = require('./ebayquota');

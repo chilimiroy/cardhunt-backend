@@ -8,6 +8,7 @@
 //                                    refused and the table does not exist
 //                                    afterwards; reads and row writes pass
 'use strict';
+require('./testcount')(42);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), path = require('path');
 const sg = require('./schemaguard');
 let pass = 0, fail = 0;

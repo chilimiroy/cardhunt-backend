@@ -20,6 +20,7 @@
 // ordinary raw card must survive it.
 // ══════════════════════════════════════════════════════════════
 
+require('./testcount')(74);   // assertions in a plain run — fewer fails the file (testcount.js)
 const m = require('./cardmatch');
 let pass = 0, fail = 0;
 const chk = (l, c) => { c ? pass++ : fail++;

@@ -11,6 +11,7 @@
 // Executed here (vm), not only read: the head script, the role mapping,
 // pricesOpen, the note's words, and the tiles both ways.
 
+require('./testcount')(57);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), vm = require('vm');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };

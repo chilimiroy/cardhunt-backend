@@ -12,6 +12,7 @@
 // disagree the row is refused, because neither is authoritative. Where the
 // title is silent, the field answers.
 'use strict';
+require('./testcount')(58);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const cm = require('./cardmatch');
 

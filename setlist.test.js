@@ -22,6 +22,7 @@
 // and asserts the two paths agree, which is the technique that has found more
 // in this project than any other.
 
+require('./testcount')(25);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const path = require('path');
 

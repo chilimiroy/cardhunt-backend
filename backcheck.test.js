@@ -10,6 +10,7 @@
 // Offline: the "photos" are the templates themselves, framed as a seller
 // would shoot them, and a card FRONT from stamps.json as the non-back.
 
+require('./testcount')(33);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const bc = require('./backcheck.js');
 const sc = require('./stampcheck.js');

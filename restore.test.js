@@ -11,6 +11,7 @@
 // Home -> Sets -> the card again: all four back, ONE /api/listings request
 // (grade=PSA 10). Set page at 1200px -> card -> Back: 1200; Sets 900 -> 900.
 'use strict';
+require('./testcount')(19);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), vm = require('vm');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };

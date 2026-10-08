@@ -13,6 +13,7 @@
 //                                  and the catalogue fields must still be
 //                                  there.
 'use strict';
+require('./testcount')(6);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { spawn } = require('child_process');
 const pg = require('./pricegate');

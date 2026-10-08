@@ -1,3 +1,4 @@
+require('./testcount')(29);   // assertions in a plain run — fewer fails the file (testcount.js)
 const m = require('./cardmatch');
 let pass=0, fail=0;
 const chk=(l,c)=>{ c?pass++:fail++; console.log('  '+(c?'PASS':'FAIL')+'  '+l); };

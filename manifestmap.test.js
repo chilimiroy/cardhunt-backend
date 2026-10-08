@@ -7,6 +7,7 @@
 // held; the catalogue still carries 1,737 Japanese "Common" rows on cards
 // TCGdex calls None, 201 of them numbered past their set's printed total.
 'use strict';
+require('./testcount')(12);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? pass++ : fail++; console.log('  ' + (c ? 'ok  ' : 'FAIL') + '  ' + n + (c || !d ? '' : '  — ' + d)); };

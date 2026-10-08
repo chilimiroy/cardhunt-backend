@@ -21,6 +21,7 @@
 // ══════════════════════════════════════════════════════════════
 
 'use strict';
+require('./testcount')(102);   // assertions in a plain run — fewer fails the file (testcount.js)
 
 const cm = require('./cardmatch');
 const lp = require('./listingparse');

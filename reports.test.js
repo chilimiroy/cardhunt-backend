@@ -12,6 +12,7 @@
 //   node reports.test.js
 //   (the stored path, in Postgres: node reportprobe.js — rolled back)
 'use strict';
+require('./testcount')(79);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), vm = require('vm');
 const R = require('./reports');
 let pass = 0, fail = 0;

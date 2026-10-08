@@ -9,6 +9,7 @@
 // Collection ($155) and 2026 ME: 30th Celebration Classic Collection ($206)
 // — so the printed number alone is not enough: the set has to be checked.
 'use strict';
+require('./testcount')(13);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? pass++ : fail++; console.log('  ' + (c ? 'ok  ' : 'FAIL') + '  ' + n + (c || !d ? '' : '  — ' + d)); };

@@ -10,6 +10,7 @@
 //   node i18n.test.js --db     also: no key is any card name, set name or
 //                              rarity in the catalogue (needs DATABASE_URL)
 
+require('./testcount')(50);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;

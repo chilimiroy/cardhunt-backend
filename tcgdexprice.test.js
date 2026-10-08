@@ -20,6 +20,7 @@
  */
 
 'use strict';
+require('./testcount')(81);   // assertions in a plain run — fewer fails the file (testcount.js)
 
 const T = require('./tcgdexprice.js');
 

@@ -62,6 +62,16 @@ const OFF_REASON = 'Best deals is switched off while its bar is fixed: listings 
   + 'top pick was still a different card.';
 const MIN_DISCOUNT = 0.15;
 const MAX_DISCOUNT = 0.60;
+// Cards kept off the shelf, each with WHY and WHEN IT COMES OFF this list —
+// a temporary exclusion with no removal condition becomes permanent (Roy).
+const EXCLUDED = {
+  // 2026-10-08: the shelf's pick was a PRERELEASE-stamped copy whose title
+  // never said so ("Near Mint w Swirl") — the stamp is on the art, and no
+  // photo check detects it yet. REMOVE when a PRERELEASE stamp template in
+  // stampcheck refuses these photos, measured both ways.
+  'en-base5-8': { reason: 'the PRERELEASE stamp on Dark Gyarados is not detectable yet',
+                  removeWhen: 'a PRERELEASE stamp template in stampcheck catches it, measured both ways' }
+};
 const MIN_TRUSTED = 3;
 // getItem calls a raw view may spend checking its deal candidates' backs.
 const DEAL_BACK_MAX = 2;
@@ -222,6 +232,8 @@ function vouchPhotos(v) {
 // view) and the probe (/api/ebay/dealsprobe?bar=vouch). Cheapest first;
 // every free criterion before the back; the first row clearing all wins.
 async function pickVouched(payload, ref, backOf) {
+  const why = EXCLUDED[payload && payload.cardId];
+  if (why) return { pick: null, skipped: { ['card excluded from deals: ' + why.reason]: 1 }, reached: [], backsAsked: 0, examined: 0, excluded: why };
   const rows = ((payload && payload.listings) || []).slice().sort((a, b) => Number(a.landed) - Number(b.landed));
   const skipped = {}, reached = [];
   let pick = null, backsAsked = 0;
@@ -254,6 +266,6 @@ function describeRule() {
     + 'opening a card checks the backs of at most ' + DEAL_BACK_MAX + ' of its candidates (one eBay item lookup each, once).';
 }
 
-module.exports = { ENABLED, OFF_REASON, MIN_DISCOUNT, MAX_DISCOUNT, MIN_TRUSTED, DEAL_BACK_MAX, BELOW_NM, basePrintingOf, notADeal, noGenuineBack,
+module.exports = { ENABLED, OFF_REASON, MIN_DISCOUNT, MAX_DISCOUNT, EXCLUDED, MIN_TRUSTED, DEAL_BACK_MAX, BELOW_NM, basePrintingOf, notADeal, noGenuineBack,
   VOUCH, vouchFree, vouchPhotos, discountOf, hpAmbiguous, pickVouched,
                    pickDeal, backCandidates, rankDeals, describeRule };

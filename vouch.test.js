@@ -75,6 +75,11 @@ console.log('\n  pickVouched — one definition for the shelf, its follow-up and
   r = await deals.pickVouched(v, ref, async l => l.itemId === 'c' ? { state: 'genuine-back', photos: 4 } : { notChecked: true });
   ok('the back budget (DEAL_BACK_MAX = 2) reaches b then c; c is the pick', r.pick && r.pick.listing.itemId === 'c' && r.backsAsked === 2, r.pick && r.pick.listing.itemId);
   ok('...with its evidence lines', r.pick && r.pick.cleared.includes('genuine back found') && r.pick.cleared.some(x => /% below/.test(x)));
+  // Exclusions (Roy, 2026-10-08): every one names why AND when it comes off.
+  ok('every excluded card states a reason and a removal condition', Object.values(deals.EXCLUDED).length > 0
+     && Object.values(deals.EXCLUDED).every(e => e.reason && e.removeWhen));
+  r = await deals.pickVouched(Object.assign({}, v, { cardId: 'en-base5-8' }), ref, async () => ({ state: 'genuine-back', photos: 4 }));
+  ok('Dark Gyarados 8/82 (prerelease stamp undetectable) is never picked, and says why', !r.pick && Object.keys(r.skipped).some(k => /PRERELEASE/.test(k)));
   finish();
 })();
 

@@ -155,7 +155,8 @@ ok(/back: \{ state: v\.state, says: v\.says, metal: !!v\.metal \}/.test(src), 'a
 const page = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
 ok(/fetch\(BACKEND \+ '\/api\/deals/.test(page) && /loadHomeDeals\(\)/.test(page), 'the home shelf reads /api/deals');
 ok(!/function notYet/.test(page), 'the "not live yet" placeholder is gone, not left dormant');
-ok(/No deal to show right now/.test(page) && /opened in the last 15 minutes/.test(page), 'an empty shelf says why');
+ok(/No deals right now — checking again shortly\./.test(page) && /title="' \+ liveEsc\(d\.rule\) \+ '"/.test(page),
+   'an empty shelf says one line; the rule is behind a hover (Roy, 2026-10-08)');
 ok(/if \(!deals_\.ENABLED\) return res\.json\(\{ enabled: false, reason: deals_\.OFF_REASON/.test(h), 'switched off, /api/deals answers enabled:false with the reason before reading any view');
 // TASK-ui T8: switched off, the home slot is empty — no gap, no placeholder —
 // and the reason is stated in the console; a FAILURE is still shown.

@@ -561,8 +561,11 @@ cd C:\Users\chili\Downloads; move ingest.js C:\Users\chili\cardhunt\ -Force; cd 
 Confirm the version banner before running anything.
 
 ## Deploying
-`git add -A ; git commit -m "..." ; git push` — Render redeploys from `main`.
-Check the build stamp at `/app` and `GET /` for the version.
+**No push unless every suite passed on a clean checkout: push ONLY with
+`bash gatedpush.sh`** (full suite on a clean worktree of HEAD; pushes only on
+all-green). Five times something went out or read green without having run
+(PROGRESS 2026-10-09). Render redeploys from `main`; check the build stamp at
+`/app` and `GET /` for the version.
 
 **ONE session on `main` at a time, or separate branches.** The Claude Code tab
 inside the desktop app is a full session with write access to this repo, not

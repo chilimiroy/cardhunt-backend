@@ -1,0 +1,2 @@
+# Shell scripts run under bash: always LF, even on a Windows checkout (gatedpush.sh).
+*.sh text eol=lf

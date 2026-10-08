@@ -389,19 +389,18 @@ function dealBackFollowUp(card, requestedId, grade, printing, edition, payload, 
   if (dealBackRunning.has(vkey) || used >= deals_.DEAL_BACK_MAX) return null;
   dealBackRunning.add(vkey);
   return (async () => {
-    const ref = await marketRefOf(card, {});
-    const todo = deals_.backCandidates(payload, ref && Object.assign({ isReal: true }, ref), deals_.DEAL_BACK_MAX - used)
-      .filter(r => !backVerdicts.has(backKey(r.itemId, cid)));
-    if (!todo.length) return;
-    let landed = 0;
+    // The shelf's own bar, run once with the back ASKED: it reaches the back
+    // of at most DEAL_BACK_MAX rows that cleared every free criterion — the
+    // same rows /api/deals will read the verdicts of (2026-10-08).
+    const ref = await dealRefOf(cid);
     const rec = used ? spent : { n: 0, at: Date.now() };
     dealBackSpent.set(vkey, rec);
-    for (const r of todo) {
-      const v = await backCheckItem(card, r.itemId, { background: true }).catch(e => ({ error: e.message }));
-      rec.n += (v && v.calls) || 0;
-      if (v && v.error) break;
-      if (!v.retryable) landed++;
-    }
+    const paid = dealBackOf(card, { paid: true, budget: deals_.DEAL_BACK_MAX - used });
+    const r = await deals_.pickVouched(payload, ref, paid.backOf);
+    rec.n += paid.calls();
+    // Rebuild only when a NEW verdict was fetched: every rebuild re-runs this
+    // follow-up, and verdicts already held would otherwise rebuild for ever.
+    const landed = r.backsAsked && paid.calls();
     const vs = viewStateGet(vkey);
     if (landed && vs && vs.gathered.ebayState)
       await rebuildView(card, requestedId, grade, printing, edition, vs, { noFetch: true, stamp: true, back: true, material: true });
@@ -1157,6 +1156,28 @@ app.get('/api/trending', access.priced, async (req, res) => {
 // Reads the cache and the database; never gathers listings — 0 eBay calls.
 // The price a deal is measured against: the card's number-matched stored
 // price, and whether it is current and measured (pricequality). One
+// The back answer the vouching bar reads (deals.pickVouched). paid: ask eBay
+// (one getItem, shared 15-min cache; the photo count fetched when a stored
+// verdict lacks it) — the view-time follow-up and the probe. Otherwise only
+// a verdict already held: the shelf itself spends nothing.
+function dealBackOf(card, o) {
+  const cid = card.api_card_id;
+  let calls = 0;
+  const backOf = async l => {
+    if (!backcheck.familyOf(cid)) return { error: 'the back check does not cover this card' };
+    if (!l.itemId) return { error: 'no eBay item id' };
+    if (!(o && o.paid)) {
+      const c = backVerdicts.get(backKey(l.itemId, cid));
+      return c ? Object.assign({}, c) : { notChecked: true };
+    }
+    // A view's DEAL_BACK_MAX is shared across its follow-ups (o.budget).
+    if (o.budget != null && calls >= o.budget) return { error: 'back-check budget for this view spent' };
+    const v = await backCheckItem(card, l.itemId, { background: true, needPhotos: true }).catch(e => ({ error: e.message }));
+    calls += (v && v.calls) || 0;
+    return v;
+  };
+  return { backOf, calls: () => calls };
+}
 // definition for the shelf and its measurement (/api/ebay/dealsprobe).
 async function dealRefOf(cardId) {
   try {
@@ -1183,15 +1204,20 @@ app.get('/api/deals', access.priced, async (req, res) => {
     if (parts.length !== 2 || now - e.ts > LISTING_TTL || !jpf.isRawGrade(parts[1])) continue;   // raw, unfiltered views only
     views.push({ cardId: parts[0], grade: parts[1], ts: e.ts, payload: e.data });
   }
+  // The VOUCHING bar (deals.pickVouched, Roy 2026-10-08) — the probe's own
+  // definition; here the back answers only from verdicts already held (the
+  // view-time follow-up asked for them), so this route spends nothing.
   const deals = [], skipped = {}, excluded = {};
   for (const v of views) {
     const ref = await dealRefOf(v.cardId);
-    const r = deals_.pickDeal(v.payload, ref);
-    for (const [k, n] of Object.entries(r.excluded || {})) excluded[k] = (excluded[k] || 0) + n;
-    if (!r.deal) { const why = r.why.replace(/-?\d+/g, 'N'); skipped[why] = (skipped[why] || 0) + 1; continue; }
-    const c = v.payload.card || {}, l = r.deal.listing;
+    const card = { api_card_id: v.cardId };
+    const r = await deals_.pickVouched(v.payload, ref, dealBackOf(card).backOf);
+    for (const [k, n] of Object.entries(r.skipped || {})) excluded[k] = (excluded[k] || 0) + n;
+    if (!r.pick) { skipped['no row could be vouched for'] = (skipped['no row could be vouched for'] || 0) + 1; continue; }
+    const c = v.payload.card || {}, l = r.pick.listing;
     deals.push({ cardId: v.cardId, name: c.name, number: c.number, set: c.set, image: c.image,
-      price: ref.price, priceSource: ref.source, priceDate: ref.recordedAt, discount: r.deal.discount, solidCount: r.deal.solidCount,
+      price: ref.price, priceSource: ref.source, priceDate: ref.recordedAt, discount: r.pick.discount,
+      evidence: r.pick.cleared,
       listing: { title: l.title, landed: l.landed, price: l.price, shipping: l.shipping, currency: 'USD', url: l.url,
                  source: l.source, sourceLabel: l.sourceLabel, marketplace: l.marketplace, condition: l.condition },
       listing_age_sec: Math.round((now - v.ts) / 1000) });
@@ -2183,6 +2209,9 @@ function filterCard(card, nameOverride) {
     // setYear, reprint). Korean prints share JAPANESE set codes, so Yahoo JP
     // is where they actually turn up.
     setYear: card.set_release ? new Date(card.set_release).getUTCFullYear() : null,
+    // The release DATE, for "prerelease" (cardmatch.printingConflict): near a
+    // set's release the word means an early copy, not a stamped printing.
+    setReleased: card.set_release ? new Date(card.set_release).toISOString().slice(0, 10) : null,
     lang: gateLanguage(card)
   };
 }
@@ -2542,6 +2571,9 @@ function ebayMatchCard(card) {
     // and set name all agree — and a live search returned 24 "matches"
     // spanning $536 to $249,999. All 45,780 cards carry a release date.
     setYear: card.set_release ? new Date(card.set_release).getUTCFullYear() : null,
+    // The release DATE, for "prerelease" (cardmatch.printingConflict): near a
+    // set's release the word means an early copy, not a stamped printing.
+    setReleased: card.set_release ? new Date(card.set_release).toISOString().slice(0, 10) : null,
     // Korean prints share Japanese set codes and numbering, so a Korean
     // Charizard ex is genuinely 201/165 from SV2a. A live search for the
     // Japanese card returned 6 Korean listings among 25. Card ids are
@@ -6193,29 +6225,17 @@ const aspectProbeCache = new Map();
 // ?zip= views run exactly this.
 async function vouchBarOf(card, id, payload, t0, pendingOf) {
     const ref = await dealRefOf(id);
-    const rows = (payload.listings || []).slice().sort((a, b) => Number(a.landed) - Number(b.landed));
-    const skipped = {}, reachedBack = [];
-    let pick = null, backsAsked = 0, backCalls = 0;
     const brief = l => ({ title: String(l.title || '').slice(0, 110), landed: l.landed, url: l.url, imageUrl: l.imageUrl,
       seller: l.seller, sellerFeedback: l.sellerFeedback || null, condition: l.sellerCondition || l.condition, conditionSource: l.conditionSource || null });
-    const skip = (why, l) => { const k = why.replace(/-?\d+(\.\d+)?/g, 'N'); skipped[k] = (skipped[k] || 0) + 1; if (l) reachedBack.push(Object.assign(brief(l), { skip: why })); };
-    for (const l of rows) {
-      const f = deals_.vouchFree(l, payload, ref);
-      if (f.skip) { skip(f.skip); continue; }
-      if (!backcheck.familyOf(id)) { skip('the back check does not cover this card', l); continue; }
-      if (backsAsked >= deals_.DEAL_BACK_MAX) { skip('back-check budget for this card spent', l); continue; }
-      backsAsked++;
-      const v = await backCheckItem(card, l.itemId, { background: true, needPhotos: true }).catch(e => ({ error: e.message }));
-      backCalls += (v && v.calls) || 0;
-      const p = deals_.vouchPhotos(v);
-      if (p.skip) { skip(p.skip, l); continue; }
-      pick = Object.assign(brief(l), { discount: +deals_.discountOf(l, ref).toFixed(3), cleared: f.cleared.concat(p.cleared),
-        identity: f.identity, stamp: l.stamp || null, back: { state: v.state, photos: v.photos } });
-      break;
-    }
+    // The shelf's own bar (deals.pickVouched); here the back is ASKED (paid).
+    const paid = dealBackOf(card, { paid: true });
+    const r = await deals_.pickVouched(payload, ref, paid.backOf);
+    const pick = r.pick ? Object.assign(brief(r.pick.listing), { discount: r.pick.discount, cleared: r.pick.cleared,
+      identity: r.pick.identity, stamp: r.pick.listing.stamp || null, back: r.pick.back }) : null;
+    const reachedBack = r.reached.map(x => Object.assign(brief(x.l), { skip: x.why }));
     const sg = payload.stampGate || {}, mc = payload.materialCheck || {};
     return { bar: 'vouch', cardId: id, name: card.name, number: card.number, set: card.set_name_en || card.set_name,
-      ref, pick, examined: rows.length, skipped, reachedBack, backsAsked, backCalls,
+      ref, pick, examined: r.examined, skipped: r.skipped, reachedBack, backsAsked: r.backsAsked, backCalls: paid.calls(),
       checks: { photoGate: { applied: !!sg.applied, kind: sg.kind || null, notRun: sg.notRun || null, pending: sg.pending || 0 },
                 material: { applied: !!mc.applied, pending: mc.pending || 0, reason: mc.reason || null } },
       langUnion: payload.sources && payload.sources.ebay && payload.sources.ebay.langUnion || null,

@@ -52,11 +52,16 @@ const outlier = require('./outlier');
 // on our warm Base scan leaves it under 0.40) and a genuine Pikachu VMAX with a
 // crease the title does not state. A genuine back says the card is real, not
 // that it is THIS card. Needs an "is this photo this card" answer first.
-const ENABLED = false;
+// ON 2026-10-08 (Roy), on the VOUCHING bar (pickVouched) for approved
+// accounts, with a discount CEILING: every bad pick across two runs sat at
+// the extreme (Lugia 185 sold as 186 at 85% below; the Blastoise reprints
+// at 87%). Past MAX_DISCOUNT the discount is itself the evidence.
+const ENABLED = true;
 const OFF_REASON = 'Best deals is switched off while its bar is fixed: listings shown here must be the same card, '
   + 'printing and condition as the price they are compared with. On 2026-10-05 a genuine back was required and the '
   + 'top pick was still a different card.';
 const MIN_DISCOUNT = 0.15;
+const MAX_DISCOUNT = 0.60;
 const MIN_TRUSTED = 3;
 // getItem calls a raw view may spend checking its deal candidates' backs.
 const DEAL_BACK_MAX = 2;
@@ -164,6 +169,7 @@ function vouchFree(l, payload, ref) {
   if (no) return { skip: no };
   cleared.push('live Buy It Now, shipping stated, unflagged (outlier / reprint price / year / novelty), no other printing or edition stated');
   if (!refUsable(ref) || discountOf(l, ref) < MIN_DISCOUNT) return { skip: 'not ' + Math.round(MIN_DISCOUNT * 100) + '% below a current measured price' };
+  if (discountOf(l, ref) > MAX_DISCOUNT) return { skip: 'more than ' + Math.round(MAX_DISCOUNT * 100) + '% below a current measured price — a discount that large is itself evidence something is wrong' };
   cleared.push(Math.round(discountOf(l, ref) * 100) + '% below the current measured price');
   const sg = (payload && payload.stampGate) || {};
   if (sg.notRun && sg.notRun.length) return { skip: 'a photo check could not run on this card (' + sg.notRun.map(r => r.label).join(', ') + ')' };
@@ -176,6 +182,7 @@ function vouchFree(l, payload, ref) {
   if (l.materialPending) return { skip: 'novelty (colour) check not run on this row yet' };
   cleared.push('novelty (colour) check ran and passed');
   if (!l.sellerStated || !l.sellerCondition && l.conditionSource !== 'ebay') return { skip: 'no condition stated by the seller' };
+  if (hpAmbiguous(l.title)) return { skip: 'title says "HP" away from a hit-point number — heavily played or hit points, ambiguous' };
   cleared.push('condition stated near mint or better (' + (l.conditionSource === 'ebay' ? "eBay's Card Condition field" : 'title') + ')');
   const fb = l.sellerFeedback || {};
   if (!(fb.score >= VOUCH.minFeedbackScore && fb.percent >= VOUCH.minFeedbackPercent))
@@ -183,8 +190,23 @@ function vouchFree(l, payload, ref) {
   cleared.push('seller feedback ' + fb.score + ' at ' + fb.percent + '%');
   return { cleared, identity: sg.applied && /lookalike|sibling|both/.test(sg.kind || '') ? sg.kind : 'none' };
 }
+// "HP" is printed on every card (hit points) and is also Heavily Played. It
+// reads as hit points only beside a bare number ("70 HP", "220HP", "HP 160");
+// anywhere else — "Alakazam EX 125/124 HP" — it is ambiguous, and a deal is
+// vouched for, so ambiguity is a skip (Roy, 2026-10-08).
+function hpAmbiguous(title) {
+  const t = String(title || '');
+  const re = /\bhp\b/gi; let m;
+  while ((m = re.exec(t))) {
+    const before = t.slice(0, m.index), after = t.slice(m.index + m[0].length);
+    const hitPoints = /(?:^|\s)\d{2,3}\s*$/.test(before) || /^\s*\d{2,3}\b/.test(after);
+    if (!hitPoints) return true;
+  }
+  return false;
+}
 // The photos: v is the back check's own answer for this row ({ state, photos, metal }).
 function vouchPhotos(v) {
+  if (v && v.notChecked) return { skip: 'back not checked yet' };
   if (!v || v.error) return { skip: 'back check could not run' + (v && v.error ? ': ' + v.error : '') };
   // An unknown count is not zero: say which (a stored verdict carries none).
   if (v.photos == null) return { skip: 'photo count not known' + (v.photosError ? ': ' + v.photosError : '') };
@@ -194,18 +216,44 @@ function vouchPhotos(v) {
   return { cleared: [v.photos + ' photos', 'genuine back found'] };
 }
 
+// THE vouching bar for one view — one definition, run by the shelf
+// (/api/deals: backOf answers from verdicts already held, 0 calls), the
+// view-time follow-up (backOf asks eBay: at most DEAL_BACK_MAX getItem a
+// view) and the probe (/api/ebay/dealsprobe?bar=vouch). Cheapest first;
+// every free criterion before the back; the first row clearing all wins.
+async function pickVouched(payload, ref, backOf) {
+  const rows = ((payload && payload.listings) || []).slice().sort((a, b) => Number(a.landed) - Number(b.landed));
+  const skipped = {}, reached = [];
+  let pick = null, backsAsked = 0;
+  const skip = (why, l) => { const k = why.replace(/-?\d+(\.\d+)?/g, 'N'); skipped[k] = (skipped[k] || 0) + 1; if (l) reached.push({ l, why }); };
+  for (const l of rows) {
+    const f = vouchFree(l, payload, ref);
+    if (f.skip) { skip(f.skip); continue; }
+    if (backsAsked >= DEAL_BACK_MAX) { skip('back-check budget for this card spent', l); continue; }
+    backsAsked++;
+    const v = await backOf(l);
+    const p = vouchPhotos(v);
+    if (p.skip) { skip(p.skip, l); continue; }
+    pick = { listing: l, discount: Math.round(discountOf(l, ref) * 1000) / 1000, cleared: f.cleared.concat(p.cleared),
+             identity: f.identity, back: { state: v.state, photos: v.photos } };
+    break;
+  }
+  return { pick, skipped, reached, backsAsked, examined: rows.length };
+}
+
 function rankDeals(deals) {
   return deals.slice().sort((a, b) => b.discount - a.discount || a.listing.landed - b.listing.landed);
 }
 
 function describeRule() {
   return 'The cheapest trusted Buy It Now listing (shipping stated, no check marked it, no stated damage, printing or '
-    + 'edition other than the priced one, and the back a genuine card has seen in the seller’s photos) on a card opened in the last '
-    + '15 minutes, at least ' + Math.round(MIN_DISCOUNT * 100) + '% below the card\'s current measured price, among at least '
-    + MIN_TRUSTED + ' such listings. Nothing is fetched to fill this shelf; opening a card checks the backs of at most '
-    + DEAL_BACK_MAX + ' of its candidates (one eBay item lookup each, once).';
+    + 'edition other than the priced one, a seller with ' + VOUCH.minFeedbackScore + '+ feedback at ' + VOUCH.minFeedbackPercent
+    + '%+, every photo check that applies run and passed, at least ' + VOUCH.minPhotos + ' photos and a genuine card back among them) '
+    + 'on a card opened in the last 15 minutes, between ' + Math.round(MIN_DISCOUNT * 100) + '% and ' + Math.round(MAX_DISCOUNT * 100)
+    + '% below the card\'s current measured price — further below is itself a warning. Nothing is fetched to fill this shelf; '
+    + 'opening a card checks the backs of at most ' + DEAL_BACK_MAX + ' of its candidates (one eBay item lookup each, once).';
 }
 
-module.exports = { ENABLED, OFF_REASON, MIN_DISCOUNT, MIN_TRUSTED, DEAL_BACK_MAX, BELOW_NM, basePrintingOf, notADeal, noGenuineBack,
-  VOUCH, vouchFree, vouchPhotos, discountOf,
+module.exports = { ENABLED, OFF_REASON, MIN_DISCOUNT, MAX_DISCOUNT, MIN_TRUSTED, DEAL_BACK_MAX, BELOW_NM, basePrintingOf, notADeal, noGenuineBack,
+  VOUCH, vouchFree, vouchPhotos, discountOf, hpAmbiguous, pickVouched,
                    pickDeal, backCandidates, rankDeals, describeRule };

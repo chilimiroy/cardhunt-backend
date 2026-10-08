@@ -409,10 +409,10 @@ schtasks /Run   /TN "CardHunt nightly refresh"
 - **Movers** (`trending.js`): both ends `tcgdex_tcgplayer_*`, same printing and
   productId; pricequality-marked cards left out; window stated; `coverage` says
   when a list is thin and why.
-- **Best deals — OFF, BLOCKED (not shelved)** (`deals.ENABLED`) on the VOUCHING
-  bar (`deals.vouchFree`/`vouchPhotos`, Roy): skip anything without evidence to
-  vouch for it. Blocked on a re-run with the clean gate and on yield; measure
-  with `/api/ebay/dealsprobe?bar=vouch` (PROGRESS 2026-10-07 (gate fixes)).
+- **Best deals — ON 2026-10-08 (Roy), approved accounts** on the VOUCHING bar:
+  ONE definition `deals.pickVouched` for shelf (held verdicts, 0 calls),
+  follow-up (<= DEAL_BACK_MAX getItem a view) and probe. 15-60% below: past
+  60% the discount is the evidence (PROGRESS 2026-10-08 (Set split)).
 
 ## Page language — EN/JA/zh-TW/zh-CN (T5; TASK-ui 2026-10-07)
 Picker between currency and bell; `ch_lang` set before paint. One exact-text table

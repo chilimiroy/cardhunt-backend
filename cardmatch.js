@@ -1978,6 +1978,19 @@ function statedYearIsReprintYear(title, card) {
   return years.length > 0 && yearsIn(String(title || '')).some(y => years.some(ry => Math.abs(y - ry) <= 1));
 }
 
+// "Prerelease" / "Pre-Release" / "pre release" as a printing word (2026-10-08).
+const PRERELEASE_WORD = /\bpre[\s-]*release\b/i;
+const PRERELEASE_SALE_MONTHS = 12;
+// Was the card's set released within `months` of now? Unknown date -> the
+// year alone; neither -> true (absence keeps, it never refuses).
+function releasedWithin(card, months, now) {
+  now = now || new Date();
+  const d = card && card.setReleased ? new Date(card.setReleased)
+    : card && card.setYear ? new Date(Date.UTC(card.setYear, 11, 31)) : null;
+  if (!d || isNaN(d)) return true;
+  return (now - d) < months * 30.44 * 86400000;
+}
+
 function printingConflict(title, card, opts) {
   opts = opts || {};
   const t = String(title || '');
@@ -2047,6 +2060,16 @@ function printingConflict(title, card, opts) {
     // there is no number — the year is one of the few things that identify it.
     if (why && (reprintOf(card) || printsNoNumber(card) || opts.wantKind !== 'raw' || statedYearIsReprintYear(t, card))) return why;
   }
+
+  // "Prerelease" (Roy, 2026-10-08). A prerelease-STAMPED copy is a different
+  // printing: Team Rocket Dark Gyarados carries a gold PRERELEASE stamp on
+  // the art (5 of 5 photos looked at; 83 kept rows said it). Near a set's
+  // release the same word means an early copy sold before release — "Mega
+  // Darkrai ex SIR ... EARLY COPY Prerelease", 3 of 89 measured, all from
+  // sets released within 12 months — so there it is no evidence. No card in
+  // the catalogue is itself a prerelease printing (2026-10-08).
+  if (PRERELEASE_WORD.test(t) && !releasedWithin(card, PRERELEASE_SALE_MONTHS))
+    return 'title says Prerelease — a prerelease-stamped printing, not this card';
 
   return null;
 }
@@ -2588,7 +2611,7 @@ const API = {
   GRADERS, GRADERS_UNAMBIGUOUS, GRADERS_AMBIGUOUS, SLAB_GENERIC,
   SLAB_WORDS, NOT_A_SINGLE_CARD, NOT_A_SINGLE_CARD_TERMS,
   SET_NAME_PHRASES, GENUINE_ART_PHRASES, boundedTerm,
-  REPRINT_FAMILIES, REPRINT_OF, setIdOf, familyOfSet, familyNamedBy, familiesReprinting, reprintCardsOf,
+  REPRINT_FAMILIES, REPRINT_OF, releasedWithin, PRERELEASE_SALE_MONTHS, setIdOf, familyOfSet, familyNamedBy, familiesReprinting, reprintCardsOf,
   LOOKALIKES, lookalikesOf, photoChecksOf, SET_WRITTEN_AS,
   reprintOf, asPrinted,
   PROMO_SETS, promoOf, promoNumberIn, PRINTS_NO_NUMBER, printsNoNumber, SUBSET_SETS, printedTotal, totalFits,

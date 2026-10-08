@@ -50,6 +50,34 @@ for (const [what, v, re] of [['back check failed', { error: 'HTTP 500' }, /could
   ['a metal photo among them', { state: 'genuine-back', photos: 4, metal: true }, /metal/], ['nothing at all', null, /could not run/]])
   ok(what + ' -> skip', (x => !!x.skip && re.test(x.skip))(deals.vouchPhotos(v)), (deals.vouchPhotos(v).skip || 'CLEARED'));
 
+// The ceiling and the ambiguous "HP" (Roy, 2026-10-08).
+console.log('\n  the discount ceiling: further below than 60% is itself the warning');
+{
+  const at = (landed) => free(row({ landed }));
+  ok('60% below (landed $40 of $100) clears', !at(40).skip, at(40).skip);
+  ok('61% below is skipped, saying why', !!at(39).skip && /more than 60% below/.test(at(39).skip), at(39).skip);
+  ok('Lugia 185 sold as 186 at 85% below -> skipped', /more than 60% below/.test(at(15).skip || ''));
+  ok('the ceiling is 0.60 and the floor 0.15', deals.MAX_DISCOUNT === 0.60 && deals.MIN_DISCOUNT === 0.15);
+}
+console.log('\n  "HP": hit points beside a number, otherwise ambiguous');
+for (const [t, amb] of [['2016 Pokemon Fates Collide Alakazam EX 125/124 HP', true], ['Blastoise - HP - played', true],
+                        ['Dark Gyarados 8/82 Team Rocket 70 HP 2000', false], ['Lugia 220HP NM', false],
+                        ['Pikachu VMAX 044/185 HP 310', false], ['Mewtwo NM', false]])
+  ok((amb ? 'ambiguous: ' : 'hit points: ') + t, deals.hpAmbiguous(t) === amb);
+ok('the Alakazam EX "125/124 HP" row is kept out of deals', /ambiguous/.test(free(row({ title: '2016 Pokemon Fates Collide Alakazam EX 125/124 HP' })).skip || ''));
+
+console.log('\n  pickVouched — one definition for the shelf, its follow-up and the probe');
+(async () => {
+  const v = view({ listings: [row({ itemId: 'a', landed: 30 }), row({ itemId: 'b', landed: 50 }), row({ itemId: 'c', landed: 55 })] });
+  let r = await deals.pickVouched(v, ref, async () => ({ notChecked: true }));
+  ok('nothing held: no pick, and it says "back not checked yet"', !r.pick && r.skipped['back not checked yet'] === 2, JSON.stringify(r.skipped));
+  ok('...the 70%-below row never reaches the back (ceiling first)', r.skipped[Object.keys(r.skipped).find(k => /more than/.test(k))] === 1);
+  r = await deals.pickVouched(v, ref, async l => l.itemId === 'c' ? { state: 'genuine-back', photos: 4 } : { notChecked: true });
+  ok('the back budget (DEAL_BACK_MAX = 2) reaches b then c; c is the pick', r.pick && r.pick.listing.itemId === 'c' && r.backsAsked === 2, r.pick && r.pick.listing.itemId);
+  ok('...with its evidence lines', r.pick && r.pick.cleared.includes('genuine back found') && r.pick.cleared.some(x => /% below/.test(x)));
+  finish();
+})();
+
 // A re-seen row (2026-10-08): the back verdict came from the cache or the
 // store, which kept no photo count, and the bar read it as "0 photos" — no row
 // could be picked twice; the 40-card production run picked 0.
@@ -64,5 +92,8 @@ console.log('\n  a back verdict seen before (cache or store)');
   ok('a cached verdict without a count fetches the listing (shared 15-min getItem cache)', /c\.photos == null && o && o\.needPhotos[\s\S]*ebayItemOnDemand\(itemId, cid, 'back', o\)[\s\S]*c\.photos = \(got\.hit\.images \|\| \[\]\)\.length/.test(fn));
 }
 
-console.log(`\n  ${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+// The async pickVouched block above ends the run (it finishes last).
+function finish() {
+  console.log(`\n  ${pass} passed, ${fail} failed\n`);
+  process.exit(fail ? 1 : 0);
+}

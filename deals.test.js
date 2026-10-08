@@ -103,7 +103,7 @@ ok(js(cand([row(50, noBack()), row(60), row(70)], 2, { price: 100, isReal: true,
 ok(js(cand([row(50, noBack()), row(60), row(70)], 0)) === '[]', 'budget spent: 0 calls');
 
 console.log('\n  off again (TASK T1, 2026-10-05): the live shelf\'s top pick was a different genuine card');
-ok(deals.ENABLED === false, 'deals.ENABLED is false until "is this photo this card" is answered');
+ok(deals.ENABLED === true, 'deals.ENABLED is ON (Roy, 2026-10-08) — on the vouching bar, approved accounts');
 ok(/different card/.test(deals.OFF_REASON), 'the off state names why');
 {
   const s = fs.readFileSync(__dirname + '/server.js', 'utf8');
@@ -132,7 +132,7 @@ ok(/parts\.length !== 2/.test(h) && /isRawGrade/.test(h), 'raw views without a p
   // The price end, one definition for the shelf and its probe (dealRefOf).
   const S2 = fs.readFileSync(__dirname + '/server.js', 'utf8').split('\r\n').join('\n');
   const dr = S2.slice(S2.indexOf('async function dealRefOf('), S2.indexOf("app.get('/api/deals'"));
-  ok(/deals_\.pickDeal\(v\.payload, ref\)/.test(h) && /const ref = await dealRefOf\(v\.cardId\)/.test(h)
+  ok(/deals_\.pickVouched\(v\.payload, ref, dealBackOf\(card\)\.backOf\)/.test(h) && /const ref = await dealRefOf\(v\.cardId\)/.test(h)
      && /numberMatchedPrice\(cardId\)/.test(dr) && /pricequality\.annotate/.test(dr),
      'the price end is the current, measured, number-matched price');
 }
@@ -140,8 +140,16 @@ ok(/materialPending: true/.test(src), 'rows the novelty check has not reached ar
 const fu = src.slice(src.indexOf('function dealBackFollowUp'), src.indexOf('// ── What does ONE listing'));
 ok(fu.length > 200, 'dealBackFollowUp exists');
 ok(/deals_\.ENABLED/.test(fu) && /isRawGrade\(grade\)/.test(fu) && /printing \|\| edition/.test(fu), 'it runs only when deals are on, on raw views without a printing or edition filter');
-ok(/deals_\.backCandidates\(/.test(fu) && /DEAL_BACK_MAX/.test(fu), 'it checks only backCandidates, within DEAL_BACK_MAX a view');
-ok(/background: true/.test(fu), 'background origin: it yields at the soft stop');
+ok(/deals_\.pickVouched\(payload, ref, paid\.backOf\)/.test(fu) && /dealBackOf\(card, \{ paid: true, budget: deals_\.DEAL_BACK_MAX - used \}\)/.test(fu),
+   'it runs the shelf\'s own bar with the back asked, within what is left of DEAL_BACK_MAX a view');
+ok(/const landed = r\.backsAsked && paid\.calls\(\)/.test(fu), 'it rebuilds the view only when it fetched a NEW verdict (every rebuild re-runs it)');
+{
+  const bo = src.slice(src.indexOf('function dealBackOf('), src.indexOf('async function dealRefOf('));
+  ok(/background: true, needPhotos: true/.test(bo), 'background origin: it yields at the soft stop, and asks for the photo count');
+  ok(/if \(!\(o && o\.paid\)\)[\s\S]*backVerdicts\.get\(backKey\(l\.itemId, cid\)\)[\s\S]*notChecked: true/.test(bo), 'unpaid: a verdict already held, or "not checked" — never a call');
+  ok(/o\.budget != null && calls >= o\.budget/.test(bo), 'paid: stops at the view\'s budget');
+  ok(!/paid: true/.test(h), '/api/deals never asks for a paid back');
+}
 ok((src.match(/^ {2}(if \(st\) )?dealBackFollowUp\(card, requestedId/gm) || []).length === 2, 'called after an open and after every re-judge');
 ok(/back: \{ state: v\.state, says: v\.says, metal: !!v\.metal \}/.test(src), 'a kept row carries the metal-photo signal, so the deals bar can read it');
 const page = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');

@@ -131,7 +131,7 @@ async function waitForBoot(server, ms = 20000) {
       '/jpfilter.js', '/listingparse.js', '/ebayquota.js', '/cardparse.js',
       '/fx.js', '/approute.test.js', '/cardhunt_preview.html',
       // T7: preserved, disabled, and never to reach a browser.
-      '/checkout-disabled.js', '/login-disabled.js',
+      '/checkout-disabled.js', '/login-disabled.js', '/compare-disabled.js',
       // T3 (2026-09-29): tracked, and still never served — a design mockup
       // full of sample prices, and a script that writes prices.
       '/cardhunt-redesign.html', '/tcgdexharvest.js', '/tcgsetname.js',

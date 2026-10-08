@@ -62,7 +62,7 @@ ok('card page: boxes, history, the view toggle and the grade selector are all in
 ok('card page: the listings are .price-only', /<div class="lbox price-only">/.test(H));
 ok('the view toggle exists nowhere else, and does nothing with prices closed',
    (H.match(/id="cd-vtog"/g) || []).length === 1 && /function toggleCardView\(\)\{\s*if \(!pricesOpen\(\)\) return;/.test(H));
-ok('card page: Compare, Set Alert and Watch are .price-only', /class="btn price-only" onclick="openCompare\(\)"/.test(H) && /class="btn price-only" onclick="addAlertFromCard\(\)"/.test(H) && /class="btn price-only" id="watch-btn"/.test(H));
+ok('card page: Set Alert and Watch are .price-only (Compare is parked: compare-disabled.js)', /class="btn price-only" onclick="addAlertFromCard\(\)"/.test(H) && /class="btn price-only" id="watch-btn"/.test(H));
 const home = H.slice(H.indexOf('<div id="screen-home"'), H.indexOf('<div id="screen-pokemon"'));
 // TASK-ui T8: search, best deals, browse by game, movers, alerts last.
 ok('home: best deals is its own .price-only section, hidden until /api/deals says enabled',

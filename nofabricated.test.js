@@ -75,6 +75,30 @@ ok('the preserved checkout still holds the functions (a move, not a loss)',
   /function startCheckout/.test(fs.readFileSync('checkout-disabled.js', 'utf8'))
   && /function renderCoStep/.test(fs.readFileSync('checkout-disabled.js', 'utf8')));
 
+// Compare (Roy, 2026-10-08, TASK-reports-and-pages T1): parked like checkout.
+// It never had a second side — the "Choose card to compare" slot went to the
+// search screen and nothing came back.
+console.log('\n  compare — parked, unreachable, preserved');
+ok('no Compare button in the page', !/openCompare|⚖️ Compare|&#9878;&#65039; Compare/.test(html));
+ok('no compare overlay or grid in the page', !/id="compare-(overlay|grid)"/.test(html));
+ok('openCompare is not defined in the page', !/function\s+openCompare\s*\(/.test(code));
+ok('nothing in the page links to the compare overlay', !/compare-overlay|compare-grid|compare-disabled/.test(html));
+{
+  const src = fs.existsSync('compare-disabled.js') ? fs.readFileSync('compare-disabled.js', 'utf8') : '';
+  ok('compare-disabled.js exists and still holds openCompare and its overlay (a move, not a loss)',
+    /function openCompare\(/.test(src) && /compare-overlay/.test(src) && /compare-grid/.test(src));
+  ok('compare-disabled.js says it is not loaded or served', /NOT LOADED BY ANY PAGE\. NOT SERVED\./.test(src));
+  let tracked = false;
+  try { execSync('git ls-files --error-unmatch compare-disabled.js', { stdio: 'ignore' }); tracked = true; } catch (e) {}
+  ok('compare-disabled.js is tracked in git', tracked, 'git add compare-disabled.js');
+  ok('server.js never names compare-disabled.js', !/compare-disabled/.test(server));
+  // The only compare route on the server is the PHOTO comparison of a card's
+  // own listings (POST /api/listings/:cardId/compare); no card-vs-card endpoint.
+  const routes = (server.match(/app\.(?:get|post|put|patch|delete)\('[^']*compare[^']*'/gi) || []);
+  ok('the server has no card-compare endpoint (only the photo compare)',
+    routes.length === 1 && /\/api\/listings\/:cardId\/compare'/.test(routes[0]), routes.join(', '));
+}
+
 console.log('\n  photos — the seller’s images, never our artwork dressed up');
 const fnSlice = name => {
   const m = new RegExp('(?:async\\s+)?function\\s+' + name + '\\s*\\(').exec(code);

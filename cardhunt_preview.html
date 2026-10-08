@@ -913,7 +913,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
       <div><div style="font-size:20px;font-weight:800" id="results-title">Results</div><div style="font-size:12px;color:var(--mu);margin-top:3px" id="results-sub"></div></div>
       <div style="display:flex;gap:8px">
         <select class="tbsel price-only" onchange="sortResults(this.value)"><option value="rel">Best match</option><option value="price">Price ↑</option><option value="price-d">Price ↓</option></select>
-        <button class="btn price-only" onclick="openCompare()">⚖️ Compare</button>
       </div>
     </div>
     <!-- Language filter chips -->
@@ -989,7 +988,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
     <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
     <button class="nl on">Card</button>
     <div class="nav-r">
-      <button class="btn price-only" onclick="openCompare()">⚖️ Compare</button>
       <button class="btn price-only" onclick="addAlertFromCard()" style="border-color:var(--am);color:var(--am)" onmouseover="this.style.background='var(--warn-soft)'" onmouseout="this.style.background=''">🔔 Set Alert</button>
       <button class="btn price-only" id="watch-btn" onclick="toggleWatch()">🤍 Watch</button>
       
@@ -5079,26 +5077,6 @@ function setR(el, r) {
   saveCardView();   // T4: initChart has set S.activeRange
 }
 
-// COMPARE
-function openCompare(){
-  const c=S.currentCard;if(!c){openM('compare-overlay');return;}
-  const base=S.activeGradeBase;
-  document.getElementById('compare-grid').innerHTML=`
-    <div style="border:2px solid var(--t);border-radius:var(--r);padding:20px;text-align:center;background:var(--tl)">
-      <img src="${c.images?.small||''}" style="height:140px;object-fit:contain;margin:0 auto 12px;border-radius:8px;box-shadow:var(--sh2)">
-      <div style="font-size:15px;font-weight:700">${c.name}</div>
-      <div style="font-size:12px;color:var(--mu);margin-top:2px">${c.set?.name||''} · #${c.number}</div>
-      <div style="font-size:22px;font-weight:800;margin-top:10px;color:var(--t)">$${base.toFixed(2)}</div>
-      <div style="font-size:12px;color:var(--mu)">${S.activeGrade}</div>
-      <div style="font-size:11px;margin-top:8px;padding:6px;background:var(--w);border-radius:8px">Rarity: ${c.rarity||'—'} · HP: ${c.hp||'—'}</div>
-    </div>
-    <div onclick="doSearch('');SS('search')" style="border:2px dashed var(--bd);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:280px;background:var(--bg);cursor:pointer;gap:12px">
-      <div style="font-size:40px">+</div>
-      <div style="font-size:14px;font-weight:600;color:var(--mu)">Choose card to compare</div>
-      <div style="font-size:12px;color:var(--fa)">Search and select any card</div>
-    </div>`;
-  openM('compare-overlay');
-}
 
 
 // PORTFOLIO
@@ -6685,7 +6663,7 @@ var LANG_JA = {
   '🔍 Search': '🔍 検索', 'Choose a game, then search by card name, set or grade': 'ゲームを選んで、カード名・セット・グレードで検索',
   'Choose a game': 'ゲームを選択', 'English, Japanese, Chinese': '英語・日本語・中国語', 'Coming soon': '近日対応',
   'Pokémon — Trending': 'ポケモン — 注目', 'Results': '検索結果', 'Best match': '関連度順',
-  'Price ↑': '価格 ↑', 'Price ↓': '価格 ↓', '⚖️ Compare': '⚖️ 比較',
+  'Price ↑': '価格 ↑', 'Price ↓': '価格 ↓',
   'Number ↑': '番号 ↑', 'Number ↓': '番号 ↓', 'Name A–Z': '名前 A–Z', 'Name Z–A': '名前 Z–A',
   'Price: High → Low': '価格：高い → 安い', 'Price: Low → High': '価格：安い → 高い',
   'Rarity': 'レアリティ', 'Rarity:': 'レアリティ:', 'Type:': 'タイプ:', 'All': 'すべて',
@@ -6707,7 +6685,6 @@ var LANG_JA = {
   'No alerts yet': 'アラートはまだありません',
   'Set a price alert on any card to get notified when it drops below your target.': 'カードに価格アラートを設定すると、目標価格を下回ったときに通知されます。',
   '+ Create your first alert': '+ 最初のアラートを作成',
-  '⚖️ Compare cards': '⚖️ カードを比較', 'Side by side, at the grade each one is currently showing.': '各カードの現在のグレードで並べて比較。',
   '🔔 Create Price Alert': '🔔 価格アラートを作成', 'Get notified when a new listing matches your criteria': '条件に合う新しい出品があれば通知',
   'Click to choose a card…': 'クリックしてカードを選択…', 'Grade / Condition': 'グレード / 状態', 'Any grade': 'すべてのグレード',
   'Alert type': 'アラートの種類', 'Price drops below': '価格が下回ったら', 'Price rises above': '価格が上回ったら',
@@ -6783,7 +6760,7 @@ var LANG_ZH_TW = {
   '🔍 Search': '🔍 搜尋', 'Choose a game, then search by card name, set or grade': '選擇遊戲，再依卡名、系列或評級搜尋',
   'Choose a game': '選擇遊戲', 'English, Japanese, Chinese': '英文、日文、中文', 'Coming soon': '即將推出',
   'Pokémon — Trending': '寶可夢 — 熱門', 'Results': '搜尋結果', 'Best match': '最相符',
-  'Price ↑': '價格 ↑', 'Price ↓': '價格 ↓', '⚖️ Compare': '⚖️ 比較',
+  'Price ↑': '價格 ↑', 'Price ↓': '價格 ↓',
   'Number ↑': '編號 ↑', 'Number ↓': '編號 ↓', 'Name A–Z': '名稱 A–Z', 'Name Z–A': '名稱 Z–A',
   'Price: High → Low': '價格：高 → 低', 'Price: Low → High': '價格：低 → 高',
   'Rarity': '稀有度', 'Rarity:': '稀有度：', 'Type:': '類型：', 'All': '全部',
@@ -6805,7 +6782,6 @@ var LANG_ZH_TW = {
   'No alerts yet': '尚無提醒',
   'Set a price alert on any card to get notified when it drops below your target.': '為任一卡牌設定價格提醒，跌破目標價時就會通知你。',
   '+ Create your first alert': '+ 建立第一個提醒',
-  '⚖️ Compare cards': '⚖️ 比較卡牌', 'Side by side, at the grade each one is currently showing.': '並排比較，各自以目前顯示的評級呈現。',
   '🔔 Create Price Alert': '🔔 建立價格提醒', 'Get notified when a new listing matches your criteria': '有符合條件的新刊登時通知你',
   'Click to choose a card…': '點擊選擇卡牌…', 'Grade / Condition': '評級 / 品相', 'Any grade': '任何評級',
   'Alert type': '提醒類型', 'Price drops below': '價格低於', 'Price rises above': '價格高於',
@@ -6879,7 +6855,7 @@ var LANG_ZH_CN = {
   '🔍 Search': '🔍 搜索', 'Choose a game, then search by card name, set or grade': '选择游戏，再按卡名、系列或评级搜索',
   'Choose a game': '选择游戏', 'English, Japanese, Chinese': '英文、日文、中文', 'Coming soon': '即将推出',
   'Pokémon — Trending': '宝可梦 — 热门', 'Results': '搜索结果', 'Best match': '最相关',
-  'Price ↑': '价格 ↑', 'Price ↓': '价格 ↓', '⚖️ Compare': '⚖️ 比较',
+  'Price ↑': '价格 ↑', 'Price ↓': '价格 ↓',
   'Number ↑': '编号 ↑', 'Number ↓': '编号 ↓', 'Name A–Z': '名称 A–Z', 'Name Z–A': '名称 Z–A',
   'Price: High → Low': '价格：高 → 低', 'Price: Low → High': '价格：低 → 高',
   'Rarity': '稀有度', 'Rarity:': '稀有度：', 'Type:': '类型：', 'All': '全部',
@@ -6901,7 +6877,6 @@ var LANG_ZH_CN = {
   'No alerts yet': '暂无提醒',
   'Set a price alert on any card to get notified when it drops below your target.': '为任一卡牌设置价格提醒，跌破目标价时就会通知你。',
   '+ Create your first alert': '+ 创建第一个提醒',
-  '⚖️ Compare cards': '⚖️ 比较卡牌', 'Side by side, at the grade each one is currently showing.': '并排比较，各自按当前显示的评级呈现。',
   '🔔 Create Price Alert': '🔔 创建价格提醒', 'Get notified when a new listing matches your criteria': '有符合条件的新在售时通知你',
   'Click to choose a card…': '点击选择卡牌…', 'Grade / Condition': '评级 / 品相', 'Any grade': '任何评级',
   'Alert type': '提醒类型', 'Price drops below': '价格低于', 'Price rises above': '价格高于',
@@ -7751,21 +7726,6 @@ function cleanSeries(name) {
 </div>
 
 <!-- ══ ADD ALERT MODAL ══ -->
-<!-- ══ COMPARE ══
-     openCompare() has existed and referenced #compare-grid and
-     #compare-overlay for a long time, and NEITHER ELEMENT WAS IN THE PAGE.
-     Clicking the Compare button on the card page threw
-     "Cannot set properties of null" and did nothing - code addressing
-     markup that is not there, which is the v36 shape exactly. Found by
-     clicking the button. -->
-<div id="compare-overlay" class="ovl" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:600;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
-  <div style="background:var(--w);border-radius:20px;padding:28px;width:92%;max-width:760px;position:relative;box-shadow:var(--sh3);max-height:88vh;overflow:auto">
-    <button onclick="closeM(&quot;compare-overlay&quot;)" style="position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;background:var(--bg);border:none;font-size:16px;cursor:pointer">&#10005;</button>
-    <div style="font-size:18px;font-weight:800;margin-bottom:4px">&#9878;&#65039; Compare cards</div>
-    <div style="font-size:13px;color:var(--mu);margin-bottom:20px">Side by side, at the grade each one is currently showing.</div>
-    <div id="compare-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px"></div>
-  </div>
-</div>
 <div id="add-alert-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:600;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
   <div style="background:var(--w);border-radius:20px;padding:32px;width:90%;max-width:480px;position:relative;box-shadow:var(--sh3)">
     <button onclick="closeAddAlertModal()" style="position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;background:var(--bg);border:none;font-size:16px;cursor:pointer">✕</button>
@@ -7851,6 +7811,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-b7b8523-dealsupply &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-5fa1bfb-compareoff &middot; click to hide</div>
 </body>
 </html>

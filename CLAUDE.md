@@ -764,7 +764,9 @@ open, Roy's (PROGRESS 2026-10-07 (buyer location)).
 query change in both conditions. **A default is a filter** (Browse returned
 no auctions until asked). (PROGRESS 2026-10-04)
 
-**A read endpoint must never write**; eBay data cached 15 min, never stored.
+**A read endpoint must never write**; eBay listings may be stored only to
+display them: <= 6 h old with the age shown, deleted once not public (API
+licence §8.1(b)(c), read 2026-10-08 — the old "never stored" was stricter).
 *Archive:* "A read endpoint must never write", "eBay listings are cached, never stored"
 
 **Before inventing a source, check what the current query already computes.**

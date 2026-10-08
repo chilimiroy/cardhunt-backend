@@ -4194,6 +4194,10 @@ let viewTableReady = null;
 async function logListingView(v) {
   v.origin = VIEW_ORIGIN;
   v.action = v.action || 'open';
+  // WHO opened it (Roy, 2026-10-08): the request's own origin — user,
+  // tooling (probes, audits), or background (follow-ups, the deals job). The
+  // deals shelf's "most-opened" list may count only 'user' rows.
+  v.caller = v.caller || ebay0.currentOrigin() || 'background';
   VIEW_LOG.push(v);
   if (VIEW_LOG.length > 500) VIEW_LOG.shift();
   console.log('[listings:view] ' + JSON.stringify({ card: v.cardId, grade: v.grade, action: v.action, calls: v.calls,
@@ -4206,15 +4210,16 @@ async function logListingView(v) {
       calls int NOT NULL, listings int, complete boolean, pages jsonb, totals jsonb,
       incomplete jsonb, ms_first int, ms_total int)`)
       .then(() => db.query(`ALTER TABLE listing_views ADD COLUMN IF NOT EXISTS action text,
-        ADD COLUMN IF NOT EXISTS origin text, ADD COLUMN IF NOT EXISTS lang jsonb`));
+        ADD COLUMN IF NOT EXISTS origin text, ADD COLUMN IF NOT EXISTS lang jsonb,
+        ADD COLUMN IF NOT EXISTS caller text`));
     await viewTableReady;
     await db.query(`INSERT INTO listing_views (card_id, grade, printing, cached, calls, listings,
-      complete, pages, totals, incomplete, ms_first, ms_total, action, origin, lang)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+      complete, pages, totals, incomplete, ms_first, ms_total, action, origin, lang, caller)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [v.cardId, v.grade, v.printing, v.cached, v.calls, v.listings, v.complete,
        JSON.stringify(v.pagesByMarketplace || {}), JSON.stringify(v.ebayTotals || {}),
        JSON.stringify(v.incomplete || []), v.msFirst, v.msTotal, v.action, v.origin,
-       v.lang ? JSON.stringify(v.lang) : null]);
+       v.lang ? JSON.stringify(v.lang) : null, v.caller]);
   } catch (e) { viewTableReady = null; console.warn('[listings:view] not recorded: ' + e.message); }
 }
 

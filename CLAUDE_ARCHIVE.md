@@ -2003,6 +2003,27 @@ Anniversary Edition". Unmeasured lead: `epid` (eBay catalogue product) is in
 135 of 200 summaries — free, and possibly per-product.
 
 ## eBay listings are cached, never stored
+**CORRECTED 2026-10-08 (Roy read the API License Agreement; quoted from
+developer.ebay.com/join/api-license-agreement the same day).** The note below
+was stricter than the terms. What they say:
+- §3.1(b): "limited intermediate copies of eBay Content only as necessary to
+  perform an activity permitted ... All intermediate copies must be deleted when
+  they are no longer required for the purpose for which they were created".
+- §8.1(c): "Displayed item listing information may not be more than six (6) hours
+  older than information displayed on the eBay Site ... If your displayed item
+  listing is not as current as the listing on the eBay Site, you will disclose
+  in your Application how much older your displayed item listing is".
+- §8.1(b)(1): "When the eBay Content is no longer publicly available, you must
+  delete it from your Application."
+- §8.1(b)(2): eBay Content in a Public Display "may not be co-mingled or
+  combined with non-eBay Content ... must be visually isolated from third-party
+  listings or other non-eBay information".
+So listings MAY be stored for display (the deals shelf: refreshed every 3 h,
+found-at shown, a listing no longer live removed). Still binding: §8.1(d)
+(derived statistics need written permission) and §9.5 ("Use eBay Content,
+either alone or in combination with third-party information, to suggest or
+model prices for items listed on eBay Site"). The original note, as written:
+
 eBay's terms allow serving item data for a request, not retaining it. So:
 - The 15-minute in-memory cache is the limit. `price_history` receives **no**
   eBay rows — re-verified 2026-09-22: zero rows with an eBay `source` or

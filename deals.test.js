@@ -152,6 +152,11 @@ ok(/const landed = r\.backsAsked && paid\.calls\(\)/.test(fu), 'it rebuilds the 
 }
 ok((src.match(/^ {2}(if \(st\) )?dealBackFollowUp\(card, requestedId/gm) || []).length === 2, 'called after an open and after every re-judge');
 ok(/back: \{ state: v\.state, says: v\.says, metal: !!v\.metal \}/.test(src), 'a kept row carries the metal-photo signal, so the deals bar can read it');
+// The "most-opened" list may count only real users (Roy, 2026-10-08): every
+// recorded view says who opened it, from the request's own origin.
+ok(/v\.caller = v\.caller \|\| ebay0\.currentOrigin\(\) \|\| 'background'/.test(src)
+   && /ADD COLUMN IF NOT EXISTS caller text/.test(src) && /action, origin, lang, caller\)/.test(src),
+   'listing_views records the caller (user / tooling / background) of every view');
 const page = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
 ok(/fetch\(BACKEND \+ '\/api\/deals/.test(page) && /loadHomeDeals\(\)/.test(page), 'the home shelf reads /api/deals');
 ok(!/function notYet/.test(page), 'the "not live yet" placeholder is gone, not left dormant');

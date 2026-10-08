@@ -6386,6 +6386,44 @@ app.get('/api/ebay/dealsprobe/:cardId', toolingKey.require, async (req, res) => 
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── GET /api/ebay/statusprobe/:cardId?n=20,21 — MEASUREMENT (2026-10-08) ──
+// The deals shelf must delete a pick once its listing is no longer public
+// (API licence §8.1(b)(1)) without a call per pick per view. The Browse API's
+// multi-item lookup (getItems, item_ids=a,b,c) would check every pick at
+// once — this measures its limit and its answer's shape BEFORE anything
+// relies on it: one search for real item ids, then one getItems per n.
+// Tooling origin, catalogue id only, nothing stored. ~1 + len(n) calls.
+app.get('/api/ebay/statusprobe/:cardId', toolingKey.require, async (req, res) => {
+  try {
+    if (!ebay.ebayEnabled()) return res.status(503).json({ error: 'EBAY_ENABLED=false' });
+    const sizes = String(req.query.n || '20').split(',').map(x => parseInt(x, 10)).filter(x => x >= 1 && x <= 30).slice(0, 3);
+    const card = await resolveListingCard(req.params.cardId);
+    if (!card) return res.status(404).json({ error: 'card not in catalogue' });
+    const auth = await getEbayTokenDetailed({ background: true });
+    if (!auth.token) return res.status(503).json({ error: auth.reason || auth.error || 'no token' });
+    const q = cm.buildQuery(ebayMatchCard(card), 'Raw');
+    const s = await ebay.fetchEbay(db, { url: 'https://api.ebay.com/buy/browse/v1/item_summary/search?q=' + encodeURIComponent(q)
+      + '&category_ids=183454&limit=50', token: auth.token, kind: 'search', background: true,
+      meta: { cardId: card.api_card_id, probe: 'statusprobe-search' }, countFrom: d => (d && d.itemSummaries ? d.itemSummaries.length : 0) });
+    if (!s.ok) return res.status(502).json({ error: s.reason || s.blocked });
+    const ids = ((s.data && s.data.itemSummaries) || []).map(it => it.itemId).filter(Boolean);
+    const tries = [];
+    for (const n of sizes) {
+      const ask = ids.slice(0, n);
+      const g = await ebay.fetchEbay(db, { url: 'https://api.ebay.com/buy/browse/v1/item/?item_ids=' + encodeURIComponent(ask.join(',')),
+        token: auth.token, kind: 'item', background: true, meta: { cardId: card.api_card_id, probe: 'statusprobe-items' }, countFrom: () => 1 });
+      const items = (g.ok && g.data && g.data.items) || [];
+      const first = items[0] || {};
+      tries.push({ n: ask.length, ok: !!g.ok, status: g.status || null, error: g.ok ? null : (g.reason || g.blocked || null),
+        errors: g.data && g.data.errors ? g.data.errors.slice(0, 3) : null, warnings: g.data && g.data.warnings ? g.data.warnings.slice(0, 3) : null,
+        returned: items.length, keys: Object.keys(first).slice(0, 60),
+        availability: items.slice(0, 5).map(it => ({ itemId: it.itemId, endDate: it.itemEndDate || null,
+          estimated: (it.estimatedAvailabilities || []).map(a => a.estimatedAvailabilityStatus) })) });
+    }
+    res.json({ cardId: card.api_card_id, idsFound: ids.length, tries, stored: false, at: new Date().toISOString() });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.get('/api/ebay/aspects/:cardId', toolingKey.require, async (req, res) => {
   const mp = String(req.query.mp || 'EBAY_US').toUpperCase();
   if (!MARKETPROBE_SITES.includes(mp) || /_NO/.test(mp)) return res.status(400).json({ error: 'unknown marketplace', allowed: MARKETPROBE_SITES.filter(m => !/_NO/.test(m)) });

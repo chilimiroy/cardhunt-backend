@@ -215,7 +215,10 @@ const ALLOWED = ['sourceEbay', '/api/ebay/conditions/:cardId', '/api/ebay/certpr
                  '/api/ebay/aspects/:cardId',
                  // T4 (2026-10-01): measures where Set/Year live and how often
                  // sellers fill them. Tooling origin; its rows reach no page.
-                 '/api/ebay/setprobe/:cardId'];
+                 '/api/ebay/setprobe/:cardId',
+                 // 2026-10-08: one search for real item ids, then the multi-item
+                 // status lookup's limit (deals §8.1(b)(1)). Tooling; reaches no page.
+                 '/api/ebay/statusprobe/:cardId'];
 const unknown = searchSites.filter(s => !ALLOWED.includes(s));
 ok('every eBay search site is a known one', unknown.length === 0, 'unexpected: ' + unknown.join(', '));
 ok('ebayActive (ungated eBay name search) is gone', !/ebayActive\s*\(/.test(server));

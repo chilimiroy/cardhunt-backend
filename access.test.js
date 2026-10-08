@@ -76,6 +76,7 @@ const ROUTES = [
   ['get', '/api/ebay/conditionvalues', 'tooling', null],
   ['get', '/api/ebay/certprobe/:cardId', 'tooling', null],
   ['get', '/api/ebay/setprobe/:cardId', 'tooling', null],
+  ['get', '/api/ebay/statusprobe/:cardId', 'tooling', null],
   ['get', '/api/cert/:cardId', 'priced', null],
   ['get', '/api/photos/:cardId', 'priced', null],
   ['get', '/api/stamp/:cardId', 'priced', null],

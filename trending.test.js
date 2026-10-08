@@ -80,7 +80,8 @@ console.log('\n5. WIRING');
 const server = fs.readFileSync(__dirname + '/server.js', 'utf8');
 ok('server.js requires trending.js', /require\('\.\/trending'\)/.test(server));
 ok('/api/trending is a GET route', /app\.get\('\/api\/trending'/.test(server));
-const route = server.slice(server.indexOf("app.get('/api/trending'"), server.indexOf('// ── SEARCH'));
+// Bounded by the deals block that follows it (2026-10-08) — that block writes deal_picks.
+const route = server.slice(server.indexOf("app.get('/api/trending'"), server.indexOf('// BEST DEALS — its own supply'));
 ok('the route never writes (no INSERT / UPDATE / DELETE)', !/\b(INSERT|UPDATE|DELETE)\b/.test(route));
 ok('the response states the rule it ranked by', /rule: trending\.describeRule/.test(route));
 ok('the response says most-viewed is unavailable and why', /most-viewed/.test(route));

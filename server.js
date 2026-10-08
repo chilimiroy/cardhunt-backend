@@ -1294,7 +1294,7 @@ app.get('/api/deals', access.priced, async (req, res) => {
     await dealTable();
     const picks = (await db.query(`SELECT p.card_id, p.found_at, c.name, c.number, c.set_name, c.set_name_en, c.image_small
       FROM deal_picks p JOIN cards c ON c.api_card_id = p.card_id
-      WHERE p.found_at > now() - interval '3 hours' ORDER BY p.found_at DESC LIMIT 60`)).rows;
+      WHERE p.found_at > now() - interval '3 hours' AND ${digital.visibleSql('c')} ORDER BY p.found_at DESC LIMIT 60`)).rows;
     const out = [];
     for (const p of picks) {
       const ref = await dealRefOf(p.card_id);

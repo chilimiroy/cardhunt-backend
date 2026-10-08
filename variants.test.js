@@ -181,7 +181,8 @@ console.log('\n  3b. the page');
   ok('printsql: ...nor when printings are unknown', !ps.isBasePrintingRow('reverse', null));
   ok('printsql: ...but IS on a card that exists only in reverse', ps.isBasePrintingRow('reverse', { printings: [{ key: 'reverse' }] }));
   ok('printsql: a holo / null row is always base-eligible', ps.isBasePrintingRow('holo', null) && ps.isBasePrintingRow(null, null));
-  ok('every headline reader in server.js applies basePrintingSql (5)', (server.match(/printsql\.basePrintingSql\(/g) || []).length === 5);
+  // 6 since 2026-10-08: the deals job's card list (dealCandidates) is a headline reader too.
+  ok('every headline reader in server.js applies basePrintingSql (6)', (server.match(/printsql\.basePrintingSql\(/g) || []).length === 6);
   // T2, 2026-09-30: the readers OUTSIDE server.js. Trending and the alert
   // evaluator read the latest real row of any printing, so 6 cards whose
   // only real price was a reverse showed it there and an estimate on their

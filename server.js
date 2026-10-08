@@ -25,6 +25,7 @@ const outlier = require('./outlier');
 // every `FROM cards` / `JOIN cards` here either filters or says why not.
 const digital = require('./digital');
 const printsql = require('./printsql');   // T10: which stored row is a card's BASE price
+const pricehold = require('./pricehold');   // 2026-10-09: cards whose price is held (no number)
 const pricequality = require('./pricequality');   // T1: is that headline current and measured?
 // A card id not matching ^(en|ja|zh-tw|zh-cn)- is a bug, not a card:
 // refused at every entry point that takes one, never served. cardid.js.
@@ -766,7 +767,8 @@ app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
           const cards = rows.rows.map(r => {
             const price = r.price_usd ? parseFloat(r.price_usd) : 0;
             const isEstimate = !r.price_source || /^estimate/.test(r.price_source);
-            return {
+            // A held card (pricehold.js) carries no headline and no price blob.
+            return pricehold.apply({
               id: r.api_card_id,
               name: r.name,
               nameEn: r.name_en || null,
@@ -789,7 +791,7 @@ app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
               _priceDate: r.recorded_at,
               _source: 'cardhunt_db',
               _lang: dbLang
-            };
+            }, r.api_card_id);
           });
           // Old, thin or unsettled says so on the tile too (T1) — one query for the set.
           const pq = await pricequality.annotate(db, rows.rows.map(r => ({ id: r.api_card_id,
@@ -1010,7 +1012,8 @@ app.get('/api/cards/:cardId', access.optional, async (req, res) => {
         }
         const pq = await pricequality.annotate(db, [{ id: c.api_card_id, price: c.price_usd,
           source: c.price_source, recordedAt: c.recorded_at, meta: c.price_meta }]);
-        return res.json({ data: {
+        // A held card (pricehold.js): no headline, no price blob, and why.
+        return res.json({ data: pricehold.apply({
           printings: pkeys ? pkeys.map(k => ({ key: k, label: cm.printingLabel(k) })) : null,
           printingPrices,
           editions: ekeys.length ? ekeys.map(k => ({ key: k, label: cm.editionLabel(k) })) : null,
@@ -1042,7 +1045,7 @@ app.get('/api/cards/:cardId', access.optional, async (req, res) => {
           _priceDate: c.recorded_at,
           _priceQuality: pq.get(c.api_card_id) || null,   // old / thin / unsettled (T1)
           _source: 'cardhunt_db'
-        }});
+        }, c.api_card_id) });
       }
     }
     // ── Not one of ours: refuse, never fetch it from pokemontcg.io ──
@@ -1254,7 +1257,9 @@ async function dealCandidates(n) {
     WHERE source ILIKE '%tcgplayer%' AND price_usd > 0
     ORDER BY price_usd DESC LIMIT $1`, [n * 5]);
   return r.rows.map(x => x.card_api_id)
-    .filter(id => backcheck.familyOf(id) && !deals_.EXCLUDED[id]).slice(0, n);
+    // Held cards (pricehold.js) have no headline, so the query above already
+    // drops them; said again here so the pool cannot pick one by another route.
+    .filter(id => backcheck.familyOf(id) && !deals_.EXCLUDED[id] && !pricehold.heldFor(id)).slice(0, n);
 }
 
 const dealJob = { running: false, runId: null, startedAt: null, finishedAt: null, total: 0, done: 0, picks: 0,

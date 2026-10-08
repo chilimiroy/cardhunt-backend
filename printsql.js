@@ -60,13 +60,18 @@ function notSecondReadingSql(ph = 'ph') {
 // ph: the price_history alias. c: the cards alias (must carry `variants`).
 // Base printing AND base edition AND not a second reading: every headline
 // reader already calls this, so each rule reaches all of them at once (rule 5).
+// A HELD card (pricehold.js: two of our cards priced as one TCGplayer
+// product, mapping unconfirmed) has no headline at all — not a real row and
+// not an estimate. Here, so every headline reader drops it at once.
+const pricehold = require('./pricehold');
 function basePrintingSql(ph = 'ph', c = 'c') {
   return `((COALESCE(${ph}.variant, '') NOT LIKE 'reverse%'
      OR (${c}.variants IS NOT NULL AND NOT EXISTS (
            SELECT 1 FROM jsonb_array_elements(${c}.variants->'printings') vp
            WHERE vp->>'key' NOT LIKE 'reverse%')))
      AND ${baseEditionSql(ph)}
-     AND ${notSecondReadingSql(ph)})`;
+     AND ${notSecondReadingSql(ph)}
+     AND ${pricehold.notHeldSql(ph)})`;
 }
 
 // The same rule in JS, for a row already in hand — used ONLY by tests to

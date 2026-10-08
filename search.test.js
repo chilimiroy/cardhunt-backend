@@ -33,6 +33,8 @@ ok('the bar: a Search item between Home and Sets, opening the search screen',
 ok('the bar\'s search box submits through doSearch', /id="nav-q"[^>]*doSearch\(this\.value\)/.test(markup));
 ok('no game picker, no "Coming soon" alert, no pickGame (never defined)', !/class="sgg"|Choose a game|alert\('Coming soon!'\)|pickGame\(/.test(markup + code));
 ok('no second set of language chips (results-lang-chip)', !/results-lang-chip|switchResultsLang/.test(code));
+ok('the breadcrumb and the answer start hidden, and hidden wins over .bc{display:flex}',
+  /<div class="bc" id="search-bc" hidden>/.test(H.replace(/\r/g, '')) && /#search-bc\[hidden\],#search-results\[hidden\]\{display:none!important\}/.test(H));
 ok('Back from a card returns to the search screen with its answer (no reset on SS)', !/search-results'\)\.hidden = true/.test(fn('SS')));
 
 console.log('\n  its content: three sections, in order');

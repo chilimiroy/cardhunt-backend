@@ -1,5 +1,62 @@
 # CardHunt — Progress Log
 
+## 2026-10-08 (licence) — the eBay API License Agreement, read, and what it removed
+
+Read in the browser (developer.ebay.com/join/api-license-agreement answers 403
+to scripts) on 2026-10-08. Roy's rule: never risk API access; where a reading
+is uncertain, remove the thing. Allowed: a listing's own price, and a link to it.
+Pinned by `ebayterms.test.js`.
+
+- **§9.5** (Restricted Activities, 5th item): "Use eBay Content, either alone
+  or in combination with third-party information, to suggest or model prices
+  for items listed on eBay Site." Removed: the grade value box's eBay median
+  (`gradePrice`, never computed now; the estimate box stays, labelled
+  estimate); "median $X" in the print-run groups ("from $Y" stays);
+  `gradeprices.js --write` (exits 2 before running; the INSERT is deleted;
+  0 `ebay_median` rows ever existed). Kept and relabelled: the headline is
+  "the cheapest trusted listing" (a listing's own price), never "this price";
+  every discount says "below the TCGplayer market price" (`deals.refLabel`).
+- **§8.1(d)**: "You must have eBay's express prior written permission to use
+  or display eBay Content in any way that enables derivation of, including
+  without limitation, any of the following: Any site-wide statistics across
+  eBay Sites or within any eBay Site; Take-up rates for enhanced listings ...;
+  Statistics relating to the performance (financial or otherwise) of any eBay
+  Service (for example, gross merchandise sales); Average selling price or
+  gross merchandise sold for any eBay category." **Ruling (Roy): outlier.js's
+  medians are per card, per view, of asking prices, never shown, never
+  stored — outside every listed item.** To keep them "never shown",
+  `publicOutliers` strips median/low/high/spread/bands from the payload, and
+  no flag reason prints an eBay-derived number (it names the yardstick).
+- **§8.1(c)**: listing information at most 6 h older than eBay's, the age
+  disclosed. **§8.1(b)(1)**: delete content no longer publicly available.
+  **§3.1(b)**: intermediate copies only as needed, deleted after. So the deals
+  shelf may store picks: refreshed every 3 h, found-at shown, a listing no
+  longer live removed (multi-item status check). The archive's "never
+  stored" note is corrected in place.
+- **§8.1(b)(2)**: eBay Content "may not be co-mingled or combined with
+  non-eBay Content ... must be visually isolated from third-party listings or
+  other non-eBay information" — a layout proposal is owed to Roy, not built.
+- Moved out of CLAUDE.md for budget (pinned by `brand.test.js`): mark C
+  `#C62128` both themes, Z `#686858` light / `#EBE7DB` dark; wordmark Card
+  `#C62128` light / `#C54748` dark, Zon as the Z; hairline edge in dark only
+  (the C is 2.86:1 on the bar).
+
+## 2026-10-08 (deals on) — the shelf, its ceiling, and prerelease
+
+- On for approved accounts, on the vouching bar (`deals.pickVouched`, one
+  definition for shelf / follow-up / probe). 15-60% below; past 60% skipped
+  (Lugia 185 sold as 186 at 85%). "HP" away from a hit-point number skipped.
+- "Prerelease" a printing conflict outside a set's first 12 months: 9,958
+  kept titles, 86 newly refused (83 Dark Gyarados, PRERELEASE stamp seen on
+  5 of 5 looked at; Uxie, 2 Rocket's Zapdos with reprint stamps), 0 newly
+  kept; 3 early-copy SIRs kept. No catalogue card is a prerelease printing.
+- Live bar, 40 cards: 6 picks; 5 look clean, Dark Gyarados again prerelease-
+  stamped under a silent title -> excluded (`deals.EXCLUDED`, with its removal
+  condition) until a PRERELEASE stamp template catches it.
+- Stamp misses (`stampmiss.fixture.json`): the 16 visible stamps scored
+  0.542-0.699 at 50-89 px — on the stamp in every crop, under 0.70. 40 scales
+  instead of 10: 9/16 reach 0.70, genuine max unchanged (0.592). Not shipped.
+
 ## 2026-10-08 (Set split) — eBay's Set field cannot refuse; and the deals bar could not pick twice
 
 ### Option S, measured both ways (`setprobe ?split=1`, `114d87b`; ~150 tooling calls)

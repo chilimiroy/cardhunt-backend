@@ -9,7 +9,7 @@ const deals = require('./deals.js');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };
 
-const ref = { price: 100, isReal: true, current: true };
+const ref = { price: 100, isReal: true, current: true, source: 'tcgdex_tcgplayer_holofoil' };
 const view = (o) => Object.assign({ listings: [], stampGate: { applied: true, kind: 'sibling', pending: 0 },
   materialCheck: { applied: true, pending: 0 } }, o || {});
 const row = (o) => Object.assign({ live: true, saleType: 'fixed', shippingKnown: true, landed: 60, price: 55, source: 'ebay',
@@ -27,7 +27,7 @@ console.log('\n  remove ONE piece of evidence -> skipped, saying which');
 const cases = [
   ['flagged by outlier.js', row({ suspect: 'unusually-cheap' }), null, /flagged/],
   ['shipping not stated', row({ shippingKnown: false }), null, /shipping/],
-  ['less than 15% below the price', row({ landed: 95 }), null, /below a current measured price/],
+  ['less than 15% below the price', row({ landed: 95 }), null, /below the TCGplayer market price/],
   ['photo check pending', row({ stamp: { state: 'pending' } }), null, /not checked yet|pending/],
   ['photo check never ran on the row', row({ stamp: undefined }), null, /not run/],
   ['a sibling check could not run (no reference)', row(), view({ stampGate: { applied: true, kind: 'sibling', notRun: [{ label: 'X #2' }] } }), /could not run/],

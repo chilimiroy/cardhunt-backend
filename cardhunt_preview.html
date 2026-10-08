@@ -1038,7 +1038,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
             <div class="cd-view cd-view-boxes">
               <div class="pboxes">
                 <div class="pbox"><div class="pbl">Market value</div><div class="pbv" id="cd-mkt">—</div><div class="pbs up" id="cd-chg"></div></div>
-                <div class="pbox"><div class="pbl">Lowest listing</div><div class="pbv" id="cd-low" style="color:var(--t)">—</div><div class="pbs" id="cd-lowsrc" style="color:var(--mu)"></div></div>
+                <div class="pbox"><div class="pbl">Cheapest trusted listing</div><div class="pbv" id="cd-low" style="color:var(--t)">—</div><div class="pbs" id="cd-lowsrc" style="color:var(--mu)"></div></div>
                 <div class="pbox"><div class="pbl">Last sold</div><div class="pbv" id="cd-sold">—</div><div class="pbs" id="cd-soldd" style="color:var(--mu)"></div></div>
               </div>
               <div style="background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:14px 18px;box-shadow:var(--sh)">
@@ -2746,7 +2746,8 @@ function setLowestFromListings(d, grade) {
   lo.setAttribute('data-gated', '1');
   if (d && d.cheapestLive != null) {
     lo.textContent = fmtCurrency(Number(d.cheapestLive));
-    ls.textContent = gradeText(grade) + ' · checked listing, landed';
+    // A listing's own price — never "the card's price" (Roy, 2026-10-08).
+    ls.textContent = gradeText(grade) + ' · the listing\'s own price, delivered';
   } else {
     // "None live" and "a marketplace did not answer" are different facts.
     var src = (d && d.sources) || {};
@@ -3633,9 +3634,11 @@ function livePrintRuns(rows) {
     : null;
   if (!groups) return rows.map(liveRow).join('');
   return groups.map(function (g) {
-    var stats = g.median != null
-      ? (g.thin ? g.priced + ' priced &mdash; too few for a market price, median '
-                : 'median ') + fmtCurrency(g.median) + ' &middot; from ' + fmtCurrency(g.low)
+    // A real listing's own price only ("from $Y"). The group median was
+    // removed 2026-10-08 (Roy; eBay API licence §9.5 — no price modelled
+    // from eBay Content).
+    var stats = g.low != null
+      ? 'from ' + fmtCurrency(g.low)
       : (g.count ? 'no usable price' : 'no live listing states this print run');
     return '<div class="lrun" data-run="' + liveEsc(g.run) + '" style="margin-top:14px">'
       + '<div style="display:flex;justify-content:space-between;gap:10px;align-items:baseline;'
@@ -4360,11 +4363,12 @@ function liveOutlierNote(d){
   // When most of the feed is wrong its median is the fakes' (Shining
   // Charizard, 2026-10-04): the server then judges against the card's own
   // stored price, and the note says which yardstick was used.
+  // No eBay-derived number on screen (2026-10-08, eBay API licence §9.5 and
+  // §8.1(d)): the yardstick is named, never priced. The catalogue price is
+  // ours (TCGplayer via TCGdex), so it may be shown.
   var basis = o.basis === 'catalogue' && o.basisPrice
-    ? 'Price check: against this card’s catalogue price ' + fmtCurrency(Number(o.basisPrice))
-      + ' (the ' + o.priced + ' listings’ own median, ' + fmtCurrency(Number(o.median))
-      + ', sits below it)'
-    : 'Price check: median ' + fmtCurrency(Number(o.median)) + ' across ' + o.priced + ' listings';
+    ? 'Price check: against this card’s TCGplayer market price ' + fmtCurrency(Number(o.basisPrice))
+    : 'Price check: against the other ' + o.priced + ' listings of this card';
   return '<div style="font-size:10px;color:var(--fa);margin-top:6px">'
     + basis
     + (o.flagged
@@ -4426,50 +4430,10 @@ function liveSourceNote(d){
     + (d.tookMs ? ' \u00b7 ' + d.tookMs + 'ms' : '') + '</div>';
 }
 
-// T2. The API returns an aggregate computed from the listings that just
-// passed the gate: median landed price, sold kept apart from active, edition
-// kept apart from edition, sample size attached. When it is worth showing it
-// replaces the multiplier estimate above — and when it is not (one listing,
-// two listings) it appears beside the estimate as evidence rather than
-// pretending to be a market price. The judgement lives in gradeprice.js so
-// the API and the page cannot disagree about what counts as measured.
-function applyMeasuredGrade(d){
-  var host = document.getElementById('cd-gradeval');
-  if (!host || !d || !d.gradePrice) return;
-  if (!(window.GradePrice && window.GradePrice.priceFor)) return;
-  var card = LF.card || S.currentCard;
-  if (!card) return;
-
-  var base = getBase(card);
-  var p = window.GradePrice.priceFor(d.gradePrice, d.grade, base, gradeMult(d.grade));
-  if (!p) return;
-
-  var ed = p.edition ? ' &middot; ' + liveEsc(p.edition) : '';
-  var extra = '';
-  if (p.estimated) {
-    if (p.observed) {
-      extra = '<div style="font-size:11px;color:var(--fa);text-align:right;max-width:220px">'
-        + 'Seen now: ' + fmtCurrency(p.observed.median) + ' &mdash; '
-        + liveEsc(p.observed.label) + '</div>';
-    }
-    if (!extra) return;              // nothing measured, leave the estimate alone
-    host.lastElementChild.outerHTML = extra;
-    return;
-  }
-
-  var range = (p.low != null && p.high != null && p.low !== p.high)
-    ? fmtCurrency(p.low) + '&ndash;' + fmtCurrency(p.high) : '';
-  host.innerHTML =
-      '<div><div style="font-size:11px;color:var(--mu)">' + liveEsc(gradeText(d.grade))
-    + ' &middot; <span style="color:var(--gr);font-weight:700">measured</span>' + ed + '</div>'
-    + '<div style="font-size:20px;font-weight:800">' + fmtCurrency(p.value) + '</div>'
-    + '<div style="font-size:10px;color:var(--fa)">' + liveEsc(p.label)
-    + (p.landed ? ' &middot; landed' : ' &middot; shipping not stated by every seller')
-    + (p.premium ? ' &middot; ' + p.premium + '&times; raw' : '') + '</div></div>'
-    + '<div style="font-size:11px;color:var(--fa);text-align:right;max-width:200px">'
-    + (range ? range + '<br>' : '')
-    + 'The estimate was ' + fmtCurrency(base * gradeMult(d.grade)) + '.</div>';
-}
+// The measured grade box (a median of eBay listing prices, T2) was REMOVED
+// 2026-10-08 (Roy): eBay API licence §9.5 forbids using eBay Content to
+// suggest or model prices. The typical-grade box above stays an ESTIMATE
+// (raw price x multiplier), labelled as one.
 
 // -- What is NOT shown, and the buttons that fetch it (T2) --
 // Opening a card asks eBay US, page 1: one call. Nothing loads by itself
@@ -4749,7 +4713,6 @@ async function renderLiveListings(card, grade, opts){
       + (st.buyItNow ? ' &mdash; ' + st.buyItNow + ' Buy It Now listing' + (st.buyItNow === 1 ? ' is' : 's are')
           + ' in the other tab' : '') + '.</div>'
       + excludedNote() + unstatedBlock() + liveRefusedBlock(d) + liveSourceNote(d) + '</div>';
-    applyMeasuredGrade(d);
     return;
   }
   if (!rows.length) {
@@ -4763,7 +4726,6 @@ async function renderLiveListings(card, grade, opts){
              + 'in eBay&rsquo;s Card Condition field right now, and no shop title states it.')
           : emptyMarketNote(d))
       + '</div>'))) + excludedNote() + unstatedBlock() + liveRefusedBlock(d) + liveSourceNote(d) + '</div>';
-    applyMeasuredGrade(d);
     return;
   }
 
@@ -4791,7 +4753,6 @@ async function renderLiveListings(card, grade, opts){
       + auc.map(liveRow).join('');
     html += excludedNote() + unstatedBlock() + liveOutlierNote(d) + liveRefusedBlock(d) + liveSourceNote(d) + '</div>';
     host.innerHTML = html;
-    applyMeasuredGrade(d);
     watchDeferredRows(card, grade);
     return;
   }
@@ -4799,7 +4760,7 @@ async function renderLiveListings(card, grade, opts){
     html += '<div style="font-size:20px;font-weight:800;margin-bottom:2px">'
       + fmtCurrency(Number(d.cheapestLive)) + '</div>'
       + '<div style="font-size:11px;color:var(--mu);margin-bottom:10px">'
-      + 'cheapest buyable, landed \u00b7 ' + live.length + ' listing'
+      + 'cheapest trusted listing, delivered \u00b7 ' + live.length + ' listing'
       + (live.length === 1 ? '' : 's')
       // The headline skips flagged rows, so it has to say so \u2014 otherwise
       // "cheapest" reads as a promise it is not making.
@@ -4811,7 +4772,7 @@ async function renderLiveListings(card, grade, opts){
       // Said plainly (Roy): a skipped bargain is never hidden, only not the price.
       + (d.headlineFloor && d.headlineFloor.skippedCheaper
           ? ' · ' + d.headlineFloor.skippedCheaper + ' cheaper listing'
-            + (d.headlineFloor.skippedCheaper === 1 ? ' is' : 's are') + ' not used for this price because the seller'
+            + (d.headlineFloor.skippedCheaper === 1 ? ' is' : 's are') + ' not used as the cheapest trusted listing because the seller'
             + (d.headlineFloor.skippedCheaper === 1 ? ' has' : 's have') + ' fewer than ' + d.headlineFloor.minScore
             + ' feedback or under ' + d.headlineFloor.minPercent + '% positive — '
             + (d.headlineFloor.skippedCheaper === 1 ? 'it is' : 'they are') + ' still listed below'
@@ -4836,7 +4797,6 @@ async function renderLiveListings(card, grade, opts){
   html += excludedNote() + unstatedBlock()
         + liveOutlierNote(d) + liveRefusedBlock(d) + liveSourceNote(d) + '</div>';
   host.innerHTML = html;
-  applyMeasuredGrade(d);
   watchDeferredRows(card, grade);
 }
 
@@ -5907,7 +5867,9 @@ async function loadHomeDeals() {
   }
   host.innerHTML = d.deals.map(function (x) {
     var l = x.listing;
-    var extra = '<div class="tmove up">' + fmtCurrency(l.landed) + ' delivered · ' + Math.round(x.discount * 100) + '% below'
+    // The discount names its yardstick (Roy, 2026-10-08): "below the TCGplayer market price".
+    var extra = '<div class="tmove up">' + fmtCurrency(l.landed) + ' delivered · ' + Math.round(x.discount * 100) + '% below the '
+      + liveEsc(x.priceLabel || 'TCGplayer market price')
       + '<br><span class="was">' + liveEsc(l.sourceLabel || l.source || '') + ' · seen ' + Math.max(1, Math.round(x.listing_age_sec / 60)) + ' min ago</span></div>'
       + (l.url ? '<a class="tdeal" href="' + liveEsc(l.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">View listing ↗</a>' : '');
     return cardSummaryTile({ cardId: x.cardId, name: x.name,
@@ -6760,7 +6722,7 @@ var LANG_JA = {
   'Price: High → Low': '価格：高い → 安い', 'Price: Low → High': '価格：安い → 高い',
   'Rarity': 'レアリティ', 'Rarity:': 'レアリティ:', 'Type:': 'タイプ:', 'All': 'すべて',
   '🔔 Set Alert': '🔔 アラート設定', '🤍 Watch': '🤍 ウォッチ', 'Set': 'セット',
-  'Market value': '相場', 'Lowest listing': '最安出品', 'Last sold': '直近の落札', 'PRICE POSITION': '価格の位置',
+  'Market value': '相場', 'Cheapest trusted listing': '信頼できる最安出品', 'Last sold': '直近の落札', 'PRICE POSITION': '価格の位置',
   'Recorded low:': '記録上の最安:', 'Recorded high:': '記録上の最高:', 'Price history —': '価格推移 —',
   'Loading recorded prices…': '記録価格を読み込み中…', '30-day avg': '30日平均', '90-day avg': '90日平均',
   'Highest recorded': '記録上の最高', 'Lowest recorded': '記録上の最安',
@@ -6858,7 +6820,7 @@ var LANG_ZH_TW = {
   'Price: High → Low': '價格：高 → 低', 'Price: Low → High': '價格：低 → 高',
   'Rarity': '稀有度', 'Rarity:': '稀有度：', 'Type:': '類型：', 'All': '全部',
   '🔔 Set Alert': '🔔 設定提醒', '🤍 Watch': '🤍 關注', 'Set': '系列',
-  'Market value': '市場價值', 'Lowest listing': '最低刊登', 'Last sold': '最近成交', 'PRICE POSITION': '價格位置',
+  'Market value': '市場價值', 'Cheapest trusted listing': '可信的最低刊登', 'Last sold': '最近成交', 'PRICE POSITION': '價格位置',
   'Recorded low:': '紀錄最低：', 'Recorded high:': '紀錄最高：', 'Price history —': '價格走勢 —',
   'Loading recorded prices…': '正在載入紀錄價格…', '30-day avg': '30 日平均', '90-day avg': '90 日平均',
   'Highest recorded': '紀錄最高', 'Lowest recorded': '紀錄最低',
@@ -6954,7 +6916,7 @@ var LANG_ZH_CN = {
   'Price: High → Low': '价格：高 → 低', 'Price: Low → High': '价格：低 → 高',
   'Rarity': '稀有度', 'Rarity:': '稀有度：', 'Type:': '类型：', 'All': '全部',
   '🔔 Set Alert': '🔔 设置提醒', '🤍 Watch': '🤍 关注', 'Set': '系列',
-  'Market value': '市场价值', 'Lowest listing': '最低在售', 'Last sold': '最近成交', 'PRICE POSITION': '价格位置',
+  'Market value': '市场价值', 'Cheapest trusted listing': '可信的最低在售', 'Last sold': '最近成交', 'PRICE POSITION': '价格位置',
   'Recorded low:': '记录最低：', 'Recorded high:': '记录最高：', 'Price history —': '价格走势 —',
   'Loading recorded prices…': '正在加载记录价格…', '30-day avg': '30 日平均', '90-day avg': '90 日平均',
   'Highest recorded': '记录最高', 'Lowest recorded': '记录最低',
@@ -7921,6 +7883,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-308fae9-dealsempty &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-d265d36-licence &middot; click to hide</div>
 </body>
 </html>

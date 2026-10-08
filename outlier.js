@@ -113,8 +113,7 @@ function flagOutliers(listings, opts) {
   const useRef = refPrice != null && refPrice > stats.median;
   const basis = useRef ? refPrice : stats.median;
   if (basis < minMedian) {
-    stats.reason = `median $${stats.median.toFixed(2)} is below $${minMedian} — ` +
-                   'cheap cards spread widely for honest reasons';
+    stats.reason = `this card trades under $${minMedian} — cheap cards spread widely for honest reasons`;
     return { listings: out, stats };
   }
 
@@ -123,10 +122,11 @@ function flagOutliers(listings, opts) {
   stats.basisPrice = basis;
   if (useRef) stats.reference.used = true;
   stats.spread = stats.high && stats.low ? +(stats.high / stats.low).toFixed(1) : null;
+  // Shown on the page: no eBay-derived number (API licence §9.5 / §8.1(d),
+  // Roy 2026-10-08). Our catalogue price may be named; the listings' median may not.
   const against = useRef
-    ? `this card's $${basis.toFixed(2)} catalogue price (the listings' own median, ` +
-      `$${stats.median.toFixed(2)}, sits below it)`
-    : `the $${basis.toFixed(2)} median for this card`;
+    ? `this card's $${basis.toFixed(2)} catalogue price`
+    : 'the other listings of this card';
 
   stats.judgedOn = opts.judgeBy === 'delivered' ? 'delivered price' : 'item price';
   for (const l of out) {
@@ -135,8 +135,7 @@ function flagOutliers(listings, opts) {
     const r = p / basis;
     if (r <= hardRatio) {
       l.suspect = 'implausible';
-      l.suspectReason = `$${p.toFixed(2)} is ${Math.round(1 / r)}x below ${against} — ` +
-        'almost certainly not the real card';
+      l.suspectReason = `$${p.toFixed(2)} is far below ${against} — almost certainly not the real card`;
       stats.flagged++;
     } else if (r <= ratio) {
       l.suspect = 'unusually-cheap';
@@ -221,10 +220,7 @@ function flagReprintPriced(listings, reprint, opts) {
   stats.originalAbove = above.length;
   stats.originalAboveMedian = above.length ? median(above) : null;
   if (above.length < minAbove || stats.originalAboveMedian < stats.median * separation) {
-    stats.reason = `this card does not price apart from ${stats.label} here ` +
-      `(${above.length} listings above $${hi}` +
-      (above.length ? `, median $${stats.originalAboveMedian.toFixed(2)}` : '') +
-      `) — price is no evidence either way`;
+    stats.reason = `this card does not price apart from ${stats.label} here — price is no evidence either way`;
     return { listings: out, stats };
   }
   // ...and the catalogue must agree, independently of this feed. A few
@@ -248,9 +244,7 @@ function flagReprintPriced(listings, reprint, opts) {
     return { listings: out, stats };
   }
   if (stats.marketPrice < stats.median * separation) {
-    stats.reason = `stored market price $${stats.marketPrice.toFixed(2)} is under ` +
-      `${separation}x the ${stats.label} median ($${stats.median.toFixed(2)}) — ` +
-      'the catalogue does not say this card prices apart, so price is no evidence';
+    stats.reason = `the stored market price does not say this card prices apart from ${stats.label}, so price is no evidence`;
     return { listings: out, stats };
   }
 
@@ -264,9 +258,7 @@ function flagReprintPriced(listings, reprint, opts) {
       // Damaged" at $19.99 is the genuine card at a fair price for it.
       if (PLAYED.has(l.sellerCondition)) { stats.exemptPlayed++; continue; }
       l.suspect = 'reprint-priced';
-      l.suspectReason = `$${p.toFixed(2)} is priced at the ${stats.label} median ` +
-        `($${stats.median.toFixed(2)}; it trades $${lo.toFixed(0)}-$${hi.toFixed(0)}) — ` +
-        `may be the reprint. This card's other listings run from $${Math.min(...above).toFixed(0)}`;
+      l.suspectReason = `$${p.toFixed(2)} is priced where the ${stats.label} reprint trades — may be the reprint`;
       stats.flagged++;
     }
   }

@@ -429,10 +429,8 @@ counted (`i18n.test.js` prints it). Built sentences, server text: English.
   BEFORE its first listings call, else Raw NM (`restore.test.js`).
 - Home: search, deals (hidden while off), games, movers, alerts (`door.test.js`).
 - CardZon is display only; the CZ mark is ONE inline `<symbol id="cz-mark">` (no
-  image file), 42px nav, 30px at <=900 (`brand.test.js`). Colours, sampled from
-  Roy's render: mark C `#C62128` both themes, Z `#686858` light / `#EBE7DB` dark;
-  wordmark Card `#C62128` light / `#C54748` dark, Zon as the Z. Hairline edge in
-  dark only (the C is 2.86:1 on the bar).
+  image file), 42px nav, 30px at <=900 (`brand.test.js`, which pins the
+  colours sampled from Roy's render and the dark-only hairline; values: PROGRESS 2026-10-08).
 
 ## Accounts — step 1 (sign-in) and step 2 (roles) SHIPPED 2026-10-06 (T6)
 `auth.js` verifies the token (ES256 via JWKS). `/api/me` is the ONLY source of the
@@ -767,6 +765,11 @@ no auctions until asked). (PROGRESS 2026-10-04)
 **A read endpoint must never write**; eBay listings may be stored only to
 display them: <= 6 h old with the age shown, deleted once not public (API
 licence §8.1(b)(c), read 2026-10-08 — the old "never stored" was stricter).
+**Licence rulings (Roy, 2026-10-08; quotes: PROGRESS 2026-10-08 (licence)):**
+§9.5 — no eBay price median shown or stored (grade box, print-run median
+removed); a discount names "TCGplayer market price". §8.1(d) — outlier.js
+medians are per card, per view, never shown, never stored: OUTSIDE the
+clause (`ebayterms.test.js`). Uncertain reading = remove the thing.
 *Archive:* "A read endpoint must never write", "eBay listings are cached, never stored"
 
 **Before inventing a source, check what the current query already computes.**

@@ -67,8 +67,10 @@ chk('with the stored $1,700.99 the $72.49 replica is flagged',
 chk('...and the C$100 one ($70.23)', !!anch.listings.find(l => l.landed === 70.23).suspect);
 chk('basis says catalogue, and the feed median is still reported',
     anch.stats.basis === 'catalogue' && anch.stats.reference.used && anch.stats.median === feed.stats.median);
-chk('the reason names both numbers', /\$1700\.99 catalogue price/.test(anch.listings.find(l => l.landed === 72.49).suspectReason) &&
-    /\$420\.97/.test(anch.listings.find(l => l.landed === 72.49).suspectReason));
+// eBay API licence §9.5 / §8.1(d) (Roy, 2026-10-08): the reason names OUR
+// catalogue price and never the listings' median.
+chk('the reason names the catalogue price and NOT the listings\' median', /\$1700\.99 catalogue price/.test(anch.listings.find(l => l.landed === 72.49).suspectReason) &&
+    !/420\.97/.test(anch.listings.find(l => l.landed === 72.49).suspectReason));
 chk('KEEPS: 0 of 26 genuine copies flagged (cheapest $944.21)', count(anch, 'g') === 0);
 chk('replicas flagged rise (27 -> 53 of 116)', count(feed, 'm') === 27 && count(anch, 'm') === 53);
 // A reference never lowers the bar: below the feed median it is not used.
@@ -131,7 +133,7 @@ chk('the payload\'s headline fields come from headlineEligible, and it says how 
     && /headlineFloor: \{ minScore: outlier\.HEADLINE_SELLER\.minScore/.test(S));
 const P = require('fs').readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
 chk('the page says plainly beside the headline: how many, why, and that they are still listed',
-    /d\.headlineFloor && d\.headlineFloor\.skippedCheaper/.test(P) && /not used for this price because the seller/.test(P) && /still listed below/.test(P));
+    /d\.headlineFloor && d\.headlineFloor\.skippedCheaper/.test(P) && /not used as the cheapest trusted listing because the seller/.test(P) && /still listed below/.test(P));
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

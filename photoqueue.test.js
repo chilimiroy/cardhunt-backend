@@ -138,7 +138,8 @@ sc._setFetch(async url => { fetched.push(url.match(/\/g\/(\w+)\//)[1]);
     ok('a waiting row carries its item id; rows coming into view are sent to /compare, once each, prices open only',
        /data-defer-item=/.test(fnP('liveRow')) && /new IntersectionObserver/.test(fnP('watchDeferredRows')) && /pricesOpen\(\)/.test(fnP('watchDeferredRows'))
        && /DEFER\.asked\[key \+ '\|' \+ id\]/.test(fnP('watchDeferredRows')) && /'\/compare'/.test(fnP('sendDeferred')) && /items\.forEach\(function \(id\) \{ delete DEFER\.asked/.test(fnP('sendDeferred')));
-    ok('…watched after every draw of the panel', (P.match(/applyMeasuredGrade\(d\);\n\s*watchDeferredRows\(card, grade\);/g) || []).length === 2);
+    // (applyMeasuredGrade was removed 2026-10-08, eBay API licence §9.5 — the draw is the anchor now)
+    ok('…watched after every draw of the panel', (P.replace(/\r/g, '').match(/host\.innerHTML = html;\n\s*watchDeferredRows\(card, grade\);/g) || []).length === 2);
   }
 
   console.log('\n  5. a smaller photo for comparisons only — never for a stamp');

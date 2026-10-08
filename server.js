@@ -1216,7 +1216,7 @@ app.get('/api/deals', access.priced, async (req, res) => {
     if (!r.pick) { skipped['no row could be vouched for'] = (skipped['no row could be vouched for'] || 0) + 1; continue; }
     const c = v.payload.card || {}, l = r.pick.listing;
     deals.push({ cardId: v.cardId, name: c.name, number: c.number, set: c.set, image: c.image,
-      price: ref.price, priceSource: ref.source, priceDate: ref.recordedAt, discount: r.pick.discount,
+      price: ref.price, priceSource: ref.source, priceLabel: deals_.refLabel(ref), priceDate: ref.recordedAt, discount: r.pick.discount,
       evidence: r.pick.cleared,
       listing: { title: l.title, landed: l.landed, price: l.price, shipping: l.shipping, currency: 'USD', url: l.url,
                  source: l.source, sourceLabel: l.sourceLabel, marketplace: l.marketplace, condition: l.condition },
@@ -4021,6 +4021,21 @@ function refusedRowsOf(sources, j) {
   return { rows, total: Math.max(total, rows.length) };
 }
 
+// The price check as the page may see it (Roy, 2026-10-08): whether it ran,
+// what it flagged, and its yardstick NAMED — never an eBay-derived number.
+// The listings' median, low/high, spread and the reprint bands stay inside
+// the server (eBay API licence §8.1(d): per card, per view, never shown,
+// never stored; §9.5: no price modelled from eBay Content reaches a viewer).
+// basisPrice is passed only when it is OUR catalogue price.
+function publicOutliers(o) {
+  if (!o) return o;
+  const ref = o.reference ? { price: o.reference.price, source: o.reference.source, used: !!o.reference.used, why: o.reference.why || null } : undefined;
+  return { applied: !!o.applied, priced: o.priced, flagged: o.flagged || 0, reason: o.reason || null,
+    basis: o.basis || null, basisPrice: o.basis === 'catalogue' ? o.basisPrice : null, judgedOn: o.judgedOn || null,
+    reference: ref,
+    reprints: Array.isArray(o.reprints) ? o.reprints.map(r => ({ reprint: r.reprint, label: r.label, applied: !!r.applied,
+      flagged: r.flagged || 0, reason: r.reason || null })) : undefined };
+}
 function buildListingsPayload(card, requestedId, grade, printing, j, sources, tookMs, progress, edition) {
   // The headline figures skip anything the outlier check flagged. This is
   // the number a buyer acts on, and "$2.08" for a card that trades at
@@ -4097,15 +4112,15 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
     // What the outlier check did, and why — reported even when it did not
     // run. "Not applied: median $0.99 is below $15" is a different fact
     // from "applied, nothing flagged".
-    outliers: j.outliers,
+    outliers: publicOutliers(j.outliers),
     // What the photo stamp gate did on THIS answer: refused, kept, and how
     // many photos are still being checked (the page re-reads while > 0).
     stampGate: j.stamp ? Object.assign({}, j.stamp, { pool: stampcheck.poolState() }) : null,
     backCheck: j.back || null,
     materialCheck: j.material ? Object.assign({}, j.material, { refusedRows: undefined }) : null,
-    // What this grade is worth, measured from the listings that passed the
-    // gate. Computed, not stored: this is a read endpoint.
-    gradePrice: gp.aggregate(listings, { grade }),
+    // gradePrice (a median of the eBay listings, "what this grade is worth")
+    // REMOVED 2026-10-08 (Roy): API licence §9.5 — no eBay Content used to
+    // suggest or model prices. Never computed, so it cannot be shown.
     listings,
     sources,
     // Is this every listing, and if not, what is still being fetched?

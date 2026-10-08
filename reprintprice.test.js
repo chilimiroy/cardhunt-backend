@@ -40,8 +40,10 @@ const MKT = { marketPrice: 4500 };
   ok(flagged.every(p => p <= 500), 'nothing above $500 flagged');
   ok(listings.filter(l => l.landed >= 1500).every(l => !l.suspect), 'every $1,500+ original untouched');
   const r = listings.find(l => l.suspect === 'reprint-priced');
-  ok(/30th Celebration \(2026\) median/.test(r.suspectReason) && /may be the reprint/.test(r.suspectReason),
-     'reason names what it matched: ' + r.suspectReason);
+  // No eBay-derived number in the text (§9.5, Roy 2026-10-08): the family, not its median or band.
+  ok(/30th Celebration \(2026\) reprint trades/.test(r.suspectReason) && /may be the reprint/.test(r.suspectReason)
+     && (r.suspectReason.match(/\$/g) || []).length === 1,
+     'reason names what it matched, and only the row\'s own price: ' + r.suspectReason);
   ok(!outlier.trustworthy(r), 'a reprint-priced row cannot be the headline cheapest');
   ok(outlier.suspectRank(r) === 1, 'it sorts after clean rows');
   ok(listings.length === AQUAPOLIS.length, 'FLAGS, never removes: every row is still there');
@@ -110,8 +112,8 @@ const MKT = { marketPrice: 4500 };
 }
 {
   const { stats } = outlier.flagReprintPriced(rows(AQUAPOLIS), R30, { marketPrice: 900 });
-  ok(!stats.applied && stats.reason.includes('stored market price $900'),
-     'a stored price under 2.5x the reprint median vetoes the feed: ' + stats.reason);
+  ok(!stats.applied && /stored market price does not say this card prices apart/.test(stats.reason) && !/\$/.test(stats.reason),
+     'a stored price under 2.5x the reprint median vetoes the feed (no number in the text): ' + stats.reason);
 }
 {
   const { stats } = outlier.flagReprintPriced(rows(AQUAPOLIS), R30, { marketPrice: 0 });

@@ -121,6 +121,15 @@ function solidRows(payload, ref, excluded) {
   return solid.sort((a, b) => Number(a.landed) - Number(b.landed));
 }
 const discountOf = (l, ref) => 1 - Number(l.landed) / ref.price;
+// The discount always NAMES what it is measured against (Roy, 2026-10-08):
+// "41% below the TCGplayer market price" — a named third party's price,
+// plainly not one we propose for the eBay item (API licence §9.5). Our stored
+// prices come from TCGplayer (via TCGdex, or TCGplayer directly); anything
+// else is named by its own source rather than passed off as "market".
+function refLabel(ref) {
+  const src = String((ref && ref.source) || '');
+  return /tcgplayer/i.test(src) ? 'TCGplayer market price' : 'stored price (' + (src || 'unknown source') + ')';
+}
 const refUsable = ref => ref && ref.isReal !== false && ref.price > 0 && ref.current;
 
 // One view's best candidate. payload: a cached /api/listings payload; ref:
@@ -178,9 +187,9 @@ function vouchFree(l, payload, ref) {
   const no = notADeal(l, basePrintingOf(payload));
   if (no) return { skip: no };
   cleared.push('live Buy It Now, shipping stated, unflagged (outlier / reprint price / year / novelty), no other printing or edition stated');
-  if (!refUsable(ref) || discountOf(l, ref) < MIN_DISCOUNT) return { skip: 'not ' + Math.round(MIN_DISCOUNT * 100) + '% below a current measured price' };
-  if (discountOf(l, ref) > MAX_DISCOUNT) return { skip: 'more than ' + Math.round(MAX_DISCOUNT * 100) + '% below a current measured price — a discount that large is itself evidence something is wrong' };
-  cleared.push(Math.round(discountOf(l, ref) * 100) + '% below the current measured price');
+  if (!refUsable(ref) || discountOf(l, ref) < MIN_DISCOUNT) return { skip: 'not ' + Math.round(MIN_DISCOUNT * 100) + '% below the ' + refLabel(ref) };
+  if (discountOf(l, ref) > MAX_DISCOUNT) return { skip: 'more than ' + Math.round(MAX_DISCOUNT * 100) + '% below the ' + refLabel(ref) + ' — a discount that large is itself evidence something is wrong' };
+  cleared.push(Math.round(discountOf(l, ref) * 100) + '% below the ' + refLabel(ref));
   const sg = (payload && payload.stampGate) || {};
   if (sg.notRun && sg.notRun.length) return { skip: 'a photo check could not run on this card (' + sg.notRun.map(r => r.label).join(', ') + ')' };
   if (sg.applied) {
@@ -262,10 +271,10 @@ function describeRule() {
     + 'edition other than the priced one, a seller with ' + VOUCH.minFeedbackScore + '+ feedback at ' + VOUCH.minFeedbackPercent
     + '%+, every photo check that applies run and passed, at least ' + VOUCH.minPhotos + ' photos and a genuine card back among them) '
     + 'on a card opened in the last 15 minutes, between ' + Math.round(MIN_DISCOUNT * 100) + '% and ' + Math.round(MAX_DISCOUNT * 100)
-    + '% below the card\'s current measured price — further below is itself a warning. Nothing is fetched to fill this shelf; '
+    + '% below the card\'s TCGplayer market price — further below is itself a warning. Nothing is fetched to fill this shelf; '
     + 'opening a card checks the backs of at most ' + DEAL_BACK_MAX + ' of its candidates (one eBay item lookup each, once).';
 }
 
 module.exports = { ENABLED, OFF_REASON, MIN_DISCOUNT, MAX_DISCOUNT, EXCLUDED, MIN_TRUSTED, DEAL_BACK_MAX, BELOW_NM, basePrintingOf, notADeal, noGenuineBack,
-  VOUCH, vouchFree, vouchPhotos, discountOf, hpAmbiguous, pickVouched,
+  VOUCH, vouchFree, vouchPhotos, discountOf, refLabel, hpAmbiguous, pickVouched,
                    pickDeal, backCandidates, rankDeals, describeRule };

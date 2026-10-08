@@ -7392,8 +7392,15 @@ function reportItem(x, d){
   head.appendChild(card);
   head.appendChild(reportsEl('span', 'rep-state ' + x.state, x.state));
   item.appendChild(head);
-  item.appendChild(reportsEl('div', null, (d.reasons[x.reason] || x.reason) + ' \u00b7 ' + (x.source || '')
-    + (x.price_shown != null ? ' \u00b7 shown at ' + x.price_shown + ' ' + (x.price_currency || '') : '')));
+  item.appendChild(reportsEl('div', null, (d.reasons[x.reason] || x.reason) + ' \u00b7 ' + (x.source || '')));
+  // What WE showed when the report was made — never eBay's current price. An
+  // eBay price is cleared once a report is actioned or dismissed, or after
+  // 30 days (reports.clearPrices); the line says so rather than going blank.
+  var pr = reportsEl('div', null, x.price_shown != null
+    ? 'Price we showed at report time: ' + Number(x.price_shown).toFixed(2) + ' ' + (x.price_currency || '')
+      + (x.source === 'ebay' ? ' (not eBay\u2019s current price)' : ' (not the listing\u2019s current price)')
+    : (x.source === 'ebay' ? 'Price at report time: no longer kept (cleared when actioned or dismissed, or after 30 days)' : 'No price recorded'));
+  pr.style.color = 'var(--mu)'; item.appendChild(pr);
   if (x.details) item.appendChild(reportsEl('div', 'rep-details', x.details));
   var who = reportsEl('div', null, 'Reported by ' + (x.reporter_email || x.user_id) + ' \u00b7 ' + new Date(x.created_at).toLocaleString());
   who.style.color = 'var(--mu)'; item.appendChild(who);
@@ -8072,6 +8079,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-42cba24-trendsets &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-e064943-pricekeep &middot; click to hide</div>
 </body>
 </html>

@@ -34,6 +34,34 @@ const RATE = [
   { n: 30, minutes: 24 * 60, label: '30 reports in 24 hours' },
 ];
 
+// ── The stored eBay price does not outlive its use (Roy, 2026-10-08) ──
+// A report keeps listing_id and listing_url. The price we showed is eBay's
+// data: it is cleared once the report is actioned or dismissed, and on any
+// report older than PRICE_KEEP_DAYS whatever its state. Only eBay rows: a
+// shop's ask (Yuyu-tei) is not eBay data. Not a scheduled job: clearPrices()
+// runs when a report is filed, before every read of the masters' list and
+// after every state change — the only paths that read or write the price.
+const PRICE_KEEP_DAYS = 30;
+const PRICE_CLEAR_STATES = ['actioned', 'dismissed'];
+// The rule, for one row (reports.test.js; reportprobe.js checks the SQL
+// below gives the same answer on real rows).
+function shouldClearPrice(row, now) {
+  if (!row || row.source !== 'ebay' || row.price_shown == null) return false;
+  if (PRICE_CLEAR_STATES.indexOf(row.state) >= 0) return true;
+  const age = (now == null ? Date.now() : +now) - new Date(row.created_at).getTime();
+  return age > PRICE_KEEP_DAYS * 86400000;
+}
+function clearPricesSql() {
+  return `UPDATE listing_reports SET price_shown = NULL, price_currency = NULL
+    WHERE source = 'ebay' AND price_shown IS NOT NULL
+      AND (state IN (${PRICE_CLEAR_STATES.map(s => "'" + s + "'").join(', ')}) OR created_at < now() - interval '${PRICE_KEEP_DAYS} days')`;
+}
+// -> the number of reports whose price was cleared
+async function clearPrices(db) {
+  const r = await db.query(clearPricesSql());
+  return r.rowCount;
+}
+
 const str = (v, max) => (typeof v === 'string' ? v.trim() : v == null ? '' : String(v).trim()).slice(0, max);
 
 // The photo-check verdicts at the moment of the report, as the row carried
@@ -98,4 +126,5 @@ function rateRefusal(row) {
   return null;
 }
 
-module.exports = { REASONS, STATES, DETAILS_MAX, PHOTO_CHECKS_MAX, RATE, validate, photoChecksOf, rateSql, rateRefusal };
+module.exports = { REASONS, STATES, DETAILS_MAX, PHOTO_CHECKS_MAX, RATE, validate, photoChecksOf, rateSql, rateRefusal,
+                   PRICE_KEEP_DAYS, PRICE_CLEAR_STATES, shouldClearPrice, clearPricesSql, clearPrices };

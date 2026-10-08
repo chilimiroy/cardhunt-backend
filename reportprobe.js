@@ -33,6 +33,23 @@ async function attempts(db, A, B) {
     const aid = await mk(A, HOSTILE), bid = await mk(B, 'user B\'s report');
     const back = (await c.query('SELECT details FROM listing_reports WHERE id = $1', [aid])).rows[0].details;
     const masterView = (await c.query('SELECT count(*)::int AS n FROM listing_reports WHERE id IN ($1, $2)', [aid, bid])).rows[0].n;
+    // reports.clearPrices on real rows, against the rule (shouldClearPrice).
+    const R = require('./reports');
+    const matrix = [['ebay', 'new', 1], ['ebay', 'reviewed', 29], ['ebay', 'actioned', 0], ['ebay', 'dismissed', 2],
+                    ['ebay', 'new', 31], ['ebay', 'reviewed', 45], ['yuyutei', 'dismissed', 90]];
+    const mids = [];
+    for (const [source, state, days] of matrix) {
+      mids.push((await c.query(`INSERT INTO listing_reports (user_id, card_id, listing_id, listing_url, source, price_shown, price_currency, reason, state, created_at)
+        VALUES ($1, 'en-base1-4', 'probe-' || $2 || '-' || $3, 'https://www.ebay.com/itm/1', $2, 412.50, 'USD', 'fake', $3, now() - make_interval(days => $4))
+        RETURNING id, source, state, created_at, price_shown`, [A, source, state, days])).rows[0]);
+    }
+    const now = (await c.query('SELECT now() AS t')).rows[0].t;
+    const expected = mids.map(r => R.shouldClearPrice(r, now));
+    const cleared = await R.clearPrices(c);
+    const after = (await c.query('SELECT id, price_shown, price_currency, listing_id, listing_url FROM listing_reports WHERE id = ANY($1) ORDER BY id', [mids.map(r => r.id)])).rows;
+    const clearing = mids.map((r, i) => { const a = after.find(x => x.id === r.id);
+      return { source: r.source, state: r.state, days: matrix[i][2], expected: expected[i], cleared: a.price_shown === null,
+               keptListing: !!(a.listing_id && a.listing_url) }; });
     await c.query('SET LOCAL ROLE authenticated');
     await c.query(`SELECT set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ sub: A, role: 'authenticated' })]);
     const as = (await c.query('SELECT current_user, auth.uid() AS uid')).rows[0];
@@ -58,7 +75,7 @@ async function attempts(db, A, B) {
     await attempt('anonRead', '   anon (no session) counts every report', 'SELECT count(*)::int AS visible FROM listing_reports');
     await c.query('RESET ROLE');
     const bAfter = (await c.query('SELECT id, state FROM listing_reports WHERE id = $1', [bid])).rows;
-    return { rehearsed, as, aid, bid, attempts: out, bAfter, hostile: { sent: HOSTILE, readBack: back, equal: back === HOSTILE }, masterView };
+    return { rehearsed, as, aid, bid, attempts: out, bAfter, hostile: { sent: HOSTILE, readBack: back, equal: back === HOSTILE }, masterView, clearing, clearedCount: cleared };
   } finally { await c.query('ROLLBACK'); c.release(); }
 }
 
@@ -76,6 +93,9 @@ async function main() {
     console.log("B's report afterwards, as the server sees it: " + show(p.bAfter));
     console.log('the server\'s own connection (what /api/admin/reports, masters only, reads): ' + p.masterView + ' of the 2 reports');
     console.log('hostile details stored and read back byte for byte: ' + p.hostile.equal);
+    console.log('reports.clearPrices on real rows (cleared ' + p.clearedCount + '):');
+    for (const x of p.clearing) console.log(`   ${x.source.padEnd(8)} ${x.state.padEnd(9)} ${String(x.days).padStart(2)} days  rule:${x.expected ? 'clear' : 'keep '}  postgres:${x.cleared ? 'cleared' : 'kept   '}  listing id+url kept:${x.keptListing}${x.expected === x.cleared ? '' : '   <-- DISAGREE'}`);
+    console.log('rule and SQL agree on every row: ' + p.clearing.every(x => x.expected === x.cleared));
     console.log('(rolled back — nothing kept)');
   } finally { await db.end(); }
 }

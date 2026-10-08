@@ -1968,6 +1968,7 @@ app.post('/api/reports', access.approved, async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, created_at, state`,
       [req.account.userId, req.account.email || null, r.cardId, r.listingId, r.listingUrl, r.source,
        r.price, r.currency, r.reason, r.details, JSON.stringify(r.photoChecks)]);
+    await reports.clearPrices(db).catch(e => console.warn('[reports] clearPrices: ' + e.message));
     res.status(201).json({ ok: true, report: ins.rows[0] });
   } catch (e) {
     if (e.code === '42P01') return res.status(503).json(REPORTS_MISSING);
@@ -1977,6 +1978,8 @@ app.post('/api/reports', access.approved, async (req, res) => {
 app.get('/api/admin/reports', access.master, async (req, res) => {
   if (!db) return res.status(503).json({ error: 'database not configured' });
   try {
+    // Clear what may no longer be kept BEFORE reading: the list never shows it.
+    await reports.clearPrices(db);
     const r = await db.query(`SELECT r.id, r.created_at, r.user_id, r.reporter_email, r.card_id, c.name AS card_name, c.number AS card_number,
         c.set_name, r.listing_id, r.listing_url, r.source, r.price_shown, r.price_currency, r.reason, r.details, r.photo_checks,
         r.state, r.state_changed_by_email, r.state_changed_at
@@ -2000,7 +2003,8 @@ app.post('/api/admin/reports/:id/state', access.master, async (req, res) => {
       WHERE id = $1 RETURNING id, state, state_changed_by_email, state_changed_at`,
       [id, state, req.account.userId, req.account.email || null]);
     if (!r.rowCount) return res.status(404).json({ error: 'no such report' });
-    res.json({ ok: true, report: r.rows[0] });
+    const cleared = await reports.clearPrices(db);   // actioned / dismissed: the eBay price goes now
+    res.json({ ok: true, report: r.rows[0], pricesCleared: cleared });
   } catch (e) {
     if (e.code === '42P01') return res.status(503).json(REPORTS_MISSING);
     res.status(500).json({ error: e.message });

@@ -50,8 +50,32 @@ ok('5 in 10 minutes: refused', R.rateRefusal({ w0: 5, w1: 5 }) && /10 minutes/.t
 ok('30 in a day: refused even when the last 10 minutes are quiet', R.rateRefusal({ w0: 0, w1: 30 }) && /24 hours/.test(R.rateRefusal({ w0: 0, w1: 30 }).limit));
 ok('counted in the table, per account', /FROM listing_reports WHERE user_id = \$1/.test(R.rateSql()));
 
+console.log('\n  the stored eBay price: cleared when actioned or dismissed, or after ' + R.PRICE_KEEP_DAYS + ' days');
+const NOW = Date.parse('2026-10-08T12:00:00Z'), DAY = 86400000;
+const rep = (o) => Object.assign({ source: 'ebay', price_shown: 412.5, state: 'new', created_at: new Date(NOW - DAY).toISOString() }, o);
+ok('KEPT: a new eBay report, a day old', !R.shouldClearPrice(rep({}), NOW));
+ok('KEPT: reviewed, 29 days old (reviewed is not a final state)', !R.shouldClearPrice(rep({ state: 'reviewed', created_at: new Date(NOW - 29 * DAY).toISOString() }), NOW));
+ok('KEPT: a Yuyu-tei report, actioned and 90 days old (a shop ask is not eBay data)', !R.shouldClearPrice(rep({ source: 'yuyutei', state: 'actioned', created_at: new Date(NOW - 90 * DAY).toISOString() }), NOW));
+ok('CLEARED: actioned, a minute old', R.shouldClearPrice(rep({ state: 'actioned', created_at: new Date(NOW - 60000).toISOString() }), NOW));
+ok('CLEARED: dismissed', R.shouldClearPrice(rep({ state: 'dismissed' }), NOW));
+ok('CLEARED: new, 31 days old (whatever its state)', R.shouldClearPrice(rep({ created_at: new Date(NOW - 31 * DAY).toISOString() }), NOW));
+ok('CLEARED: reviewed, 31 days old', R.shouldClearPrice(rep({ state: 'reviewed', created_at: new Date(NOW - 31 * DAY).toISOString() }), NOW));
+ok('nothing to clear: an eBay report with no price', !R.shouldClearPrice(rep({ price_shown: null, state: 'dismissed' }), NOW));
+const CS = R.clearPricesSql();
+ok('the SQL clears the price and its currency, eBay rows only', /SET price_shown = NULL, price_currency = NULL/.test(CS) && /WHERE source = 'ebay' AND price_shown IS NOT NULL/.test(CS));
+ok('the SQL uses the same states and days as the rule', /state IN \('actioned', 'dismissed'\)/.test(CS) && new RegExp("interval '" + R.PRICE_KEEP_DAYS + " days'").test(CS));
+ok('it never touches listing_id or listing_url, and deletes nothing', !/listing_id|listing_url|DELETE/.test(CS));
+// Awaited before the summary (an unawaited assertion never runs: the file exits first).
+const clearCheck = (async () => { let sql = null; const fake = { query: async (q) => { sql = q; return { rowCount: 3 }; } };
+  const n = await R.clearPrices(fake); ok('clearPrices runs that SQL and returns the count cleared', sql === CS && n === 3); })();
+
 const S = fs.readFileSync(__dirname + '/server.js', 'utf8').replace(/\r/g, '');
 console.log('\n  the server');
+const sliceRoute = (head) => { const i = S.indexOf(head); return i < 0 ? '' : S.slice(i, S.indexOf('\n});', i)); };
+ok('clearPrices runs after a report is filed', /reports\.clearPrices\(db\)/.test(sliceRoute("app.post('/api/reports'")));
+ok('clearPrices runs BEFORE the masters\' list is read', (s => s.indexOf('reports.clearPrices(db)') >= 0 && s.indexOf('reports.clearPrices(db)') < s.indexOf('SELECT r.id'))(sliceRoute("app.get('/api/admin/reports'")));
+ok('clearPrices runs after a state change (actioned / dismissed clear at once)', (s => s.indexOf('reports.clearPrices(db)') > s.indexOf('UPDATE listing_reports SET state'))(sliceRoute("app.post('/api/admin/reports/:id/state'")));
+ok('no scheduled job: nothing sets an interval for it', !/setInterval\([^)]*clearPrices|cron[^\n]*clearPrices/i.test(S));
 ok('POST /api/reports is access.approved', /app\.post\('\/api\/reports', access\.approved/.test(S));
 ok('GET /api/admin/reports is access.master', /app\.get\('\/api\/admin\/reports', access\.master/.test(S));
 ok('POST /api/admin/reports/:id/state is access.master', /app\.post\('\/api\/admin\/reports\/:id\/state', access\.master/.test(S));
@@ -81,6 +105,9 @@ ok('the details box stops at 1000 characters', /<textarea id="report-details" ma
 ok('a report that did not send is amber, and says so', /reportSay\('The report was not sent: '/.test(fn('reportSend')) && /m\.className = bad \? 'msg-warn'/.test(fn('reportSay')));
 ok('Listing reports beside Approve accounts, masters only', /AUTH\.role === 'master' \? '<button[^']*onclick="adminOpen\(\)">Approve accounts<\/button>'\s*\+ '<button[^']*onclick="reportsOpen\(\)">Listing reports<\/button>'/.test(H));
 const view = ['reportsRender', 'reportItem', 'reportsEl', 'reportsSetState', 'reportSay'].map(fn).join('\n');
+ok('the masters\' view labels the price as what WE showed at report time, not eBay\'s current price',
+  /Price we showed at report time: /.test(fn('reportItem')) && /not eBay\\u2019s current price/.test(fn('reportItem')));
+ok('a cleared eBay price says it is no longer kept, never blank', /no longer kept \(cleared when actioned or dismissed, or after 30 days\)/.test(fn('reportItem')));
 ok('the masters\' view never uses innerHTML / insertAdjacentHTML / outerHTML', !/innerHTML|insertAdjacentHTML|outerHTML|document\.write/.test(view));
 
 // ── a hostile report, through validate() and the page's own renderer ──
@@ -135,5 +162,7 @@ if (ran != null) {
   ok('the listing link is only ever http(s)', /\/\^https\?:\\\/\\\/\/i\.test\(x\.listing_url\)/.test(fn('reportItem')));
 }
 
-console.log(`\n  ${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+clearCheck.then(() => {
+  console.log(`\n  ${pass} passed, ${fail} failed\n`);
+  process.exit(fail ? 1 : 0);
+});

@@ -243,7 +243,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
    bare 1fr has a min-content floor and was the whole overflow. */
 @media(max-width:640px){
   .hero-stats{flex-wrap:wrap;gap:12px 22px}
-  .gg,.sgg{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .gg{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   .gc img{max-width:100%;height:auto}
   .ltabs{flex-wrap:wrap}
   .lt{padding:10px 12px}
@@ -876,11 +876,21 @@ html:not(.ch-noprice) .price-door { display: none !important; }
   </div>
 </div>
 
-<!-- ══ SEARCH / GAME PICKER ══ -->
+<!-- ══ SEARCH ══ ONE page (Roy, 2026-10-08, TASK-reports-and-pages T2).
+     Before: the Search nav item opened a game picker with its own search
+     box, and every search (that box, the home hero, the bar) drew its
+     answer on a SECOND screen, #screen-results. Now there is one screen:
+     the box, the answer under it, and below that the page's own content
+     (T6) — Most searched cards, Trending cards, Trending sets. The bar's
+     Search item, the home search box and the bar's search box all arrive
+     here through doSearch(). Searching is catalogue (public); a price on a
+     candidate only shows to an approved account, and a confident match
+     never fetches listings from here (/api/search?listings=0). -->
 <div id="screen-search" class="screen">
-  <div class="content" style="padding-top:36px">
+  <div class="content" style="padding-top:28px">
+    <div class="bc" id="search-bc" hidden><span class="lnk" onclick="clearSearch()">Search</span> › <span id="results-q-bc">—</span></div>
     <div style="font-size:26px;font-weight:800;letter-spacing:-.5px;margin-bottom:6px">Search</div>
-    <div style="font-size:14px;color:var(--mu);margin-bottom:28px">Choose a game, then search by card name, set or grade</div>
+    <div style="font-size:14px;color:var(--mu);margin-bottom:22px">Search by card name, set, collector number or grade</div>
     <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;flex-wrap:wrap">
       <span style="font-size:13px;font-weight:600;color:var(--mu)">Language:</span>
       <button class="fchip on" id="slang-all" onclick="setSearchLang('all',this)">🌍 All</button>
@@ -888,7 +898,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
       <button class="fchip" id="slang-ja" onclick="setSearchLang('ja',this)">🇯🇵 Japanese</button>
       <button class="fchip" id="slang-zh" onclick="setSearchLang('zh',this)">🇨🇳 Chinese</button>
     </div>
-    <div style="display:flex;gap:10px;margin-bottom:36px">
+    <div style="display:flex;gap:10px;margin-bottom:28px">
       <div style="flex:1;position:relative">
       <input class="tbq" id="search-main" style="width:100%;padding:14px 18px;font-size:15px;border-radius:12px;border:2px solid var(--bd)" placeholder="e.g. Charizard Holo Base Set PSA 9…"
         oninput="triggerAutocomplete(this.value,'main-ac')"
@@ -898,44 +908,24 @@ html:not(.ch-noprice) .price-door { display: none !important; }
     </div>
       <button class="btn p" style="padding:14px 28px;font-size:15px;border-radius:12px" onclick="doSearch(document.getElementById('search-main').value)">🔍 Search</button>
     </div>
-    <div style="font-size:12px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px">Choose a game</div>
-    <div class="sgg" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:36px">
-      <div onclick="pickGame('pokemon')" style="background:var(--tl);border:2px solid var(--t);border-radius:var(--r);padding:28px 20px;cursor:pointer;transition:all .18s" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform=''">
-        <div style="font-size:40px;margin-bottom:10px">🎴</div><div style="font-size:17px;font-weight:800;margin-bottom:4px">Pokémon TCG</div>
-        <div style="font-size:12px;color:var(--mu)">English, Japanese, Chinese</div>
-        <div style="margin-top:14px;display:flex;gap:6px;flex-wrap:wrap"><span class="b bd2">Base Set</span><span class="b bd2">Scarlet & Violet</span><span class="b bd2">151</span></div>
-      </div>
-      <div onclick="alert('Coming soon!')" style="background:var(--w);border:2px solid var(--bd);border-radius:var(--r);padding:28px 20px;cursor:pointer;opacity:.6"><div style="font-size:40px;margin-bottom:10px">⚔️</div><div style="font-size:17px;font-weight:800">Magic: TG</div><div style="font-size:12px;color:var(--mu);margin-top:4px">Coming soon</div></div>
-      <div onclick="alert('Coming soon!')" style="background:var(--w);border:2px solid var(--bd);border-radius:var(--r);padding:28px 20px;cursor:pointer;opacity:.6"><div style="font-size:40px;margin-bottom:10px">⭐</div><div style="font-size:17px;font-weight:800">Yu-Gi-Oh!</div><div style="font-size:12px;color:var(--mu);margin-top:4px">Coming soon</div></div>
-      <div onclick="alert('Coming soon!')" style="background:var(--w);border:2px solid var(--bd);border-radius:var(--r);padding:28px 20px;cursor:pointer;opacity:.6"><div style="font-size:40px;margin-bottom:10px">🏴‍☠️</div><div style="font-size:17px;font-weight:800">One Piece</div><div style="font-size:12px;color:var(--mu);margin-top:4px">Coming soon</div></div>
-      <div onclick="alert('Coming soon!')" style="background:var(--w);border:2px solid var(--bd);border-radius:var(--r);padding:28px 20px;cursor:pointer;opacity:.6"><div style="font-size:40px;margin-bottom:10px">✨</div><div style="font-size:17px;font-weight:800">Lorcana</div><div style="font-size:12px;color:var(--mu);margin-top:4px">Coming soon</div></div>
-      <div onclick="alert('Coming soon!')" style="background:var(--w);border:2px solid var(--bd);border-radius:var(--r);padding:28px 20px;cursor:pointer;opacity:.6"><div style="font-size:40px;margin-bottom:10px">🐉</div><div style="font-size:17px;font-weight:800">Dragon Ball</div><div style="font-size:12px;color:var(--mu);margin-top:4px">Coming soon</div></div>
-    </div>
-    <div style="font-size:17px;font-weight:700;margin-bottom:16px">Pokémon — Trending</div>
-    <div class="cg" id="search-trending"></div>
-  </div>
-</div>
+    <!-- The answer to the last search. Hidden until there is one. -->
+    <section id="search-results" hidden>
+      <div style="margin-bottom:16px"><div style="font-size:20px;font-weight:800" id="results-title">Results</div><div style="font-size:12px;color:var(--mu);margin-top:3px" id="results-sub"></div></div>
+      <div class="fchips" id="results-filters"></div>
+      <div class="cg" id="results-grid"></div>
+    </section>
 
-<!-- ══ SEARCH RESULTS ══ -->
-<div id="screen-results" class="screen">
-  <div class="content" style="padding-top:28px">
-    <div class="bc"><span class="lnk" onclick="SS('search')">Search</span> › <span id="results-q-bc">—</span></div>
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div><div style="font-size:20px;font-weight:800" id="results-title">Results</div><div style="font-size:12px;color:var(--mu);margin-top:3px" id="results-sub"></div></div>
-      <div style="display:flex;gap:8px">
-        <select class="tbsel price-only" onchange="sortResults(this.value)"><option value="rel">Best match</option><option value="price">Price ↑</option><option value="price-d">Price ↓</option></select>
-      </div>
-    </div>
-    <!-- Language filter chips -->
-    <div style="display:flex;gap:7px;margin-bottom:14px;align-items:center">
-      <span style="font-size:12px;font-weight:600;color:var(--mu)">Language:</span>
-      <button class="results-lang-chip fchip on" data-lang="all" onclick="switchResultsLang('all',this)">🌍 All</button>
-      <button class="results-lang-chip fchip" data-lang="en" onclick="switchResultsLang('en',this)">🇺🇸 English</button>
-      <button class="results-lang-chip fchip" data-lang="ja" onclick="switchResultsLang('ja',this)">🇯🇵 Japanese</button>
-      <button class="results-lang-chip fchip" data-lang="zh" onclick="switchResultsLang('zh',this)">🇨🇳 Chinese</button>
-    </div>
-    <div class="fchips" id="results-filters"></div>
-    <div class="cg" id="results-grid"></div>
+    <!-- ══ THE PAGE'S OWN CONTENT (T6) ══ catalogue: cards and sets, no
+         price for anyone here. Most searched counts searches recorded in
+         search_log, and says it is still gathering until there are enough —
+         never most-viewed under this name. Trending is the Pokémon page's
+         list (/api/trending/catalogue, the same builder), without prices. -->
+    <div class="sec-h" style="margin-top:34px"><div><div class="sec-t">Most searched cards</div><div class="sec-s" id="search-popular-sub">Loading&hellip;</div></div></div>
+    <div class="cg" id="search-popular"></div>
+    <div class="sec-h" style="margin-top:34px"><div><div class="sec-t">Trending cards</div><div class="sec-s" id="search-trending-sub">Loading&hellip;</div></div></div>
+    <div class="cg" id="search-trending"></div>
+    <div class="sec-h" style="margin-top:34px"><div><div class="sec-t">Trending sets</div><div class="sec-s" id="search-tsets-sub">Loading&hellip;</div></div></div>
+    <div class="setrow2" id="search-tsets"></div>
   </div>
 </div>
 
@@ -2090,7 +2080,6 @@ var TOPBAR = {
   home:      { nav: 'home',      back: false, search: true  },
   pokemon:   { nav: null,        back: true,  search: true  },
   search:    { nav: 'search',    back: true,  search: false },
-  results:   { nav: 'search',    back: true,  search: true  },
   sets:      { nav: 'sets',      back: false, search: false },
   setdetail: { nav: 'sets',      back: true,  search: true  },
   card:      { nav: null,        back: true,  search: true  },
@@ -2126,7 +2115,7 @@ function SS(id,skipHistory){
   if(id==='sets'){if(!S.enSets.length) loadAllSets(); else renderSets();}
   if(id==='pokemon'){renderHomeSetRow();updateHeroStats();loadTrending();}
   if(id==='portfolio') renderPortfolio();
-  if(id==='search') loadSearchTrending();
+  if(id==='search') loadSearchSections();
   if(id==='alerts'){renderAlertsList();updateAlertStats();updateAlertsBar();}
   if(id==='card'&&S.currentCard) setTimeout(()=>initChart(S.activeGradeBase,S.activeRange||'3M'),80);
 }
@@ -2177,22 +2166,49 @@ async function loadHome() {
   updateAlertsBar();
 }
 
-async function loadSearchTrending(){
-  if(document.getElementById('search-trending').querySelector('img'))return;
-  // This drew 8 Surging Sparks cards straight from pokemontcg.io, and each
-  // tile opened a pokemontcg.io id (sv8pt5-*) — the same class of producer
-  // as the alert picker. Our own trending, under our ids.
-  try{
-    const r=await fetch(BACKEND + '/api/trending?lang=en&sort=price-desc&limit=8');
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    const d=await r.json();
-    const cards=(d.cards||[]).filter(c=>OUR_CARD_ID.test(c.id)).map(c=>({
-      id: c.id, name: c.name, number: c.number, rarity: c.rarity,
-      set: { id: c.set && c.set.id, name: c.set && (c.set.nameEn || c.set.name) },
-      images: { small: c.image || '', large: c.image || '' },
-      _price: c.price, _priceIsReal: true, _priceSource: c.priceSource, _priceQuality: c.priceQuality || null }));
-    document.getElementById('search-trending').innerHTML=cards.map(c=>cardTile(c)).join('');
-  }catch(e){ console.warn('[search-trending] ' + e.message); }
+// ── The search page's own content (T6, 2026-10-08) ──
+// Catalogue only: cardTile(c, {noPrice}) draws no price slot for anyone, and
+// neither endpoint sends a price. Asked once per visit.
+async function loadSearchSections(){
+  if (S.searchSectionsLoaded) return;
+  S.searchSectionsLoaded = true;
+  var set = function (id, t) { var e = document.getElementById(id); if (e) e.textContent = t; };
+  var tile = function (c, note) { return cardTile({ id: c.id, name: c.name, nameEn: c.nameEn, number: c.number, rarity: c.rarity,
+    set: { id: c.set && c.set.id, name: c.set && (c.set.nameEn || c.set.name) }, images: { small: c.image || '', large: c.image || '' } },
+    { noPrice: true, note: note }); };
+  try {
+    var r = await fetch(BACKEND + '/api/search/popular');
+    var d = await r.json();
+    if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    if (!d.recording) set('search-popular-sub', 'Not recording searches yet, so there is nothing to rank. This section fills in once searches are being counted.');
+    else if (d.gathering) set('search-popular-sub', 'Still gathering: ' + d.resolved + ' of the ' + d.needed + ' searches needed (searches that found one card, last ' + d.days + ' days). Nothing is ranked until then.');
+    else {
+      set('search-popular-sub', d.rule);
+      document.getElementById('search-popular').innerHTML = d.cards.map(function (c) { return tile(c, 'searched ' + c.searches + (c.searches === 1 ? ' time' : ' times')); }).join('');
+    }
+  } catch (e) { set('search-popular-sub', 'Could not load: ' + e.message); }
+  try {
+    var r2 = await fetch(BACKEND + '/api/trending/catalogue');
+    var t = await r2.json();
+    if (!r2.ok) throw new Error(t.error || ('HTTP ' + r2.status));
+    set('search-trending-sub', t.cards.length ? t.rule : 'No card has a measured rise over ' + (t.window || 'the window') + ' yet.');
+    document.getElementById('search-trending').innerHTML = (t.cards || []).filter(function (c) { return OUR_CARD_ID.test(c.id); }).map(function (c) { return tile(c); }).join('');
+    set('search-tsets-sub', t.sets.length ? t.setRule : 'No trending sets: no card has a measured rise over ' + (t.window || 'the window') + ' yet.');
+    S.trendSets = t.sets || [];
+    renderSearchSets();
+  } catch (e) { set('search-trending-sub', 'Could not load: ' + e.message); set('search-tsets-sub', 'Could not load: ' + e.message); }
+}
+// A trending set is drawn with the Sets screen's own tile when the set list
+// has loaded, else by name — the tile needs the set's row (logo, date).
+function renderSearchSets(){
+  var host = document.getElementById('search-tsets'); if (!host || !S.trendSets) return;
+  var list = (typeof LANG_SETS !== 'undefined' && LANG_SETS.en) ? LANG_SETS.en : null;
+  if (!list || !list.length) { if (typeof loadAllSets === 'function' && !S._searchSetsAsked) { S._searchSetsAsked = true; Promise.resolve(loadAllSets()).then(renderSearchSets); } }
+  host.innerHTML = S.trendSets.map(function (s) {
+    var row = list && list.find(function (x) { return x.id === s.id || x.aid === s.id; });
+    if (row) return setTileHTML(row);
+    return '<div class="stile" onclick="openSet(&quot;' + liveEsc(s.id) + '&quot;)"><div class="stile-n">' + liveEsc(s.nameEn || s.name) + '</div></div>';
+  }).join('');
 }
 
 let srCards=[];
@@ -2251,6 +2267,9 @@ async function doSearch(q, lang) {
   closeAutocomplete();
 
   document.getElementById('results-q-bc').textContent = q;
+  var smEl = document.getElementById('search-main'); if (smEl) smEl.value = q;
+  document.getElementById('search-results').hidden = false;
+  document.getElementById('search-bc').hidden = false;
   document.getElementById('results-title').textContent = 'Searching\u2026';
   document.getElementById('results-sub').textContent = '';
   document.getElementById('results-grid').innerHTML =
@@ -2258,7 +2277,7 @@ async function doSearch(q, lang) {
     + '<div style="width:36px;height:36px;border:3px solid var(--bd);border-top-color:var(--t);'
     + 'border-radius:50%;animation:sp .75s linear infinite;margin:0 auto 14px"></div>'
     + '<div style="font-size:13px">Searching\u2026</div></div>';
-  SS('results');
+  if (!document.getElementById('screen-search').classList.contains('on')) SS('search');
 
   var d;
   try {
@@ -3214,7 +3233,6 @@ async function openCard(id){
   if(S.chart){S.chart.destroy();S.chart=null;}
   S.activeGrade='Raw NM';S.watching=false;
   S.cdView='boxes'; applyCardView(); S.activeRange='3M';
-  
   // A new card starts at Raw + All, and the selector is redrawn so it never
   // shows the previous card's selection against this card's listings.
   SEL.status='Raw'; SEL.condition='All'; SEL.otherGrader=null; SEL.printing='all'; SEL.edition='all';
@@ -5144,13 +5162,11 @@ function closeM(id){document.getElementById(id).classList.remove('on');}
 
 
 
-function switchResultsLang(lang,el){
-  searchLang=lang;
-  document.querySelectorAll('.results-lang-chip').forEach(c=>c.classList.remove('on'));
-  el.classList.add('on');
-  // Re-search with language filter
-  const q=document.getElementById('results-q-bc').textContent;
-  if(q&&q!=='—') doSearch(q,lang);
+// Back to the search page's start: no answer showing, an empty box.
+function clearSearch(){
+  document.getElementById('search-results').hidden = true;
+  document.getElementById('search-bc').hidden = true;
+  var i = document.getElementById('search-main'); if (i) { i.value = ''; i.focus(); }
 }
 
 // ── AUTOCOMPLETE ENGINE ──────────────────────────────────────────────────────
@@ -5213,7 +5229,6 @@ async function fetchAutocomplete(val,dropId){
   if(!drop) return;
   drop.style.display='block';
   drop.innerHTML='<div style="padding:12px 16px;font-size:12px;color:var(--mu);display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border:2px solid var(--bd);border-top-color:var(--t);border-radius:50%;animation:sp .6s linear infinite"></div>Searching…</div>';
-  
   try{
     // Fetch name-matched cards — use name:* wildcard style search
     const q=encodeURIComponent(`name:"${val}*"`);
@@ -6437,7 +6452,7 @@ document.addEventListener('click',function(e){
 // Start alert engine and bar on load
 setTimeout(()=>{startAlertEngine();updateAlertsBar();},500);
 // INIT
-setTimeout(()=>{loadHome();loadSearchTrending();},100);
+setTimeout(()=>{loadHome();},100);
 // T3: the eBay quota indicator — read once now, then on its own timer.
 refreshQuota(true);
 });  // end DOMContentLoade
@@ -6471,8 +6486,12 @@ function nameWithEnPlain(name, nameEn) {
 // "deal" flag — all from a hash of the card id, on a live screen, the
 // LESSONS §4 class nofabricated.test.js missed because it never looked at
 // this function. Price and what is known about it, nothing else.
-function cardTile(c) {
-  var price = getBase(c);
+function cardTile(c, opts) {
+  opts = opts || {};
+  // A catalogue tile (the search page, T6): no price slot for anyone — not
+  // getBase(), which would fall back to an estimate for a card with no price.
+  var showPrice = pricesOpen() && !opts.noPrice;
+  var price = showPrice ? getBase(c) : 0;
   var cid = c.id || '';
   var isReal = (c._priceIsReal === true) || (c._priceSource && !/^estimate/.test(c._priceSource));
   var priceStr = price > 0 ? fmtCurrency(price) : '&#8212;';
@@ -6483,7 +6502,8 @@ function cardTile(c) {
     + '<div class="cn" title="' + (c.nameEn || c.name || '') + '">' + nameWithEn(c.name, c.nameEn) + '</div>'
     + '<div class="cs">' + setName + ' &middot; #' + (c.number || '') + '</div>'
     // The door: no price row at all without prices — not a dash, not "$0".
-    + (pricesOpen() ? '<div class="cr"><span class="cp">' + priceStr + '</span>' + priceMarksHtml(isReal, c._priceQuality) + '</div>' : '')
+    + (showPrice ? '<div class="cr"><span class="cp">' + priceStr + '</span>' + priceMarksHtml(isReal, c._priceQuality) + '</div>' : '')
+    + (opts.note ? '<div class="cs">' + liveEsc(opts.note) + '</div>' : '')
     + '</div></div>';
 }
 
@@ -6680,10 +6700,10 @@ var LANG_JA = {
   'Biggest movers — % gain': '上昇率が大きい順', 'Biggest fallers — %': '下落率が大きい順',
   'Biggest movers — value gain': '上昇額が大きい順', 'Biggest fallers — value': '下落額が大きい順',
   'Over': '期間', '24 hours': '24時間', '7 days': '7日間', '30 days': '30日間',
-  '🔍 Search': '🔍 検索', 'Choose a game, then search by card name, set or grade': 'ゲームを選んで、カード名・セット・グレードで検索',
-  'Choose a game': 'ゲームを選択', 'English, Japanese, Chinese': '英語・日本語・中国語', 'Coming soon': '近日対応',
-  'Pokémon — Trending': 'ポケモン — 注目', 'Results': '検索結果', 'Best match': '関連度順',
-  'Price ↑': '価格 ↑', 'Price ↓': '価格 ↓',
+  '🔍 Search': '🔍 検索', 'Most searched cards': 'よく検索されるカード', 'Trending cards': '注目のカード', 'Trending sets': '注目のセット', 'Search by card name, set, collector number or grade': 'カード名・セット・番号・グレードで検索',
+  'Coming soon': '近日対応',
+  'Results': '検索結果',
+ 
   'Number ↑': '番号 ↑', 'Number ↓': '番号 ↓', 'Name A–Z': '名前 A–Z', 'Name Z–A': '名前 Z–A',
   'Price: High → Low': '価格：高い → 安い', 'Price: Low → High': '価格：安い → 高い',
   'Rarity': 'レアリティ', 'Rarity:': 'レアリティ:', 'Type:': 'タイプ:', 'All': 'すべて',
@@ -6698,7 +6718,7 @@ var LANG_JA = {
   'Cards': 'カード', 'Grade': 'グレード', 'Paid': '購入額', 'Value': '評価額',
   'View this listing on eBay ↗': 'eBayでこの出品を見る ↗',
   'Images are the seller’s, from eBay, shown with their listing.': '画像は出品者のもので、eBayの出品とともに表示しています。',
-  '🔔 Alerts': '🔔 アラート', 'Price Alerts': '価格アラート',
+  'Price Alerts': '価格アラート',
   'Get notified when a card drops below your target price': 'カードが目標価格を下回ったら通知',
   '+ New Alert': '+ 新規アラート', 'Active alerts': '有効なアラート', 'Triggered today': '本日発動',
   'Cards watching': 'ウォッチ中のカード', 'All alerts': 'すべてのアラート', 'Active': '有効', 'Triggered': '発動済み', 'Paused': '一時停止',
@@ -6715,7 +6735,7 @@ var LANG_JA = {
   'Push notification': 'プッシュ通知', 'Alert preview:': 'アラートのプレビュー:', '🔔 Create Alert': '🔔 アラートを作成',
   // attributes (placeholder / title / aria-label)
   'Search any card…': 'カードを検索…', 'Try: Charizard Base Set PSA 9…': '例: Charizard Base Set PSA 9…',
-  'e.g. Charizard Holo Base Set PSA 9…': '例: Charizard Holo Base Set PSA 9…', 'Refine…': '絞り込み…',
+  'e.g. Charizard Holo Base Set PSA 9…': '例: Charizard Holo Base Set PSA 9…',
   'Search sets…': 'セットを検索…', 'Search in set…': 'セット内を検索…',
   'Theme: follows your device': 'テーマ：端末の設定に従う', 'Theme: always light': 'テーマ：常にライト', 'Theme: always dark': 'テーマ：常にダーク',
   'Pokémon TCG — sets, trending cards and prices': 'ポケモンカード — セット、注目カード、価格',
@@ -6777,10 +6797,10 @@ var LANG_ZH_TW = {
   'Biggest movers — % gain': '漲幅最大 — %', 'Biggest fallers — %': '跌幅最大 — %',
   'Biggest movers — value gain': '漲幅最大 — 金額', 'Biggest fallers — value': '跌幅最大 — 金額',
   'Over': '期間', '24 hours': '24 小時', '7 days': '7 天', '30 days': '30 天',
-  '🔍 Search': '🔍 搜尋', 'Choose a game, then search by card name, set or grade': '選擇遊戲，再依卡名、系列或評級搜尋',
-  'Choose a game': '選擇遊戲', 'English, Japanese, Chinese': '英文、日文、中文', 'Coming soon': '即將推出',
-  'Pokémon — Trending': '寶可夢 — 熱門', 'Results': '搜尋結果', 'Best match': '最相符',
-  'Price ↑': '價格 ↑', 'Price ↓': '價格 ↓',
+  '🔍 Search': '🔍 搜尋', 'Most searched cards': '最常搜尋的卡牌', 'Trending cards': '熱門卡牌', 'Trending sets': '熱門系列', 'Search by card name, set, collector number or grade': '依卡名、系列、編號或評級搜尋',
+  'Coming soon': '即將推出',
+  'Results': '搜尋結果',
+ 
   'Number ↑': '編號 ↑', 'Number ↓': '編號 ↓', 'Name A–Z': '名稱 A–Z', 'Name Z–A': '名稱 Z–A',
   'Price: High → Low': '價格：高 → 低', 'Price: Low → High': '價格：低 → 高',
   'Rarity': '稀有度', 'Rarity:': '稀有度：', 'Type:': '類型：', 'All': '全部',
@@ -6795,7 +6815,7 @@ var LANG_ZH_TW = {
   'Cards': '卡牌', 'Grade': '評級', 'Paid': '購入價', 'Value': '價值',
   'View this listing on eBay ↗': '在 eBay 查看此刊登 ↗',
   'Images are the seller’s, from eBay, shown with their listing.': '圖片屬於賣家，來自 eBay，與其刊登一同顯示。',
-  '🔔 Alerts': '🔔 提醒', 'Price Alerts': '價格提醒',
+  'Price Alerts': '價格提醒',
   'Get notified when a card drops below your target price': '卡牌跌破目標價時通知你',
   '+ New Alert': '+ 新增提醒', 'Active alerts': '啟用中的提醒', 'Triggered today': '今日觸發',
   'Cards watching': '關注中的卡牌', 'All alerts': '所有提醒', 'Active': '啟用中', 'Triggered': '已觸發', 'Paused': '已暫停',
@@ -6811,7 +6831,7 @@ var LANG_ZH_TW = {
   'Notify via': '通知方式', 'In-app + Email': '應用程式內 + 電子郵件', 'Email only': '僅電子郵件', 'In-app only': '僅應用程式內',
   'Push notification': '推播通知', 'Alert preview:': '提醒預覽：', '🔔 Create Alert': '🔔 建立提醒',
   'Search any card…': '搜尋任何卡牌…', 'Try: Charizard Base Set PSA 9…': '例如：Charizard Base Set PSA 9…',
-  'e.g. Charizard Holo Base Set PSA 9…': '例如：Charizard Holo Base Set PSA 9…', 'Refine…': '縮小範圍…',
+  'e.g. Charizard Holo Base Set PSA 9…': '例如：Charizard Holo Base Set PSA 9…',
   'Search sets…': '搜尋系列…', 'Search in set…': '在系列中搜尋…',
   'Theme: follows your device': '主題：跟隨裝置設定', 'Theme: always light': '主題：一律淺色', 'Theme: always dark': '主題：一律深色',
   'Pokémon TCG — sets, trending cards and prices': '寶可夢集換式卡牌 — 系列、熱門卡牌與價格',
@@ -6872,10 +6892,10 @@ var LANG_ZH_CN = {
   'Biggest movers — % gain': '涨幅最大 — %', 'Biggest fallers — %': '跌幅最大 — %',
   'Biggest movers — value gain': '涨幅最大 — 金额', 'Biggest fallers — value': '跌幅最大 — 金额',
   'Over': '期间', '24 hours': '24 小时', '7 days': '7 天', '30 days': '30 天',
-  '🔍 Search': '🔍 搜索', 'Choose a game, then search by card name, set or grade': '选择游戏，再按卡名、系列或评级搜索',
-  'Choose a game': '选择游戏', 'English, Japanese, Chinese': '英文、日文、中文', 'Coming soon': '即将推出',
-  'Pokémon — Trending': '宝可梦 — 热门', 'Results': '搜索结果', 'Best match': '最相关',
-  'Price ↑': '价格 ↑', 'Price ↓': '价格 ↓',
+  '🔍 Search': '🔍 搜索', 'Most searched cards': '最常搜索的卡牌', 'Trending cards': '热门卡牌', 'Trending sets': '热门系列', 'Search by card name, set, collector number or grade': '按卡名、系列、编号或评级搜索',
+  'Coming soon': '即将推出',
+  'Results': '搜索结果',
+ 
   'Number ↑': '编号 ↑', 'Number ↓': '编号 ↓', 'Name A–Z': '名称 A–Z', 'Name Z–A': '名称 Z–A',
   'Price: High → Low': '价格：高 → 低', 'Price: Low → High': '价格：低 → 高',
   'Rarity': '稀有度', 'Rarity:': '稀有度：', 'Type:': '类型：', 'All': '全部',
@@ -6890,7 +6910,7 @@ var LANG_ZH_CN = {
   'Cards': '卡牌', 'Grade': '评级', 'Paid': '买入价', 'Value': '价值',
   'View this listing on eBay ↗': '在 eBay 查看此在售 ↗',
   'Images are the seller’s, from eBay, shown with their listing.': '图片属于卖家，来自 eBay，与其在售信息一同显示。',
-  '🔔 Alerts': '🔔 提醒', 'Price Alerts': '价格提醒',
+  'Price Alerts': '价格提醒',
   'Get notified when a card drops below your target price': '卡牌跌破目标价时通知你',
   '+ New Alert': '+ 新建提醒', 'Active alerts': '启用中的提醒', 'Triggered today': '今日触发',
   'Cards watching': '关注中的卡牌', 'All alerts': '所有提醒', 'Active': '启用中', 'Triggered': '已触发', 'Paused': '已暂停',
@@ -6906,7 +6926,7 @@ var LANG_ZH_CN = {
   'Notify via': '通知方式', 'In-app + Email': '应用内 + 电子邮件', 'Email only': '仅电子邮件', 'In-app only': '仅应用内',
   'Push notification': '推送通知', 'Alert preview:': '提醒预览：', '🔔 Create Alert': '🔔 创建提醒',
   'Search any card…': '搜索任何卡牌…', 'Try: Charizard Base Set PSA 9…': '例如：Charizard Base Set PSA 9…',
-  'e.g. Charizard Holo Base Set PSA 9…': '例如：Charizard Holo Base Set PSA 9…', 'Refine…': '缩小范围…',
+  'e.g. Charizard Holo Base Set PSA 9…': '例如：Charizard Holo Base Set PSA 9…',
   'Search sets…': '搜索系列…', 'Search in set…': '在系列中搜索…',
   'Theme: follows your device': '主题：跟随设备设置', 'Theme: always light': '主题：始终浅色', 'Theme: always dark': '主题：始终深色',
   'Pokémon TCG — sets, trending cards and prices': '宝可梦集换式卡牌 — 系列、热门卡牌与价格',
@@ -7824,6 +7844,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-d6bec0b-onebar &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-709272b-onesearch &middot; click to hide</div>
 </body>
 </html>

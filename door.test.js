@@ -77,8 +77,10 @@ ok('home order: search, deals, browse by game, movers, alerts',
    && at('id="game-grid"') < at('id="mv-gain-pct"') && at('id="mv-gain-pct"') < at('id="alerts-bar-items"'));
 const pk = H.slice(H.indexOf('<div id="screen-pokemon"'), H.indexOf('<div id="screen-search"'));
 ok('trending: inside .price-only, a note before it', /<div class="price-door"[^>]*><\/div>\s*<div class="price-only">\s*<div class="sec-h"/.test(pk) && pk.indexOf('/.price-only (trending)') > pk.indexOf('id="home-trending"'));
-ok('set page and results: the price sorts are .price-only', /<option class="price-only" value="price-d">/.test(H) && /<option class="price-only" value="price">/.test(H)
-   && /<select class="tbsel price-only" onchange="sortResults/.test(H));
+// The results screen's sort called sortResults(), which was never defined; it
+// went with the results screen (T2, 2026-10-08). The set page's remain.
+ok('set page: the price sorts are .price-only', /<option class="price-only" value="price-d">/.test(H) && /<option class="price-only" value="price">/.test(H)
+   && !/sortResults/.test(H));
 
 console.log('\n  the loaders: nothing is asked of a price endpoint while prices are closed');
 for (const f of ['loadHomeMovers', 'loadHomeDeals', 'loadTrending', 'updateAlertsBar', 'renderLiveListings', 'renderListingFinder', 'loadHistory']) {

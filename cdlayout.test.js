@@ -62,11 +62,11 @@ for (const id of ['cd-img', 'cd-mkt', 'cd-sold', 'cd-trend-bar', 'cd-52low', 'cd
 // browser measurement is the real check; these keep the rules from going.
 const phone = (page.match(/\/\* T4 \(2026-09-28\)[\s\S]*?@media\(max-width:640px\)\{[\s\S]*?\n\}/) || [''])[0];
 ok(/\.hero-stats\{flex-wrap:wrap/.test(phone), 'phone: hero stats wrap');
-ok(/\.gg,\.sgg\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/.test(phone), 'phone: both game grids are two minmax(0,1fr) columns');
+ok(/\.gg\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/.test(phone), 'phone: the game grid is two minmax(0,1fr) columns');
 ok(/\.ltabs\{flex-wrap:wrap\}/.test(phone), 'phone: language tabs wrap');
 ok(/\.ptable \.pth,\.ptable \.ptr\{grid-template-columns:minmax\(0,1\.7fr\)/.test(phone),
    'phone: the portfolio grid rule is .ptable-scoped (unscoped, the later .pth rule won)');
-ok(/class="sgg"/.test(page), 'the search game picker carries .sgg');
+ok(!/class="sgg"/.test(page), 'the search page has no game picker (T6, 2026-10-08)');
 
 console.log(`\ncdlayout.test.js — ${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

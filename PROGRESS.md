@@ -1,5 +1,76 @@
 # CardHunt — Progress Log
 
+## 2026-10-08 (reports and pages) — compare off, one bar, one search page, red, reports, three logos
+
+TASK-reports-and-pages.md, eight items, one session on main.
+
+- **T1 Compare parked**: `openCompare`, its overlay and its i18n entries
+  moved to `compare-disabled.js` (tracked, not loaded, not served), the
+  checkout pattern. It never had a second side — "Choose card to compare"
+  went to the search screen and nothing came back — and no endpoint
+  (`POST /api/listings/:id/compare` is the photo check). `nofabricated.test.js`.
+- **T5 Red**: the accent token, light `#C62128`, dark `#EB6B6C` (the logo red
+  is 2.86:1 on the dark surface). Hard-coded colours that bypassed the token:
+  4 of ours (the chart line, 3 values; the old purple glow) + 2 hard-coded
+  cert reds. Left alone as categorical / third-party: source chips
+  (TCGplayer blue), the TW tag, rarity gradients, Chinese set placeholders.
+  Errors and warnings amber (`--warn` `#B45309` on `#FFF8E1`, 4.73:1; dark
+  `#F3B35B` on `#332711`, 7.93:1); destructive buttons outlined in ink and
+  named ("Reject account", "Delete alert"); `--crit` is price-down only.
+  Radios/checkboxes were still the browser's blue: `:root accent-color`.
+  Ratios per theme are computed from the tokens by `accent.test.js`.
+- **T7 One top bar**: nine per-screen `<nav>` copies -> one `#topbar` outside
+  the screens; `TOPBAR` (per screen: lit item, Back, search box, extras) is
+  applied by `topbarFor()` from `SS()`. Account, theme, currency (price-only)
+  and language now on every screen. No sideways scroll at 390px on any screen.
+- **T2/T6 One search page**: the game picker and `#screen-results` merged
+  into `#screen-search`; the bar's Search item, the home box and the bar's
+  box all reach it via `doSearch`. Found dead: `pickGame` (the picker's
+  Pokémon tile) and `sortResults` (the results sort) were never defined.
+  Search terms were recorded nowhere server-side (only the visitor's own
+  browser): `search_log` (migration-search-log.sql — NOT YET RUN), query
+  capped at 120, the card when ONE matched, candidate count, no user, no IP.
+  "Most searched" says not-recording / gathering (<20 resolved searches in 30
+  days), never views. Trending cards: the % gain risers, public, no price.
+- **Trending sets are approved-only (Roy)**: the risers list is our own data
+  — `price_history` rows from TCGdex's TCGplayer block (`tcgdex_tcgplayer_*`);
+  `price_history` held 0 eBay rows of 176,494 today — but a ranking by price
+  movement is price information without a number. `/api/trending/sets`
+  (access.priced), drawn behind the page's `.price-door`.
+  **Open (Roy):** Trending cards is the same ranking and is still public.
+- **T3 Reports**: Report under View listing (outside the row's link) -> reason
+  + details (cap 1,000, refused over, not cut). `listing_reports`
+  (migration-reports.sql — NOT YET RUN): RLS on, a user SELECTs own rows, no
+  API-role write. Approved-only route; rate limit 5 / 10 min and 30 / 24 h,
+  counted in the table. Masters: "Listing reports" beside Approve accounts,
+  state changes only, built with DOM nodes + textContent. `reportprobe.js`
+  (migration applied inside a rolled-back transaction) measured: A reads own
+  1 row; B's 0; A inserts directly, updates B, inserts as B, deletes own ->
+  42501 each; anon sees 0; hostile details round-trip byte for byte.
+  Deviation from the task text: no RLS INSERT policy — it would let a pending
+  account skip the approval check and the rate limit.
+- **Report prices (Roy)**: listing id + URL kept; the eBay price is cleared
+  when a report is actioned/dismissed and on any report >30 days old
+  (`reports.clearPrices`, run on file / before the masters' list / after a
+  state change — no scheduler). On real Postgres (rolled back), 7 rows, rule
+  and SQL agreed on all: 4 cleared, 3 kept (incl. a Yuyu-tei row — not eBay).
+  Gap: with no report activity, an old price waits in the table until the next
+  read; nothing displays it before it is cleared.
+- **T4 Logos**: `ex5.5` Poké Card Creator Pack (5 cards), `mfb` My First
+  Battle (34), `exu` Unseen Forces Unown Collection (28, the file's Unown O;
+  Roy) — served by name from `SET_LOGOS` (`/set-logos/<id>.png`),
+  `set_logo_source 'cardzon:<file>'` via `setlogo.js`. ex10 keeps TCGdex's.
+- **T8 Set link**: the card page's breadcrumb set link was
+  `onclick="SS('setdetail')"` — no set named, so it showed the last set opened
+  or an empty page (measured: "—", 0 cards). Removed with the breadcrumb; the
+  details row's set name opens `<lang>-<set id>` (Japanese/Chinese lists
+  loaded first). `setlink.test.js` also fails page-wide on any handler calling
+  an undefined function — on the pre-session page it names the breadcrumb,
+  `pickGame` and `sortResults`.
+- **Test tooling lesson:** an unawaited assertion followed by `process.exit`
+  never runs and the suite still says "passed" (caught in reports.test.js).
+- Suite: 98 -> 103 suites (5 new test files), all green on a clean checkout before each push.
+
 ## 2026-10-08 (deals supply) — a shelf with its own supply and no eBay data on it
 
 - **The design (Roy):** the shelf shows OUR data only — card, TCGplayer market

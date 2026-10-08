@@ -119,7 +119,7 @@ async function waitForBoot(server, ms = 20000) {
 
     // ── Set logos we made (T4, 2026-10-08): named files only ──
     console.log('\nSET LOGOS — each by name, nothing else under /set-logos/');
-    for (const [p, file] of [['/set-logos/ex5.5.png', 'set-pokecard.png'], ['/set-logos/mfb.png', 'set-myfirst.png']]) {
+    for (const [p, file] of [['/set-logos/ex5.5.png', 'set-pokecard.png'], ['/set-logos/mfb.png', 'set-myfirst.png'], ['/set-logos/exu.png', 'set-exu.png']]) {
       const rr = await fetch(BASE + p, { redirect: 'manual' });
       const bytes = Buffer.from(await rr.arrayBuffer());
       const r = { status: rr.status, headers: { 'content-type': rr.headers.get('content-type') } };
@@ -131,7 +131,7 @@ async function waitForBoot(server, ms = 20000) {
       const r = await get(p);
       ok(`${p} is not served`, r.status === 404, 'got ' + r.status);
     }
-    for (const p of ['/set-myfirst.png', '/set-pokecard.png', '/set-ex10.png']) {
+    for (const p of ['/set-myfirst.png', '/set-pokecard.png', '/set-exu.png']) {
       const r = await get(p);
       ok(`${p} (the file by its own name) is not served`, r.status === 404, 'got ' + r.status);
     }

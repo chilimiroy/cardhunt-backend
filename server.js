@@ -6815,6 +6815,7 @@ app.get('/app', (req, res) => {
 const SET_LOGOS = {
   'ex5.5.png': 'set-pokecard.png',    // Poké Card Creator Pack
   'mfb.png':   'set-myfirst.png',     // My First Battle — its blue plate is part of the image (white text)
+  'exu.png':   'set-exu.png',         // Unseen Forces Unown Collection (Roy: exu, not ex10 — ex10 keeps TCGdex's logo)
 };
 app.get('/set-logos/:file', (req, res) => {
   const f = Object.prototype.hasOwnProperty.call(SET_LOGOS, req.params.file) ? SET_LOGOS[req.params.file] : null;

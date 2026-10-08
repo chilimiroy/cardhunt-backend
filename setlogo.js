@@ -15,6 +15,9 @@ const HOST = 'https://cardhunt-backend.onrender.com';
 const PLAN = [
   { set: 'ex5.5', name: 'Poké Card Creator Pack', file: 'set-pokecard.png' },
   { set: 'mfb',   name: 'My First Battle',        file: 'set-myfirst.png' },
+  // Roy, 2026-10-08: this file is the Unown Collection's (the Unown O), not
+  // Unseen Forces' (ex10), which keeps the logo TCGdex gives it.
+  { set: 'exu',   name: 'Unseen Forces Unown Collection', file: 'set-exu.png' },
 ];
 async function main() {
   const WRITE = process.argv.includes('--write');

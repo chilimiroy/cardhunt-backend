@@ -75,6 +75,17 @@ const sliceRoute = (head) => { const i = S.indexOf(head); return i < 0 ? '' : S.
 ok('clearPrices runs after a report is filed', /reports\.clearPrices\(db\)/.test(sliceRoute("app.post('/api/reports'")));
 ok('clearPrices runs BEFORE the masters\' list is read', (s => s.indexOf('reports.clearPrices(db)') >= 0 && s.indexOf('reports.clearPrices(db)') < s.indexOf('SELECT r.id'))(sliceRoute("app.get('/api/admin/reports'")));
 ok('clearPrices runs after a state change (actioned / dismissed clear at once)', (s => s.indexOf('reports.clearPrices(db)') > s.indexOf('UPDATE listing_reports SET state'))(sliceRoute("app.post('/api/admin/reports/:id/state'")));
+{ const i = S.indexOf("app.post('/api/deals/refresh'"); const dr = i < 0 ? '' : S.slice(i, S.indexOf('\n});', i));
+  const first = dr.indexOf('clearReportPricesForRun()'), ret = dr.search(/return res\.status/);
+  ok('the 3-hourly deals refresh runs clearPrices, BEFORE any early return (off, already running)', first > 0 && (ret < 0 || first < ret));
+  ok('every refresh answer reports what it did (reportPrices)', (dr.match(/reportPrices/g) || []).length >= 5);
+  const fnr = S.slice(S.indexOf('async function clearReportPricesForRun('), S.indexOf('\n}', S.indexOf('async function clearReportPricesForRun(')));
+  ok('…through reports.clearPrices, and a missing table is said, not thrown', /require\('\.\/reports'\)\.clearPrices\(db\)/.test(fnr) && /42P01/.test(fnr));
+  const W = fs.readFileSync(__dirname + '/.github/workflows/deals-refresh.yml', 'utf8').replace(/\r/g, '');
+  ok('the workflow prints reportPrices from the start answer', /jq -c '\.reportPrices' start\.json/.test(W));
+  ok('no new scheduled job: the workflow still has its one schedule', (W.match(/cron:/g) || []).length === 1);
+  const flows = fs.readdirSync(__dirname + '/.github/workflows');
+  ok('no other workflow names clearPrices or reports', flows.every(f => f === 'deals-refresh.yml' || !/clearPrices|listing_reports/.test(fs.readFileSync(__dirname + '/.github/workflows/' + f, 'utf8')))); }
 ok('no scheduled job: nothing sets an interval for it', !/setInterval\([^)]*clearPrices|cron[^\n]*clearPrices/i.test(S));
 ok('POST /api/reports is access.approved', /app\.post\('\/api\/reports', access\.approved/.test(S));
 ok('GET /api/admin/reports is access.master', /app\.get\('\/api\/admin\/reports', access\.master/.test(S));

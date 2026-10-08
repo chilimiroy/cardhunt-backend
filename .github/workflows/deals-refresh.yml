@@ -9,6 +9,11 @@
 # ~1.3 eBay calls a card = ~104 a run; the job's calls are BACKGROUND origin
 # and stop by themselves at the quota's soft stop.
 #
+# The same start request also clears the stored eBay price on listing reports
+# that are actioned, dismissed or older than 30 days (reports.clearPrices) —
+# that rule's clock is this run, not a job of its own. The server answers
+# with reportPrices, printed below.
+#
 # The tooling key is a repository secret (CARDZON_TOOLING_KEY), added by Roy.
 # It is never written here and never echoed.
 name: Deals refresh
@@ -40,6 +45,7 @@ jobs:
             if [ "$code" = 202 ] || [ "$code" = 409 ]; then break; fi
             sleep 30
           done
+          echo "report prices: $(jq -c '.reportPrices' start.json 2>/dev/null)"
           if [ "$code" = 202 ]; then echo "RUN_ID=$(jq -r '.runId' start.json)" >> "$GITHUB_ENV";
           elif [ "$code" = 409 ]; then echo "Not started: $(jq -r '.reason' start.json)"; echo "RUN_ID=" >> "$GITHUB_ENV";
           else echo "The server did not accept the start."; exit 1; fi

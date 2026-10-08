@@ -1309,13 +1309,25 @@ async function runDealRefresh(runId) {
 // POST /api/deals/refresh — starts the job (the GitHub Action, tooling key),
 // answers at once; the Action then polls /status, which also keeps the
 // free-tier instance awake while the job runs. Its eBay calls are BACKGROUND.
-app.post('/api/deals/refresh', toolingKey.require, (req, res) => {
-  if (!deals_.ENABLED) return res.status(409).json({ started: false, reason: 'deals are switched off' });
-  if (dealJob.running) return res.status(409).json({ started: false, reason: 'already running', status: dealJob });
-  if (!db) return res.status(503).json({ started: false, reason: 'no database' });
+//
+// Each call also runs reports.clearPrices (Roy, 2026-10-08): the 30-day rule
+// for a report's stored eBay price fires on this 3-hourly clock, not only
+// when a report is filed or reviewed — no scheduled job of its own. It runs
+// whether or not a deals run starts (off, already running), and every answer
+// says what it did in `reportPrices`, which the workflow prints.
+async function clearReportPricesForRun() {
+  if (!db) return { ran: false, reason: 'no database' };
+  try { return { ran: true, cleared: await require('./reports').clearPrices(db) }; }
+  catch (e) { return { ran: false, reason: e.code === '42P01' ? 'listing_reports does not exist yet (migration-reports.sql not run)' : e.message }; }
+}
+app.post('/api/deals/refresh', toolingKey.require, async (req, res) => {
+  const reportPrices = await clearReportPricesForRun();
+  if (!deals_.ENABLED) return res.status(409).json({ started: false, reason: 'deals are switched off', reportPrices });
+  if (dealJob.running) return res.status(409).json({ started: false, reason: 'already running', status: dealJob, reportPrices });
+  if (!db) return res.status(503).json({ started: false, reason: 'no database', reportPrices });
   const runId = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   ebay0.withOrigin('background', () => { runDealRefresh(runId).catch(e => console.warn('[deals] refresh failed:', e.message)); });
-  res.status(202).json({ started: true, runId, cards: DEALS_SUPPLY.cards });
+  res.status(202).json({ started: true, runId, cards: DEALS_SUPPLY.cards, reportPrices });
 });
 app.get('/api/deals/refresh/status', toolingKey.require, (req, res) => {
   res.json(Object.assign({}, dealJob, { errors: dealJob.errors.slice(0, 20), at: new Date().toISOString() }));

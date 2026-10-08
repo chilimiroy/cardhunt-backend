@@ -49,8 +49,8 @@ ok(/ME2PT5_PREMIUM\.forEach\(function\(c\)\{\s*c\.id = 'en-me02\.5-' \+ c\.numbe
 ok(/id: l \+ '-' \+ ts \+ '-' \+ num/.test(fnSrc(page, 'tcgdexFetchSet')), 'TCGdex-direct cards carry the language');
 ok(!/function doSearchLegacy/.test(page) && !/Search the full catalogue instead<\/button>/.test(page),
    'the legacy pokemontcg.io search and its button are gone');
-ok(/\/api\/trending\/catalogue/.test(fnSrc(page, 'loadSearchSections')) && /OUR_CARD_ID\.test\(c\.id\)/.test(fnSrc(page, 'loadSearchSections'))
-   && !/\$\{API\}\/cards/.test(fnSrc(page, 'loadSearchSections')),
+ok(/\/api\/trending\/search/.test(fnSrc(page, 'loadSearchTrend')) && /OUR_CARD_ID\.test\(c\.id\)/.test(fnSrc(page, 'loadSearchTrend'))
+   && !/\$\{API\}\/cards/.test(fnSrc(page, 'loadSearchTrend')),
    'the Search screen trending grid reads our trending, our ids only');
 const ap = fnSrc(page, 'apiFetch');
 ok(ap && !/API\s*\+\s*'\/cards/.test(ap), 'apiFetch no longer falls back to pokemontcg.io for cards');

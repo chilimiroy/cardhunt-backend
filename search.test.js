@@ -40,31 +40,31 @@ const iPop = page.indexOf('Most searched cards'), iTc = page.indexOf('Trending c
 ok('Most searched, then Trending cards, then Trending sets', iPop > 0 && iTc > iPop && iTs > iTc);
 ok('nothing on the page is labelled most-viewed', !/most[- ]viewed/i.test(page));
 const ls = fn('loadSearchSections');
-ok('the sections read /api/search/popular and /api/trending/catalogue', /\/api\/search\/popular/.test(ls) && /\/api\/trending\/catalogue/.test(ls));
+const lt = fn('loadSearchTrend');
+ok('Most searched reads /api/search/popular; trending reads /api/trending/search', /\/api\/search\/popular/.test(ls) && /\/api\/trending\/search/.test(lt));
 ok('not recording / gathering are said in words, nothing drawn', /!d\.recording/.test(ls) && /d\.gathering/.test(ls) && /Still gathering/.test(ls));
-ok('every tile there is a catalogue tile: no price slot for anyone', (ls.match(/cardTile\(/g) || []).length === 1 && /noPrice: true/.test(ls));
+ok('every tile there is a catalogue tile: no price slot for anyone', (ls + lt).match(/cardTile\(/g).length === 2 && (ls + lt).match(/noPrice: true/g).length === 2);
 ok('cardTile: noPrice skips getBase (no estimate) and the price row', /var showPrice = pricesOpen\(\) && !opts\.noPrice;/.test(fn('cardTile')) && /var price = showPrice \? getBase\(c\) : 0;/.test(fn('cardTile')));
 ok('the old pokemontcg-shaped loader is gone', !/loadSearchTrending/.test(code));
 
 console.log('\n  the server');
 const route = (path) => { const i = S.indexOf("app.get('" + path + "'"); return i < 0 ? '' : S.slice(i, S.indexOf('\n});', i) + 4); };
-const pop = route('/api/search/popular'), cat = route('/api/trending/catalogue'), tr = route('/api/trending');
+const pop = route('/api/search/popular'), cat = route('/api/trending/search'), tr = route('/api/trending');
 ok('/api/search/popular is catalogue (access.optional)', /app\.get\('\/api\/search\/popular', access\.optional/.test(S));
-ok('/api/trending/catalogue is catalogue (access.optional)', /app\.get\('\/api\/trending\/catalogue', access\.optional/.test(S));
+ok('no public trending route is left (catalogue, sets)', !/\/api\/trending\/(catalogue|sets)'/.test(S));
 ok('/api/trending stays priced', /app\.get\('\/api\/trending', access\.priced/.test(S));
 ok('popular reads search_log only — not listing_views', /FROM search_log/.test(pop) && !/listing_views/.test(pop));
 ok('popular answers gathering below the threshold, with the count so far', /t\.resolved < SEARCH_POPULAR_MIN/.test(pop) && /gathering: true, cards: \[\]/.test(pop));
 ok('popular says "not recording" when the table is missing (42P01)', /42P01/.test(pop) && /recording: false/.test(pop));
-ok('trending sets are approved-only: their own route, access.priced (a ranking by price movement)', /app\.get\('\/api\/trending\/sets', access\.priced/.test(S));
-ok('the public catalogue route sends no sets', !/sets[,:]/.test(cat.replace(/\/\/[^\n]*/g, '')));
-ok('the page: Trending sets behind the door — a .price-door, then .price-only around it',
-  /<div class="price-door" role="note"[^>]*><\/div>\s*<div class="price-only">\s*<div class="sec-h"[^>]*><div><div class="sec-t">Trending sets/.test(page));
-ok('the page asks for trending sets only when prices are open (whenPrices)', /if \(!whenPrices\(loadSearchTrendSets\)\) return;/.test(fn('loadSearchTrendSets')) && /\/api\/trending\/sets/.test(fn('loadSearchTrendSets')));
-ok('the catalogue trending sends no price, change or date', /cards: b\.cards\.slice\(0, 12\)\.map\(c => \(\{ id: c\.id, name: c\.name, nameEn: c\.nameEn, number: c\.number,\s*rarity: c\.rarity, image: c\.image, set: c\.set \}\)\)/.test(cat)
-  && !/price|change/i.test(cat.replace(/measured TCGplayer price rose|No prices are shown here|\/\/[^\n]*/g, '')));
+ok('trending cards and sets are approved-only: /api/trending/search is access.priced (a ranking by price movement)', /app\.get\('\/api\/trending\/search', access\.priced/.test(S));
+ok('the page: Trending cards AND Trending sets inside one door — a .price-door, then .price-only around both',
+  /<div class="price-door" role="note"[^>]*><\/div>\s*<div class="price-only">\s*<div class="sec-h"[^>]*><div><div class="sec-t">Trending cards[\s\S]*?Trending sets[\s\S]*?<\/div><!-- \/\.price-only \(trending cards and sets\) -->/.test(H.replace(/\r/g, '')));
+ok('the page asks for trending only when prices are open (whenPrices) — signed out, no request', /if \(!whenPrices\(loadSearchTrend\)\) return;/.test(lt)
+  && !/\/api\/trending/.test(ls));
+ok('the trending route sends no price, change or date', /cards: b\.cards\.slice\(0, 12\)\.map\(c => \(\{ id: c\.id, name: c\.name, nameEn: c\.nameEn, number: c\.number,\s*rarity: c\.rarity, image: c\.image, set: c\.set \}\)\)/.test(cat)
+  && !/price|change/i.test(cat.replace(/access\.priced|measured TCGplayer price rose|\/\/[^\n]*/g, '')));
 ok('every trending route shares ONE builder (trendingBody)', /await trendingBody\(p\)/.test(tr) && /await trendingBody\(p\)/.test(cat) && (S.match(/async function trendingBody\(/g) || []).length === 1);
-{ const ts = route('/api/trending/sets');
-  ok('trending sets are derived from the same list and say so (setRule)', /await trendingBody\(p\)/.test(ts) && /bySet/.test(ts) && /setRule:/.test(ts)); }
+ok('trending sets are derived from the same list and say so (setRule)', /bySet/.test(cat) && /setRule:/.test(cat));
 const srch = route('/api/search');
 ok('every resolved search is recorded (logSearch) — query, card if ONE, candidate count', /logSearch\(q, confident \? top\.cardId : null, candidates\.length\)/.test(srch));
 const log = S.slice(S.indexOf('function logSearch('), S.indexOf('\n}', S.indexOf('function logSearch(')) + 2);

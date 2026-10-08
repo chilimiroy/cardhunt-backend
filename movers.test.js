@@ -52,7 +52,7 @@ ok(/TCGdex/.test(tr.describeRule(p)) && /old, thin or unsettled/.test(tr.describ
 
 console.log('\n  wiring');
 const src = fs.readFileSync(__dirname + '/server.js', 'utf8');
-const route = src.slice(src.indexOf("app.get('/api/trending'"), src.indexOf('// ── SEARCH'));
+const route = src.slice(src.indexOf('async function trendingBody('), src.indexOf('// ── SEARCH'));   // the shared body (T6, 2026-10-08)
 ok(/pricequality\.annotate\(db, r\.rows/.test(route) && /trending\.rankMovers\(r\.rows, p\.sort, q\)/.test(route), '/api/trending hands the quality marks to rankMovers');
 ok(/coverage: trending\.coverage\(p, eligible, current\)/.test(route) && /trending\.currentSql\(p\)/.test(route), 'and reports coverage against the cards priced now');
 const page = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');

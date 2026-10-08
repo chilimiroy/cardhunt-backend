@@ -1967,6 +1967,7 @@ app.get('/api/admin/reports', access.master, async (req, res) => {
     const r = await db.query(`SELECT r.id, r.created_at, r.user_id, r.reporter_email, r.card_id, c.name AS card_name, c.number AS card_number,
         c.set_name, r.listing_id, r.listing_url, r.source, r.price_shown, r.price_currency, r.reason, r.details, r.photo_checks,
         r.state, r.state_changed_by_email, r.state_changed_at
+      /* digital:unfiltered — a report names its card whatever the card is */
       FROM listing_reports r LEFT JOIN cards c ON c.api_card_id = r.card_id
       ORDER BY r.created_at DESC, r.id DESC LIMIT 300`);
     res.json({ reasons: reports.REASONS, states: reports.STATES, reports: r.rows });

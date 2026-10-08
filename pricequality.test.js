@@ -93,7 +93,7 @@ console.log('\n  every screen that shows a headline is wired');
   ok(/lp\.source_meta AS price_meta/.test(sets) && /meta: r\.price_meta/.test(sets), '...with source_meta (listing counts)');
   const card = S.slice(S.indexOf("app.get('/api/cards/:cardId'"), S.indexOf("// ── Not one of ours"));
   ok(/pricequality\.annotate\(db/.test(card) && /_priceQuality: pq\.get\(c\.api_card_id\)/.test(card), '/api/cards/:id (card page, alerts, latest searches)');
-  const tr = S.slice(S.indexOf("app.get('/api/trending'"), S.indexOf('// ── SEARCH'));
+  const tr = S.slice(S.indexOf('async function trendingBody('), S.indexOf('// ── SEARCH'));   // the shared body (T6, 2026-10-08)
   ok(/pricequality\.annotate\(db/.test(tr) && /priceQuality: pq\.get\(c\.id\)/.test(tr), '/api/trending (both trending grids)');
   const T = fs.readFileSync(__dirname + '/trending.js', 'utf8');
   ok((T.match(/AS price_meta/g) || []).length === 2, 'trending.js selects source_meta for price and mover sorts');
@@ -110,7 +110,9 @@ console.log('\n  every screen that shows a headline is wired');
   ok(/estMark = priceMarksHtml\(isReal, c\._priceQuality\)/.test(code), 'set tile passes the card\'s quality');
   ok(/priceMarksHtml\(true, cc\._priceQuality, \{ skip: \['old'\], text: true \}\)/.test(code), 'card page badge passes it');
   ok(/out\.quality = d\._priceQuality/.test(code), 'cardSummary keeps it (alerts, latest searches)');
-  ok(/quality: c\.priceQuality/.test(code) && /_priceQuality: c\.priceQuality/.test(code), 'both trending grids keep it');
+  // The search page's trending is catalogue since T6 (2026-10-08): no price, so no mark to keep.
+  ok(/quality: c\.priceQuality/.test(code), 'the Pokémon trending grid keeps it');
+  ok(!/_priceQuality: c\.priceQuality/.test(code) && /noPrice: true/.test(code), 'the search page\'s trending draws no price at all (catalogue tiles)');
 }
 
 (async () => {

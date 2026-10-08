@@ -101,7 +101,8 @@ eq('both routes go through the shared helper',
 eq('the helper caches the whole getItem answer (cert AND images)', /certcheck\.fromItem\(call\.data\)/.test(route), true);
 eq('eBay rows carry itemId', /itemId: it\.itemId/.test(server) && /itemId: o\.itemId/.test(server), true);
 const page = fs.readFileSync('cardhunt_preview.html', 'utf8');
-eq('Verify is a sibling of the link, not inside it', /<\/a>'\s*\n\s*\+ certLine\(l\)/.test(page), true);
+// Report (T3, 2026-10-08) sits between them, also outside the link.
+eq('Verify is a sibling of the link, not inside it', /<\/a>'\s*\n\s*(?:\+ reportButtonHtml\(l\)\s*\n\s*)?\+ certLine\(l\)/.test(page), true);
 eq('Verify is offered on eBay PSA rows only', /l\.source === 'ebay' && l\.itemId && \/\^PSA/.test(page), true);
 eq('every state has its own chip style', ['no-cert', 'entered', 'verified', 'mismatch', 'error'].every(s => page.includes('.certchip.' + s + '{')), true);
 

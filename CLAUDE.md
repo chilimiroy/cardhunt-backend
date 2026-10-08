@@ -90,7 +90,9 @@ Gitignored (need a DB URL or residential IP): `sourcerank.js`,
 `gradeprices.js`. `.gitignore` covers data, logs, credentials, scratch only.
 
 - **Tracked is not deployed.** Render runs `server.js`; nothing requires
-  `ingest.js`, and `/ingest.js` 404s (`approute.test.js`). It carries no secret.
+  `ingest.js`, and `/ingest.js` 404s (`approute.test.js`). Keys come from env
+  only: a pokemontcg.io key sat in it, `server.js` and the page until
+  2026-10-08 (rotated; `nosecrets.test.js`).
 - **A file the server requires is not local tooling** (`yuyutei.js` ignored =
   `MODULE_NOT_FOUND` on boot). The audit tools are tracked so their findings
   are reproducible.

@@ -1122,9 +1122,10 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 </div>
 
 <script>
-const KEY='4c777c95-8a61-407e-b16e-48bd2f827478';
+// No pokemontcg.io key in the page (2026-10-08): anything here is public.
+// The direct calls below go keyless, at pokemontcg.io's per-visitor limit.
 const API='https://api.pokemontcg.io/v2';
-const H={'X-Api-Key':KEY};
+const H={};
 
 // ── RENDER BACKEND CONNECTION ─────────────────────────────────
 // Same origin when the page is served by a LOCAL server.js, so an endpoint
@@ -8081,6 +8082,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-1473b66-searchbc &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-51a693c-nokey &middot; click to hide</div>
 </body>
 </html>

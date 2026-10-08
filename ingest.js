@@ -30,15 +30,19 @@ try { Pool = require('pg').Pool; } catch (e) { /* dry run without pg */ }
 // ── CONFIG ────────────────────────────────────────────────────
 const TCGDEX   = 'https://api.tcgdex.net/v2';
 const TCG_API  = 'https://api.pokemontcg.io/v2';
-const TCG_KEY  = process.env.POKEMONTCG_KEY || '4c777c95-8a61-407e-b16e-48bd2f827478';
-const TCG_H    = { 'X-Api-Key': TCG_KEY };
+// The pokemontcg.io key comes from the environment only (POKEMONTCG_KEY, a
+// user environment variable on this machine). It was hard-coded here until
+// 2026-10-08 and has been rotated. Unset, requests go without a key at
+// pokemontcg.io's lower keyless limit. nosecrets.test.js fails on a literal.
+const TCG_KEY  = process.env.POKEMONTCG_KEY || null;
+const TCG_H    = TCG_KEY ? { 'X-Api-Key': TCG_KEY } : {};
 
 // Rate limits — deliberately conservative. Nothing gets blocked at these speeds.
 const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite)
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.9.3';   // bump when this file changes
+const VERSION = '5.9.4';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals

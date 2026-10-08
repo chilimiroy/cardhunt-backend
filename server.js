@@ -396,9 +396,11 @@ app.get('/api/back/:cardId', access.priced, async (req, res) => {
 });
 
 // ── DATA SOURCES ──────────────────────────────────────────────
-const TCG_KEY = process.env.POKEMONTCG_KEY || '4c777c95-8a61-407e-b16e-48bd2f827478';
+// pokemontcg.io key: Render's environment only (POKEMONTCG_KEY). Hard-coded
+// until 2026-10-08, then rotated. Unset: keyless requests (a lower limit).
+const TCG_KEY = process.env.POKEMONTCG_KEY || null;
 const TCG_API = 'https://api.pokemontcg.io/v2';
-const TCG_H   = { 'X-Api-Key': TCG_KEY };
+const TCG_H   = TCG_KEY ? { 'X-Api-Key': TCG_KEY } : {};
 const TCGDEX  = 'https://api.tcgdex.net/v2';   // free, multilingual, no key
 
 // Map our set ids -> TCGdex set ids

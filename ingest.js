@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.9.6';   // bump when this file changes
+const VERSION = '5.9.7';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -1161,33 +1161,15 @@ function yahooSawSummary() {
 
 // ── 4. (eBay Browse fallback deleted 2026-09-29, T9 — see safePriceFor)
 
-// ── AGGREGATE ─────────────────────────────────────────────────
-// Detects the failure mode where a source returns the same price for
-// every query — a sure sign the match is junk.
-// Detects the failure mode where a source returns the same price for every
-// query — the sign of a bad match (a sealed booster box matching dozens of
-// different cards).
-//
-// IMPORTANT: only applies above a price floor. Bulk commons legitimately share
-// TCGPlayer's minimum price — dozens of cards at $0.15 is normal market data,
-// not a broken source. An earlier version rejected ~80 valid commons per set.
-// The repeat test must be RELATIVE, not to the cent. When a degenerate search
-// returns the same generic pool for every card, the medians land near each
-// other but rarely equal: SM7 came back as $191.08, $191.50, $190.57 ... --
-// 40+ cards clustered on one sealed-box price and every pair more than $0.01
-// apart, so the exact-match test caught none of them.
-const JUNK_FLOOR = 5.00;
-const JUNK_REL_TOLERANCE = 0.015;
-const recentPrices = [];
-function looksLikeJunk(price) {
-  if (!price || price < JUNK_FLOOR) return false;   // cheap repeats are real
-  recentPrices.push(price);
-  if (recentPrices.length > 12) recentPrices.shift();
-  if (recentPrices.length < 6) return false;
-  const near = recentPrices.filter(p =>
-    Math.abs(p - price) <= price * JUNK_REL_TOLERANCE).length;
-  return near >= 5;
-}
+// ── ONE PRODUCT ANSWERING FOR SEVERAL CARDS (pricedupe.js, Roy 2026-10-09) ──
+// Rejects a price when an earlier card in the run got the same price for the
+// same product id — the mismatched-product bug — or, with no product id, the
+// same exact price from the same source on 5+ cards. It replaced
+// looksLikeJunk, whose 1.5%-of-the-last-12 test measured the run's value
+// ordering: on 08/10 it discarded 1,285 genuine prices and let through five
+// real duplicates (PROGRESS 2026-10-09). One guard per ingest command.
+const pricedupe = require('./pricedupe');
+const PRICE_GUARD = pricedupe.createGuard();
 
 // Set context for the JP listing filter, derived from a cards row. If
 // set_total is missing the filter falls back to demanding the set code in the
@@ -2228,10 +2210,10 @@ async function safePriceFor(card) {
   // Reject implausible single-card prices
   if (res.price > 50000) return null;
 
-  // Reject a source that has started repeating itself
-  if (looksLikeJunk(res.price)) {
-    console.log(`\n  WARNING: ${res.source} returned $${res.price} for 5+ different cards`);
-    console.log(`  above the $${JUNK_FLOOR} floor — treating as a bad match, skipping.\n`);
+  // One product answering for several cards (pricedupe.js): refused, named.
+  const dup = PRICE_GUARD.check(card.api_card_id, res);
+  if (dup) {
+    console.log(`\n  REFUSED ${card.api_card_id} (${card.name}): ${res.source} — ${dup}. Not written.\n`);
     return null;
   }
 

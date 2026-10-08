@@ -1,5 +1,49 @@
 # CardHunt — Progress Log
 
+## 2026-10-09 — the duplicate-price guard replaced, the push gate committed, the key's last local copies deleted
+
+- **The guard (`pricedupe.js`, replacing `looksLikeJunk`).** The old test
+  rejected a price >= $5 within 1.5% of 5 of the last 12 — in a run ordered by
+  value, that measures sort order. Now: refused when an earlier card in the
+  run got the same price for the same TCGplayer product id (TCGdex and the
+  internal search share the id space); with no product id, the same exact
+  price from the same source on 5+ cards at >= $5. Different product ids
+  always pass; no proximity, no window. A refusal names the card.
+- **Replayed on the 08/10 run.** The batch was rebuilt from the database as
+  it stood at 00:00:01Z (same selection, prices recorded before the run): 4,884
+  due and every tier count equal to the log, 2,555 of the reached 3,952
+  written — equal to the log. The 1,285 warnings carry no card, so they were
+  matched in run order as two streams (TCGdex-priced cards to the 898
+  tcgdex_* warnings, the rest to the 387 tcgplayer_market warnings): 1,272
+  matched (881 of 885 TCGdex pairs within 25% of TCGdex's price today), 13
+  TCGdex warnings unplaced, 125 unwritten cards genuinely without data. The
+  old rule replayed on that sequence agrees with the run on 3,352 of 3,827
+  priced cards (88%: its window is sensitive to small order differences).
+  **The new rule refuses 0 of the 1,272**, and 5 cards the old guard WROTE —
+  each a second card given the same product at the same price:
+  en-dpp-DP25 and en-dpp-DP05 Tropical Wind = DP48 (product 90056, $249,
+  TCGplayer search); en-np-36 Tropical Tidal Wave = en-hgssp-HGSS18 (97703,
+  $1,400, TCGdex); en-ecard3-10 Gengar = en-ecard3-H09 (85669, $509.99,
+  TCGdex); en-ecard3-H11 Houndoom = en-ecard3-12 (86201, $111.04, search).
+  **Open:** the first claimant of each product is kept, though either card may
+  be the wrong one; their stored prices are unchanged.
+- **The three deal exclusions were wrong.** None of en-bwp-BW28, en-bw5-107,
+  en-ex12-91 was in the 08/10 batch (written 07/10 00:01, due a minute after
+  that run began): the old guard never touched them. Each product id belongs
+  to that card alone in all of price_history; en-ex12-91 answers TCGdex again
+  (200, $799, the stored price). All three are back in the pool.
+- **The push gate** was a scratch script on one machine. `gatedpush.sh` is
+  committed (full suite on a clean worktree of HEAD; pushes only on all-green
+  with no suite missing; shown to refuse a commit with a failing suite) and
+  CLAUDE.md now says: no push without it. The five times something went out
+  or read green without running: the source-reading test, the deals photo
+  count, the async assertion (reports.test.js), the 51 + 1 found by the
+  assertion count, and 32e0cd3 pushed over a failing scopeguard.test.js.
+- **The six local .bak files holding the old pokemontcg.io key are deleted**
+  (three of cardhunt_preview.html, two of server.js, one of ingest.js; all
+  untracked). No other file in the project holds it; git history still does —
+  rotation is still Roy's.
+
 ## 2026-10-08 (night) — a leaked key, a guard that discards good prices, a nightly that dies quietly, tests that did not run
 
 - **The pokemontcg.io API key was a literal** in `ingest.js`, `server.js` and

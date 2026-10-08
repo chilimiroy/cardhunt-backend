@@ -135,7 +135,7 @@ if (!fs.existsSync(__dirname + '/ingest.js')) {
   if (fs.existsSync(__dirname + '/refresh-daily.cmd')) {
     const cmd = fs.readFileSync(__dirname + '/refresh-daily.cmd', 'utf8').trim().split(/\r?\n/).filter(l => l.trim() && !/^\s*(REM|@echo)/i.test(l));
     ok('refresh-daily.cmd ends on the node line (its exit code is the task result)', /^node ingest\.js refresh/.test(cmd[cmd.length - 1]), cmd[cmd.length - 1]);
-  } else TC.skip(1, 'refresh-daily.cmd is local-only (gitignored *.cmd) and not in this checkout');
+  } else ok('refresh-daily.cmd is present (tracked since 2026-10-08)', false);
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');

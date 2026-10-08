@@ -177,7 +177,7 @@ console.log('\n  one English gate — cardmatch.verify');
   if (fs.existsSync('ebayprobe.js')) {
     const pr = fs.readFileSync('ebayprobe.js', 'utf8');
     ok('ebayprobe (local) gates with cm.verify and asks cm.buildQuery', /cm\.verify\(/.test(pr) && /cm\.buildQuery\(/.test(pr));
-  } else TC.skip(1, 'ebayprobe.js is local-only (gitignored) and not in this checkout');
+  } else ok('ebayprobe.js is present (tracked since 2026-10-08)', false);
   const cm = require('./cardmatch');
   const cz = { name: 'Charizard VMAX', number: '74', setTotal: '73', setId: 'swsh3.5', setName: "Champion's Path" };
   ok('verify refuses "x4 Playset"', !cm.verify('Charizard VMAX 74/73 x4 Playset', cz, 'Raw').ok);

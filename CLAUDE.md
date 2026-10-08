@@ -85,8 +85,8 @@ Shared, never copied — every duplicated implementation here has drifted.
 
 `git ls-files` is the authority; `setlist.test.js` asserts every `*.test.js`,
 `ingest.js`, `CLAUDE.md`, `PROGRESS.md`, `jptest.js` are in the index.
-Gitignored (need a DB URL or residential IP): `sourcerank.js`,
-`jpreconcile.js`, `tcgdexprobe.js`, `ebayprobe.js`, `yahoogate.js`,
+Gitignored (need a DB URL or residential IP):
+`jpreconcile.js`, `tcgdexprobe.js`, `yahoogate.js`,
 `gradeprices.js`. `.gitignore` covers data, logs, credentials, scratch only.
 
 - **Tracked is not deployed.** Render runs `server.js`; nothing requires

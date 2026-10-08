@@ -13,7 +13,9 @@ node_modules/
 # (TASK T2). It reads DATABASE_URL from the environment and holds no secret.
 
 # Local tooling -- needs a database URL or a residential IP
-sourcerank.js
+# sourcerank.js was here until 2026-10-08 (Roy): its 48 tests skipped on every
+# clean checkout, and a failing source test once let a bad commit out. It holds
+# no secret and no eBay content; tracked, never served (approute.test.js).
 jpreconcile.js
 
 # yuyutei.js was here, on the same reasoning as the probes above: local
@@ -33,7 +35,8 @@ tcgdexprobe.js
 # tcgdexharvest.js was here until 2026-09-29 (TASK T3): it WRITES prices,
 # and existed on one machine -- the ingest.js case exactly. Tracked; never
 # deployed (nothing server.js requires loads it; approute asserts the 404).
-ebayprobe.js
+# ebayprobe.js was here until 2026-10-08: gateaudit's check of it skipped on a
+# clean checkout. Credentials come from the environment; it stores nothing.
 yahoogate.js
 
 # setaudit.js is DELIBERATELY TRACKED, unlike every probe above it.
@@ -66,6 +69,9 @@ yahoo.html
 # Scripts and scheduled-task plumbing
 *.ps1
 *.cmd
+# The nightly's wrapper is tracked (2026-10-08): setyield.test.js checks that
+# node is its last command (its exit code is the task result). No secret in it.
+!refresh-daily.cmd
 .task-watch-state
 
 # Notes. CLAUDE.md and PROGRESS.md USED to be here too. CLAUDE.md is the

@@ -11,10 +11,11 @@
 // clone does not have it. Say so plainly instead of throwing
 // MODULE_NOT_FOUND; there is nothing here to test without it.
 const TC = require('./testcount')(48);   // assertions in a plain run — fewer fails the file (testcount.js)
+// Tracked since 2026-10-08 (Roy): no skip. A missing sourcerank.js is a
+// failure — a permanent skip on the source ranking is not acceptable.
 if (!require('fs').existsSync(__dirname + '/sourcerank.js')) {
-  TC.skip(48, 'sourcerank.test.js — sourcerank.js is local-only (gitignored) and not in this checkout');
-  console.log('\n  0 passed, 0 failed');
-  process.exit(0);
+  console.log('  FAIL  sourcerank.js is missing — it is tracked; restore it\n\n  0 passed, 1 failed');
+  process.exit(1);
 }
 const sr = require('./sourcerank');
 

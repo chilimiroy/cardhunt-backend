@@ -18,7 +18,7 @@
 // preloaded with -r (the costmeter.js pattern) — nothing in server.js
 // knows about tests. Tokens are HS256, minted with a test secret.
 
-require('./testcount')(312);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(313);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), os = require('os'), path = require('path'), crypto = require('crypto');
 const { spawn } = require('child_process');
 let pass = 0, fail = 0;
@@ -69,6 +69,7 @@ const ROUTES = [
   ['post', '/api/listings/:cardId/compare', 'priced', null],
   ['get', '/api/search', 'catalogue', null],
   ['get', '/api/search/popular', 'catalogue', null],
+  ['get', '/api/suggest', 'catalogue', null],
   ['get', '/api/trending/search', 'priced', null],
   ['get', '/api/listings/:cardName', 'public', 'refuses: an unidentifiable card gets no listings'],
   ['get', '/api/graded/:cardName', 'priced', null],

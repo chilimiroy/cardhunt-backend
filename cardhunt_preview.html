@@ -5198,7 +5198,7 @@ function clearSearch(){
 }
 
 // ── AUTOCOMPLETE ENGINE ──────────────────────────────────────────────────────
-let acTimer=null, acIdx=-1, acResults=[], heroLang='all';
+let acTimer=null, acIdx=-1, heroLang='all';
 
 function setHeroLang(lang,el){
   heroLang=lang;searchLang=lang;
@@ -5252,44 +5252,37 @@ async function triggerAutocomplete(val,dropId){
   acTimer=setTimeout(()=>fetchAutocomplete(val,dropId),280);
 }
 
+// Autocomplete reads OUR cards table (2026-10-08): /api/suggest, names that
+// start with what was typed, grouped by name. It asked pokemontcg.io from the
+// browser on every keystroke until then — another catalogue, with its ids.
+// Not /api/search: that records each query for "Most searched", and a
+// keystroke is not a search. Every value drawn is escaped.
 async function fetchAutocomplete(val,dropId){
   const drop=document.getElementById(dropId);
   if(!drop) return;
   drop.style.display='block';
   drop.innerHTML='<div style="padding:12px 16px;font-size:12px;color:var(--mu);display:flex;align-items:center;gap:8px"><div style="width:14px;height:14px;border:2px solid var(--bd);border-top-color:var(--t);border-radius:50%;animation:sp .6s linear infinite"></div>Searching…</div>';
   try{
-    // Fetch name-matched cards — use name:* wildcard style search
-    const q=encodeURIComponent(`name:"${val}*"`);
-    const r=await fetch(`${API}/cards?q=${q}&pageSize=12&orderBy=-set.releaseDate`,{headers:H});
+    const r=await fetch(BACKEND+'/api/suggest?q='+encodeURIComponent(val));
     const d=await r.json();
-    acResults=d.data||[];
-    
-    if(!acResults.length){
-      drop.innerHTML='<div style="padding:14px 16px;font-size:13px;color:var(--mu)">No cards found for "'+val+'"</div>';
+    if(!r.ok) throw new Error(d.error||('HTTP '+r.status));
+    const grouped=d.names||[];
+    if(!grouped.length){
+      drop.innerHTML='<div style="padding:14px 16px;font-size:13px;color:var(--mu)">No cards found for &ldquo;'+liveEsc(val)+'&rdquo;</div>';
       return;
     }
-
-    // Group by name to show unique card names first
-    const seen=new Set(), grouped=[];
-    acResults.forEach(c=>{
-      if(!seen.has(c.name)){seen.add(c.name);grouped.push({type:'name',name:c.name,img:c.images?.small,count:acResults.filter(x=>x.name===c.name).length,id:c.id});}
+    var h='<div style="padding:8px 12px 4px;font-size:10px;font-weight:700;color:var(--fa);text-transform:uppercase;letter-spacing:.06em">Cards</div>';
+    grouped.forEach(function(item){
+      h+='<div class="ac-item" data-name="'+liveEsc(item.name)+'" data-drop="'+liveEsc(dropId)+'" onclick="selectAc(this.dataset.name,this.dataset.drop)" style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid var(--bd)" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'\'">'
+        +(item.image?'<img src="'+liveEsc(item.image)+'" alt="" style="width:32px;height:44px;object-fit:contain;border-radius:4px;flex-shrink:0" onerror="this.style.display=\'none\'">':'')
+        +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+liveEsc(item.name)
+        +(item.nameEn&&item.nameEn!==item.name?' <span style="color:var(--mu);font-weight:500">('+liveEsc(item.nameEn)+')</span>':'')+'</div>'
+        +'<div style="font-size:11px;color:var(--mu)">'+item.count+' version'+(item.count!==1?'s':'')+'</div></div>'
+        +'<span style="font-size:10px;color:var(--fa)">→</span></div>';
     });
-    
-    drop.innerHTML=(function(){
-      var h='<div style="padding:8px 12px 4px;font-size:10px;font-weight:700;color:var(--fa);text-transform:uppercase;letter-spacing:.06em">Cards</div>';
-      grouped.forEach(function(item,idx2){
-        var nm=item.name.replace(/'/g,"\\'"  );
-        h+='<div class="ac-item" onclick="selectAc(\''+nm+'\',\''+dropId+'\')  " style="display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;border-bottom:1px solid var(--bd)" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'\'  ">'
-          +(item.img?'<img src="'+item.img+'" style="width:32px;height:44px;object-fit:contain;border-radius:4px;flex-shrink:0" onerror="this.style.display=\'none\'">'  :'')
-          +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+item.name+'</div>'
-          +'<div style="font-size:11px;color:var(--mu)">'+item.count+' version'+(item.count!==1?'s':'')+'</div></div>'
-          +'<span style="font-size:10px;color:var(--fa)">→</span></div>';
-      });
-      var vEsc=val.replace(/'/g,"\\'"  );
-      h+='<div onclick="doSearch(\''+vEsc+'\');closeAutocomplete()" style="display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;background:var(--bg);border-top:1px solid var(--bd);font-size:12px;font-weight:600;color:var(--t)" onmouseover="this.style.background=\'var(--tl)\'" onmouseout="this.style.background=\'var(--bg)\'">'
-        +'🔍 See all results for &ldquo;'+val+'&rdquo;</div>';
-      return h;
-    })()
+    h+='<div data-q="'+liveEsc(val)+'" onclick="doSearch(this.dataset.q);closeAutocomplete()" style="display:flex;align-items:center;gap:8px;padding:10px 14px;cursor:pointer;background:var(--bg);border-top:1px solid var(--bd);font-size:12px;font-weight:600;color:var(--t)" onmouseover="this.style.background=\'var(--tl)\'" onmouseout="this.style.background=\'var(--bg)\'">'
+      +'🔍 See all results for &ldquo;'+liveEsc(val)+'&rdquo;</div>';
+    drop.innerHTML=h;
   }catch(e){
     drop.innerHTML='<div style="padding:14px 16px;font-size:13px;color:var(--mu)">Search failed — press Enter to try again</div>';
   }
@@ -8054,6 +8047,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-2bc9190-artist &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-edca0c7-suggest &middot; click to hide</div>
 </body>
 </html>

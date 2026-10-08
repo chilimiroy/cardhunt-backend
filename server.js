@@ -4955,6 +4955,33 @@ app.get('/api/search/popular', access.optional, async (req, res) => {
   }
 });
 
+// ── Autocomplete: names in OUR catalogue (2026-10-08) ──
+// The page asked pokemontcg.io from the browser on every keystroke. This
+// answers from cards: names (or English names) that START with the text,
+// grouped by name, most printings first, with one image each. No price, no
+// listing, nothing recorded (a keystroke is not a search: search_log is for
+// /api/search). Public, like the rest of the catalogue.
+const SUGGEST_MAX = 8;
+app.get('/api/suggest', access.optional, async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 60);
+  if (q.length < 2) return res.json({ q, names: [] });
+  if (!db) return res.status(503).json({ error: 'database not configured', names: [] });
+  const key = 'suggest_' + q.toLowerCase();
+  const hit = cGet(key);
+  if (hit) return res.json(hit);
+  try {
+    const like = q.replace(/[\\%_]/g, m => '\\' + m) + '%';
+    const r = await db.query(`SELECT c.name, max(c.name_en) AS name_en, count(*)::int AS n,
+        (array_agg(c.image_small ORDER BY c.set_release DESC NULLS LAST) FILTER (WHERE c.image_small IS NOT NULL))[1] AS image
+      FROM cards c
+      WHERE (c.name ILIKE $1 OR c.name_en ILIKE $1) AND ${digital.visibleSql('c')}
+      GROUP BY c.name ORDER BY count(*) DESC, c.name LIMIT $2`, [like, SUGGEST_MAX]);
+    const body = { q, names: r.rows.map(x => ({ name: x.name, nameEn: x.name_en || null, count: x.n, image: x.image || null })) };
+    cSet(key, body);
+    res.json(body);
+  } catch (e) { res.status(500).json({ error: e.message, names: [] }); }
+});
+
 app.get('/api/search', access.optional, async (req, res) => {
   const q = String(req.query.q || '').trim();
   const limit = Math.min(parseInt(req.query.limit) || 10, 25);

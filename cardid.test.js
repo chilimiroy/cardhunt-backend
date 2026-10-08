@@ -66,8 +66,9 @@ while ((mm = reDirect.exec(page))) {
   const all = [...before.matchAll(/(?:async\s+)?function\s+(\w+)\s*\(/g)];
   direct.push(all.length ? all[all.length - 1][1] : '?');
 }
-ok(direct.length === 1 && direct[0] === 'fetchAutocomplete',
-   'the only direct pokemontcg.io card request left is the name autocomplete (got ' + direct.join(', ') + ')');
+// 2026-10-08: the name autocomplete, the last one, reads /api/suggest (our cards).
+ok(direct.length === 0,
+   'no direct pokemontcg.io card request is left in the page (got ' + direct.join(', ') + ')');
 {
   const ac = fnSrc(page, 'fetchAutocomplete');
   ok(ac.length > 200 && /selectAc\(/.test(ac) && !/openCard|alertCardTarget/.test(ac),

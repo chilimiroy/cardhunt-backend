@@ -529,6 +529,16 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .lrow2-go{display:inline-block;margin-top:6px;padding:6px 12px;border-radius:999px;font-size:12px;
   font-weight:700;background:var(--accent);color:var(--accent-ink);white-space:nowrap}
 .lrow2:hover .lrow2-go{background:var(--accent-strong)}
+/* Report (T3): under View listing, outside the row's link; quiet, not the accent. */
+.lrep-row{display:flex;justify-content:flex-end;padding:4px 0 6px}
+.lrep{padding:4px 12px;font-size:11px;font-weight:600;border-radius:999px;border:1px solid var(--bd);background:transparent;color:var(--mu);cursor:pointer}
+.lrep:hover{border-color:var(--ink-2);color:var(--ink)}
+.rep-reasons{display:flex;flex-direction:column;gap:6px;margin:6px 0 14px}
+.rep-reasons label{display:flex;gap:8px;align-items:center;font-size:13px;cursor:pointer}
+.rep-item{padding:12px 0;border-top:1px solid var(--bd);font-size:12px;line-height:1.5}
+.rep-details{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:12px}
+.rep-state{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:999px;border:1px solid var(--bd);color:var(--mu)}
+.rep-state.new{border-color:var(--accent);color:var(--accent)}
 .lrow2:hover .lrow2-t{color:var(--accent)}
 /* Cert check (T2): a sibling of the row's link, never inside it. Each state
    looks different — above all, a MISMATCH must never read as "not checked". */
@@ -4037,6 +4047,7 @@ function liveRow(l){
     // The whole row is the link; this makes it LOOK like one, at a size
     // that is easy to hit.
     + '<span class="lrow2-go">View listing &#8599;</span></div></a>'
+    + reportButtonHtml(l)
     + certLine(l) + '</div>';
 }
 
@@ -7220,7 +7231,8 @@ function authRender(){
     h += '<div style="font-size:18px;font-weight:800;margin-bottom:6px">Signed in</div>'
       + '<div style="font-size:13px;color:var(--mu);margin-bottom:18px">' + liveEsc(AUTH.user.email || AUTH.user.id)
       + (AUTH.user.provider ? ' &middot; ' + liveEsc(AUTH.user.provider) : '') + '</div>'
-      + (AUTH.role === 'master' ? '<button class="btn" style="margin-right:8px" onclick="adminOpen()">Approve accounts</button>' : '')
+      + (AUTH.role === 'master' ? '<button class="btn" style="margin-right:8px" onclick="adminOpen()">Approve accounts</button>'
+         + '<button class="btn" style="margin-right:8px" onclick="reportsOpen()">Listing reports</button>' : '')
       + '<button class="btn" onclick="authSignOut()">Sign out</button>';
   } else {
     h += '<div style="font-size:18px;font-weight:800;margin-bottom:6px">Sign in to CardZon</div>'
@@ -7234,6 +7246,147 @@ function authRender(){
   el.innerHTML = h;
 }
 function authOpen(){ authRender(); openM('auth-overlay'); }
+
+// ── Reporting a listing (Roy, 2026-10-08, T3) ─────────────────────
+// The row as drawn is kept by its key when it is drawn, so the report
+// carries what the user saw — price, source and photo checks at that
+// moment — without the user typing any of it. Listings are drawn only for
+// approved accounts; the server refuses anyone else (access.approved),
+// counts the rate limit and caps the text (reports.js).
+var REPORT_ROWS = {};
+var REPORT = { row: null, card: null, busy: false };
+function reportButtonHtml(l){
+  if (!pricesOpen() || !l) return '';
+  var key = String(l.itemId || l.url || '');
+  if (!key) return '';
+  REPORT_ROWS[key] = l;
+  return '<div class="lrep-row"><button class="lrep" data-rk="' + liveEsc(key) + '" onclick="reportOpen(this.dataset.rk)" title="Report a fake, the wrong card, or something else wrong with this listing">Report</button></div>';
+}
+function reportOpen(key){
+  var l = REPORT_ROWS[key], c = S.currentCard;
+  if (!l || !c) return;
+  REPORT.row = l; REPORT.card = c; REPORT.key = key;
+  document.getElementById('report-what').textContent = (c.name || '') + ' #' + (c.number || '') + ' \u00b7 ' + (l.sourceLabel || l.source || '') + ' \u00b7 ' + (l.title || key);
+  document.querySelectorAll('input[name="rep-reason"]').forEach(function (r) { r.checked = false; r.onchange = reportCount; });
+  document.getElementById('report-details').value = '';
+  reportSay('', false);
+  document.getElementById('report-send').disabled = false;
+  reportCount();
+  openM('report-overlay');
+}
+function reportReason(){ var r = document.querySelector('input[name="rep-reason"]:checked'); return r ? r.value : ''; }
+function reportCount(){
+  var t = document.getElementById('report-details').value;
+  document.getElementById('report-count').textContent = t.length + ' / 1000';
+  document.getElementById('report-details-req').textContent = reportReason() === 'other' ? '(required for Other)' : '(optional)';
+}
+// A message under the form: text only; amber when it did not send (T5).
+function reportSay(text, bad){
+  var m = document.getElementById('report-msg');
+  m.hidden = !text; m.textContent = text || '';
+  m.className = bad ? 'msg-warn' : '';
+  m.setAttribute('role', bad ? 'alert' : 'status');
+}
+async function reportSend(){
+  if (REPORT.busy || !REPORT.row) return;
+  var reason = reportReason(), details = document.getElementById('report-details').value;
+  if (!reason) return reportSay('Choose what is wrong with the listing.', true);
+  if (reason === 'other' && !details.trim()) return reportSay('Say what is wrong — details are needed for Other.', true);
+  var l = REPORT.row;
+  var body = { cardId: REPORT.card.id, listingId: String(l.itemId || l.url || ''), listingUrl: l.url || null,
+    source: l.source || '', price: l.landed != null ? Number(l.landed) : (l.price != null ? Number(l.price) : null), currency: 'USD',
+    reason: reason, details: details,
+    photoChecks: { stamp: l.stamp, back: l.back, suspect: l.suspect, suspectReason: l.suspectReason, materialPending: l.materialPending } };
+  REPORT.busy = true; document.getElementById('report-send').disabled = true;
+  try {
+    var token = await authToken();
+    var r = await fetch(BACKEND + '/api/reports', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body) });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    reportSay('Report sent. Thank you \u2014 a CardZon administrator will look at it.', false);
+    setTimeout(function () { closeM('report-overlay'); }, 1600);
+  } catch (e) {
+    reportSay('The report was not sent: ' + (e.message || 'the server did not answer') + '.', true);
+    document.getElementById('report-send').disabled = false;
+  }
+  REPORT.busy = false;
+}
+
+// ── Listing reports, the masters' view (T3) ──
+// Newest first. Read-only but for the state. Every value from a report is
+// set with textContent: the details are text a person typed (and the email,
+// card and URL are data too). Nothing here is assembled as an HTML string.
+var REPORTS = { data: null, error: null };
+function reportsOpen(){ closeM('auth-overlay'); openM('reports-overlay'); reportsLoad(); }
+async function reportsLoad(){
+  REPORTS.error = null; reportsRender();
+  try {
+    var token = await authToken();
+    var r = await fetch(BACKEND + '/api/admin/reports', { headers: { Authorization: 'Bearer ' + token } });
+    var j = await r.json();
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    REPORTS.data = j;
+  } catch (e) { REPORTS.data = null; REPORTS.error = e.message || 'the server did not answer'; }
+  reportsRender();
+}
+function reportsEl(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = String(text); return e; }
+function reportsRender(){
+  var host = document.getElementById('reports-body'); if (!host) return;
+  host.replaceChildren();
+  if (REPORTS.error) { var w = reportsEl('div', 'msg-warn', REPORTS.error); w.setAttribute('role', 'alert'); host.appendChild(w); return; }
+  var d = REPORTS.data;
+  if (!d) { host.appendChild(reportsEl('div', null, 'Loading\u2026')); return; }
+  if (!d.reports.length) { host.appendChild(reportsEl('div', null, 'No reports yet.')); return; }
+  host.appendChild(reportsEl('div', null, d.reports.length + ' report' + (d.reports.length === 1 ? '' : 's') + ', newest first.'));
+  d.reports.forEach(function (x) { host.appendChild(reportItem(x, d)); });
+}
+function reportItem(x, d){
+  var item = reportsEl('div', 'rep-item');
+  var head = reportsEl('div'); head.style.cssText = 'display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap';
+  var card = reportsEl('a', null, (x.card_name || x.card_id) + (x.card_number ? ' #' + x.card_number : '') + (x.set_name ? ' \u00b7 ' + x.set_name : ''));
+  card.href = '#'; card.style.cssText = 'font-weight:700;color:var(--accent)';
+  card.addEventListener('click', function (ev) { ev.preventDefault(); closeM('reports-overlay'); openCard(x.card_id); });
+  head.appendChild(card);
+  head.appendChild(reportsEl('span', 'rep-state ' + x.state, x.state));
+  item.appendChild(head);
+  item.appendChild(reportsEl('div', null, (d.reasons[x.reason] || x.reason) + ' \u00b7 ' + (x.source || '')
+    + (x.price_shown != null ? ' \u00b7 shown at ' + x.price_shown + ' ' + (x.price_currency || '') : '')));
+  if (x.details) item.appendChild(reportsEl('div', 'rep-details', x.details));
+  var who = reportsEl('div', null, 'Reported by ' + (x.reporter_email || x.user_id) + ' \u00b7 ' + new Date(x.created_at).toLocaleString());
+  who.style.color = 'var(--mu)'; item.appendChild(who);
+  if (x.listing_url && /^https?:\/\//i.test(x.listing_url)) {
+    var a = reportsEl('a', null, 'The listing (' + x.listing_id + ')');
+    a.href = x.listing_url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    item.appendChild(a);
+  } else item.appendChild(reportsEl('div', null, 'Listing ' + x.listing_id));
+  var pc = x.photo_checks || {};
+  var checks = [pc.stamp && ('photo check: ' + pc.stamp.state + (pc.stamp.kind ? ' (' + pc.stamp.kind + ')' : '')),
+                pc.back && ('back: ' + pc.back.state), pc.suspect && ('flag: ' + pc.suspect), pc.materialPending && 'novelty check pending'].filter(Boolean);
+  var cl = reportsEl('div', null, checks.length ? 'At the time: ' + checks.join(' \u00b7 ') : 'At the time: no photo-check verdict on the row');
+  cl.style.color = 'var(--mu)'; item.appendChild(cl);
+  if (x.state_changed_at) { var ch = reportsEl('div', null, 'Set to ' + x.state + ' by ' + (x.state_changed_by_email || 'a master') + ' \u00b7 ' + new Date(x.state_changed_at).toLocaleString()); ch.style.color = 'var(--mu)'; item.appendChild(ch); }
+  var row = reportsEl('div'); row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-top:8px';
+  var sel = document.createElement('select'); sel.className = 'tbsel';
+  d.states.forEach(function (s) { var o = reportsEl('option', null, s); o.value = s; if (s === x.state) o.selected = true; sel.appendChild(o); });
+  var save = reportsEl('button', 'btn sm', 'Save state');
+  var msg = reportsEl('span'); msg.style.fontSize = '11px';
+  save.addEventListener('click', function () { reportsSetState(x.id, sel.value, save, msg); });
+  row.appendChild(sel); row.appendChild(save); row.appendChild(msg);
+  item.appendChild(row);
+  return item;
+}
+async function reportsSetState(id, state, btn, msg){
+  btn.disabled = true; msg.textContent = ''; msg.className = '';
+  try {
+    var token = await authToken();
+    var r = await fetch(BACKEND + '/api/admin/reports/' + encodeURIComponent(id) + '/state', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ state: state }) });
+    var j = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    reportsLoad();      // re-read: the list shows what the server holds
+  } catch (e) { msg.className = 'msg-warn'; msg.textContent = 'Not saved: ' + (e.message || 'no answer'); btn.disabled = false; }
+}
 
 // ── Approving accounts — masters only (T6 step 2) ─────────────────
 // The button is shown when /api/me said master, but the SERVER refuses
@@ -7700,6 +7853,39 @@ function cleanSeries(name) {
   </div>
 </div>
 <!-- ══ APPROVE ACCOUNTS (T6 step 2) — masters only; the server refuses anyone else ══ -->
+<!-- ══ REPORT A LISTING (T3) ══ filled by reportOpen(); everything but the
+     reason and the details is captured from the row, not typed. -->
+<div id="report-overlay" class="overlay">
+  <div class="modal" style="max-width:480px;max-height:90vh;overflow:auto">
+    <button class="modal-x" onclick="closeM('report-overlay')" aria-label="Close">&#10005;</button>
+    <div style="font-size:18px;font-weight:800;margin-bottom:4px">Report this listing</div>
+    <div id="report-what" style="font-size:12px;color:var(--mu);margin-bottom:12px;overflow-wrap:anywhere"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--mu)">What is wrong</div>
+    <div class="rep-reasons" id="report-reasons">
+      <label><input type="radio" name="rep-reason" value="fake"> Fake or counterfeit</label>
+      <label><input type="radio" name="rep-reason" value="wrong_card"> Wrong card</label>
+      <label><input type="radio" name="rep-reason" value="wrong_condition"> Wrong condition</label>
+      <label><input type="radio" name="rep-reason" value="wrong_price"> Wrong price</label>
+      <label><input type="radio" name="rep-reason" value="other"> Other</label>
+    </div>
+    <label for="report-details" style="display:block;font-size:12px;font-weight:700;color:var(--mu);margin-bottom:6px">Details <span id="report-details-req">(optional)</span></label>
+    <textarea id="report-details" maxlength="1000" rows="4" oninput="reportCount()" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--bd);border-radius:10px;font-size:13px;background:var(--w);color:inherit;resize:vertical"></textarea>
+    <div id="report-count" style="font-size:11px;color:var(--fa);text-align:right;margin-bottom:10px">0 / 1000</div>
+    <div style="font-size:11px;color:var(--mu);margin-bottom:12px">Sent with it: the card, the listing&rsquo;s id and link, its source, the price shown and the photo checks as they stand now.</div>
+    <div id="report-msg" role="status" style="font-size:12px;margin-bottom:10px" hidden></div>
+    <button class="btn p" id="report-send" onclick="reportSend()">Send report</button>
+    <button class="btn" onclick="closeM('report-overlay')">Cancel</button>
+  </div>
+</div>
+<!-- ══ LISTING REPORTS — masters only (T3) ══ built with DOM nodes and
+     textContent: a report's details are text a person typed, never markup. -->
+<div id="reports-overlay" class="overlay">
+  <div class="modal" style="max-width:640px;max-height:90vh;overflow:auto">
+    <button class="modal-x" onclick="closeM('reports-overlay')" aria-label="Close">&#10005;</button>
+    <div style="font-size:18px;font-weight:800;margin-bottom:6px">Listing reports</div>
+    <div id="reports-body"></div>
+  </div>
+</div>
 <div id="admin-overlay" class="overlay">
   <div class="modal" style="max-width:560px;max-height:90vh;overflow:auto">
     <button class="modal-x" onclick="closeM('admin-overlay')" aria-label="Close">&#10005;</button>
@@ -7844,6 +8030,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-709272b-onesearch &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-215b50a-reports &middot; click to hide</div>
 </body>
 </html>

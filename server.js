@@ -1934,6 +1934,65 @@ async function userRecord(req, res) {
 }
 app.get('/api/admin/users/:userId/record', access.master, userRecord);
 
+// ── LISTING REPORTS (Roy, 2026-10-08, TASK-reports-and-pages T3) ──
+// reports.js says what a report holds, its caps and its rate limit; the
+// table is migration-reports.sql (Roy runs it; RLS on, a user reads only
+// their own, no API role writes). An approved account files one here — the
+// user id is the token's, never the body's. Masters list them and change
+// their state; nothing here edits a listing or deletes a report.
+const reports = require('./reports');
+const REPORTS_MISSING = { error: 'reports are not set up yet — migration-reports.sql has not been run' };
+app.post('/api/reports', access.approved, async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'database not configured' });
+  const v = reports.validate(req.body);
+  if (!v.ok) return res.status(400).json({ error: v.error });
+  try {
+    const rate = reports.rateRefusal((await db.query(reports.rateSql(), [req.account.userId])).rows[0]);
+    if (rate) return res.status(429).json({ error: rate.message, limit: rate.limit });
+    const r = v.row;
+    const ins = await db.query(`INSERT INTO listing_reports (user_id, reporter_email, card_id, listing_id, listing_url, source,
+        price_shown, price_currency, reason, details, photo_checks)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id, created_at, state`,
+      [req.account.userId, req.account.email || null, r.cardId, r.listingId, r.listingUrl, r.source,
+       r.price, r.currency, r.reason, r.details, JSON.stringify(r.photoChecks)]);
+    res.status(201).json({ ok: true, report: ins.rows[0] });
+  } catch (e) {
+    if (e.code === '42P01') return res.status(503).json(REPORTS_MISSING);
+    res.status(500).json({ error: 'the report was not saved: ' + e.message });
+  }
+});
+app.get('/api/admin/reports', access.master, async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'database not configured' });
+  try {
+    const r = await db.query(`SELECT r.id, r.created_at, r.user_id, r.reporter_email, r.card_id, c.name AS card_name, c.number AS card_number,
+        c.set_name, r.listing_id, r.listing_url, r.source, r.price_shown, r.price_currency, r.reason, r.details, r.photo_checks,
+        r.state, r.state_changed_by_email, r.state_changed_at
+      FROM listing_reports r LEFT JOIN cards c ON c.api_card_id = r.card_id
+      ORDER BY r.created_at DESC, r.id DESC LIMIT 300`);
+    res.json({ reasons: reports.REASONS, states: reports.STATES, reports: r.rows });
+  } catch (e) {
+    if (e.code === '42P01') return res.status(503).json(REPORTS_MISSING);
+    res.status(500).json({ error: e.message });
+  }
+});
+app.post('/api/admin/reports/:id/state', access.master, async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'database not configured' });
+  const id = String(req.params.id);
+  const state = String((req.body && req.body.state) || '');
+  if (!/^[0-9]{1,18}$/.test(id)) return res.status(400).json({ error: 'not a report id' });
+  if (reports.STATES.indexOf(state) < 0) return res.status(400).json({ error: 'state must be one of ' + reports.STATES.join(', ') });
+  try {
+    const r = await db.query(`UPDATE listing_reports SET state = $2, state_changed_by = $3, state_changed_by_email = $4, state_changed_at = now()
+      WHERE id = $1 RETURNING id, state, state_changed_by_email, state_changed_at`,
+      [id, state, req.account.userId, req.account.email || null]);
+    if (!r.rowCount) return res.status(404).json({ error: 'no such report' });
+    res.json({ ok: true, report: r.rows[0] });
+  } catch (e) {
+    if (e.code === '42P01') return res.status(503).json(REPORTS_MISSING);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // GET /api/history/:cardId — measured, ungraded price observations, one
 // series per market.
 //

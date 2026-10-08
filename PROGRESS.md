@@ -1,5 +1,32 @@
 # CardHunt — Progress Log
 
+## 2026-10-09 (later) — both sides of a collision held; how many collisions there are
+
+- **Held, both sides:** `pricehold.js` takes the nine cards of the four
+  collisions out of the headline (printsql.basePrintingSql), the card/set
+  payloads say priceHeld with no price blob, the page draws a dash and the
+  reason. Two were in the 80-card deals pool (en-hgssp-HGSS18 25th, en-np-36
+  26th); none was a live pick.
+- **The no-product-id threshold (5), measured:** Yahoo medians at most 4
+  cards at one exact price on any day (3,884 prices, 45 days); 08/10's 274
+  no-product-id cards at most 3. NOT covered by it: product-id'd prices repeat
+  genuinely (6 products at $6.49 on 08/10), and Yuyu-tei's yen points put 71
+  cards on $6.24 (08/28) — Yuyu-tei writes outside safePriceFor.
+- **Collisions across the catalogue (read-only):** of 46,512 cards, 22,950
+  carry a TCGplayer product id (24,433 distinct ids, from TCGdex's
+  variants_detailed, TCGdex's pricing block and our internal search). **53 ids
+  map to more than one card, 106 cards** (50 ids x2, 2 x3, 1 x4). Origin: 15
+  the source (TCGdex gives both cards the id — Brilliant Stars Trainer Gallery
+  vs main set, the two halves of the SM trainer kits, Rumble); 24 our search
+  onto a TCGdex id (TCGdex gives it to one card, our search to another); 7 our
+  search alone; 7 both. Our search's pattern: a lettered or prefixed number
+  matched to the plain one — Skyridge H09/H10/H11/H20/H30 vs 10/11/12/21/32,
+  Legendary Treasures RC6/RC8/RC18/RC19 vs 33/59/104/105, Aquapolis a/b,
+  XY177/198/200 vs their "a" promos. Ten highest-value: np-36 / HGSS18 $1,400,
+  ecard3-10 / H09 $509.99, ru1-3 Ninetales $373.41 (with ru1-5, ru1-6),
+  ecard3-32 / H30 $354.93, ru1-6 $324.98, dpp-DP05 / DP25 $249. Not changed:
+  the matching is a task of its own; only the nine above are held.
+
 ## 2026-10-09 — the duplicate-price guard replaced, the push gate committed, the key's last local copies deleted
 
 - **The guard (`pricedupe.js`, replacing `looksLikeJunk`).** The old test

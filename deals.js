@@ -71,14 +71,12 @@ const EXCLUDED = {
   // stampcheck refuses these photos, measured both ways.
   'en-base5-8': { reason: 'the PRERELEASE stamp on Dark Gyarados is not detectable yet',
                   removeWhen: 'a PRERELEASE stamp template in stampcheck catches it, measured both ways' },
-  // 2026-10-08: of the 80 cards the deals job walks, these three were not
-  // rewritten by the 08/10 nightly and cannot be confirmed against their
-  // source today (two TCGplayer-search prices, which the guard rejected 387
-  // times that night; one TCGdex 503). The other 77 were rewritten that night
-  // or still equal TCGdex's current price (PROGRESS 2026-10-08 (junk guard)).
-  'en-bwp-BW28': { reason: 'its stored price could not be confirmed current: the duplicate-price guard (looksLikeJunk) of the 08/10 nightly discarded 1,285 genuine prices that night, and a discarded price leaves the older one as the deal reference', removeWhen: 'the nightly writes a fresh price for this card after the guard stops discarding genuine prices' },
-  'en-bw5-107':  { reason: 'its stored price could not be confirmed current: the duplicate-price guard (looksLikeJunk) of the 08/10 nightly discarded 1,285 genuine prices that night, and a discarded price leaves the older one as the deal reference', removeWhen: 'the nightly writes a fresh price for this card after the guard stops discarding genuine prices' },
-  'en-ex12-91':  { reason: 'its stored price could not be confirmed current: the duplicate-price guard (looksLikeJunk) of the 08/10 nightly discarded 1,285 genuine prices that night, and a discarded price leaves the older one as the deal reference', removeWhen: 'the nightly writes a fresh price for this card after the guard stops discarding genuine prices' },
+  // en-bwp-BW28, en-bw5-107 and en-ex12-91 were here 2026-10-08 -> 10-09, on a
+  // wrong inference: rebuilding the 08/10 batch showed none of them was in it
+  // (written 07/10 00:01, due a minute after that run began), so the old
+  // duplicate-price guard never touched them; each product id belongs to that
+  // card alone; en-ex12-91 answers TCGdex again at the stored $799
+  // (PROGRESS 2026-10-09).
 };
 // getItem calls a raw view may spend checking its deal candidates' backs.
 const DEAL_BACK_MAX = 2;

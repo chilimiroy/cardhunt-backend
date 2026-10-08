@@ -59,6 +59,7 @@ function slice(src, start) {
     ok(!FALLBACK.has('unreachable') && !FALLBACK.has('not-ready'),
        'never when TCGdex is unreachable or no harvest has run — that would move the whole catalogue');
 
+    const ARTISTS = [];
     const run = async (responses, conflicts) => {
       let n = 0;
       const fakeFetch = async () => {
@@ -66,10 +67,12 @@ function slice(src, start) {
         if (r === 'throw') throw new Error('ECONNRESET');
         return { status: r.status, ok: r.status === 200, json: async () => r.body };
       };
-      const f = new Function('db', 'tdxp', 'hostDelay', 'DELAY_TCGDEX', 'TCGDEX', 'fetch', 'sleep', 'console', 'tcgdexLocalId',
+      // writeIllustrator (2026-10-08): the artist rides the same response; stubbed, recorded.
+      const f = new Function('db', 'tdxp', 'hostDelay', 'DELAY_TCGDEX', 'TCGDEX', 'fetch', 'sleep', 'console', 'tcgdexLocalId', 'writeIllustrator',
         'let _tdxConflicts = null, _tdxWarned = false;\n' + src + '\nreturn tcgdexPriceFor;')(
         null, { parsePricing: tdxp.parsePricing, tcgplayerByEdition: tdxp.tcgplayerByEdition, printingsFromTcgdex: tdxp.printingsFromTcgdex, loadProductConflicts: async () => conflicts || { ready: true, tcgplayer: new Set() } },
-        async () => {}, 0, 'https://tcgdex.test', fakeFetch, async () => {}, { log() {} }, require('./cardid').tcgdexLocalId);
+        async () => {}, 0, 'https://tcgdex.test', fakeFetch, async () => {}, { log() {} }, require('./cardid').tcgdexLocalId,
+        async (card, ill) => { ARTISTS.push(ill === undefined ? '(undefined)' : ill); });
       // A bare null (the old function) must count as failures, not crash.
       try { return (await f({ api_card_id: 'en-neo1-9', set_api_id: 'neo1', number: '9' })) || { bare: null }; }
       catch (e) { return { threw: e.message }; }

@@ -16,8 +16,9 @@ const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? 
 const H = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8').replace(/\r/g, '');
 
 console.log('\n  T7: the logo');
-const navs = H.match(/<nav class="nav">[\s\S]*?<\/nav>/g) || [];
-ok('nine navs', navs.length === 9, navs.length);
+// One bar since 2026-10-08 (TASK-reports-and-pages T7): nine copies had drifted.
+const navs = H.match(/<nav class="nav"[^>]*>[\s\S]*?<\/nav>/g) || [];
+ok('ONE nav, the shared top bar (was nine copies)', navs.length === 1 && /id="topbar"/.test(navs[0] || ''), navs.length);
 const logos = navs.map(n => (n.match(/<div class="logo"[^>]*>([\s\S]*?)<\/div>/) || [])[1] || '');
 const USE = '<svg class="logo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"/></svg>';
 ok('every nav logo is the inline mark, a <use> of #cz-mark', logos.every(l => l.startsWith(USE)), logos.length);

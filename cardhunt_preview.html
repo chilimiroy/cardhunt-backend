@@ -212,6 +212,8 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .nl{padding:7px 14px;border-radius:var(--rs);font-size:13px;font-weight:500;color:var(--mu);border:none;background:none;transition:all .15s}
 .nl:hover{color:var(--tx);background:var(--surface-2)}.nl.on{color:var(--t);background:var(--tl);font-weight:600}
 .nav-r{margin-left:auto;display:flex;align-items:center;gap:8px}
+#topbar [hidden]{display:none!important}
+.notif-bell.on{border-color:var(--t);color:var(--t);background:var(--tl)}
 .nsearch{position:relative}.nsearch input{padding:7px 14px 7px 34px;border:1.5px solid var(--bd);border-radius:22px;font-size:13px;outline:none;width:195px;background:var(--bg);color:var(--tx);transition:all .2s}
 .nsearch input:focus{border-color:var(--t);width:250px;background:var(--w)}.nsearch-i{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none;opacity:.45}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--rs);font-size:13px;font-weight:500;border:1.5px solid var(--bd);background:var(--w);color:var(--tx);cursor:pointer;transition:all .15s;text-decoration:none;white-space:nowrap}
@@ -664,19 +666,31 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="cz-mark" viewBox="0 0 124 92"><path d="M58 22 A 26 26 0 1 0 58 70" fill="none" stroke="var(--cz-c, #C62128)" stroke-width="16" stroke-linecap="butt"/><path d="M62 22 H112 L76 70 H116" fill="none" stroke="var(--cz-z, #EBE7DB)" stroke-width="15" stroke-linejoin="miter" stroke-linecap="butt"/></symbol></svg>
 <!-- ══ LOGIN ══ -->
+<!-- ══ THE TOP BAR ══ ONE bar for every screen (Roy, 2026-10-08,
+     TASK-reports-and-pages T7). There were nine copies, one per screen; the
+     logo change had to be made nine times and eight of them had drifted —
+     only Home carried account, theme, currency and language. Now the shared
+     controls are here once and on every screen by construction. What
+     differs per screen is data, not markup: TOPBAR in the script says which
+     item is active, whether Back and the search box show, and which extras
+     (data-on="<screen> ...") appear. topbarFor(id) applies it; SS() calls it. -->
+<nav class="nav" id="topbar" data-screen="home">
+  <button class="btn" id="nav-back" onclick="goBack()" style="padding:7px 12px;font-size:13px;margin-right:8px" hidden>← Back</button>
+  <div class="logo" onclick="SS('home')"><svg class="logo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"/></svg><span class="wm">Card<em>Zon</em></span></div>
+  <button class="nl on" data-nav="home" onclick="SS('home')">Home</button>
+  <button class="nl" data-nav="search" onclick="SS('search')">Search</button>
+  <button class="nl" data-nav="sets" onclick="SS('sets')">Sets</button>
+  <button class="nl" data-nav="portfolio" onclick="SS('portfolio')">Portfolio</button>
+  <div class="nav-r">
+    <button class="btn price-only" onclick="addAlertFromCard()" data-on="card" hidden>🔔 Set Alert</button>
+    <button class="btn price-only" id="watch-btn" data-on="card" hidden onclick="toggleWatch()">🤍 Watch</button>
+    <input class="tbq" data-on="sets" hidden id="sets-q" style="width:210px;padding:8px 14px" placeholder="Search sets…" oninput="filterSets(this.value)">
+    <div class="nsearch" id="nav-search"><span class="nsearch-i">🔍</span><input id="nav-q" placeholder="Search any card…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
+    <button class="btn" onclick="cycleTheme()" id="theme-btn" title="Theme: follows your device">◐ Auto</button><div class="npick price-only" id="cur-pick"><button class="btn npick-b" id="currency-btn" onclick="pickOpen('cur-pick',event)" aria-haspopup="menu" aria-expanded="false" title="Currency"><svg class="npick-i coin" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg><span class="npick-v">USD</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m" role="menu" hidden></div></div><div class="npick" id="lang-pick"><button class="btn npick-b" id="lang-btn" onclick="pickOpen('lang-pick',event)" aria-haspopup="menu" aria-expanded="false" title="Page language"><span class="npick-v">EN</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m" role="menu" hidden></div></div><button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--accent);color:var(--accent-ink);font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button><button class="btn auth-btn" onclick="authOpen()" id="auth-btn" style="display:none" title="Sign in with Google or an emailed link">Sign in</button>
+  </div>
+</nav>
 <!-- ══ HOME ══ -->
 <div id="screen-home" class="screen on">
-  <nav class="nav">
-    <div class="logo" onclick="SS('home')"><svg class="logo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"/></svg><span class="wm">Card<em>Zon</em></span></div>
-    <button class="nl on" onclick="SS('home')">Home</button>
-    <button class="nl" onclick="SS('search')">Search</button>
-    <button class="nl" onclick="SS('sets')">Sets</button>
-    <button class="nl" onclick="SS('portfolio')">Portfolio</button>
-    <div class="nav-r">
-      <div class="nsearch"><span class="nsearch-i">🔍</span><input id="nav-q" placeholder="Search any card…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
-      <button class="btn" onclick="cycleTheme()" id="theme-btn" title="Theme: follows your device">◐ Auto</button><div class="npick price-only" id="cur-pick"><button class="btn npick-b" id="currency-btn" onclick="pickOpen('cur-pick',event)" aria-haspopup="menu" aria-expanded="false" title="Currency"><svg class="npick-i coin" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg><span class="npick-v">USD</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m" role="menu" hidden></div></div><div class="npick" id="lang-pick"><button class="btn npick-b" id="lang-btn" onclick="pickOpen('lang-pick',event)" aria-haspopup="menu" aria-expanded="false" title="Page language"><span class="npick-v">EN</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m" role="menu" hidden></div></div><button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--accent);color:var(--accent-ink);font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button><button class="btn auth-btn" onclick="authOpen()" id="auth-btn" style="display:none" title="Sign in with Google or an emailed link">Sign in</button>
-    </div>
-  </nav>
   <div class="hero">
     <div class="hero-in">
       <h1>Find the best deal on<br>any <em>Pokémon card.</em></h1>
@@ -807,13 +821,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
      Home with their element ids unchanged, so every function that draws
      them still finds them. -->
 <div id="screen-pokemon" class="screen">
-  <nav class="nav">
-    <button class="btn" onclick="goBack()" style="padding:7px 12px;font-size:13px;margin-right:8px">← Back</button>
-    <div class="logo" onclick="SS('home')"><svg class="logo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"/></svg><span class="wm">Card<em>Zon</em></span></div>
-    <button class="nl" onclick="SS('home')">Home</button><button class="nl on">Pokémon</button>
-    <button class="nl" onclick="SS('sets')">Sets</button><button class="nl" onclick="SS('portfolio')">Portfolio</button>
-    <div class="nav-r"></div>
-  </nav>
   <div class="content" style="padding-top:28px">
     <div class="bc"><span class="lnk" onclick="SS('home')">Home</span> › <span>Pokémon</span></div>
     <div style="font-size:26px;font-weight:700;letter-spacing:-.02em;margin-bottom:4px;font-family:'Source Serif 4',Georgia,serif">Pokémon TCG</div>
@@ -871,14 +878,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 
 <!-- ══ SEARCH / GAME PICKER ══ -->
 <div id="screen-search" class="screen">
-  <nav class="nav">
-    <button class="btn" onclick="goBack()" style="padding:7px 12px;font-size:13px;margin-right:8px">← Back</button>
-    <div class="logo" onclick="SS('home')"><svg class="logo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"/></svg><span class="wm">Card<em>Zon</em></span></div>
-    <button class="nl" onclick="SS('home')">Home</button><button class="nl on">Search</button>
-    <button class="nl" onclick="SS('sets')">Sets</button><button class="nl" onclick="SS('portfolio')">Portfolio</button>
-    <div class="nav-r"><div class="nsearch"><span class="nsearch-i">🔍</span><input id="search-q" placeholder="Search any card…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
-      <button class="btn p" onclick="doSearch(document.getElementById('search-q').value)">🔍 Search</button></div>
-  </nav>
   <div class="content" style="padding-top:36px">
     <div style="font-size:26px;font-weight:800;letter-spacing:-.5px;margin-bottom:6px">Search</div>
     <div style="font-size:14px;color:var(--mu);margin-bottom:28px">Choose a game, then search by card name, set or grade</div>
@@ -919,14 +918,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 
 <!-- ══ SEARCH RESULTS ══ -->
 <div id="screen-results" class="screen">
-  <nav class="nav">
-    <button class="btn" onclick="goBack()" style="padding:7px 12px;font-size:13px;margin-right:8px">← Back</button>
-    <div class="logo" onclick="SS('home')"><svg class="logo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"/></svg><span class="wm">Card<em>Zon</em></span></div>
-    <button class="nl" onclick="SS('home')">Home</button><button class="nl on" onclick="SS('search')">Search</button>
-    <button class="nl" onclick="SS('sets')">Sets</button>
-    <div class="nav-r"><div class="nsearch"><span class="nsearch-i">🔍</span><input id="results-refine" placeholder="Refine…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
-      <button class="btn p" onclick="doSearch(document.getElementById('results-refine').value)">🔍</button></div>
-  </nav>
   <div class="content" style="padding-top:28px">
     <div class="bc"><span class="lnk" onclick="SS('search')">Search</span> › <span id="results-q-bc">—</span></div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
@@ -950,12 +941,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 
 <!-- ══ SETS ══ -->
 <div id="screen-sets" class="screen">
-  <nav class="nav">
-    <div class="logo" onclick="SS('home')"><svg class="logo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"/></svg><span class="wm">Card<em>Zon</em></span></div>
-    <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
-    <button class="nl on">Sets</button><button class="nl" onclick="SS('portfolio')">Portfolio</button>
-    <div class="nav-r"><input class="tbq" id="sets-q" style="width:210px;padding:8px 14px" placeholder="Search sets…" oninput="filterSets(this.value)"></div>
-  </nav>
   <div class="content" style="padding-top:28px">
     <div style="font-size:22px;font-weight:800;letter-spacing:-.4px;margin-bottom:4px">Sets</div>
     <div style="font-size:13px;color:var(--mu);margin-bottom:20px" id="sets-sub">Loading…</div>
@@ -972,13 +957,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 
 <!-- ══ SET DETAIL ══ -->
 <div id="screen-setdetail" class="screen">
-  <nav class="nav">
-    <button class="btn" onclick="goBack()" style="padding:7px 12px;font-size:13px;margin-right:8px">← Back</button>
-    <div class="logo" onclick="SS('home')"><svg class="logo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"/></svg><span class="wm">Card<em>Zon</em></span></div>
-    <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
-    <button class="nl on" onclick="SS('sets')">Sets</button>
-    <div class="nav-r"></div>
-  </nav>
   <div class="content" style="padding-top:28px">
     <div class="bc"><span class="lnk" onclick="SS('sets')">Sets</span> › <span id="sd-bc">—</span></div>
     <div style="display:flex;align-items:center;gap:18px;margin-bottom:22px" id="sd-hdr"></div>
@@ -1002,17 +980,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 
 <!-- ══ CARD DETAIL ══ -->
 <div id="screen-card" class="screen">
-  <nav class="nav">
-    <button class="btn" onclick="goBack()" style="padding:7px 12px;font-size:13px;margin-right:8px">← Back</button>
-    <div class="logo" onclick="SS('home')"><svg class="logo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"/></svg><span class="wm">Card<em>Zon</em></span></div>
-    <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
-    <button class="nl on">Card</button>
-    <div class="nav-r">
-      <button class="btn price-only" onclick="addAlertFromCard()" style="border-color:var(--am);color:var(--am)" onmouseover="this.style.background='var(--warn-soft)'" onmouseout="this.style.background=''">🔔 Set Alert</button>
-      <button class="btn price-only" id="watch-btn" onclick="toggleWatch()">🤍 Watch</button>
-      
-    </div>
-  </nav>
   <div class="content" style="padding-top:28px">
     <div class="bc"><span class="lnk" id="cd-set-lnk" onclick="SS('setdetail')">Set</span> › <span id="cd-bc">—</span></div>
     <!-- ══ CARD PAGE LAYOUT ══ (TASK-ui, 2026-10-07; rules in CLAUDE.md)
@@ -1121,17 +1088,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 
 <!-- ══ PORTFOLIO ══ -->
 <div id="screen-portfolio" class="screen">
-  <nav class="nav">
-    <div class="logo" onclick="SS('home')"><svg class="logo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"/></svg><span class="wm">Card<em>Zon</em></span></div>
-    <button class="nl" onclick="SS('home')">Home</button><button class="nl" onclick="SS('search')">Search</button>
-    <button class="nl" onclick="SS('sets')">Sets</button><button class="nl on">Portfolio</button>
-    <div class="nav-r">
-      <div class="npick price-only" id="cur-pick2"><button class="btn npick-b" id="currency-btn2" onclick="pickOpen('cur-pick2',event)" aria-haspopup="menu" aria-expanded="false" title="Currency"><svg class="npick-i coin" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg><span class="npick-v">USD</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m" role="menu" hidden></div></div>
-      <div class="npick" id="lang-pick2"><button class="btn npick-b" id="lang-btn2" onclick="pickOpen('lang-pick2',event)" aria-haspopup="menu" aria-expanded="false" title="Page language"><span class="npick-v">EN</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m" role="menu" hidden></div></div>
-      <button class="btn" onclick="SS('alerts')">&#128276;</button>
-      <button class="btn auth-btn" onclick="authOpen()" id="auth-btn2" style="display:none" title="Sign in with Google or an emailed link">Sign in</button>
-    </div>
-  </nav>
   <div class="content" style="padding-top:28px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <div>
@@ -2125,6 +2081,36 @@ function getBase(c) {
 function fmtD(d){if(!d)return'';const p=(d+'').replace(/-/g,'/').split('/');return['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+p[1]-1]+' '+p[0];}
 function fmtP(n){return n>=1000?'$'+(n/1000).toFixed(1)+'k':'$'+n.toFixed(2);}
 
+// ── THE TOP BAR, per screen (T7) ──
+// nav: which item is lit (none on a card or the Pokémon page — the
+// breadcrumb says where you are); back: the Back button; search: the bar's
+// search box (not on Search, which is a search box, nor on Sets, which has
+// its own filter beside it). Extras carry data-on="<screen> ..." in the bar.
+var TOPBAR = {
+  home:      { nav: 'home',      back: false, search: true  },
+  pokemon:   { nav: null,        back: true,  search: true  },
+  search:    { nav: 'search',    back: true,  search: false },
+  results:   { nav: 'search',    back: true,  search: true  },
+  sets:      { nav: 'sets',      back: false, search: false },
+  setdetail: { nav: 'sets',      back: true,  search: true  },
+  card:      { nav: null,        back: true,  search: true  },
+  portfolio: { nav: 'portfolio', back: false, search: true  },
+  alerts:    { nav: null,        back: false, search: true, bell: true }
+};
+function topbarFor(id){
+  var bar = document.getElementById('topbar'); if (!bar) return;
+  var c = TOPBAR[id] || { nav: null, back: true, search: true };
+  bar.dataset.screen = id;
+  bar.querySelectorAll('[data-nav]').forEach(function (b) {
+    var on = b.dataset.nav === c.nav;
+    b.classList.toggle('on', on);
+    if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
+  var back = document.getElementById('nav-back'); if (back) back.hidden = !c.back;
+  var s = document.getElementById('nav-search'); if (s) s.hidden = !c.search;
+  bar.querySelectorAll('[data-on]').forEach(function (el) { el.hidden = (' ' + el.dataset.on + ' ').indexOf(' ' + id + ' ') < 0; });
+  var bell = bar.querySelector('.notif-bell'); if (bell) bell.classList.toggle('on', !!c.bell);
+}
 // SCREEN NAVIGATION
 function SS(id,skipHistory){
   const cur=document.querySelector('.screen.on')?.id?.replace('screen-','');
@@ -2134,6 +2120,7 @@ function SS(id,skipHistory){
   if(cur&&cur!==id){ S.scrollMem=S.scrollMem||{}; S.scrollMem[cur]=window.scrollY; if(cur==='card') saveCardView(); }
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
   document.getElementById('screen-'+id)?.classList.add('on');
+  topbarFor(id);
   if(skipHistory&&cur!==id&&S.scrollMem&&S.scrollMem[id]>0) restoreScroll(S.scrollMem[id]); else { SCROLL_SEQ++; window.scrollTo(0,0); }
   if(id==='home'&&!S.homeLoaded) loadHome();
   if(id==='sets'){if(!S.enSets.length) loadAllSets(); else renderSets();}
@@ -2266,8 +2253,6 @@ async function doSearch(q, lang) {
   document.getElementById('results-q-bc').textContent = q;
   document.getElementById('results-title').textContent = 'Searching\u2026';
   document.getElementById('results-sub').textContent = '';
-  var rfEl = document.getElementById('results-refine');
-  if (rfEl) rfEl.value = q;
   document.getElementById('results-grid').innerHTML =
     '<div style="grid-column:1/-1;padding:64px;text-align:center;color:var(--mu)">'
     + '<div style="width:36px;height:36px;border:3px solid var(--bd);border-top-color:var(--t);'
@@ -5164,7 +5149,7 @@ function switchResultsLang(lang,el){
   document.querySelectorAll('.results-lang-chip').forEach(c=>c.classList.remove('on'));
   el.classList.add('on');
   // Re-search with language filter
-  const q=document.getElementById('results-refine').value||document.getElementById('results-q-bc').textContent;
+  const q=document.getElementById('results-q-bc').textContent;
   if(q&&q!=='—') doSearch(q,lang);
 }
 
@@ -6624,7 +6609,7 @@ var currentCurrency = 'USD';
 function setCurrency(code){
   if (CURRENCIES.indexOf(code) < 0 || code === currentCurrency) return;
   currentCurrency = code;
-  document.querySelectorAll('#currency-btn .npick-v, #currency-btn2 .npick-v').forEach(function (v) { v.textContent = code; });
+  document.querySelectorAll('#currency-btn .npick-v').forEach(function (v) { v.textContent = code; });
   pickRender('cur');
   // Re-render current screen with new currency
   var active = document.querySelector('.screen.on');
@@ -7062,7 +7047,7 @@ document.addEventListener('DOMContentLoaded', function(){ if (currentLang() !== 
 // One component, so the currency control matches the language control.
 // The menu lists each language with its coverage, so a language that is
 // mostly English does not look the same as one that is complete.
-var PICKS = { lang: ['lang-pick', 'lang-pick2'], cur: ['cur-pick', 'cur-pick2'] };
+var PICKS = { lang: ['lang-pick'], cur: ['cur-pick'] };
 function pickRender(kind){
   PICKS[kind].forEach(function (id) {
     var m = document.querySelector('#' + id + ' .npick-m'); if (!m) return;
@@ -7189,7 +7174,7 @@ function authLoadLib(){
 }
 function authRedirect(){ return location.origin + location.pathname; }
 function authButtons(){
-  ['auth-btn', 'auth-btn2'].forEach(function (id) {
+  ['auth-btn'].forEach(function (id) {
     var b = document.getElementById(id); if (!b) return;
     b.style.display = AUTH.sb ? '' : 'none';
     // The person's own address, as the server returned it — card data rules do not apply.
@@ -7716,15 +7701,6 @@ function cleanSeries(name) {
 
 <!-- ══ ALERTS SCREEN ══ -->
 <div id="screen-alerts" class="screen">
-  <nav class="nav">
-    <div class="logo" onclick="SS('home')"><svg class="logo-i" viewBox="0 0 124 92" aria-hidden="true" focusable="false"><use href="#cz-mark"/></svg><span class="wm">Card<em>Zon</em></span></div>
-    <button class="nl" onclick="SS('home')">Home</button>
-    <button class="nl" onclick="SS('search')">Search</button>
-    <button class="nl" onclick="SS('sets')">Sets</button>
-    <button class="nl" onclick="SS('portfolio')">Portfolio</button>
-    <button class="nl on">🔔 Alerts</button>
-    <div class="nav-r"></div>
-  </nav>
   <div class="content" style="padding-top:28px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <div>
@@ -7848,6 +7824,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-468c8f5-red &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-d6bec0b-onebar &middot; click to hide</div>
 </body>
 </html>

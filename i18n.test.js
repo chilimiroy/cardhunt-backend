@@ -76,12 +76,12 @@ console.log('\n  the control: top bar, between the currency tool and the alert b
 // TASK-ui T5: both are the same picker; currency carries a coin (no blue globe) and is .price-only.
 const nav1 = H.slice(H.indexOf('id="cur-pick"') - 60, H.indexOf('id="cur-pick"') + 1600);
 ok('main nav: currency, then language, then the bell', /id="currency-btn"[^]*?id="lang-btn"[^]*?notif-bell/.test(nav1));
-const nav2 = H.slice(H.indexOf('id="cur-pick2"') - 60, H.indexOf('id="cur-pick2"') + 1400);
-ok('portfolio nav: currency, then language, then the bell', /id="currency-btn2"[^]*?id="lang-btn2"[^]*?&#128276;/.test(nav2));
+// One top bar (T7, 2026-10-08): the portfolio's second copy of each picker is gone.
+ok('one copy of each picker: no cur-pick2 / lang-pick2', !/id="(cur|lang)-pick2"/.test(H));
 ok('one component: both pickers are .npick with an .npick-b button and a menu',
-   ['cur-pick', 'cur-pick2', 'lang-pick', 'lang-pick2'].every(id => new RegExp('<div class="npick[^"]*" id="' + id + '"><button class="btn npick-b"').test(H)));
+   ['cur-pick', 'lang-pick'].every(id => new RegExp('<div class="npick[^"]*" id="' + id + '"><button class="btn npick-b"').test(H)));
 ok('currency: a coin icon, no globe, and absent without prices (.price-only)',
-   /<div class="npick price-only" id="cur-pick"><button[^>]*><svg class="npick-i coin"/.test(H) && /<div class="npick price-only" id="cur-pick2">/.test(H)
+   /<div class="npick price-only" id="cur-pick"><button[^>]*><svg class="npick-i coin"/.test(H)
    && !/🌐|&#127760;/.test(H.slice(H.indexOf('<body')).replace(/<!--[\s\S]*?-->/g, '')));
 ok('the old cycling controls are gone, not left dormant', !/function toggleCurrency|function cycleLang/.test(H));
 ok('the theme toggle is untouched, before currency', H.indexOf('id="theme-btn"') < H.indexOf('id="currency-btn"'));

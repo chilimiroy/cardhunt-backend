@@ -983,7 +983,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 <!-- ══ CARD DETAIL ══ -->
 <div id="screen-card" class="screen">
   <div class="content" style="padding-top:28px">
-    <div class="bc"><span class="lnk" id="cd-set-lnk" onclick="SS('setdetail')">Set</span> › <span id="cd-bc">—</span></div>
     <!-- ══ CARD PAGE LAYOUT ══ (TASK-ui, 2026-10-07; rules in CLAUDE.md)
            above the image: name, then set · number · year · rarity · artist
            1. the card image | the price column: ONE view area (the three
@@ -2396,7 +2395,10 @@ async function openSet(setId, apiSetId){
   if (setId === WP_GROUP_ID) return openKitGroup(WP_GROUP_ID);
 
   var all = getSetsData().concat(JP, ZH_TW, ZH_CN,
-    (S.enSets||[]).map(function(x){ return {id:x.id,n:x.name,s:x.series,t:x.total,d:x.releaseDate,lo:(x.images&&x.images.logo)||'',aid:x.id}; }));
+    (S.enSets||[]).map(function(x){ return {id:x.id,n:x.name,s:x.series,t:x.total,d:x.releaseDate,lo:(x.images&&x.images.logo)||'',aid:x.id}; }),
+    // Any language's loaded list, not only the page language's: a card's set
+    // link (openCardSet) opens a Japanese set while the Sets screen is English.
+    LANG_SETS.en || [], LANG_SETS.ja || [], LANG_SETS['zh-tw'] || [], LANG_SETS['zh-cn'] || []);
   var set = all.filter(function(x){ return x.id===setId; })[0] || {id:setId,n:setId,t:'?',d:'',lo:'',aid:apiSetId};
   S.currentSet = set;
 
@@ -3302,8 +3304,6 @@ async function openCard(id){
       setName: (c.set && c.set.name) || '',
       img: (c.images && (c.images.small || c.images.large)) || ''
     });
-    document.getElementById('cd-set-lnk').textContent=c.set&&c.set.name?c.set.name:'Set';
-    document.getElementById('cd-bc').textContent=nameWithEnPlain(c.name, c.nameEn);
     showCardArt(c);
     document.getElementById('cd-name').textContent=c.name;
     renderCardSub(c);
@@ -3346,11 +3346,33 @@ async function openCard(id){
 // our database (no column on `cards`), so it is read from TCGdex by the
 // card's own id; if neither id form answers it says "not recorded" rather
 // than a bare dash that reads as "this card has no artist".
+// The set's page, from the card's OWN id (T8, 2026-10-08): the set screen
+// keys a set as <lang>-<set id> (loadLangSets) and asks the API by the bare
+// set id. The breadcrumb link this replaces called SS('setdetail') with no
+// set at all — a handler that had lost its target.
+function cardSetTarget(c){
+  var m = /^(en|ja|zh-tw|zh-cn)-/.exec(c && c.id || '');
+  var sid = c && c.set && c.set.id;
+  return m && sid ? { setId: m[1] + '-' + sid, apiSetId: sid } : null;
+}
+// openSet names the set from the loaded set list; from a card reached by
+// search that list may not be loaded yet for a Japanese or Chinese set, and
+// the heading would read the raw id. Load it first (cached after once).
+async function openCardSet(setId, apiSetId){
+  var lang = (/^(ja|zh-tw|zh-cn)-/.exec(setId) || [])[1];
+  if (lang && typeof loadLangSets === 'function') { try { await loadLangSets(lang); } catch (e) {} }
+  openSet(setId, apiSetId);
+}
 function renderCardSub(c) {
   var host = document.getElementById('cd-sub');
   if (!host || !c) return;
   var set = c.set || {};
-  var setName = liveEsc(set.name || '') + (set.nameEn && set.nameEn !== set.name ? ' (' + liveEsc(set.nameEn) + ')' : '');
+  var t = cardSetTarget(c);
+  var setText = liveEsc(set.name || '') + (set.nameEn && set.nameEn !== set.name ? ' (' + liveEsc(set.nameEn) + ')' : '');
+  // Catalogue: public, signed in or out. A link only when there is a set to open.
+  var setName = t ? '<a class="lnk" id="cd-setlink" href="#" data-set="' + liveEsc(t.setId) + '" data-aid="' + liveEsc(t.apiSetId) + '" '
+      + 'onclick="event.preventDefault();openCardSet(this.dataset.set,this.dataset.aid)" title="Open this set">' + setText + '</a>'
+    : setText;
   host.innerHTML = setName + ' · #' + liveEsc(String(c.number || '?')) + '/' + (set.total ? liveEsc(String(set.total)) : '?')
     + ' · ' + (set.releaseDate ? String(set.releaseDate).slice(0, 4) : '')
     + ' · <span class="b bg2">' + liveEsc(c.rarity || '?') + '</span>'
@@ -8032,6 +8054,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-55e3c07-accentcolor &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-43336f3-setlink &middot; click to hide</div>
 </body>
 </html>

@@ -99,3 +99,6 @@ costmeter.*.json
 
 # Roy's source artwork for the CZ mark (544 KB render); nothing serves it
 logo.jpg
+
+# refreshrun.js: the nightly's own run marker (local state)
+refresh-run.json

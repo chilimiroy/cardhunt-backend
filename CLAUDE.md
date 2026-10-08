@@ -399,7 +399,9 @@ language's nightly refresh from `price_history` (0 network); a trigger records
 hot 24h to dormant 30d (thresholds: archive, third pass). **Price beats rarity.** Ordered by overdue-ness weighted by value. "Due" is
 judged on the headline row only. **`--max` is per language** (`all` = 4
 caps); `--hours=4` is the bound that holds. An empty set or 200-card gap is
-named and exits 2 (`setyield.js`, `refresh-empty-sets.log`).
+named and exits 2 (`setyield.js`, `refresh-empty-sets.log`). A language not run
+or not finished exits 3 and is named; an interrupt exits 130; a hard kill is
+named by the next run (`refreshrun.js`).
 
 **Windows, no cron:** Task Scheduler "CardHunt nightly refresh" runs
 `refresh-daily.cmd` at 03:00 as this user (`DATABASE_URL` is a user env var).

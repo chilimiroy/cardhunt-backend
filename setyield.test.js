@@ -101,10 +101,10 @@ if (!fs.existsSync(__dirname + '/ingest.js')) {
   console.log('  SKIP  ingest.js not in this checkout');
 } else {
   const src = fs.readFileSync(__dirname + '/ingest.js', 'utf8');
-  const a = src.indexOf('async function refreshDue(');
+  const a = src.indexOf('async function refreshOne(');   // the per-language body since refreshrun (2026-10-08)
   const b = src.indexOf('\nasync function ', a + 10);
   const body = a >= 0 ? src.slice(a, b > a ? b : undefined) : '';
-  ok('refreshDue found, and the slice ends before the next function', body.length > 2000 && !/async function main\(/.test(body));
+  ok('refreshOne found, and the slice ends before the next function', body.length > 2000 && !/async function main\(/.test(body));
   ok('ingest requires ./setyield', /require\('\.\/setyield'\)/.test(src));
   ok('a tally per run', /setyield\.createTally\(\)/.test(body));
   // All three outcomes, each in the branch that produces it.

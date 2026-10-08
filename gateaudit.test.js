@@ -149,8 +149,8 @@ if (fs.existsSync('ingest.js')) {
   ok('every yahooJapanSearch caller builds its context with jpCtx',
     [...ing.matchAll(/yahooJapanSearch\(([^;]*?)\)\)?;?\n/g)].length > 0 &&
     !/yahooJapanSearch\([^)]*\{\s*setTotal:/.test(ing));
-  ok('refreshDue copies set_total and set_api_id into the card it prices',
-    /set_total:\s*r\.set_total,\s*set_api_id:\s*r\.set_api_id/.test(slice(ing, 'refreshDue')));
+  ok('refreshOne (the per-language refresh) copies set_total and set_api_id into the card it prices',
+    /set_total:\s*r\.set_total,\s*set_api_id:\s*r\.set_api_id/.test(slice(ing, 'refreshOne')));
   const spf = slice(ing, 'safePriceFor');
   ok('safePriceFor has no eBay fallback (eBay data must never be stored)', !/ebay/i.test(spf.replace(/\/\/.*$/gm, '')));
   ok('safePriceFor has no name-only Cardmarket fallback', !/cardmarketSearch/.test(spf));

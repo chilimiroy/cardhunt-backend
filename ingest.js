@@ -24,6 +24,7 @@
 const fs = require('fs');
 const path = require('path');
 const { tcgdexLocalId } = require('./cardid');
+const refreshrun = require('./refreshrun');
 let Pool = null;
 try { Pool = require('pg').Pool; } catch (e) { /* dry run without pg */ }
 
@@ -42,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.9.4';   // bump when this file changes
+const VERSION = '5.9.5';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -5144,16 +5145,47 @@ function refreshTierFor(price, rarity) {
   return REFRESH_TIERS[REFRESH_TIERS.length - 1];
 }
 
+// The run: every requested language, then ONE verdict (refreshrun.js, Roy
+// 2026-10-08). A language that did not run or did not finish makes the run
+// exit 3 with a line naming it; an interrupt prints the same line and exits
+// 130; a hard kill is named by the next run's first lines. Before this, the
+// 08/10 nightly stopped at 98.8% of English and never started Japanese or
+// Chinese, and nothing said so.
 async function refreshDue(lang, ...flags) {
-  if (!db) { console.log('  DATABASE_URL required'); return; }
-
-  if (lang === 'all') {
-    for (const L of ['en','ja','zh-tw','zh-cn']) await refreshDue(L, ...flags);
-    return;
-  }
-  lang = lang || 'en';
+  if (!db) { console.log('  DATABASE_URL required'); process.exitCode = refreshrun.EXIT_INCOMPLETE; return; }
   const dry = flags.includes('--dry');
-  if (!dry && !preflightFilter()) return;
+  const requested = lang === 'all' ? refreshrun.LANGS.slice() : [lang || 'en'];
+  if (!dry) { const prev = refreshrun.previousUnfinished(); if (prev) console.log('\n' + prev.line + '\n'); }
+  const run = refreshrun.createRun(requested, { marker: dry ? false : undefined });
+  const onSignal = sig => {
+    const v = refreshrun.verdict(run);
+    console.log('\n  REFRESH INTERRUPTED (' + sig + ')' + (run.current ? ' during ' + run.current : '') + '.');
+    v.lines.forEach(l => console.log(l));
+    refreshrun.close(run);   // said here, so the next run need not repeat it
+    process.exit(refreshrun.EXIT_INTERRUPTED);
+  };
+  const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGBREAK', 'SIGHUP'];
+  SIGNALS.forEach(s => process.on(s, onSignal));
+  try {
+    for (const L of requested) {
+      refreshrun.start(run, L);
+      let o;
+      try { o = await refreshOne(L, flags, run); }
+      catch (e) { o = { state: 'error', why: e.message }; console.log('\n  ' + L + ': refresh threw — ' + e.message); }
+      refreshrun.finish(run, L, o);
+    }
+  } finally { SIGNALS.forEach(s => process.removeListener(s, onSignal)); }
+  const v = refreshrun.close(run);
+  console.log('');
+  if (dry && v.ok) console.log('  REFRESH DRY RUN — nothing was priced; ' + requested.join(', ') + ' listed only');
+  else v.lines.forEach(l => console.log(l));
+  if (!v.ok) process.exitCode = Math.max(process.exitCode || 0, v.exitCode);
+}
+
+// One language. Returns its outcome for refreshrun: complete | stopped | error.
+async function refreshOne(lang, flags, run) {
+  const dry = flags.includes('--dry');
+  if (!dry && !preflightFilter()) return { state: 'error', why: 'the listing filter failed its preflight' };
   const maxArg = (flags.find(f => String(f).startsWith('--max=')) || '').replace('--max=','');
   const cap = parseInt(maxArg) || 100000;
   // --set narrows a run to one set. Needed to verify the source-confidence
@@ -5251,7 +5283,7 @@ async function refreshDue(lang, ...flags) {
   if (neverPriced) console.log(`  ${neverPriced} have never had a real price`);
   console.log('');
 
-  if (!due.length) { console.log('  Nothing is due.\n'); return; }
+  if (!due.length) { console.log('  Nothing is due.\n'); return { state: 'complete', done: 0, of: 0 }; }
 
   due.sort((a, b) => b.urgency - a.urgency);
   const batch = due.slice(0, cap);
@@ -5275,7 +5307,7 @@ async function refreshDue(lang, ...flags) {
     console.log('\n  This batch by tier: '
       + Object.entries(byTier).map(([k,v]) => k + ' ' + v).join(', '));
     console.log(`\n  Run without --dry to price them.\n`);
-    return;
+    return { state: 'complete', dry: true, done: 0, of: batch.length };
   }
 
   let priced = 0, missed = 0, moved = 0, demoted = 0;
@@ -5284,10 +5316,11 @@ async function refreshDue(lang, ...flags) {
   // fails invisibly; this is what makes a whole silent set visible.
   const tally = setyield.createTally();
 
-  let ranOut = false;
+  let ranOut = false, stoppedAt = batch.length;
   for (let i = 0; i < batch.length; i++) {
+    refreshrun.progress(run, lang, i, batch.length);
     if (Date.now() > deadline) {
-      ranOut = true;
+      ranOut = true; stoppedAt = i;
       console.log(`
   TIME BUDGET REACHED — ${budgetHours}h. Stopping after ${i} of ${batch.length}.`);
       console.log('  The rest stays overdue and leads the next run. Use --hours=N to change.');
@@ -5363,6 +5396,8 @@ async function refreshDue(lang, ...flags) {
 
   // Prices just moved, so this is the moment alerts become true or false.
   if (!dry) await evaluateAlerts(lang);
+  return ranOut ? { state: 'stopped', done: stoppedAt, of: batch.length, why: 'the ' + budgetHours + 'h budget ran out' }
+                : { state: 'complete', done: batch.length, of: batch.length };
 }
 
 // ══════════════════════════════════════════════════════════════

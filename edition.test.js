@@ -177,7 +177,7 @@ if (fs.existsSync(__dirname + '/ingest.js')) {
   ok('...refuses a 1st Edition product TCGdex gives to two cards', /_tdxConflicts\.tcgplayer\.has\(String\(fe\.productId\)\)/.test(tpf));
   ok('...and never when the headline itself is a 1st Edition key', /startsWith\('1st-edition'\)/.test(tpf));
   ok('writeEditionPrice stores edition = \'1st-edition\' (kept out of every headline)', /'1st-edition',\$4/.test(wep));
-  ok('the refresh writes it', /await writeEditionPrice\(card, res\);/.test(fnOf('refreshDue')));
+  ok('the refresh writes it', /await writeEditionPrice\(card, res\);/.test(fnOf('refreshOne')));
   ok('safeprices writes it', /await writeEditionPrice\(card, res\);/.test(fnOf('safePrices')));
   // The column is what the headline rule reads first.
   ok('baseEditionSql excludes a row whose edition column is 1st-edition',

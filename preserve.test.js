@@ -972,10 +972,16 @@ if (stamp.length && headSha) {
 
     console.log('\n11. LIVE API — a source with no rejection count has not run the gate');
     const lst = await get('/api/listings/en-swsh11-186?dryRun=1');
-    ok('/api/listings answers', !lst._err, lst._err);
-    if (lst && lst.sources) {
+    // Found 2026-10-08 (the assertion-count audit): signed out, /api/listings
+    // answers 401 (the door), "answers" passed on the REFUSAL body and the
+    // source check below silently never ran. Now each case says what it is.
+    if (lst && lst.error === 'sign-in required') {
+      ok('/api/listings refuses a signed-out caller (the door): 401 sign-in required, no sources', !lst.sources);
+      console.log('  SKIP  every unavailable source states a reason — /api/listings is for approved accounts; this run is signed out');
+    } else {
+      ok('/api/listings answers with sources', !lst._err && !!(lst && lst.sources), lst._err || Object.keys(lst || {}).join(','));
       ok('every unavailable source states a reason',
-        Object.values(lst.sources).every(s => s.status !== 'unavailable' || !!s.reason),
+        !!(lst && lst.sources) && Object.values(lst.sources).every(s => s.status !== 'unavailable' || !!s.reason),
         'the UI offers these marketplaces and must explain each');
     }
   }

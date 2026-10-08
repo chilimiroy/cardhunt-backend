@@ -1,0 +1,46 @@
+// testcount.js — every test file states how many assertions it runs, and
+// FAILS if fewer ran (Roy, 2026-10-08).
+//
+// Three times a suite reported passing without having run what it claimed:
+// a source-reading test that sliced nothing, the deals photo count, and an
+// async assertion that never ran because the file exited first. A printed
+// count only helps a reader who remembers the last one; this compares.
+//
+//   require('./testcount')(N)      first line of a test file
+//
+// It reads the file's OWN summary line as it is printed — "N passed, M
+// failed" (or preservebreak's "N guards fired, M did not") — and at exit:
+//   * no summary line at all              -> FAIL (the file ended early)
+//   * passed + failed < N                 -> FAIL (assertions were lost)
+//   * otherwise                           -> nothing; the file's own exit code stands
+// N is a MINIMUM for the plain run: --db / --live / --deployed add more.
+// When a file gains assertions, raise N in the same commit
+// (testcount.test.js lists every file and its N).
+'use strict';
+const SUMMARY = /(\d+) passed, (\d+) failed|(\d+) guards fired, (\d+) did not/g;
+
+function counted(text) {
+  const all = [...String(text).matchAll(SUMMARY)];
+  const m = all[all.length - 1];
+  return m ? (+(m[1] || m[3]) + +(m[2] || m[4])) : null;
+}
+
+module.exports = function expectAssertions(min) {
+  if (!(Number.isInteger(min) && min > 0)) throw new Error('testcount: give the number of assertions this file runs');
+  let tail = '';
+  const write = process.stdout.write.bind(process.stdout);
+  process.stdout.write = function (chunk, ...rest) {
+    tail += String(chunk);
+    if (tail.length > 200000) tail = tail.slice(-100000);
+    return write(chunk, ...rest);
+  };
+  process.on('exit', () => {
+    const ran = counted(tail);
+    if (ran == null || ran < min) {
+      write('\n  FAIL  assertion count: ' + (ran == null ? 'no summary line was printed' : ran + ' ran')
+        + ', this file runs at least ' + min + ' — an assertion stopped running\n');
+      process.exitCode = 1;
+    }
+  });
+};
+module.exports.counted = counted;

@@ -1061,14 +1061,14 @@ app.get('/api/cards/:cardId', access.optional, async (req, res) => {
 // changes nightly, and the cold query takes ~5s.
 const trending = require('./trending');
 const deals_ = require('./deals');
-app.get('/api/trending', access.priced, async (req, res) => {
-  const p = trending.parseParams(req.query);
+// ONE builder for a trending list (T6, 2026-10-08): the priced route and the
+// search page's catalogue route both read it, so they cannot drift.
+async function trendingBody(p) {
   const key = `trending_${p.lang}_${p.sort}_${p.window}_${p.limit}`;
   const hit = cGet(key);
-  if (hit) return res.json(Object.assign({}, hit, { cached: true }));
-  if (!db) return res.status(503).json({ error: 'database not configured', cards: [] });
+  if (hit) return Object.assign({}, hit, { cached: true });
   const t0 = Date.now();
-  try {
+  {
     let cards, eligible, extra = {};
     if (p.kind === 'price') {
       const r = await db.query(trending.priceSql(p));
@@ -1110,8 +1110,44 @@ app.get('/api/trending', access.priced, async (req, res) => {
       tookMs: Date.now() - t0, generatedAt: new Date().toISOString(), cached: false,
     }, extra);
     cSet(key, body);
-    res.json(body);
-  } catch (err) { res.status(500).json({ error: err.message, cards: [] }); }
+    return body;
+  }
+}
+app.get('/api/trending', access.priced, async (req, res) => {
+  const p = trending.parseParams(req.query);
+  if (!db) return res.status(503).json({ error: 'database not configured', cards: [] });
+  try { res.json(await trendingBody(p)); }
+  catch (err) { res.status(500).json({ error: err.message, cards: [] }); }
+});
+
+// ── The search page's Trending cards and Trending sets (T6, 2026-10-08) ──
+// Catalogue, so public: the SAME list /api/trending ranks (biggest % risers
+// over 7 days, English — the only language re-priced), sent WITHOUT a
+// price, a change or a date. Nobody sees a figure here; the order is the
+// trending list's. "Trending sets" did not exist anywhere: it is derived
+// from that same list — the sets holding the most of this week's risers —
+// and says so in `setRule`, rather than being a second ranking.
+app.get('/api/trending/catalogue', access.optional, async (req, res) => {
+  const p = trending.parseParams({ sort: 'gain-pct', window: '7d', lang: 'en', limit: 60 });
+  if (!db) return res.status(503).json({ error: 'database not configured', cards: [], sets: [] });
+  try {
+    const b = await trendingBody(p);
+    const bySet = new Map();
+    for (const c of b.cards) {
+      const s = bySet.get(c.set.id) || { id: c.set.id, name: c.set.name, nameEn: c.set.nameEn, risers: 0 };
+      s.risers++; bySet.set(c.set.id, s);
+    }
+    const sets = [...bySet.values()].sort((a, b) => b.risers - a.risers || String(a.name).localeCompare(String(b.name))).slice(0, 8);
+    res.json({
+      window: b.windowLabel, lang: b.lang, eligible: b.eligible, coverage: b.coverage || null,
+      rule: 'The cards whose measured TCGplayer price rose most, as a percentage, over ' + b.windowLabel
+        + ' — the Pokémon page\'s "Biggest movers — % gain" list. No prices are shown here.',
+      setRule: 'The sets holding the most cards among those ' + b.cards.length + ' risers.',
+      cards: b.cards.slice(0, 12).map(c => ({ id: c.id, name: c.name, nameEn: c.nameEn, number: c.number,
+        rarity: c.rarity, image: c.image, set: c.set })),
+      sets,
+    });
+  } catch (err) { res.status(500).json({ error: err.message, cards: [], sets: [] }); }
 });
 
 // ── BEST DEALS (TASK T3, 2026-10-05; deals.js) ─────────────────
@@ -4790,6 +4826,52 @@ function searchCandidate(r) {
   };
 }
 
+// ── Search terms, recorded (T6, 2026-10-08) ──
+// Nothing recorded a search before this: the page kept "Recent searches" in
+// the visitor's own browser only. search_log (migration-search-log.sql, which
+// Roy runs) holds the query text, capped, the card it resolved to when it
+// resolved to ONE, and how many candidates it had. No user id, no IP: the
+// count is of searches, not of people. Missing table = not recording; the
+// search itself never waits on, or fails because of, this insert.
+const SEARCH_LOG_MAX_Q = 120;
+const SEARCH_POPULAR_MIN = 20;     // resolved searches before a ranking is shown
+const SEARCH_POPULAR_DAYS = 30;
+let searchLogMissing = false;
+function logSearch(q, cardId, candidates) {
+  if (!db || searchLogMissing) return;
+  db.query('INSERT INTO search_log (query, card_id, candidates) VALUES ($1, $2, $3)',
+    [String(q).slice(0, SEARCH_LOG_MAX_Q), cardId || null, candidates | 0])
+    .catch(e => { if (e.code === '42P01') searchLogMissing = true; else console.warn('[search_log] ' + e.message); });
+}
+
+// Most searched cards: the cards searches RESOLVED to (one clear match) in
+// the last 30 days. Until there are SEARCH_POPULAR_MIN of them it answers
+// gathering — never a short list posing as a ranking, and never views.
+app.get('/api/search/popular', access.optional, async (req, res) => {
+  if (!db) return res.status(503).json({ error: 'database not configured', cards: [] });
+  try {
+    const t = (await db.query(`SELECT count(*)::int AS searches, count(card_id)::int AS resolved, min(searched_at) AS since
+      FROM search_log WHERE searched_at > now() - interval '${SEARCH_POPULAR_DAYS} days'`)).rows[0];
+    const base = { recording: true, days: SEARCH_POPULAR_DAYS, searches: t.searches, resolved: t.resolved,
+      since: t.since, needed: SEARCH_POPULAR_MIN,
+      rule: 'Cards that searches resolved to (one clear match) in the last ' + SEARCH_POPULAR_DAYS + ' days.' };
+    if (t.resolved < SEARCH_POPULAR_MIN) return res.json(Object.assign(base, { gathering: true, cards: [] }));
+    const r = await db.query(`SELECT s.card_id, count(*)::int AS n, c.name, c.name_en, c.number, c.rarity, c.image_small,
+        c.set_api_id, c.set_name, c.set_name_en
+      FROM search_log s JOIN cards c ON c.api_card_id = s.card_id
+      WHERE s.card_id IS NOT NULL AND s.searched_at > now() - interval '${SEARCH_POPULAR_DAYS} days' AND ${digital.visibleSql('c')}
+      GROUP BY s.card_id, c.name, c.name_en, c.number, c.rarity, c.image_small, c.set_api_id, c.set_name, c.set_name_en
+      ORDER BY n DESC, s.card_id LIMIT 12`);
+    res.json(Object.assign(base, { gathering: false, cards: r.rows.map(x => ({ id: x.card_id, searches: x.n,
+      name: x.name, nameEn: x.name_en || null, number: x.number, rarity: x.rarity, image: x.image_small || null,
+      set: { id: x.set_api_id, name: x.set_name, nameEn: x.set_name_en || null } })) }));
+  } catch (e) {
+    if (e.code === '42P01') return res.json({ recording: false, gathering: true, cards: [],
+      reason: 'search_log does not exist yet — migration-search-log.sql has not been run' });
+    res.status(500).json({ error: e.message, cards: [] });
+  }
+});
+
 app.get('/api/search', access.optional, async (req, res) => {
   const q = String(req.query.q || '').trim();
   const limit = Math.min(parseInt(req.query.limit) || 10, 25);
@@ -4833,6 +4915,8 @@ app.get('/api/search', access.optional, async (req, res) => {
       gap,
       resolved: confident ? top.cardId : null
     };
+
+    logSearch(q, confident ? top.cardId : null, candidates.length);
 
     if (!candidates.length) {
       payload.message = 'No card in the database matches that. Check the collector number, or try just the card name.';

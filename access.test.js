@@ -64,6 +64,8 @@ const ROUTES = [
   ['get', '/api/listings/:cardId', 'priced', null],
   ['post', '/api/listings/:cardId/compare', 'priced', null],
   ['get', '/api/search', 'catalogue', null],
+  ['get', '/api/search/popular', 'catalogue', null],
+  ['get', '/api/trending/catalogue', 'catalogue', null],
   ['get', '/api/listings/:cardName', 'public', 'refuses: an unidentifiable card gets no listings'],
   ['get', '/api/graded/:cardName', 'priced', null],
   ['get', '/api/diagnostic', 'catalogue', null],

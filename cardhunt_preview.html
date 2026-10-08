@@ -670,6 +670,8 @@ html:not(.ch-noprice) .price-door { display: none !important; }
 .btn.btn-destroy:hover, .btn.btn-destroy:focus-visible { background: var(--ink); color: var(--surface); }
 /* Focus rings follow the accent (T5). */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Radios, checkboxes and ranges follow the accent, not the browser's blue (T5). */
+:root { accent-color: var(--accent); }
 .price-door .btn { margin-top: 10px; }
 </style>
 </head>
@@ -8030,6 +8032,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-215b50a-reports &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-55e3c07-accentcolor &middot; click to hide</div>
 </body>
 </html>

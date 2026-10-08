@@ -66,6 +66,7 @@ for (const h of OLD) ok('the old accent ' + h + ' is gone', code.toUpperCase().i
 ok('no rgba of the old chart blue or the old purple glow', !/rgba\(\s*(47,\s*75,\s*166|124,\s*58,\s*237)/.test(code));
 ok('the price chart reads the accent token (accentColor), not a hex', /borderColor:\s*accentColor\(\)/.test(H) && /function accentColor\(/.test(H));
 ok('a theme change redraws an open chart', /function applyTheme[\s\S]{0,700}S\.chart[\s\S]{0,80}initChart\(/.test(H));
+ok('form controls (radios, checkboxes) follow the accent, not the browser blue', /:root \{ accent-color: var\(--accent\); \}/.test(style));
 ok('focus rings follow the accent', /:focus-visible\s*\{\s*outline:\s*2px solid var\(--accent\)/.test(style));
 
 console.log('\n  errors are amber, destructive is weight');

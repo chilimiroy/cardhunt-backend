@@ -1,0 +1,1147 @@
+{
+ "about": "Stamp-check test set, 2026-10-08 (PROGRESS \"Set split\"). Rows eBay files under a reprint family Set that the title gate keeps and the stamp check called not-visible, each labelled BY EYE from the s-l500 photo: reprint = the 25th/30th stamp plainly visible; genuine = an original, no stamp; unclear = cannot tell. check = what judge() returned with MATCH at build time.",
+ "threshold": 0.7,
+ "match": {
+  "lo": 28,
+  "steps": 10,
+  "desc": true,
+  "stopAt": 0.7
+ },
+ "rows": [
+  {
+   "label": "reprint",
+   "cardId": "en-base1-15",
+   "itemId": "v1|236804410632|0",
+   "photo": "https://i.ebayimg.com/images/g/MTIAAeSwuzJp~P0~/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC003",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.542,
+      "at": {
+       "x": 298,
+       "y": 198,
+       "w": 50
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-base1-15",
+   "itemId": "v1|117372349379|0",
+   "photo": "https://i.ebayimg.com/images/g/7hsAAeSw-dlqiRxL/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC003",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.434,
+      "at": {
+       "x": 203,
+       "y": 147,
+       "w": 28
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-base1-2",
+   "itemId": "v1|128121585845|0",
+   "photo": "https://i.ebayimg.com/images/g/tQMAAeSwgyBqxrZb/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    375,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC001",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.414,
+      "at": {
+       "x": 303,
+       "y": 314,
+       "w": 28
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-base1-2",
+   "itemId": "v1|318332447293|0",
+   "photo": "https://i.ebayimg.com/images/g/CtMAAeSwZLVqDa6i/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC001",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.616,
+      "at": {
+       "x": 319,
+       "y": 218,
+       "w": 74
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-base1-2",
+   "itemId": "v1|318469978212|0",
+   "photo": "https://i.ebayimg.com/images/g/7JsAAeSwz6xqMxVB/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC001",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.622,
+      "at": {
+       "x": 312,
+       "y": 210,
+       "w": 61
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-base1-2",
+   "itemId": "v1|158169589298|0",
+   "photo": "https://i.ebayimg.com/images/g/aKAAAeSwMcpqeFYR/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    384,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC001",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.424,
+      "at": {
+       "x": 87,
+       "y": 351,
+       "w": 28
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-base1-2",
+   "itemId": "v1|267756749493|0",
+   "photo": "https://i.ebayimg.com/images/g/sAwAAeSwvFVqfrOL/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    444,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC001",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.683,
+      "at": {
+       "x": 298,
+       "y": 207,
+       "w": 69
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-base1-2",
+   "itemId": "v1|128080720022|0",
+   "photo": "https://i.ebayimg.com/images/g/HqwAAeSwt3xqqRO7/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    487,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC001",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.462,
+      "at": {
+       "x": 113,
+       "y": 113,
+       "w": 50
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-base1-2",
+   "itemId": "v1|376836619414|0",
+   "photo": "https://i.ebayimg.com/images/g/5X4AAeSwdOFpWvOx/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC001",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.692,
+      "at": {
+       "x": 326,
+       "y": 184,
+       "w": 74
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-base1-2",
+   "itemId": "v1|317798052712|0",
+   "photo": "https://i.ebayimg.com/images/g/h2IAAeSwkw1pdQzn/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC001",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.594,
+      "at": {
+       "x": 321,
+       "y": 207,
+       "w": 61
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-base1-4",
+   "itemId": "v1|227510254285|0",
+   "photo": "https://i.ebayimg.com/images/g/d-cAAeSwcOFpoOPl/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    375,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-30th-c-001",
+      "label": "30th Celebration (2026)",
+      "checked": true,
+      "score": 0.564,
+      "at": {
+       "x": 268,
+       "y": 440,
+       "w": 39
+      }
+     },
+     {
+      "reprint": "en-cel25cc-CC002",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.525,
+      "at": {
+       "x": 168,
+       "y": 6,
+       "w": 39
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-base5-8",
+   "itemId": "v1|377391792492|0",
+   "photo": "https://i.ebayimg.com/images/g/6XoAAeSwycZqcNVD/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC005",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.699,
+      "at": {
+       "x": 319,
+       "y": 218,
+       "w": 74
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-basep-24",
+   "itemId": "v1|188931869765|0",
+   "photo": "https://i.ebayimg.com/images/g/aYcAAeSweKZqqKpC/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    375,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC008",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.51,
+      "at": {
+       "x": 7,
+       "y": 7,
+       "w": 45
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-basep-24",
+   "itemId": "v1|188931869758|0",
+   "photo": "https://i.ebayimg.com/images/g/xcAAAeSwpr5qqKpL/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    375,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC008",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.53,
+      "at": {
+       "x": 34,
+       "y": 18,
+       "w": 39
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-bw1-113",
+   "itemId": "v1|128119857332|0",
+   "photo": "https://i.ebayimg.com/images/g/mm4AAeSwyIdqxaDF/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    391,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC020",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.472,
+      "at": {
+       "x": 315,
+       "y": 408,
+       "w": 33
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-bw1-113",
+   "itemId": "v1|318745387781|0",
+   "photo": "https://i.ebayimg.com/images/g/2GQAAeSwRAVqg3zI/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    400,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC020",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.369,
+      "at": {
+       "x": 176,
+       "y": 237,
+       "w": 28
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-bw1-113",
+   "itemId": "v1|407032871912|0",
+   "photo": "https://i.ebayimg.com/images/g/lhwAAeSw3XhqQQKa/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    368,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC020",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.375,
+      "at": {
+       "x": 36,
+       "y": 201,
+       "w": 28
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-bw4-54",
+   "itemId": "v1|287501225939|0",
+   "photo": "https://i.ebayimg.com/images/g/crQAAeSwvM9qcMlH/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC022",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.682,
+      "at": {
+       "x": 45,
+       "y": 189,
+       "w": 89
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-ex4-9",
+   "itemId": "v1|960010895123|0",
+   "photo": "https://i.ebayimg.com/images/g/9JYAAeSw7plqweBN/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    375,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC011",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.436,
+      "at": {
+       "x": 207,
+       "y": 35,
+       "w": 33
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-ex4-9",
+   "itemId": "v1|206599692713|0",
+   "photo": "https://i.ebayimg.com/images/g/~gUAAeSwnBlqwRHW/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    445,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC011",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.46,
+      "at": {
+       "x": 266,
+       "y": 423,
+       "w": 28
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-ex4-9",
+   "itemId": "v1|407098175052|0",
+   "photo": "https://i.ebayimg.com/images/g/jBEAAeSwtcBqZRO6/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    486,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC011",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.699,
+      "at": {
+       "x": 94,
+       "y": 173,
+       "w": 73
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-ex4-9",
+   "itemId": "v1|318811645652|0",
+   "photo": "https://i.ebayimg.com/images/g/hrUAAeSwuQVql05p/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    375,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC011",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.495,
+      "at": {
+       "x": 123,
+       "y": 54,
+       "w": 33
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-ex4-9",
+   "itemId": "v1|398117897823|0",
+   "photo": "https://i.ebayimg.com/images/g/VjsAAeSweFNqQcFB/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    375,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC011",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.458,
+      "at": {
+       "x": 287,
+       "y": 41,
+       "w": 28
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-gym2-15",
+   "itemId": "v1|406947691675|0",
+   "photo": "https://i.ebayimg.com/images/g/WH4AAeSwuu5qEmxI/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC007",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.694,
+      "at": {
+       "x": 324,
+       "y": 162,
+       "w": 61
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-gym2-15",
+   "itemId": "v1|137188827796|0",
+   "photo": "https://i.ebayimg.com/images/g/-qcAAeSw5ohpzdqh/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC007",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.676,
+      "at": {
+       "x": 308,
+       "y": 203,
+       "w": 74
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-gym2-15",
+   "itemId": "v1|389568066009|0",
+   "photo": "https://i.ebayimg.com/images/g/va0AAeSwxbxpgCxC/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC007",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.675,
+      "at": {
+       "x": 315,
+       "y": 237,
+       "w": 61
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-hgss1-107",
+   "itemId": "v1|306935136506|0",
+   "photo": "https://i.ebayimg.com/images/g/XNIAAeSwDCxpiR0~/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC019",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.592,
+      "at": {
+       "x": 287,
+       "y": 162,
+       "w": 28
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-hgss4-100",
+   "itemId": "v1|318878846302|0",
+   "photo": "https://i.ebayimg.com/images/g/LScAAeSw3c5qqqjN/s-l500.jpg",
+   "ebaySet": "30th Anniversary Edition",
+   "photoSize": [
+    375,
+    500
+   ],
+   "check": {
+    "state": "unchecked",
+    "scores": [
+     {
+      "reprint": "en-30th-c-020",
+      "label": "30th Celebration (2026)",
+      "checked": false,
+      "why": "no stamp template built for this reprint"
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-hgss4-100",
+   "itemId": "v1|206581669911|0",
+   "photo": "https://i.ebayimg.com/images/g/7DwAAeSwcS9qtqnj/s-l500.jpg",
+   "ebaySet": "30th Anniversary Edition",
+   "photoSize": [
+    431,
+    500
+   ],
+   "check": {
+    "state": "unchecked",
+    "scores": [
+     {
+      "reprint": "en-30th-c-020",
+      "label": "30th Celebration (2026)",
+      "checked": false,
+      "why": "no stamp template built for this reprint"
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-neo1-20",
+   "itemId": "v1|287597016928|0",
+   "photo": "https://i.ebayimg.com/images/g/8QQAAeSwSbhqrzGu/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    375,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC009",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.466,
+      "at": {
+       "x": 46,
+       "y": 64,
+       "w": 39
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-neo1-20",
+   "itemId": "v1|800596633473|0",
+   "photo": "https://i.ebayimg.com/images/g/wc4AAeSw5B5qlZ72/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC009",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.424,
+      "at": {
+       "x": 114,
+       "y": 164,
+       "w": 28
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-neo3-66",
+   "itemId": "v1|137676035279|0",
+   "photo": "https://i.ebayimg.com/images/g/1P4AAeSwau1qkzQR/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC010",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.463,
+      "at": {
+       "x": 72,
+       "y": 22,
+       "w": 41
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-neo3-66",
+   "itemId": "v1|237005852751|0",
+   "photo": "https://i.ebayimg.com/images/g/Y8YAAeSwSJFqfzJf/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC010",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.465,
+      "at": {
+       "x": 129,
+       "y": 395,
+       "w": 28
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-neo3-66",
+   "itemId": "v1|237005866190|0",
+   "photo": "https://i.ebayimg.com/images/g/vWIAAeSw1cJqfzWg/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC010",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.463,
+      "at": {
+       "x": 137,
+       "y": 402,
+       "w": 28
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-pl3-145",
+   "itemId": "v1|158089915663|0",
+   "photo": "https://i.ebayimg.com/images/g/APYAAeSw1uFqWT3u/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    379,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC018",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.433,
+      "at": {
+       "x": 219,
+       "y": 198,
+       "w": 33
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-pop5-17",
+   "itemId": "v1|307144465711|0",
+   "photo": "https://i.ebayimg.com/images/g/mMoAAeSwLrNqjNmR/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC015",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.696,
+      "at": {
+       "x": 323,
+       "y": 195,
+       "w": 74
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-sm2-60",
+   "itemId": "v1|188418998455|0",
+   "photo": "https://i.ebayimg.com/images/g/P8AAAeSwNylqEztB/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC025",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.671,
+      "at": {
+       "x": 312,
+       "y": 204,
+       "w": 61
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-xy1-97",
+   "itemId": "v1|168745804328|0",
+   "photo": "https://i.ebayimg.com/images/g/KGIAAeSwVg1qvSUl/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC023",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.441,
+      "at": {
+       "x": 312,
+       "y": 159,
+       "w": 34
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "genuine",
+   "cardId": "en-xy1-97",
+   "itemId": "v1|336749551604|0",
+   "photo": "https://i.ebayimg.com/images/g/xJMAAeSwpfhqhM9Q/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    365,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC023",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.468,
+      "at": {
+       "x": 168,
+       "y": 20,
+       "w": 28
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "unclear",
+   "cardId": "en-xy5-106",
+   "itemId": "v1|287625531365|0",
+   "photo": "https://i.ebayimg.com/images/g/FjEAAeSwEVFqwd6i/s-l500.jpg",
+   "ebaySet": "30th Anniversary Edition",
+   "photoSize": [
+    500,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-30th-c-023",
+      "label": "30th Celebration (2026)",
+      "checked": true,
+      "score": 0.619,
+      "at": {
+       "x": 203,
+       "y": 188,
+       "w": 50
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-xy6-76",
+   "itemId": "v1|377291174031|0",
+   "photo": "https://i.ebayimg.com/images/g/~~wAAeSwwNtqOwz3/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    414,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC024",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.693,
+      "at": {
+       "x": 65,
+       "y": 241,
+       "w": 66
+      }
+     }
+    ]
+   }
+  },
+  {
+   "label": "reprint",
+   "cardId": "en-xy6-76",
+   "itemId": "v1|198564174570|0",
+   "photo": "https://i.ebayimg.com/images/g/7SYAAeSwBJRqe4A9/s-l500.jpg",
+   "ebaySet": "Celebrations: Classic Collection",
+   "photoSize": [
+    375,
+    500
+   ],
+   "check": {
+    "state": "not-visible",
+    "scores": [
+     {
+      "reprint": "en-cel25cc-CC024",
+      "label": "Celebrations (2021)",
+      "checked": true,
+      "score": 0.677,
+      "at": {
+       "x": 65,
+       "y": 241,
+       "w": 63
+      }
+     }
+    ]
+   }
+  }
+ ]
+}

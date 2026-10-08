@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.9.5';   // bump when this file changes
+const VERSION = '5.9.6';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -723,6 +723,24 @@ let _tdxConflicts = null, _tdxWarned = false;
 // Classic Collection). A bare null used to send an unreachable TCGdex's
 // every card to the internal API.
 const TCGDEX_FALLBACK_OK = new Set(['no-tcgplayer', 'not-on-tcgdex', 'shared']);
+// ── The artist rides the call the nightly already makes (Roy, 2026-10-08) ──
+// The card page fetched it from TCGdex on every view. TCGdex's card response
+// carries it; tcgdexPriceFor has that response for every English card it
+// prices, so it is stored here — no extra request. A missing artist never
+// blanks a stored one (absent data never overwrites stored data). Needs
+// migration-illustrator.sql; until then this says so once and writes nothing.
+let _illusCol = null, _illusWarned = false;
+async function writeIllustrator(card, illustrator) {
+  if (_illusCol === null) _illusCol = (await db.query(
+    `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='cards' AND column_name='illustrator'`)
+    .catch(() => ({ rows: [] }))).rows.length > 0;
+  if (!_illusCol) {
+    if (!_illusWarned) { _illusWarned = true; console.log('\n  cards.illustrator is missing — run migration-illustrator.sql. Artists are not stored until then.\n'); }
+    return;
+  }
+  await db.query(`UPDATE cards SET illustrator = COALESCE($2, illustrator), illustrator_checked_at = NOW() WHERE api_card_id = $1`,
+    [card.api_card_id, illustrator ? String(illustrator).slice(0, 200) : null]).catch(e => console.log('  (artist not stored for ' + card.api_card_id + ': ' + e.message + ')'));
+}
 async function tcgdexPriceFor(card) {
   if (!card.set_api_id || !String(card.api_card_id).startsWith('en-')) return { price: null, none: 'not-english' };
   if (!_tdxConflicts) {
@@ -749,6 +767,7 @@ async function tcgdexPriceFor(card) {
     if (!d) await sleep(2000 * (i + 1));
   }
   if (!d) return { price: null, none: 'unreachable', detail: String(status) };
+  await writeIllustrator(card, d.illustrator);
   const p = tdxp.parsePricing(d);
   const b = p.tcgplayerBase;
   // No TCGplayer price: hand back TCGdex's Cardmarket block, which the caller

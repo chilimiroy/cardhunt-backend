@@ -1020,6 +1020,9 @@ app.get('/api/cards/:cardId', access.optional, async (req, res) => {
           supertype: c.supertype,
           images: { small: c.image_small, large: c.image_large },
           imageLang: c.image_lang || null,
+          // The artist, stored by the nightly from TCGdex (2026-10-08;
+          // migration-illustrator.sql). Absent column or not yet asked: null.
+          illustrator: c.illustrator || null,
           // releaseDate is not decoration: the estimator's vintage multiplier
           // reads it, and withholding it priced a 1999 card as a 2024 one.
           set: { id: c.set_api_id, name: c.set_name,

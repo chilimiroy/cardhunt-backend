@@ -49,7 +49,9 @@ console.log('\n  §8.1(d) — per-card medians stay inside the server');
 }
 
 console.log('\n  the headline is a listing, named as one');
-ok('the box says "Cheapest trusted listing", and "the listing\'s own price"', /<div class="pbl">Cheapest trusted listing<\/div>/.test(P) && /the listing\\'s own price, delivered/.test(P));
+ok('eBay\'s figure is not in our price-box row; the eBay section is labelled "Listings from eBay"',
+   !/id="cd-low"/.test(P) && /Listings from eBay/.test(P) && /function renderOtherSources\(d\)/.test(P));
+ok('tiles show no eBay median ("avg listing … median of N" removed)', !/function cardListingAvg|LISTING_AVG_CACHE|median of ' \+/.test(P));
 ok('the panel line says "cheapest trusted listing", never "this price"', /'cheapest trusted listing, delivered/.test(P) && !/cheapest buyable/.test(P) && !/not used for this price/.test(P));
 
 console.log('\n  a discount names its third party');
@@ -58,7 +60,10 @@ console.log('\n  a discount names its third party');
   ok('refLabel names TCGplayer for our TCGplayer-sourced prices', deals.refLabel({ source: 'tcgdex_tcgplayer_holofoil' }) === 'TCGplayer market price' && deals.refLabel({ source: 'tcgplayer_market' }) === 'TCGplayer market price');
   ok('...and any other source by its own name, never as "market"', /^stored price \(yuyutei\)$/.test(deals.refLabel({ source: 'yuyutei' })));
   ok('the shelf\'s rule says "TCGplayer market price"', /TCGplayer market price/.test(deals.describeRule()) && !/current measured price/.test(deals.describeRule()));
-  ok('the deals tile says "% below the" + the named price', /'% below the '\s*\+ liveEsc\(x\.priceLabel \|\| 'TCGplayer market price'\)/.test(P) && /priceLabel: deals_\.refLabel\(ref\)/.test(S));
+  // No combined number on screen at all (Roy, 2026-10-08): the tile shows OUR
+  // figure ("TCGplayer market"), eBay's zone shows eBay's — the reader sees the gap.
+  ok('the deals tile names our price as TCGplayer market, and shows no percentage', /TCGplayer market/.test(P) && /priceLabel: deals_\.refLabel\(ref\)/.test(S)
+     && !/% below/.test(fnOf(P, 'loadHomeDeals') + fnOf(P, 'openDeal')));
 }
 
 console.log(`\n  ebayterms.test.js — ${pass} passed, ${fail} failed\n`);

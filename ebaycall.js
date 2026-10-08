@@ -238,10 +238,14 @@ function redactHeaders(h) {
  */
 async function fetchEbay(db, opts) {
   opts = opts || {};
-  const { url, token, kind = 'search', background = false, dryRun = false,
+  const { url, token, kind = 'search', dryRun = false,
           countFrom, fetchImpl, method = 'GET', body = null,
           basic = null } = opts;
-  const origin = originFor(opts);
+  // A BACKGROUND context (the deals refresh job, 2026-10-08) makes every
+  // call in it background — counted so, in the background lane, and yielding
+  // at the soft stop — even the user-path calls it reuses (listingsFor).
+  const background = !!opts.background || currentOrigin() === 'background';
+  const origin = originFor(Object.assign({}, opts, { background }));
   const meta = Object.assign({}, opts.meta || {}, { origin });
   // The token exchange is a POST with HTTP Basic and a form body; searches
   // are GETs with a bearer. Both must pass through here or token calls go

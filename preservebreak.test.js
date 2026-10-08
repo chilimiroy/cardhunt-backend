@@ -36,9 +36,9 @@ const breaks = [
   // renderMarketData is gone (2026-09-29): the page no longer asks
   // /api/market for anything. The way that comes back is a fetch of it.
   ['a /api/market fetch comes back into the page',
-    h => h.replace('function setLowestFromListings(d, grade) {',
+    h => h.replace('function renderOtherSources(d) {',
                    "function fetchMarketPrice(card) { return fetch(BACKEND + '/api/market/' + card.name); }\n"
-                   + 'function setLowestFromListings(d, grade) {'),
+                   + 'function renderOtherSources(d) {'),
     'the page never fetches /api/market'],
 
   ['outlier rows are filtered away instead of greyed',
@@ -58,12 +58,11 @@ const breaks = [
     h => h.replace('The results are not ', 'The results are '),
     'say the results are not checked by us'],
 
-  // ...and the by-name lowest it used to write into the Lowest listing box.
-  ['a second writer puts an ungated price into Lowest listing',
-    h => h.replace('function setLowestFromListings(d, grade) {',
-                   "function renderMarketData(m) { document.getElementById('cd-low').textContent = m.lowestActive; }\n"
-                   + 'function setLowestFromListings(d, grade) {'),
-    'only updatePrices (clears) and setLowestFromListings (gated) write #cd-low'],
+  // eBay's figure back in the price-box row, beside our data (§8.1(b)(2)).
+  ['eBay\'s cheapest listing comes back into the price-box row',
+    h => h.replace('<div class="pboxes">',
+                   '<div class="pboxes"><div class="pbox"><div class="pbl">Cheapest trusted listing</div><div class="pbv" id="cd-low">—</div></div>'),
+    'eBay\'s figure is not in the price-box row'],
 
   ['the shop-asking-price label is removed from the row',
     h => h.replace('shop asking price', 'price'),

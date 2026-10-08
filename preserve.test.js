@@ -104,8 +104,8 @@ console.log('  ' + html.length + ' bytes' + (OFFLINE ? '   [offline: live checks
 console.log('\n0. THE SLICER ITSELF');
 // 14 assertions below read source through fnSrc(). If it slices the wrong
 // text they report green about code they never looked at.
-ok('fnSrc finds a plain function', /^function setLowestFromListings\s*\(/.test(fnSrc('setLowestFromListings')),
-  JSON.stringify(fnSrc('setLowestFromListings').slice(0, 40)));
+ok('fnSrc finds a plain function', /^function renderOtherSources\s*\(/.test(fnSrc('renderOtherSources')),
+  JSON.stringify(fnSrc('renderOtherSources').slice(0, 40)));
 ok('fnSrc finds an async function', /^async function loadLangSets\s*\(/.test(fnSrc('loadLangSets')),
   JSON.stringify(fnSrc('loadLangSets').slice(0, 40)));
 ok('fnSrc does not over-run into the next declaration',
@@ -477,20 +477,21 @@ ok('Latest searches stores identity only - never a price',
 // cardId, but it is a per-card-AND-GRADE quantity: one number standing in
 // for the answer to two different questions, which is the /api/market
 // defect wearing another hat.
-ok('the listing average is keyed by card AND grade',
-  codeOnly.indexOf('function listingAvgKey') >= 0
-  && fnCode('fillListingAvg').indexOf('listingAvgKey') >= 0
-  && fnCode('cardSummaryTile').indexOf('listingAvgKey') >= 0,
-  'a card-only key lets a PSA 10 median land in a Raw NM row');
+// The average itself (an eBay median computed in the page) was REMOVED
+// 2026-10-08 (eBay API licence §9.5). The lesson stands for what a tile
+// still fills in later — our market price: the tile is keyed card AND grade.
+ok('the tile is keyed by card AND grade, and its fills find it by that key',
+  codeOnly.indexOf('function tileKey') >= 0
+  && fnCode('cardSummaryTile').indexOf('tileKey') >= 0
+  && fnCode('renderLatestSearches').indexOf('tileKey') >= 0
+  && fnCode('updateAlertsBarPrices').indexOf('tileKey') >= 0
+  && codeOnly.indexOf('function cardListingAvg') < 0 && codeOnly.indexOf('LISTING_AVG_CACHE') < 0,
+  'a card-only key lets a PSA 10 fill land in a Raw NM tile; the eBay median is gone');
 // Asserting the key function is CALLED is not asserting it uses the grade:
 // a break test gutted its body to 'return cardId' and this still passed.
-ok('...and listingAvgKey actually USES the grade it is given',
+ok('...and tileKey actually USES the grade it is given',
   (function () {
-    // Bounded by the NEXT declaration, not by a byte count. A 220-char
-    // window over-ran into cardListingAvg(cardId, grade), which mentions
-    // both words, so a gutted key function still passed. Same over-slicing
-    // failure fnSrc itself has had twice.
-    const src = fnCode('listingAvgKey');
+    const src = fnCode('tileKey');
     return src.indexOf('grade') >= 0 && src.indexOf('cardId') >= 0;
   })(),
   'a key that ignores its grade is a key on the card alone');
@@ -572,7 +573,9 @@ ok('every deep link query goes through cardmatch.buildQuery',
 // ══════════════════════════════════════════════════════════════
 console.log('\n7. THE LABELS THAT STOP A NUMBER BEING MISREAD');
 ok('shop asking prices are labelled ON THE ROW',
-  /shop-ask/.test(html) && /shop asking price/.test(html),
+  // In the ROW itself (liveRow) — the source sections also say it, so a
+  // page-wide match would stay green with the row label gone (2026-10-08).
+  /shop-ask/.test(fnCode('liveRow')) && /shop asking price/.test(fnCode('liveRow')),
   'a row gets rendered far from anything that would otherwise explain it');
 ok('editions are kept apart (Shadowless is not Unlimited)',
   /\bedition\b/.test(html), 'p.edition on the aggregate');
@@ -772,16 +775,14 @@ console.log('7d3. THE BOXES, THE GRAPH AND THE BAR ARE MEASURED OR SAY NOTHING')
     !/base\s*\*\s*\.?\d/.test(fnCode('updatePrices')));
   ok('the position bar has no invented low/high multipliers',
     !/0\.67|1\.35|\*\s*0\.6/.test(fnCode('updateValueBar')) && fnCode('updateValueBar').indexOf('HIST') >= 0);
-  ok('Lowest listing is the GATED cheapest, set where the panel gets its answer',
-    fnCode('renderLiveListings').indexOf('setLowestFromListings(d, grade)') >= 0
-    && fnCode('setLowestFromListings').indexOf('cheapestLive') >= 0);
-  // ...and nothing else puts a number there: the by-name lowest from
-  // /api/market was the other writer, deleted 2026-09-29.
-  const lowWriters = [...codeOnly.matchAll(/(?:^|\n)\s*(?:async\s+)?function\s+([A-Za-z0-9_$]+)\s*\(/g)]
-    .map(m => m[1]).filter(f => /getElementById\('cd-low'\)/.test(fnCode(f)));
-  ok('only updatePrices (clears) and setLowestFromListings (gated) write #cd-low',
-    lowWriters.includes('setLowestFromListings')      // not vacuous: it found the real writer
-    && lowWriters.every(f => f === 'updatePrices' || f === 'setLowestFromListings'), lowWriters.join(', '));
+  // eBay's figure is NOT in the price-box row (API licence §8.1(b)(2), Roy
+  // 2026-10-08): the row is our data; the cheapest trusted listing heads the
+  // eBay section, from the server's per-source answer.
+  ok('eBay\'s figure is not in the price-box row — no #cd-low, no writer for it',
+    codeOnly.indexOf("'cd-low'") < 0 && html.indexOf('id="cd-low"') < 0 && codeOnly.indexOf('function setLowestFromListings') < 0);
+  ok('the eBay section heads with eBay\'s own cheapest trusted listing (cheapestBySource.ebay)',
+    /cheapestLive: d\.cheapestBySource \? d\.cheapestBySource\.ebay : d\.cheapestLive/.test(fnCode('renderLiveListings'))
+    && /Listings from eBay/.test(fnCode('renderListingFinder')));
   ok('the graph draws /api/history', fnCode('loadHistory').indexOf('/api/history/') >= 0);
   const server = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8');
   const h = server.slice(server.indexOf("app.get('/api/history/:cardId'"));

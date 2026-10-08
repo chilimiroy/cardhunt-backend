@@ -1,5 +1,43 @@
 # CardHunt — Progress Log
 
+## 2026-10-08 (deals supply) — a shelf with its own supply and no eBay data on it
+
+- **The design (Roy):** the shelf shows OUR data only — card, TCGplayer market
+  price, "Deal found 2 h ago". Nothing of eBay's until a click; the click IS
+  the check (`/api/deals/:id/live`, 1 getItem, 0 within 15 min): sold, ended,
+  out of stock or no longer 15-60% below at its live price -> the pick is
+  deleted and the tile says why. Otherwise eBay's own zone: "From eBay",
+  delivered price, link — never a comparison number; the reader sees the gap.
+- **The deal % is internal** (it chooses which listings qualify): never shown,
+  never stored — the same ruling as the outlier medians (§8.1(d)). The shelf
+  is ordered by OUR price, not by it.
+- **Supply:** `POST /api/deals/refresh` (tooling key) runs `deals.pickVouched`
+  over 80 English cards by TCGplayer price (current, back-check family, not
+  EXCLUDED), waiting up to 90 s a card for its photo checks; `deal_picks`
+  holds card, item id, found_at, run (RLS on at first use). A GitHub Actions
+  schedule (`30 */3 * * *`) starts it and polls `/status` every 2 min — the
+  polling keeps the free-tier instance awake. Calls are BACKGROUND:
+  `ebaycall` now treats a background context as background for every call in
+  it (before, only a tooling context overrode a call's own flag — the job's
+  searches would have counted as user and never yielded at the soft stop).
+- **getItems (multi-item lookup) is closed to our keys**: `statusprobe`,
+  2026-10-08, HTTP 403 "1100: Access denied" at 20 and 21 ids; the search in
+  the same probe answered. Not applied for (Roy); the click design needs none.
+- **Removed while building:** the view-time deals back follow-up (it spent
+  getItem calls for the old cached-view shelf) and the probe's legacy pickDeal
+  path. Still owed: `deals.pickDeal`, `backCandidates`, `solidRows` and their
+  tests in `deals.test.js` are dormant pure functions — delete them.
+- **§9.5, found while building:** card tiles (Latest searches, My alerts)
+  showed "avg listing $X median of N" — an eBay median computed IN THE PAGE.
+  Removed (`cardListingAvg`, `fillListingAvg`, the cache); tiles keep a
+  card+grade key (`tileKey`) for our price.
+- **§8.1(b)(2) layout:** "Cheapest trusted listing" left our price-box row;
+  eBay's listings sit in a bordered "Listings from eBay" section headed by
+  eBay's own cheapest trusted listing (`cheapestBySource.ebay`); every other
+  marketplace gets its own section (`renderOtherSources`).
+- `listing_views.caller` (user / tooling / background) records who opened a
+  card, so "most-opened" can count real users later.
+
 ## 2026-10-08 (licence) — the eBay API License Agreement, read, and what it removed
 
 Read in the browser (developer.ebay.com/join/api-license-agreement answers 403

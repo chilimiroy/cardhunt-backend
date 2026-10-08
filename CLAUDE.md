@@ -344,12 +344,14 @@ Method, tooling rows: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-07 (TASK-ui, thi
 | Verify (cert) · Photos (same item) · "Check card back" | 1 getItem · 0 · 1 (0 if fetched in 15 min or stored) |
 | back check, automatic | +1 getItem per unchecked row, ≤20 a view, background |
 | stamp / lookalike / sibling / auctions / novelty (material) | 0 |
-| home movers (4 × `/api/trending`) · best deals (`/api/deals`, cache only) | 0 |
+| home movers (4 × `/api/trending`) · the deals shelf (`/api/deals`, stored picks) | 0 |
+| deals refresh (GitHub Action, every 3 h, background origin) | ~104 a run (80 cards × 1.3), ~830/day |
+| open a deal (`/api/deals/:id/live`) | 1 getItem (0 within 15 min) |
 | search resolving to one card · ambiguous | 1 per card (+reprints) · 0 |
 | tooling probes and audits | tooling origin, 300/day — rows in the archive |
 | every `node ingest.js` command, the test suite | 0 |
 
-**Nothing recurring touches eBay.** State an eBay change's calls per card view
+**Only the deals refresh recurs (3-hourly, background).** State an eBay change's calls per card view
 before shipping it. Every new eBay call site: tooling origin if a tool, a row
 here, an entry in `gateaudit.test.js`'s allow-list.
 
@@ -409,10 +411,10 @@ schtasks /Run   /TN "CardHunt nightly refresh"
 - **Movers** (`trending.js`): both ends `tcgdex_tcgplayer_*`, same printing and
   productId; pricequality-marked cards left out; window stated; `coverage` says
   when a list is thin and why.
-- **Best deals — ON 2026-10-08 (Roy), approved accounts** on the VOUCHING bar:
-  ONE definition `deals.pickVouched` for shelf (held verdicts, 0 calls),
-  follow-up (<= DEAL_BACK_MAX getItem a view) and probe. 15-60% below: past
-  60% the discount is the evidence (PROGRESS 2026-10-08 (Set split)).
+- **Best deals — ON (Roy, 2026-10-08), approved accounts.** A 3-hourly job
+  (`.github/workflows/deals-refresh.yml`) runs `deals.pickVouched` on 80 cards
+  by value; `deal_picks` keeps card, item id, found_at. The shelf shows OUR data;
+  a click fetches live, deletes a sold pick (PROGRESS 2026-10-08 (deals supply)).
 
 ## Page language — EN/JA/zh-TW/zh-CN (T5; TASK-ui 2026-10-07)
 Picker between currency and bell; `ch_lang` set before paint. One exact-text table
@@ -767,9 +769,9 @@ display them: <= 6 h old with the age shown, deleted once not public (API
 licence §8.1(b)(c), read 2026-10-08 — the old "never stored" was stricter).
 **Licence rulings (Roy, 2026-10-08; quotes: PROGRESS 2026-10-08 (licence)):**
 §9.5 — no eBay price median shown or stored (grade box, print-run median
-removed); a discount names "TCGplayer market price". §8.1(d) — outlier.js
-medians are per card, per view, never shown, never stored: OUTSIDE the
-clause (`ebayterms.test.js`). Uncertain reading = remove the thing.
+and tile medians removed); no combined number shown — the deal % only CHOOSES.
+§8.1(d) — outlier.js medians and the deal % are per card, per view, never
+shown, never stored: OUTSIDE the clause (`ebayterms.test.js`). Uncertain reading = remove the thing.
 *Archive:* "A read endpoint must never write", "eBay listings are cached, never stored"
 
 **Before inventing a source, check what the current query already computes.**

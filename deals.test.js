@@ -102,72 +102,84 @@ ok(js(cand([row(50, noBack({ shippingKnown: false })), row(60, noBack()), row(70
 ok(js(cand([row(50, noBack()), row(60), row(70)], 2, { price: 100, isReal: true, current: false })) === '[]', 'no current measured price: 0 calls');
 ok(js(cand([row(50, noBack()), row(60), row(70)], 0)) === '[]', 'budget spent: 0 calls');
 
-console.log('\n  off again (TASK T1, 2026-10-05): the live shelf\'s top pick was a different genuine card');
-ok(deals.ENABLED === true, 'deals.ENABLED is ON (Roy, 2026-10-08) — on the vouching bar, approved accounts');
-ok(/different card/.test(deals.OFF_REASON), 'the off state names why');
-{
-  const s = fs.readFileSync(__dirname + '/server.js', 'utf8');
-  const f = s.slice(s.indexOf('function dealBackFollowUp'), s.indexOf('function dealBackFollowUp') + 200);
-  const g = s.slice(s.indexOf('function dealBackFollowUp'), s.indexOf('function dealBackFollowUp') + 400);
-  ok(g.length > 100 && /if \(\(!deals_\.ENABLED && !measure\)/.test(g), 'switched off, dealBackFollowUp returns before any getItem — unless measuring');
-  // Measuring (2026-10-07): only the tooling-keyed probe passes it.
-  const probe = s.slice(s.indexOf("app.get('/api/ebay/dealsprobe/:cardId'"), s.indexOf("app.get('/api/ebay/aspects/:cardId'"));
-  ok((s.match(/\{ measure: true \}/g) || []).length === 1 && /\{ measure: true \}/.test(probe)
-     && /app\.get\('\/api\/ebay\/dealsprobe\/:cardId', toolingKey\.require/.test(s),
-     '...and only /api/ebay/dealsprobe (tooling key) measures — nothing reaches a visitor');
-}
+console.log('\n  on (Roy, 2026-10-08), with its own supply');
+ok(deals.ENABLED === true, 'deals.ENABLED is ON — on the vouching bar, approved accounts');
 ok(/switched off/.test(deals.OFF_REASON), 'the off state still carries its reason, should it be switched off again');
 ok(/genuine card/.test(deals.describeRule()) && /at most 2/.test(deals.describeRule()), 'the rule states the back and what it costs');
-ok(/Nothing is fetched/.test(deals.describeRule()), 'the rule says nothing is fetched');
 
-console.log('\n  wiring');
-const src = fs.readFileSync(__dirname + '/server.js', 'utf8');
-const h = src.slice(src.indexOf("app.get('/api/deals'"), src.indexOf('// ── SEARCH'));
-ok(h.length > 100, '/api/deals exists');
-ok(/listingCache\.entries\(\)/.test(h) && /LISTING_TTL/.test(h), 'it reads only the 15-minute listing cache');
-ok(!/(gatherListings|listingsFor|sourceEbay|fetchEbay|ebayCall|ebayItemOnDemand)\(/.test(h), 'it never gathers listings — 0 eBay calls');
-ok(/ebayCalls: 0/.test(h), 'and says so in the payload');
-ok(/parts\.length !== 2/.test(h) && /isRawGrade/.test(h), 'raw views without a printing or edition filter only');
+console.log('\n  wiring: the refresh job, the shelf, the click');
+const src = fs.readFileSync(__dirname + '/server.js', 'utf8').split('\r\n').join('\n');
+const blockAt = src.indexOf('// BEST DEALS — its own supply');
+const sup = src.slice(blockAt, src.indexOf('// ── SEARCH', blockAt));
+ok(blockAt > 0 && sup.length > 2000, 'the supply block exists');
 {
-  // The price end, one definition for the shelf and its probe (dealRefOf).
-  const S2 = fs.readFileSync(__dirname + '/server.js', 'utf8').split('\r\n').join('\n');
-  const dr = S2.slice(S2.indexOf('async function dealRefOf('), S2.indexOf("app.get('/api/deals'"));
-  ok(/deals_\.pickVouched\(v\.payload, ref, dealBackOf\(card\)\.backOf\)/.test(h) && /const ref = await dealRefOf\(v\.cardId\)/.test(h)
-     && /numberMatchedPrice\(cardId\)/.test(dr) && /pricequality\.annotate/.test(dr),
-     'the price end is the current, measured, number-matched price');
+  const job = sup.slice(sup.indexOf('async function runDealRefresh('), sup.indexOf("app.post('/api/deals/refresh'"));
+  ok(/deals_\.pickVouched\(payload, ref, paid\.backOf\)/.test(job) && /dealBackOf\(card, \{ paid: true, budget: deals_\.DEAL_BACK_MAX \}\)/.test(job),
+     'the job runs the shelf\'s own bar (pickVouched), the back within DEAL_BACK_MAX a card');
+  ok(/INSERT INTO deal_picks \(card_id, item_id, found_at, run_id\)/.test(job), 'it stores card, item id, found_at, run — nothing else');
+  ok(/DELETE FROM deal_picks WHERE card_id = \$1/.test(job), 'a card with no deal now loses its old pick');
+  ok(/stoppedFor/.test(job) && /break;/.test(job), 'when the quota says stop, it stops and says so');
 }
-ok(/materialPending: true/.test(src), 'rows the novelty check has not reached are marked, so no deal is an unchecked gold card');
-const fu = src.slice(src.indexOf('function dealBackFollowUp'), src.indexOf('// ── What does ONE listing'));
-ok(fu.length > 200, 'dealBackFollowUp exists');
-ok(/deals_\.ENABLED/.test(fu) && /isRawGrade\(grade\)/.test(fu) && /printing \|\| edition/.test(fu), 'it runs only when deals are on, on raw views without a printing or edition filter');
-ok(/deals_\.pickVouched\(payload, ref, paid\.backOf\)/.test(fu) && /dealBackOf\(card, \{ paid: true, budget: deals_\.DEAL_BACK_MAX - used \}\)/.test(fu),
-   'it runs the shelf\'s own bar with the back asked, within what is left of DEAL_BACK_MAX a view');
-ok(/const landed = r\.backsAsked && paid\.calls\(\)/.test(fu), 'it rebuilds the view only when it fetched a NEW verdict (every rebuild re-runs it)');
+ok(/CREATE TABLE IF NOT EXISTS deal_picks \(\s*card_id text PRIMARY KEY, item_id text NOT NULL, found_at timestamptz NOT NULL DEFAULT now\(\), run_id text\)/.test(sup)
+   && /ALTER TABLE deal_picks ENABLE ROW LEVEL SECURITY/.test(sup),
+   'deal_picks holds no price, title, photo or discount — and RLS is on from its first use');
+ok(/ebay0\.withOrigin\('background', \(\) => \{ runDealRefresh\(runId\)/.test(sup), 'the job runs in a BACKGROUND context (counted so, yields at the soft stop)');
+ok(/app\.post\('\/api\/deals\/refresh', toolingKey\.require/.test(sup) && /app\.get\('\/api\/deals\/refresh\/status', toolingKey\.require/.test(sup),
+   'start and status are tooling-key only (the GitHub Action)');
+{
+  const ec = fs.readFileSync(__dirname + '/ebaycall.js', 'utf8');
+  ok(/const background = !!opts\.background \|\| currentOrigin\(\) === 'background';/.test(ec), 'ebaycall: a background context makes every call in it background');
+}
+{
+  const shelf = sup.slice(sup.indexOf("app.get('/api/deals', access.priced"), sup.indexOf('const dealLiveCache'));
+  ok(shelf.length > 500, '/api/deals exists');
+  ok(!/(gatherListings|listingsFor|sourceEbay|fetchEbay|ebayItemOnDemand|dealItemLive)\(/.test(shelf) && /ebayCalls: 0/.test(shelf), 'the shelf never asks eBay — 0 calls, and says so');
+  ok(!/item_id|title|discount|landed|url/.test(shelf.replace(/\/\/.*$/gm, '')), 'the shelf sends OUR data only — no item id, title, link, price of eBay\'s, or discount');
+  ok(/found_at > now\(\) - interval '3 hours'/.test(shelf), 'picks older than the 3-hour refresh are not shown');
+  ok(/out\.sort\(\(a, b\) => b\.price - a\.price\)/.test(shelf), 'ordered by OUR price — never by the internal discount');
+  ok(/if \(!deals_\.ENABLED\) return res\.json\(\{ enabled: false, reason: deals_\.OFF_REASON/.test(shelf), 'switched off, it answers enabled:false with the reason');
+}
+{
+  const click = sup.slice(sup.indexOf("app.get('/api/deals/:cardId/live'"));
+  ok(/drop\('This one has sold\.'\)/.test(click) && /DELETE FROM deal_picks WHERE card_id = \$1/.test(click), 'a sold listing deletes the pick and says "This one has sold."');
+  ok(/q < deals_\.MIN_DISCOUNT \|\| q > deals_\.MAX_DISCOUNT/.test(click) && !/discount:|q,|percent/.test(click.slice(click.indexOf('res.json({ cardId, gone: false'))),
+     'the live price is re-judged INTERNALLY; no comparison number is sent');
+}
 {
   const bo = src.slice(src.indexOf('function dealBackOf('), src.indexOf('async function dealRefOf('));
-  ok(/background: true, needPhotos: true/.test(bo), 'background origin: it yields at the soft stop, and asks for the photo count');
-  ok(/if \(!\(o && o\.paid\)\)[\s\S]*backVerdicts\.get\(backKey\(l\.itemId, cid\)\)[\s\S]*notChecked: true/.test(bo), 'unpaid: a verdict already held, or "not checked" — never a call');
-  ok(/o\.budget != null && calls >= o\.budget/.test(bo), 'paid: stops at the view\'s budget');
-  ok(!/paid: true/.test(h), '/api/deals never asks for a paid back');
+  ok(/background: true, needPhotos: true/.test(bo), 'the paid back asks for the photo count, in the background lane');
+  ok(/o\.budget != null && calls >= o\.budget/.test(bo), 'paid: stops at its budget');
 }
-ok((src.match(/^ {2}(if \(st\) )?dealBackFollowUp\(card, requestedId/gm) || []).length === 2, 'called after an open and after every re-judge');
+ok(!/function dealBackFollowUp/.test(src) && !/dealBackFollowUp\(/.test(src), 'the view-time follow-up (for the cached-view shelf) is deleted, not left spending');
 ok(/back: \{ state: v\.state, says: v\.says, metal: !!v\.metal \}/.test(src), 'a kept row carries the metal-photo signal, so the deals bar can read it');
 // The "most-opened" list may count only real users (Roy, 2026-10-08): every
 // recorded view says who opened it, from the request's own origin.
 ok(/v\.caller = v\.caller \|\| ebay0\.currentOrigin\(\) \|\| 'background'/.test(src)
    && /ADD COLUMN IF NOT EXISTS caller text/.test(src) && /action, origin, lang, caller\)/.test(src),
    'listing_views records the caller (user / tooling / background) of every view');
-const page = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
-ok(/fetch\(BACKEND \+ '\/api\/deals/.test(page) && /loadHomeDeals\(\)/.test(page), 'the home shelf reads /api/deals');
-ok(!/function notYet/.test(page), 'the "not live yet" placeholder is gone, not left dormant');
-ok(/No deals right now — checking again shortly\./.test(page) && /title="' \+ liveEsc\(d\.rule\) \+ '"/.test(page),
-   'an empty shelf says one line; the rule is behind a hover (Roy, 2026-10-08)');
-ok(/if \(!deals_\.ENABLED\) return res\.json\(\{ enabled: false, reason: deals_\.OFF_REASON/.test(h), 'switched off, /api/deals answers enabled:false with the reason before reading any view');
-// TASK-ui T8: switched off, the home slot is empty — no gap, no placeholder —
-// and the reason is stated in the console; a FAILURE is still shown.
-const ldAt = page.indexOf('async function loadHomeDeals'), ld = page.slice(ldAt, page.indexOf('\n}\n', ldAt));
-ok(/if \(d\.enabled === false\) \{\s*sec\.hidden = true;\s*console\.info\('\[deals\] Best deals is switched off: '/.test(ld), 'switched off: the section stays hidden and the reason is logged, not "no deal right now"');
-ok(/sec\.hidden = false;\s*\/\/ a failure is shown/.test(ld) && /\n  sec\.hidden = false;/.test(ld), 'a load failure, and an enabled shelf, show the section');
+{
+  const wf = require('path').join(__dirname, '.github', 'workflows', 'deals-refresh.yml');
+  const y = fs.existsSync(wf) ? fs.readFileSync(wf, 'utf8') : '';
+  ok(/cron: '30 \*\/3 \* \* \*'/.test(y), 'the GitHub Action fires every 3 hours from 00:30 UTC');
+  ok(/secrets\.CARDZON_TOOLING_KEY/.test(y) && !/X-CardHunt-Key: [A-Za-z0-9]{12,}/.test(y), 'it sends the key from repo secrets, never written in the file');
+  ok(/\/api\/deals\/refresh\/status/.test(y), 'it polls status until the run ends (keeping the instance awake)');
+}
 
+const page = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8').split('\r\n').join('\n');
+const ldAt = page.indexOf('async function loadHomeDeals'), ld = page.slice(ldAt, page.indexOf('\n}\n', ldAt));
+ok(/fetch\(BACKEND \+ '\/api\/deals/.test(page) && /loadHomeDeals\(\)/.test(page), 'the home shelf reads /api/deals');
+ok(/No deals right now — checking again shortly\./.test(ld) && /title="' \+ liveEsc\(d\.rule\) \+ '"/.test(ld),
+   'an empty shelf says one line; the rule is behind a hover (Roy, 2026-10-08)');
+ok(/if \(d\.enabled === false\) \{\s*sec\.hidden = true;\s*console\.info\('\[deals\] Best deals is switched off: '/.test(ld), 'switched off: the section stays hidden and the reason is logged');
+ok(/sec\.hidden = false;\s*\/\/ a failure is shown/.test(ld) && /\n  sec\.hidden = false;/.test(ld), 'a load failure, and an enabled shelf, show the section');
+ok(!/listing\.|landed|discount|% below/.test(ld), 'a shelf tile shows nothing of eBay\'s — no listing, price of eBay\'s, or percentage');
+ok(/'Deal found ' \+ /.test(ld) && /TCGplayer market/.test(ld), 'a tile shows our card, the TCGplayer market price and when the deal was found');
+{
+  const ck = page.slice(page.indexOf('async function openDeal('), page.indexOf('\n}\n', page.indexOf('async function openDeal(')));
+  ok(/'\/api\/deals\/' \+ encodeURIComponent\(cardId\) \+ '\/live'/.test(ck), 'opening a deal fetches the listing live');
+  ok(/From eBay/.test(ck) && /delivered/.test(ck) && /View on eBay/.test(ck), 'eBay\'s own zone: "From eBay", its delivered price, a link');
+  ok(!/% below|discount|percent/.test(ck), 'no comparison number on screen — the reader sees the two figures and the gap');
+  ok(/d\.gone/.test(ck) && /d\.says/.test(ck), 'gone: the tile says why (sold, expired, no longer a deal)');
+}
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

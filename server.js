@@ -369,44 +369,8 @@ function backFollowUp(card, requestedId, grade, printing, edition, rows) {
      .finally(() => backRunning.delete(vkey));
 }
 
-// The deal candidates' backs (TASK T1, 2026-10-05; deals.backCandidates).
-// The deals shelf requires a genuine back seen, and reads cached views only,
-// so the check happens here, when a raw view is opened or re-judged: the
-// cheapest rows that would be a deal but for the back, at most
-// deals.DEAL_BACK_MAX getItem calls a view (background; 0 when the view has
-// no candidate or its candidates' verdicts are stored). Then re-judged.
-const dealBackSpent = new Map();   // view key -> { n, at }: calls spent within one view's life
-const dealBackRunning = new Set();
-// opts.measure (2026-10-07, /api/ebay/dealsprobe only): run while deals are
-// OFF, and hand back the work so the probe can wait for it. The rule, the
-// candidates and the DEAL_BACK_MAX budget are the shelf's own.
-function dealBackFollowUp(card, requestedId, grade, printing, edition, payload, opts) {
-  const measure = !!(opts && opts.measure);
-  if ((!deals_.ENABLED && !measure) || printing || edition || !jpf.isRawGrade(grade) || !backcheck.familyOf(card.api_card_id)) return null;
-  const cid = card.api_card_id, vkey = listingKey(cid, viewCacheGrade(grade, printing, edition));
-  const spent = dealBackSpent.get(vkey);
-  const used = spent && Date.now() - spent.at < LISTING_TTL ? spent.n : 0;
-  if (dealBackRunning.has(vkey) || used >= deals_.DEAL_BACK_MAX) return null;
-  dealBackRunning.add(vkey);
-  return (async () => {
-    // The shelf's own bar, run once with the back ASKED: it reaches the back
-    // of at most DEAL_BACK_MAX rows that cleared every free criterion — the
-    // same rows /api/deals will read the verdicts of (2026-10-08).
-    const ref = await dealRefOf(cid);
-    const rec = used ? spent : { n: 0, at: Date.now() };
-    dealBackSpent.set(vkey, rec);
-    const paid = dealBackOf(card, { paid: true, budget: deals_.DEAL_BACK_MAX - used });
-    const r = await deals_.pickVouched(payload, ref, paid.backOf);
-    rec.n += paid.calls();
-    // Rebuild only when a NEW verdict was fetched: every rebuild re-runs this
-    // follow-up, and verdicts already held would otherwise rebuild for ever.
-    const landed = r.backsAsked && paid.calls();
-    const vs = viewStateGet(vkey);
-    if (landed && vs && vs.gathered.ebayState)
-      await rebuildView(card, requestedId, grade, printing, edition, vs, { noFetch: true, stamp: true, back: true, material: true });
-  })().catch(e => console.warn('[deals] back follow-up failed:', e.message))
-     .finally(() => dealBackRunning.delete(vkey));
-}
+// (dealBackFollowUp — view-time back checks for a shelf that read cached
+// views — DELETED 2026-10-08: the shelf reads the refresh job's picks.)
 
 // ── What does ONE listing's card back show? (TASK T3) ──
 //   GET /api/back/:cardId?item=v1|167236883977|0
@@ -1191,41 +1155,212 @@ async function dealRefOf(cardId) {
   } catch (e) { return null; }
 }
 
+// ══════════════════════════════════════════════════════════════
+// BEST DEALS — its own supply (Roy, 2026-10-08)
+//
+// The home page is what people see BEFORE they open anything, so a shelf
+// that read only cards opened in the last 15 minutes was nearly always
+// empty. Now a refresh job walks the most valuable cards (by our TCGplayer
+// price, until a user-only open count exists — listing_views.caller), runs
+// the shelf's own bar (deals.pickVouched) on each, and keeps ONE pick per
+// card in deal_picks.
+//
+// What the shelf shows is OURS only: the card, our TCGplayer market price,
+// "deal found 2 h ago". Nothing of eBay's appears until someone clicks; the
+// click IS the check — it fetches the listing live, and if it has sold or
+// its price no longer qualifies, the pick is deleted and the tile says so.
+// So nothing on the shelf can go stale (API licence §8.1(b)(1), §8.1(c)).
+//
+// What is stored: card id, eBay item id (needed for the click), found_at,
+// run id. Never a price, a title, a photo or the discount. The discount is
+// INTERNAL (it chooses which listings qualify) — never displayed, never
+// stored, like outlier.js's medians (Roy, 2026-10-08).
+//
+// Cost: the job, every 3 hours from 00:30 UTC (a GitHub Actions schedule —
+// Render's free tier sleeps, so nothing in-process would fire), 80 cards at
+// ~1.3 calls a card measured = ~104 a run, ~830 a day, BACKGROUND origin (it
+// yields at the 92% soft stop). A click: 1 getItem (0 within 15 minutes).
+// ══════════════════════════════════════════════════════════════
+const DEALS_SUPPLY = { cards: 80, maxAgeMs: 3 * 3600 * 1000, waitMs: 90 * 1000, grade: 'Raw NM' };
+let dealTableReady = null;
+// Created by the server on first use, RLS on in the same step: API roles
+// read nothing of it (every read and write goes through this server).
+function dealTable() {
+  if (!db) return Promise.reject(new Error('no database'));
+  if (!dealTableReady) dealTableReady = db.query(`CREATE TABLE IF NOT EXISTS deal_picks (
+      card_id text PRIMARY KEY, item_id text NOT NULL, found_at timestamptz NOT NULL DEFAULT now(), run_id text)`)
+    .then(() => db.query('ALTER TABLE deal_picks ENABLE ROW LEVEL SECURITY'))
+    .catch(e => { dealTableReady = null; throw e; });
+  return dealTableReady;
+}
+
+// Which cards the job walks: English, a current TCGplayer-sourced base price
+// (the 30-day window pricequality calls current), highest first; then only
+// cards the back check covers (the bar needs a genuine back) and none on
+// deals.EXCLUDED. Over-asks 5x so the filters still leave `n`.
+async function dealCandidates(n) {
+  const r = await db.query(`
+    SELECT card_api_id, price_usd FROM (
+      SELECT DISTINCT ON (ph.card_api_id) ph.card_api_id, ph.price_usd, ph.source
+      FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
+      WHERE ph.grade IS NULL AND ph.card_api_id LIKE 'en-%'
+        AND ph.recorded_at > now() - interval '30 days'
+        AND ${printsql.basePrintingSql('ph', 'c')}
+        AND ${digital.visibleSql('c')} AND ${cardid.ourIdSql('c')}
+      ORDER BY ph.card_api_id, ph.recorded_at DESC) latest
+    WHERE source ILIKE '%tcgplayer%' AND price_usd > 0
+    ORDER BY price_usd DESC LIMIT $1`, [n * 5]);
+  return r.rows.map(x => x.card_api_id)
+    .filter(id => backcheck.familyOf(id) && !deals_.EXCLUDED[id]).slice(0, n);
+}
+
+const dealJob = { running: false, runId: null, startedAt: null, finishedAt: null, total: 0, done: 0, picks: 0,
+                  backCalls: 0, errors: [], stoppedFor: null, last: null };
+const dealPending = p => ((p && p.stampGate && p.stampGate.pendingQueued) || 0) + ((p && p.materialCheck && p.materialCheck.pending) || 0);
+async function runDealRefresh(runId) {
+  Object.assign(dealJob, { running: true, runId, startedAt: new Date().toISOString(), finishedAt: null,
+    total: 0, done: 0, picks: 0, backCalls: 0, errors: [], stoppedFor: null });
+  try {
+    await dealTable();
+    await db.query(`DELETE FROM deal_picks WHERE found_at < now() - interval '3 hours'`);
+    const ids = await dealCandidates(DEALS_SUPPLY.cards);
+    dealJob.total = ids.length;
+    for (const id of ids) {
+      try {
+        const card = await resolveListingCard(id);
+        if (!card) { dealJob.done++; continue; }
+        const t0 = Date.now();
+        let payload = await listingsFor(card, id, DEALS_SUPPLY.grade, null, {});
+        // The photo checks run after the answer; wait for them, as the probe does.
+        while (dealPending(payload) > 0 && Date.now() - t0 < DEALS_SUPPLY.waitMs) {
+          await new Promise(r => setTimeout(r, 2000));
+          const p = await listingsFor(card, id, DEALS_SUPPLY.grade, null, { poll: true });
+          if (p && !p.notFetched) payload = p;
+        }
+        const ref = await dealRefOf(id);
+        const paid = dealBackOf(card, { paid: true, budget: deals_.DEAL_BACK_MAX });
+        const r = await deals_.pickVouched(payload, ref, paid.backOf);
+        dealJob.backCalls += paid.calls();
+        if (r.pick && r.pick.listing.itemId) {
+          await db.query(`INSERT INTO deal_picks (card_id, item_id, found_at, run_id) VALUES ($1, $2, now(), $3)
+            ON CONFLICT (card_id) DO UPDATE SET item_id = EXCLUDED.item_id, found_at = EXCLUDED.found_at, run_id = EXCLUDED.run_id`,
+            [id, r.pick.listing.itemId, runId]);
+          dealJob.picks++;
+        } else {
+          await db.query('DELETE FROM deal_picks WHERE card_id = $1', [id]);   // no deal any more: not left over from a run before
+        }
+      } catch (e) {
+        const msg = String(e.message || e);
+        // The quota said stop (background yields at the soft stop): stop, say so.
+        if (e.ebayStatus || /quota|soft stop|rate|limit/i.test(msg)) { dealJob.stoppedFor = msg.slice(0, 200); break; }
+        dealJob.errors.push({ cardId: id, error: msg.slice(0, 160) });
+      }
+      dealJob.done++;
+    }
+  } catch (e) {
+    dealJob.errors.push({ error: String(e.message || e).slice(0, 200) });
+  } finally {
+    dealJob.running = false;
+    dealJob.finishedAt = new Date().toISOString();
+    dealJob.last = { runId, startedAt: dealJob.startedAt, finishedAt: dealJob.finishedAt, total: dealJob.total,
+      done: dealJob.done, picks: dealJob.picks, backCalls: dealJob.backCalls, errors: dealJob.errors.length, stoppedFor: dealJob.stoppedFor };
+    console.log('[deals] refresh ' + JSON.stringify(dealJob.last));
+  }
+}
+
+// POST /api/deals/refresh — starts the job (the GitHub Action, tooling key),
+// answers at once; the Action then polls /status, which also keeps the
+// free-tier instance awake while the job runs. Its eBay calls are BACKGROUND.
+app.post('/api/deals/refresh', toolingKey.require, (req, res) => {
+  if (!deals_.ENABLED) return res.status(409).json({ started: false, reason: 'deals are switched off' });
+  if (dealJob.running) return res.status(409).json({ started: false, reason: 'already running', status: dealJob });
+  if (!db) return res.status(503).json({ started: false, reason: 'no database' });
+  const runId = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+  ebay0.withOrigin('background', () => { runDealRefresh(runId).catch(e => console.warn('[deals] refresh failed:', e.message)); });
+  res.status(202).json({ started: true, runId, cards: DEALS_SUPPLY.cards });
+});
+app.get('/api/deals/refresh/status', toolingKey.require, (req, res) => {
+  res.json(Object.assign({}, dealJob, { errors: dealJob.errors.slice(0, 20), at: new Date().toISOString() }));
+});
+
+// The shelf: OUR data only — the card, our TCGplayer market price and when
+// the deal was found. Picks older than the refresh interval are not shown.
 app.get('/api/deals', access.priced, async (req, res) => {
   // Off (deals.ENABLED) answers that it is off and why — never an empty
   // shelf that reads as "no deals right now".
-  if (!deals_.ENABLED) return res.json({ enabled: false, reason: deals_.OFF_REASON, rule: deals_.describeRule(),
-    considered: 0, count: 0, deals: [], skipped: {}, ebayCalls: 0 });
+  if (!deals_.ENABLED) return res.json({ enabled: false, reason: deals_.OFF_REASON, rule: deals_.describeRule(), count: 0, deals: [], ebayCalls: 0 });
   const limit = Math.min(24, Math.max(1, parseInt(req.query.limit, 10) || 8));
-  const t0 = Date.now(), now = Date.now();
-  const views = [];
-  for (const [key, e] of listingCache.entries()) {
-    const parts = key.split('|');
-    if (parts.length !== 2 || now - e.ts > LISTING_TTL || !jpf.isRawGrade(parts[1])) continue;   // raw, unfiltered views only
-    views.push({ cardId: parts[0], grade: parts[1], ts: e.ts, payload: e.data });
-  }
-  // The VOUCHING bar (deals.pickVouched, Roy 2026-10-08) — the probe's own
-  // definition; here the back answers only from verdicts already held (the
-  // view-time follow-up asked for them), so this route spends nothing.
-  const deals = [], skipped = {}, excluded = {};
-  for (const v of views) {
-    const ref = await dealRefOf(v.cardId);
-    const card = { api_card_id: v.cardId };
-    const r = await deals_.pickVouched(v.payload, ref, dealBackOf(card).backOf);
-    for (const [k, n] of Object.entries(r.skipped || {})) excluded[k] = (excluded[k] || 0) + n;
-    if (!r.pick) { skipped['no row could be vouched for'] = (skipped['no row could be vouched for'] || 0) + 1; continue; }
-    const c = v.payload.card || {}, l = r.pick.listing;
-    deals.push({ cardId: v.cardId, name: c.name, number: c.number, set: c.set, image: c.image,
-      price: ref.price, priceSource: ref.source, priceLabel: deals_.refLabel(ref), priceDate: ref.recordedAt, discount: r.pick.discount,
-      evidence: r.pick.cleared,
-      listing: { title: l.title, landed: l.landed, price: l.price, shipping: l.shipping, currency: 'USD', url: l.url,
-                 source: l.source, sourceLabel: l.sourceLabel, marketplace: l.marketplace, condition: l.condition },
-      listing_age_sec: Math.round((now - v.ts) / 1000) });
-  }
-  res.json({ enabled: true, rule: deals_.describeRule(), considered: views.length, count: Math.min(deals.length, limit),
-    deals: deals_.rankDeals(deals).slice(0, limit), skipped, excludedRows: excluded, ebayCalls: 0,
-    freshness: { maxAgeSeconds: Math.round(LISTING_TTL / 1000), note: 'listings from views opened in the last 15 minutes; nothing fetched' },
-    attribution: EBAY_ATTRIBUTION, tookMs: Date.now() - t0 });
+  try {
+    await dealTable();
+    const picks = (await db.query(`SELECT p.card_id, p.found_at, c.name, c.number, c.set_name, c.set_name_en, c.image_small
+      FROM deal_picks p JOIN cards c ON c.api_card_id = p.card_id
+      WHERE p.found_at > now() - interval '3 hours' ORDER BY p.found_at DESC LIMIT 60`)).rows;
+    const out = [];
+    for (const p of picks) {
+      const ref = await dealRefOf(p.card_id);
+      if (!ref || !ref.isReal || !ref.current) continue;     // our price must be current to stand beside
+      out.push({ cardId: p.card_id, name: p.name, number: p.number, set: p.set_name_en || p.set_name, image: p.image_small,
+        price: ref.price, priceLabel: deals_.refLabel(ref), priceDate: ref.recordedAt,
+        foundAt: p.found_at, foundAgoMin: Math.max(0, Math.round((Date.now() - new Date(p.found_at).getTime()) / 60000)) });
+    }
+    // Ordered by OUR price, dearest first — never by the discount, which is internal.
+    out.sort((a, b) => b.price - a.price);
+    res.json({ enabled: true, rule: deals_.describeRule(), count: Math.min(out.length, limit), deals: out.slice(0, limit),
+      ebayCalls: 0, refreshedAt: dealJob.last ? dealJob.last.finishedAt : null,
+      freshness: { maxAgeHours: 3, note: 'a deal is found by a scan every 3 hours; the listing itself is fetched live when you open it' } });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// The click: the listing, LIVE (1 getItem; 0 within 15 minutes). Gone —
+// ended, sold, out of stock, 404 — and the pick is deleted, the answer says
+// so. Still listed but no longer qualifying at its live price (the internal
+// 15-60% rule) — deleted too. Otherwise the listing's own facts, in eBay's
+// own zone of the tile: its price, shipping, link. Never a comparison number.
+const dealLiveCache = new Map();   // itemId -> { at, item } — 15 minutes, memory only
+async function dealItemLive(itemId, cardId) {
+  const hit = dealLiveCache.get(itemId);
+  if (hit && Date.now() - hit.at < certcheck.EBAY_ITEM_TTL_MS) return { item: hit.item, calls: 0 };
+  if (!ebay.ebayEnabled()) return { error: 'EBAY_ENABLED=false', status: 503 };
+  const auth = await getEbayTokenDetailed({ background: false });
+  if (!auth.token) return { error: auth.reason || auth.error || 'eBay token unavailable', status: 503 };
+  const call = await ebay.fetchEbay(db, { url: 'https://api.ebay.com/buy/browse/v1/item/' + encodeURIComponent(itemId),
+    token: auth.token, kind: 'item', background: false, meta: { cardId, probe: 'deal-click' }, countFrom: () => 1 });
+  if (call.blocked) return { error: call.reason, status: 503 };
+  if (!call.ok) return (call.status === 404 || call.status === 410) ? { gone: true, calls: 1 } : { error: call.reason || 'eBay getItem failed', status: 502 };
+  const d = call.data || {};
+  const ship = (d.shippingOptions || [])[0];
+  const item = { itemId, title: d.title || '', url: d.itemWebUrl || null, image: (d.image || {}).imageUrl || null,
+    price: d.price ? Number(d.price.value) : null, currency: d.price ? d.price.currency : null,
+    shipping: ship && ship.shippingCost ? Number(ship.shippingCost.value) : null,
+    ended: !!(d.itemEndDate && new Date(d.itemEndDate).getTime() < Date.now()),
+    outOfStock: (d.estimatedAvailabilities || []).length > 0
+      && (d.estimatedAvailabilities || []).every(a => a.estimatedAvailabilityStatus === 'OUT_OF_STOCK'),
+    buyItNow: (d.buyingOptions || []).includes('FIXED_PRICE') };
+  dealLiveCache.set(itemId, { at: Date.now(), item });
+  return { item, calls: 1 };
+}
+app.get('/api/deals/:cardId/live', access.priced, async (req, res) => {
+  const cardId = req.params.cardId;
+  try {
+    await dealTable();
+    const p = (await db.query(`SELECT item_id FROM deal_picks WHERE card_id = $1 AND found_at > now() - interval '3 hours'`, [cardId])).rows[0];
+    if (!p) return res.status(404).json({ cardId, gone: true, says: 'This deal has expired.' });
+    const got = await dealItemLive(p.item_id, cardId);
+    if (got.error) return res.status(got.status || 502).json({ cardId, error: got.error, says: 'eBay could not be asked right now — try again shortly.' });
+    const drop = async says => { await db.query('DELETE FROM deal_picks WHERE card_id = $1', [cardId]); return res.json({ cardId, gone: true, says }); };
+    if (got.gone) return drop('This one has sold.');
+    const it = got.item;
+    if (it.ended || it.outOfStock) return drop('This one has sold.');
+    if (!it.buyItNow || it.price == null || it.currency !== 'USD') return drop('This listing has changed — it is no longer a deal.');
+    const delivered = +(it.price + (it.shipping || 0)).toFixed(2);
+    const ref = await dealRefOf(cardId);
+    // INTERNAL only: does the live price still qualify? The number is never sent.
+    const q = ref && ref.price > 0 ? 1 - delivered / ref.price : null;
+    if (q == null || q < deals_.MIN_DISCOUNT || q > deals_.MAX_DISCOUNT) return drop('Its price has changed — it is no longer a deal.');
+    res.json({ cardId, gone: false, ebay: { price: it.price, shipping: it.shipping, delivered, currency: 'USD',
+      title: it.title, url: it.url, image: it.image, checkedAt: new Date().toISOString(), calls: got.calls },
+      attribution: EBAY_ATTRIBUTION });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // ── SEARCH ────────────────────────────────────────────────────
@@ -4048,6 +4183,10 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
   // many cheaper rows the headline stepped over for it (headlineFloor).
   const trusted = listings.filter(outlier.headlineEligible);
   const headLive = trusted.find(l => l.live);
+  // Per source too (API licence §8.1(b)(2), 2026-10-08): each marketplace's
+  // section on the page heads with ITS OWN cheapest trusted listing.
+  const cheapestBySource = {};
+  for (const l of trusted) if (l.live && cheapestBySource[l.source] == null) cheapestBySource[l.source] = l.landed;
   const sellerSkipped = listings.filter(l => l.live && outlier.trustworthy(l) && !outlier.sellerMeetsFloor(l)
     && (!headLive || Number(l.landed) < Number(headLive.landed))).length;
   sources = withStampRefusals(sources, j.stamp);
@@ -4101,6 +4240,7 @@ function buildListingsPayload(card, requestedId, grade, printing, j, sources, to
     liveCount: j.liveCount,
     cheapest: trusted.length ? trusted[0].landed : null,
     cheapestLive: (headLive || {}).landed ?? null,
+    cheapestBySource,
     headlineFloor: { minScore: outlier.HEADLINE_SELLER.minScore, minPercent: outlier.HEADLINE_SELLER.minPercent,
                      skippedCheaper: sellerSkipped },
     // T5: how many live rows the page's two tabs hold. cheapest above is
@@ -4319,7 +4459,6 @@ async function rebuildView(card, requestedId, grade, printing, edition, vs, ropt
   if (!ropts.stamp) stampFollowUp(card, requestedId, grade, printing, edition, j.stampPending, j.stampPendingTop);
   if (!ropts.back) backFollowUp(card, requestedId, grade, printing, edition, payload.listings);
   if (!ropts.material) materialFollowUp(card, requestedId, grade, printing, edition, payload.listings);
-  dealBackFollowUp(card, requestedId, grade, printing, edition, payload);
   return payload;
 }
 
@@ -4419,7 +4558,6 @@ async function listingsFor(card, requestedId, grade, printing, opts) {
   if (st) stampFollowUp(card, requestedId, grade, printing, edition, gathered.stampPending, gathered.stampPendingTop);
   if (st) backFollowUp(card, requestedId, grade, printing, edition, payload.listings);
   if (st) materialFollowUp(card, requestedId, grade, printing, edition, payload.listings);
-  if (st) dealBackFollowUp(card, requestedId, grade, printing, edition, payload);
   return payload;
 }
 
@@ -6359,30 +6497,9 @@ app.get('/api/ebay/dealsprobe/:cardId', toolingKey.require, async (req, res) => 
     // the evidence to vouch for it. Cheapest first; every free criterion
     // (deals.vouchFree) before the one paid one (the back check's getItem,
     // at most DEAL_BACK_MAX a card); the first row clearing all is the pick.
-    if (req.query.bar === 'vouch') return res.json(await vouchBarOf(card, id, payload, t0, pendingOf));
-    const backWork = dealBackFollowUp(card, id, grade, null, null, payload, { measure: true });
-    if (backWork) { await backWork; payload = await reread(); }
-    const ref = await dealRefOf(id);
-    const r = deals_.pickDeal(payload, ref);
-    const row = r.deal ? (payload.listings || []).find(l => l.itemId === r.deal.listing.itemId) || r.deal.listing : null;
-    const sg = payload.stampGate || {}, mc = payload.materialCheck || {};
-    res.json({ cardId: id, name: card.name, number: card.number, set: card.set_name_en || card.set_name, grade,
-      ref, deal: r.deal ? { discount: r.deal.discount, solidCount: r.deal.solidCount } : null, why: r.deal ? null : r.why,
-      excluded: r.excluded || {},
-      row: row ? { title: row.title, landed: row.landed, price: row.price, shipping: row.shipping, url: row.url,
-        imageUrl: row.imageUrl, itemId: row.itemId, condition: row.condition, sellerCondition: row.sellerCondition,
-        sellerStated: row.sellerStated, source: row.source, marketplace: row.marketplace,
-        suspect: row.suspect || null, suspectReason: row.suspectReason || null,
-        stamp: row.stamp || null, back: row.back || null, materialPending: !!row.materialPending } : null,
-      checks: {   // what APPLIED to this view, and what is still waiting
-        photoGate: { applied: !!sg.applied, kind: sg.kind || null, checks: (sg.reprints || []).map(c => c.cardId + ':' + (c.kind || 'reprint') + (c.notRun ? ':NOT-RUN' : '')),
-                     notRun: sg.notRun || null, pending: sg.pending || 0, reason: sg.reason || null },
-        material: { applied: !!mc.applied, pending: mc.pending || 0, reason: mc.reason || null, reference: mc.reference || null },
-        backFamily: backcheck.familyOf(id) || null,
-        outliers: payload.outliers || null },
-      waitedMs: Date.now() - t0, stillPending: pendingOf(payload), listings: payload.count,
-      langUnion: payload.sources && payload.sources.ebay && payload.sources.ebay.langUnion || null,
-      stored: false, at: new Date().toISOString() });
+    // The shelf's own bar only (2026-10-08): the legacy pickDeal path and its
+    // follow-up were deleted with the cached-view shelf.
+    return res.json(await vouchBarOf(card, id, payload, t0, pendingOf));
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -1,0 +1,63 @@
+# Best deals — the refresh job's clock (Roy, 2026-10-08).
+#
+# Render's free tier sleeps after 15 minutes without traffic, so nothing
+# in-process can keep a schedule. This calls the server instead: it starts the
+# job (the request also wakes the instance), then polls its status every two
+# minutes until the run ends — which keeps the instance awake while it works.
+#
+# Every 3 hours from 00:30 UTC, just after eBay's daily reset. 80 cards at
+# ~1.3 eBay calls a card = ~104 a run; the job's calls are BACKGROUND origin
+# and stop by themselves at the quota's soft stop.
+#
+# The tooling key is a repository secret (CARDZON_TOOLING_KEY), added by Roy.
+# It is never written here and never echoed.
+name: Deals refresh
+
+on:
+  schedule:
+    - cron: '30 */3 * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  group: deals-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 175
+    env:
+      HOST: https://cardhunt-backend.onrender.com
+      KEY: ${{ secrets.CARDZON_TOOLING_KEY }}
+    steps:
+      - name: Start the run (wakes the server)
+        run: |
+          if [ -z "$KEY" ]; then echo "The CARDZON_TOOLING_KEY secret is not set — nothing started."; exit 1; fi
+          code=000
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -o start.json -w '%{http_code}' -X POST -H "X-CardHunt-Key: $KEY" --max-time 90 "$HOST/api/deals/refresh" || echo 000)
+            echo "start attempt $i: HTTP $code $(cat start.json 2>/dev/null | head -c 300)"
+            if [ "$code" = 202 ] || [ "$code" = 409 ]; then break; fi
+            sleep 30
+          done
+          if [ "$code" = 202 ]; then echo "RUN_ID=$(jq -r '.runId' start.json)" >> "$GITHUB_ENV";
+          elif [ "$code" = 409 ]; then echo "Not started: $(jq -r '.reason' start.json)"; echo "RUN_ID=" >> "$GITHUB_ENV";
+          else echo "The server did not accept the start."; exit 1; fi
+
+      - name: Poll until the run ends (keeps the instance awake)
+        if: env.RUN_ID != ''
+        run: |
+          for i in $(seq 1 80); do
+            sleep 120
+            curl -s -H "X-CardHunt-Key: $KEY" --max-time 60 "$HOST/api/deals/refresh/status" > status.json || true
+            echo "$(date -u +%H:%M) $(jq -c '{running,done,total,picks,backCalls,stoppedFor,errors:(.errors|length)}' status.json 2>/dev/null)"
+            if [ "$(jq -r '.running' status.json 2>/dev/null)" = "false" ]; then
+              last=$(jq -c '.last' status.json)
+              echo "finished: $last"
+              # A restart mid-run leaves no record of THIS run: say so, fail the job.
+              if [ "$(jq -r '.last.runId' status.json)" != "$RUN_ID" ]; then echo "Run $RUN_ID did not finish (server restarted?)"; exit 1; fi
+              exit 0
+            fi
+          done
+          echo "Still running after 160 minutes."
+          exit 1

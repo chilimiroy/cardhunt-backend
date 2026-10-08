@@ -39,16 +39,16 @@ ok('exactly ONE place in the page fetches /api/listings', listingFetches === 1, 
 ok('…and the only other /api/listings call is the comparison POST',
    (code.match(/fetch\(BACKEND \+ '\/api\/listings\/'/g) || []).length === 2 && /'\/api\/listings\/' \+ encodeURIComponent\(card\.id\) \+ '\/compare', \{ method: 'POST'/.test(code));
 ok('...and it is fetchListings', /fetch\(BACKEND \+ '\/api\/listings\/'/.test(slice('fetchListings')));
-ok('the panel and the tile average both go through it',
-  /fetchListings\(/.test(slice('renderLiveListings')) && /fetchListings\(/.test(slice('cardListingAvg')));
+ok('the panel goes through it', /fetchListings\(/.test(slice('renderLiveListings')));
 // T2, measured live 2026-09-30: one home-page load opened 14 cards through
-// the tiles — 45 eBay calls nobody asked for. A tile reads the cache only.
-ok('a tile never starts an eBay search: cardListingAvg asks cachedOnly',
-  /fetchListings\([^)]*\{ cachedOnly: true \}\)/.test(slice('cardListingAvg')));
+// the tiles — 45 eBay calls nobody asked for. Since 2026-10-08 a tile reads
+// NO listings at all: its eBay median was removed (API licence §9.5).
+ok('a tile never asks for listings (its eBay median is gone)',
+  !/fetchListings\(|cardListingAvg|fillListingAvg/.test(slice('cardSummaryTile') + slice('renderLatestSearches') + slice('updateAlertsBar')));
 ok('...and a "not fetched" reply is never cached or shared with the panel',
   /if \(d && d\.notFetched\) return d;/.test(slice('fetchListings')) && /if \(cachedOnly\) return pr;/.test(slice('fetchListings')));
-ok('Lowest listing is filled from that same answer (setLowestFromListings)',
-  /setLowestFromListings\(/.test(slice('renderLiveListings')));
+ok('the eBay section heads with that same answer (cheapestBySource.ebay)',
+  /d\.cheapestBySource \? d\.cheapestBySource\.ebay : d\.cheapestLive/.test(slice('renderLiveListings')));
 
 (async () => {
   console.log('\n  fetchListings — one request per card+grade, however many ask');

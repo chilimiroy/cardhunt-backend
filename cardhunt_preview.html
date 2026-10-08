@@ -1038,7 +1038,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
             <div class="cd-view cd-view-boxes">
               <div class="pboxes">
                 <div class="pbox"><div class="pbl">Market value</div><div class="pbv" id="cd-mkt">—</div><div class="pbs up" id="cd-chg"></div></div>
-                <div class="pbox"><div class="pbl">Cheapest trusted listing</div><div class="pbv" id="cd-low" style="color:var(--t)">—</div><div class="pbs" id="cd-lowsrc" style="color:var(--mu)"></div></div>
                 <div class="pbox"><div class="pbl">Last sold</div><div class="pbv" id="cd-sold">—</div><div class="pbs" id="cd-soldd" style="color:var(--mu)"></div></div>
               </div>
               <div style="background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:14px 18px;box-shadow:var(--sh)">
@@ -2658,11 +2657,8 @@ function updatePrices(grade,base){
     + (priceIsReal ? '' : '<span style="font-size:11px;color:var(--fa);margin-left:6px;'
         + 'font-weight:600" title="Estimated from rarity and set age — no market '
         + 'data for this card yet">est</span>');
-  // Lowest listing depends on the grade, so a grade change clears it until
-  // that grade's gated listings answer.
-  var lo = document.getElementById('cd-low');
-  lo.textContent = '—'; lo.removeAttribute('data-gated');
-  document.getElementById('cd-lowsrc').textContent = 'checking ' + gradeText(grade) + ' listings…';
+  // (The "cheapest trusted listing" box left this row 2026-10-08 — eBay's
+  // figure is the eBay panel's own header, API licence §8.1(b)(2).)
   // Last sold: no licensed source (T8). Stated, never a number.
   document.getElementById('cd-sold').textContent = '—';
   var sdd = document.getElementById('cd-soldd');
@@ -2735,30 +2731,6 @@ function priceMarksHtml(isReal, q, opts) {
     return '<span class="pqf" style="font-size:9px;color:var(--am);margin-left:4px;font-weight:600" title="' + why + '">'
       + WORD[f] + '</span>';
   }).join('');
-}
-
-// The cheapest GATED live listing at the selected grade — the same number
-// the listings panel leads with, so the box and the panel cannot disagree.
-function setLowestFromListings(d, grade) {
-  var lo = document.getElementById('cd-low');
-  var ls = document.getElementById('cd-lowsrc');
-  if (!lo || !ls) return;
-  lo.setAttribute('data-gated', '1');
-  if (d && d.cheapestLive != null) {
-    lo.textContent = fmtCurrency(Number(d.cheapestLive));
-    // A listing's own price — never "the card's price" (Roy, 2026-10-08).
-    ls.textContent = gradeText(grade) + ' · the listing\'s own price, delivered';
-  } else {
-    // "None live" and "a marketplace did not answer" are different facts.
-    var src = (d && d.sources) || {};
-    var silent = Object.keys(src).filter(function (k) {
-      return ['error', 'unconfigured', 'quota', 'disabled', 'busy', 'rate-limit'].indexOf(src[k].status) >= 0;
-    });
-    lo.textContent = '—';
-    ls.textContent = silent.length
-      ? 'no checked listing — ' + silent.join(', ') + ' did not answer'
-      : 'no checked ' + gradeText(grade) + ' listing live';
-  }
 }
 
 // ══ THE GRADING SELECTOR ══════════════════════════════════════
@@ -3703,7 +3675,16 @@ function renderListingFinder(card) {
   }
 
   // Real listings from our own API land here, above the search links.
-  html += '<div id="cd-live"></div>';
+  // eBay's listings in their OWN labelled section, visually apart from our
+  // prices and card data (API licence §8.1(b)(2), Roy 2026-10-08); any other
+  // marketplace in a section of its own below (renderOtherSources).
+  html += '<section class="src-panel src-ebay" style="border:1px solid var(--bd);border-radius:var(--r);margin:14px 0 10px;overflow:hidden">'
+    + '<div class="src-head" style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 14px;'
+    + 'background:var(--bg);border-bottom:1px solid var(--bd)">'
+    + '<span style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--tx)">Listings from eBay</span>'
+    + '<span style="font-size:10px;color:var(--mu)">eBay&rsquo;s listings, each at its own price &middot; links open eBay</span></div>'
+    + '<div id="cd-live"></div></section>'
+    + '<div id="cd-live-other"></div>';
 
   // Search links, grouped by region — the fallback when a source is down
   // or does not cover this card (English has no live source until eBay
@@ -4503,6 +4484,33 @@ function onlyUsNote(d) {
     + '</div>';
 }
 
+// Every marketplace other than eBay in a section of its own (API licence
+// §8.1(b)(2), Roy 2026-10-08: eBay Content visually isolated from
+// third-party listings). One section per source, named; its rows at their
+// own prices, cheapest first; the server's cheapest trusted row as its head.
+function renderOtherSources(d) {
+  var host = document.getElementById('cd-live-other');
+  if (!host) return;
+  var by = {};
+  (d && d.listings || []).forEach(function (l) {
+    if (l.source === 'ebay') return;
+    (by[l.source] = by[l.source] || []).push(l);
+  });
+  host.innerHTML = Object.keys(by).map(function (src) {
+    var rows = by[src].slice().sort(function (a, b) { return Number(a.landed) - Number(b.landed); });
+    var label = rows[0].sourceLabel || src;
+    var head = d.cheapestBySource && d.cheapestBySource[src] != null
+      ? 'cheapest trusted listing ' + fmtCurrency(Number(d.cheapestBySource[src])) : rows.length + ' listing' + (rows.length === 1 ? '' : 's');
+    return '<section class="src-panel src-' + liveEsc(src) + '" style="border:1px solid var(--bd);border-radius:var(--r);margin:10px 0;overflow:hidden">'
+      + '<div class="src-head" style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:8px 14px;'
+      + 'background:var(--bg);border-bottom:1px solid var(--bd)">'
+      + '<span style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--tx)">Listings from ' + liveEsc(label) + '</span>'
+      + '<span style="font-size:10px;color:var(--mu)">' + head
+      + (rows.some(function (l) { return l.priceKind === 'shop-ask'; }) ? ' &middot; shop asking prices' : '') + '</span></div>'
+      + '<div style="padding:4px 14px 10px">' + rows.map(liveRow).join('') + '</div></section>';
+  }).join('');
+}
+
 async function renderLiveListings(card, grade, opts){
   var _a = arguments; if (!whenPrices(function () { renderLiveListings.apply(null, _a); })) return;   // the door: prices only
   opts = opts || {};
@@ -4552,9 +4560,13 @@ async function renderLiveListings(card, grade, opts){
 
   perfMark('card:listings arrived', { id: cardId, grade: grade, rows: (d.listings || []).length, cached: !!d.cached });
   if (PERF_ON) requestAnimationFrame(function () { perfMark('card:listings painted', { id: cardId }); });
-  // The Lowest listing box reads the same gated answer this panel leads with.
-  setLowestFromListings(d, grade);
 
+  // §8.1(b)(2): eBay rows stay in the eBay section; every other source's rows
+  // are drawn in a section of their own. The eBay section's headline is
+  // eBay's own cheapest trusted listing (the server's cheapestBySource).
+  renderOtherSources(d);
+  d = Object.assign({}, d, { listings: (d.listings || []).filter(function (l) { return l.source === 'ebay'; }),
+    cheapestLive: d.cheapestBySource ? d.cheapestBySource.ebay : d.cheapestLive });
   var rows = d.listings || [];
 
   // ── Sale type (T5, 2026-10-04) ──
@@ -5467,49 +5479,13 @@ async function cardSummary(cardId) {
   return out;
 }
 
-// ── The listing average is per CARD AND GRADE, never per card ──
-//
-// Found in the browser, not by a test. My alerts held a Charizard at PSA 10
-// and Latest searches held the same card at Raw NM, and BOTH rendered
-// $51,743.85 — the PSA 10 median — while the true Raw NM median was $105
-// across 25 listings. A 493x error, on the row a buyer reads.
-//
-// The cause is the one this file keeps recording: a single cached number
-// standing in for the answer to two different questions. The cache was
-// keyed on cardId alone, so whichever section fetched first wrote its
-// grade's median into the other's tile.
-//
-// So the key carries the grade, and the DOM slot carries it too.
-const LISTING_AVG_CACHE = {};
-function listingAvgKey(cardId, grade) { return cardId + '@@' + (grade || 'Raw NM'); }
-
-// Second call, deliberately separate: /api/listings spends eBay quota, so
-// the tile paints from /api/cards first and fills this in when it arrives.
-async function cardListingAvg(cardId, grade) {
-  var _a = arguments; if (!whenPrices(function () { cardListingAvg.apply(null, _a); })) return { avg: null, count: 0, notFetched: true };   // the door: prices only
-  try {
-    // The card panel's answer if someone already fetched it — never a new
-    // eBay search for a tile nobody opened (T2: one home-page load opened
-    // 14 cards and spent 45 calls).
-    const j = await fetchListings(cardId, grade || 'Raw NM', null, { cachedOnly: true });
-    if (j.notFetched) return { avg: null, count: 0, note: 'open the card to check listings', notFetched: true };
-    // Outlier-flagged rows are excluded from the average for the same
-    // reason `cheapest` skips them: $2.08 against a $750 median is not a
-    // price for this card, and averaging it in moves the number people act
-    // on. Flagged rows are still SHOWN in the panel — never removed.
-    const rows = (j.listings || []).filter(function (l) { return !l.suspect && l.landed != null; });
-    if (!rows.length) {
-      return { avg: null, count: 0,
-               note: (j.listings || []).length ? 'all listings flagged as outliers' : 'no gated listings' };
-    }
-    const vals = rows.map(function (l) { return Number(l.landed); }).sort(function (a, b) { return a - b; });
-    const mid = Math.floor(vals.length / 2);
-    const med = vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
-    return { avg: med, count: vals.length, note: null };
-  } catch (e) {
-    return { avg: null, count: 0, note: 'listings unavailable' };
-  }
-}
+// ── A tile is keyed by CARD AND GRADE (data-tile) ──
+// So a later fill (our market price) lands in the right tile: the same card
+// can sit in My alerts at PSA 10 and in Latest searches at Raw NM.
+// The tile's "avg listing $X median of N" — a median of eBay listing prices
+// computed in this page — was REMOVED 2026-10-08 (Roy; eBay API licence
+// §9.5, and no price is computed in the page).
+function tileKey(cardId, grade) { return cardId + '@@' + (grade || 'Raw NM'); }
 
 // One tile. `extra` is appended inside the info block — that is where an
 // alert puts its own target price.
@@ -5533,60 +5509,18 @@ function cardSummaryTile(s, opts) {
       + priceMarksHtml(s.marketIsReal, s.quality);
   }
 
-  // The listing average, stated as what it is — or stated as absent.
-  //
-  // Read from the grade-keyed cache, NEVER from the card summary. The card
-  // summary has no grade, so a value stored on it is an answer to a
-  // question it cannot identify — which is how a PSA 10 median came to be
-  // printed as a Raw NM one, 493x out.
-  const avgGrade = opts.grade || 'Raw NM';
-  const avgKey = listingAvgKey(s.cardId, avgGrade);
-  const cached = LISTING_AVG_CACHE[avgKey];
-  let avg;
-  if (cached && cached.avg != null) {
-    avg = '<span style="color:var(--tx);font-weight:600">' + fmtCurrency(cached.avg) + '</span>'
-        + '<span style="color:var(--fa)"> median of ' + cached.count + '</span>';
-  } else if (cached && cached.note) {
-    avg = '<span style="color:var(--mu)">' + liveEsc(cached.note) + '</span>';
-  } else {
-    avg = '<span style="color:var(--fa)">checking listings&hellip;</span>';
-  }
-  // The slot names the grade it is waiting for, so a fill for a different
-  // grade cannot find it.
-  avg = '<span data-avg="' + liveEsc(avgKey) + '">' + avg + '</span>';
+  const key = tileKey(s.cardId, opts.grade || 'Raw NM');
 
-  return '<div class="ct" style="flex-shrink:0;width:172px;' + (opts.border || 'border:1px solid var(--bd)') + '">'
+  return '<div class="ct" data-tile="' + liveEsc(key) + '" style="flex-shrink:0;width:172px;' + (opts.border || 'border:1px solid var(--bd)') + '">'
     + '<div class="cti" style="position:relative;height:200px;padding:8px" ' + open + '>' + img + (opts.badges || '') + '</div>'
     + '<div class="ci">'
       + '<div class="cn" ' + open + '>' + liveEsc(s.name || s.cardId) + '</div>'
       + '<div class="cs">' + liveEsc(s.setName || '') + '</div>'
-      // The door: without prices neither line is drawn — "no market price"
-      // would be untrue, and a 'checking listings…' slot would never fill.
+      // The door: without prices the price line is not drawn — "no market
+      // price" would be untrue.
       + (pricesOpen() ? '<div class="cr" style="margin-top:4px">' + price + '</div>' : '')
-      // opts.noAvg: a caller that will not fetch listings must not print a
-      // 'checking listings…' slot that nothing ever fills.
-      + (opts.noAvg || !pricesOpen() ? '' : '<div style="font-size:10px;margin-top:3px;line-height:1.5">'
-        + '<span style="color:var(--fa)">avg listing </span>' + avg + '</div>')
       + (opts.extra || '')
     + '</div></div>';
-}
-
-// Fill in the listing average once it arrives, without repainting the tile.
-// Keyed by card AND grade at every step — the cache, the lookup and the DOM
-// slot — so a PSA 10 median can never land in a Raw NM row.
-async function fillListingAvg(hostSel, cardId, grade) {
-  const key = listingAvgKey(cardId, grade);
-  const res = LISTING_AVG_CACHE[key] || await cardListingAvg(cardId, grade);
-  // "not fetched" is not an answer: once the card is opened, the next
-  // redraw finds the real one in LIVE_CACHE.
-  if (!res.notFetched) LISTING_AVG_CACHE[key] = res;
-  document.querySelectorAll(hostSel + ' [data-avg="' + key + '"]').forEach(function (el) {
-    el.innerHTML = res.avg != null
-      ? '<span style="color:var(--tx);font-weight:600">' + fmtCurrency(res.avg) + '</span>'
-        + '<span style="color:var(--fa)"> median of ' + res.count + '</span>'
-      : '<span style="color:var(--mu)">' + liveEsc(res.note || 'no gated listings') + '</span>';
-  });
-  return res;
 }
 
 // ── HOME: Choose TCG set ──────────────────────────────────────
@@ -5828,7 +5762,7 @@ async function loadTrending() {
       cardId: c.id, name: c.nameEn && lang !== 'en' ? c.name + ' (' + c.nameEn + ')' : c.name,
       setName: (c.set && (c.set.nameEn || c.set.name) || '') + (c.number ? ' · #' + c.number : ''),
       img: c.image, market: c.price, marketIsReal: true, quality: c.priceQuality || null
-    }, { noAvg: true, extra: extra });
+    }, { extra: extra });
   }).join('');
 }
 
@@ -5865,20 +5799,56 @@ async function loadHomeDeals() {
       + '<span class="deals-how" tabindex="0" title="' + liveEsc(d.rule) + '" style="text-decoration:underline dotted;cursor:help">How deals are chosen</span></div>';
     return;
   }
+  // A tile is OUR data only (Roy, 2026-10-08): the card, our TCGplayer
+  // market price, when the deal was found. Nothing of eBay's appears until
+  // someone opens it — openDeal() fetches the listing live, into its own
+  // zone (API licence §8.1(b)(2): eBay Content visually separate).
   host.innerHTML = d.deals.map(function (x) {
-    var l = x.listing;
-    // The discount names its yardstick (Roy, 2026-10-08): "below the TCGplayer market price".
-    var extra = '<div class="tmove up">' + fmtCurrency(l.landed) + ' delivered · ' + Math.round(x.discount * 100) + '% below the '
-      + liveEsc(x.priceLabel || 'TCGplayer market price')
-      + '<br><span class="was">' + liveEsc(l.sourceLabel || l.source || '') + ' · seen ' + Math.max(1, Math.round(x.listing_age_sec / 60)) + ' min ago</span></div>'
-      + (l.url ? '<a class="tdeal" href="' + liveEsc(l.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">View listing ↗</a>' : '');
+    var ago = x.foundAgoMin >= 60 ? Math.round(x.foundAgoMin / 60) + ' h ago' : Math.max(1, x.foundAgoMin) + ' min ago';
+    var extra = '<div class="deal-ours" style="font-size:10px;color:var(--mu);margin-top:2px">'
+      + liveEsc(x.priceLabel === 'TCGplayer market price' ? 'TCGplayer market' : (x.priceLabel || 'TCGplayer market'))
+      + ' &middot; ' + 'Deal found ' + ago + '</div>'
+      + '<div class="deal-ebay" id="deal-eb-' + liveEsc(x.cardId) + '" style="margin-top:6px">'
+      + '<button class="tdeal" onclick="event.stopPropagation();openDeal(\'' + liveEsc(x.cardId) + '\')">See the eBay listing</button></div>';
     return cardSummaryTile({ cardId: x.cardId, name: x.name,
       setName: (x.set || '') + (x.number ? ' · #' + x.number : ''), img: x.image, market: x.price, marketIsReal: true },
-      { noAvg: true, extra: extra });
+      { extra: extra });
   }).join('');
 }
 
-// ── HOME MOVERS (T2, 2026-10-05) ─────────────────────────────
+// Opening a deal: the listing, fetched LIVE (the click is the check). Sold,
+// expired or no longer qualifying: the server has deleted the pick, and the
+// tile says so. Otherwise eBay's own zone: the listing's own price, delivered,
+// and a link — never a comparison number; the reader sees our figure above
+// and eBay's below.
+async function openDeal(cardId) {
+  var zone = document.getElementById('deal-eb-' + cardId);
+  if (!zone) return;
+  zone.innerHTML = '<div style="font-size:10px;color:var(--mu)">Checking the listing on eBay&hellip;</div>';
+  var d;
+  try {
+    var r = await fetch(BACKEND + '/api/deals/' + encodeURIComponent(cardId) + '/live');
+    d = await r.json();
+    if (!r.ok && !d.gone) throw new Error(d && (d.says || d.error) ? (d.says || d.error) : 'HTTP ' + r.status);
+  } catch (e) {
+    zone.innerHTML = '<div style="font-size:10px;color:var(--mu)">' + liveEsc(e.message) + '</div>';
+    return;
+  }
+  if (d.gone) {
+    zone.innerHTML = '<div class="deal-gone" style="font-size:11px;color:var(--mu);font-weight:600">' + liveEsc(d.says || 'This deal has gone.') + '</div>';
+    return;
+  }
+  var e = d.ebay;
+  zone.innerHTML = '<div class="deal-ebay-zone" style="border-top:1px dashed var(--bd);padding-top:6px">'
+    + '<div style="font-size:9px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.06em">From eBay</div>'
+    + '<div style="font-size:14px;font-weight:800;color:var(--tx)">' + fmtCurrency(e.delivered) + ' delivered</div>'
+    + '<div style="font-size:10px;color:var(--fa)">' + fmtCurrency(e.price)
+    + (e.shipping ? ' + ' + fmtCurrency(e.shipping) + ' shipping' : ' &middot; free shipping') + ' &middot; checked just now</div>'
+    + (e.url ? '<a class="tdeal" href="' + liveEsc(e.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">View on eBay ↗</a>' : '')
+    + '</div>';
+}
+
+/ ── HOME MOVERS (T2, 2026-10-05) ─────────────────────────────
 // Four lists from /api/trending — gainers and fallers, by % and by value —
 // compared on TCGdex prices only, same printing and product at both ends,
 // marked prices (old / thin / unsettled) left out (trending.js). Each list
@@ -5989,15 +5959,14 @@ function renderLatestSearches() {
     cardSummary(c.cardId).then(function (s) {
       var host2 = document.getElementById('latest-searches');
       if (host2 && s && s.market != null) {
-        var el = host2.querySelector('[data-avg="' + listingAvgKey(c.cardId, 'Raw NM') + '"]');
-        var cr = el && el.closest('.ci') && el.closest('.ci').querySelector('.cr');
+        var el = host2.querySelector('[data-tile="' + tileKey(c.cardId, 'Raw NM') + '"]');
+        var cr = el && el.querySelector('.cr');
         if (cr && !cr.getAttribute('data-filled')) {
           cr.setAttribute('data-filled', '1');
           cr.innerHTML = '<span class="cp">' + fmtCurrency(s.market) + '</span>'
             + priceMarksHtml(s.marketIsReal, s.quality);
         }
       }
-      return fillListingAvg('#latest-searches', c.cardId, 'Raw NM');
     });
   });
 }
@@ -6091,7 +6060,6 @@ function updateAlertsBar() {
     cardSummary(a.cardId).then(function (s) {
       // Repaint only if the summary added something the tile did not have.
       if (s && s.market != null) updateAlertsBarPrices();
-      return fillListingAvg('#alerts-bar-items', a.cardId, a.grade);
     });
   });
 }
@@ -6103,9 +6071,9 @@ function updateAlertsBarPrices() {
   ALERTS.forEach(function (a) {
     var s = CARD_SUMMARY_CACHE[a.cardId];
     if (!s || s.market == null) return;
-    var tile = bar.querySelector('[data-avg="' + listingAvgKey(a.cardId, a.grade) + '"]');
+    var tile = bar.querySelector('[data-tile="' + tileKey(a.cardId, a.grade) + '"]');
     if (!tile) return;
-    var cr = tile.closest('.ci') && tile.closest('.ci').querySelector('.cr');
+    var cr = tile.querySelector('.cr');
     if (cr && !cr.getAttribute('data-filled')) {
       cr.setAttribute('data-filled', '1');
       cr.innerHTML = '<span class="cp">' + fmtCurrency(s.market) + '</span>'
@@ -7883,6 +7851,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-d265d36-licence &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-b7b8523-dealsupply &middot; click to hide</div>
 </body>
 </html>

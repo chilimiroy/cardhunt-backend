@@ -81,7 +81,7 @@ ok('set page and results: the price sorts are .price-only', /<option class="pric
    && /<select class="tbsel price-only" onchange="sortResults/.test(H));
 
 console.log('\n  the loaders: nothing is asked of a price endpoint while prices are closed');
-for (const f of ['loadHomeMovers', 'loadHomeDeals', 'loadTrending', 'updateAlertsBar', 'renderLiveListings', 'renderListingFinder', 'loadHistory', 'cardListingAvg']) {
+for (const f of ['loadHomeMovers', 'loadHomeDeals', 'loadTrending', 'updateAlertsBar', 'renderLiveListings', 'renderListingFinder', 'loadHistory']) {
   const src = fn(f);
   ok(`${f} begins with whenPrices`, src.split('\n')[1] && /if \(!whenPrices\(function \(\) \{ \w+\.apply\(null, _a\); \}\)\) return/.test(src.split('\n')[1]), (src.split('\n')[1] || '').slice(0, 60));
 }
@@ -106,7 +106,8 @@ ok('mockP — the page\'s own estimator — returns nothing while closed', /^fun
 ok('set page tiles: no price row without prices', /\+\(pricesOpen\(\) \? '<div class="cr"><span class="cp">'\+priceStr\+estMark/.test(H));
 ok('set page: the "where prices come from" note is not drawn while closed', /if \(!pricesOpen\(\)\) return;/.test(fn('setSourceNote')));
 ok('search candidates: no price slot without prices', /pricesOpen\(\) \? '<span style="font-size:14px;font-weight:800">' \+ price \+ '<\/span>' : '<span><\/span>'/.test(H));
-ok('summary tiles: neither the price nor the listing line without prices', /\(pricesOpen\(\) \? '<div class="cr" style="margin-top:4px">' \+ price/.test(fn('cardSummaryTile')) && /opts\.noAvg \|\| !pricesOpen\(\)/.test(fn('cardSummaryTile')));
+// (the tile's listing line — an eBay median — was removed 2026-10-08, API licence §9.5)
+ok('summary tiles: no price line without prices, and no listing line at all', /\(pricesOpen\(\) \? '<div class="cr" style="margin-top:4px">' \+ price/.test(fn('cardSummaryTile')) && !/avg listing|noAvg/.test(fn('cardSummaryTile')));
 
 console.log('\n  wired: the account, the waiting screen, the token');
 const ac = fn('authCheck');

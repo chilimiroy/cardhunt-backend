@@ -1,5 +1,75 @@
 # CardHunt — Progress Log
 
+## 2026-10-08 (night) — a leaked key, a guard that discards good prices, a nightly that dies quietly, tests that did not run
+
+- **The pokemontcg.io API key was a literal** in `ingest.js`, `server.js` and
+  `cardhunt_preview.html` — the page one public for as long as it was there;
+  in git since `0ef2e73`, and in six local `.bak` files (untracked, not
+  served). Now `POKEMONTCG_KEY` from the environment only; the page holds no
+  key and calls pokemontcg.io keyless. `nosecrets.test.js` scans those three
+  and every tracked source file for key shapes, and is shown to catch the key
+  in all three as committed before (`4c6356e`). **The old key must be
+  rotated** — removing it from the code does not take it out of history.
+  Process: the fix was pushed with a failing suite (`scopeguard.test.js`
+  named the removed `KEY` global) because the push was not gated on the
+  result; fixed in the next commit, and every push since goes through a script
+  that pushes only when the clean-checkout suite is all green.
+- **The "same price for 5+ cards" warnings (1,285 in the 08/10 run, 486 on
+  07/10) are a guard misfiring, not a fallback writing one price.**
+  `looksLikeJunk` keeps the last 12 prices and rejects any >= $5 with 5 of
+  them within 1.5%; the nightly works in descending value order, so
+  neighbouring cards are genuinely close. 08/10: 1,079 distinct exact prices,
+  no exact price more than 5 times, 1,239 of 1,284 consecutive warnings at or
+  below the one before; by source tcgdex_tcgplayer_holofoil 536, _normal 288,
+  _unlimited-holofoil 58, _unlimited 16 (898 product-matched TCGdex prices),
+  tcgplayer_market 387; $5-10 264, $10-20 380, $20-50 386, $50-100 113,
+  $100+ 142. A rejected price is NOT written — nothing junk reached the
+  table — but the card keeps its older price. Deals: of the 80 pool cards 71
+  were rewritten that night, 4 still equal TCGdex's price now (incl. live pick
+  en-col1-20); en-bwp-BW28, en-bw5-107 (TCGplayer-search prices) and
+  en-ex12-91 (TCGdex 503) could not be confirmed and are in `deals.EXCLUDED`
+  until the nightly rewrites them. None was a live pick. **Open: the guard
+  itself** — it should not judge product-matched TCGdex prices, or should not
+  judge value-ordered neighbours; not changed this round.
+- **The 08/10 nightly** reached 98.8% of English (2,555 priced, 1,395 no data)
+  and ended in `^C` (LastTaskResult 0xC000013A); Japanese and Chinese never
+  started; the log said nothing. `refreshrun.js`: a language not run, stopped
+  at the --hours budget or errored -> exit 3 and "REFRESH INCOMPLETE — did not
+  finish: …; did not run: …"; Ctrl+C / console close / terminate -> the same
+  line and exit 130; a hard kill -> `refresh-run.json`, named by the next
+  run's first line. A language that throws no longer aborts the rest.
+- **Assertions that were not running while the suite said green: 51, plus 1
+  that passed on an error.** Every test file now pins its assertion count
+  (`testcount.js`, all 103 needed it). Found by V8 coverage of a plain run:
+  preserve.test.js "every unavailable source states a reason" never ran
+  signed out, and "/api/listings answers" passed on the 401 refusal body. Found
+  by the guard's first clean-checkout run: gateaudit's ebayprobe.js check (1)
+  and setyield's refresh-daily.cmd check (1) vanished silently, and
+  sourcerank.test.js skipped all 48 and exited 0. Those three files hold no
+  secret and no eBay content: now tracked, the skips removed — a missing file
+  fails. Everything else coverage found never ran is behind --db / --live /
+  --deployed or an error path.
+- **TCGdex and languages (settled):** the same card id answers in en, fr, es,
+  it, pt, de (TCGdex's set code and number are shared, so they give nothing to
+  exclude); ja, ko, zh-tw, zh-cn, nl, pl, ru, id, th, es-mx, pt-br, pt-pt
+  answer 404 for all five cards measured (sv03.5-151, sv03.5-199, base1-4,
+  det1-10, ru1-10 — the last English only). No field links a card to another
+  language; Japanese by dex number returns every card of the species (29 Mew,
+  44 Charizard), the counterpart among several same-name cards of one set
+  (SV2a: 4 Mew ex, 3 Charizard ex). No language map is built;
+  TASK-query-language.md stays on keyword exclusion.
+- **Artist and autocomplete:** the card page asked TCGdex for the artist on
+  every view; the nightly now stores it from the card response it already
+  fetches (`writeIllustrator`; `migration-illustrator.sql`, Roy runs it).
+  Measured read-only on all 21,256 visible English cards (TCGdex GraphQL card(id) in batches of 50, agreeing with the card endpoint on 1,050 of 1,050 overlapping cards): 20,535 have an artist on TCGdex (96.6%), 720 are on TCGdex with none (90 sets — swshp 133, the XY and BW trainer kits, sve energy, ru1 Rumble), 1 is not on TCGdex (exu). Stored today: 0 — the migration has not run; after it, the nightly reaches them as each comes due (~4,000 a night, every card within the 30-day dormant tier). Japanese (14,463) and Chinese (8,313) get none: the nightly asks TCGdex only for English, and the page no longer fetches it live. Autocomplete asked pokemontcg.io from the browser on every
+  keystroke (pokemontcg ids, typed text into the HTML unescaped); now
+  `/api/suggest` reads our cards table, records nothing, escapes everything.
+- Also: trending cards joined trending sets behind the door
+  (`/api/trending/search`, approved only); the 30-day report-price rule runs
+  on the deals-refresh clock; the search page's breadcrumb no longer shows
+  "Search › —" on a fresh page. Suite: 108 files, all green on a clean
+  checkout.
+
 ## 2026-10-08 (reports and pages) — compare off, one bar, one search page, red, reports, three logos
 
 TASK-reports-and-pages.md, eight items, one session on main.

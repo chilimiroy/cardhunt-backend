@@ -6793,6 +6793,25 @@ app.get('/app', (req, res) => {
 
 // The CardZon mark is drawn inline in the page (#cz-mark): no image route.
 
+// ── Set logos we made ourselves (Roy, 2026-10-08, TASK-reports-and-pages T4) ──
+// For sets no source has a logo for. Each file is named here, by the set id
+// it is for; anything else under /set-logos/ is a 404 — the one-file-by-name
+// rule, never a folder mount. cards.set_logo holds this URL and
+// set_logo_source says 'cardzon:<file>' (setlogo.js writes both).
+const SET_LOGOS = {
+  'ex5.5.png': 'set-pokecard.png',    // Poké Card Creator Pack
+  'mfb.png':   'set-myfirst.png',     // My First Battle — its blue plate is part of the image (white text)
+};
+app.get('/set-logos/:file', (req, res) => {
+  const f = Object.prototype.hasOwnProperty.call(SET_LOGOS, req.params.file) ? SET_LOGOS[req.params.file] : null;
+  if (!f) return res.status(404).json({ error: 'no such set logo' });
+  res.type('png');
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.sendFile(require('path').join(__dirname, f), err => {
+    if (err && !res.headersSent) res.status(500).send('set logo unavailable');
+  });
+});
+
 // ══════════════════════════════════════════════════════════════
 // GET /cardmatch.js  —  the query builder, for the browser
 //

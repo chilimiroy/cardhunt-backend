@@ -94,6 +94,7 @@ const ROUTES = [
   ['get', '/api/ebay/aspects/:cardId', 'tooling', null],
   ['get', '/api/ebay/quota', 'public', 'eBay spend so far, read from the ledger (spends nothing); no user data. ?probe=1 asks eBay and needs the tooling key (toolingkey.test.js)'],
   ['get', '/app', 'public', 'the page itself — anonymous visitors browse it'],
+  ['get', '/set-logos/:file', 'public', 'set logo images for the catalogue, each file named in SET_LOGOS'],
   ['get', '/gradeprice.js', 'public', 'a module the page loads'],
   ['get', '/estimator.js', 'public', 'a module the page loads'],
   ['get', '/cardmatch.js', 'public', 'a module the page loads'],

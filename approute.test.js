@@ -117,6 +117,25 @@ async function waitForBoot(server, ms = 20000) {
     ok('/ still answers', root.status === 200, 'got ' + root.status);
     ok('/ points at /app', root.body.includes('"/app"'));
 
+    // ── Set logos we made (T4, 2026-10-08): named files only ──
+    console.log('\nSET LOGOS — each by name, nothing else under /set-logos/');
+    for (const [p, file] of [['/set-logos/ex5.5.png', 'set-pokecard.png'], ['/set-logos/mfb.png', 'set-myfirst.png']]) {
+      const rr = await fetch(BASE + p, { redirect: 'manual' });
+      const bytes = Buffer.from(await rr.arrayBuffer());
+      const r = { status: rr.status, headers: { 'content-type': rr.headers.get('content-type') } };
+      const same = r.status === 200 && Buffer.compare(bytes, require('fs').readFileSync(path.join(__dirname, file))) === 0;
+      ok(`${p} serves ${file} as image/png`, r.status === 200 && /image\/png/.test(r.headers['content-type'] || ''), 'got ' + r.status + ' ' + (r.headers['content-type'] || ''));
+      ok(`${p} is ${file} byte for byte`, same);
+    }
+    for (const p of ['/set-logos/ex10.png', '/set-logos/set-myfirst.png', '/set-logos/..%2fserver.js', '/set-logos/%2e%2e%2fCLAUDE.md', '/set-logos/', '/set-logos/toString', '/set-logos/__proto__']) {
+      const r = await get(p);
+      ok(`${p} is not served`, r.status === 404, 'got ' + r.status);
+    }
+    for (const p of ['/set-myfirst.png', '/set-pokecard.png', '/set-ex10.png']) {
+      const r = await get(p);
+      ok(`${p} (the file by its own name) is not served`, r.status === 404, 'got ' + r.status);
+    }
+
     // ── What must stay UNREACHABLE ───────────────────────────
     console.log('\nBLOCKED — everything else in the project root');
     const mustNotServe = [

@@ -59,7 +59,9 @@ console.log('  ' + pageNames.length + ' top-level identifiers, including: '
 // The four the user named, plus the one that actually broke it. If the page
 // stops declaring these the test should be updated deliberately, not pass
 // quietly because it is now checking nothing.
-for (const n of ['API', 'KEY', 'S', 'RP']) {
+// KEY left the page deliberately on 2026-10-08 (the pokemontcg.io key was a
+// literal; nosecrets.test.js) — H, still a short page global, stands in.
+for (const n of ['API', 'H', 'S', 'RP']) {
   chk('page still declares ' + n + ' (the hazard is real)', pageNames.includes(n));
 }
 

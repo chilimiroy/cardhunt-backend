@@ -302,7 +302,10 @@ Rules of the gate:
   *Archive:* "REPRINT vs ORIGINAL — settled, and the stamp (2026-10-02)". Metal Charizards on CC002 are kept (open).
 - **FALSIFIED — do not retry without a new idea**: artwork template; SIFT (no
   opencv.js build ships it); Japanese layout by template; sibling+price rule;
-  "which card is this" over all scans (STOPPED); OCR (CLOSED). Base Set 2's mark
+  "which card is this" over all scans (STOPPED); OCR (CLOSED); **refusing on
+  eBay's Set aspect** (Option S: 25 of 42 unstamped rows filed under the
+  reprint's Set were genuine originals, a $1,000 Base Charizard among them; Set
+  is a headline flag only — PROGRESS 2026-10-08 (Set split)). Base Set 2's mark
   needs alignment first. Numbers and PROGRESS block names:
   *Archive:* "MOVED FROM CLAUDE.md, 2026-10-07 (budget, second pass)".
 - **References are stored, never fetched in a request** (`refscans.js`,

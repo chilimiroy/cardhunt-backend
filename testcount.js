@@ -16,6 +16,13 @@
 // N is a MINIMUM for the plain run: --db / --live / --deployed add more.
 // When a file gains assertions, raise N in the same commit
 // (testcount.test.js lists every file and its N).
+//
+// A check that cannot run HERE (a local-only, gitignored file absent from a
+// clean checkout) is declared, never silent:
+//   const tc = require('./testcount')(N);  ...  tc.skip(k, 'why')
+// prints "SKIP" with the reason and lowers this run's minimum by exactly k.
+// The first clean-checkout run with this guard found three such checks that
+// had vanished without a word (2026-10-08).
 'use strict';
 const SUMMARY = /(\d+) passed, (\d+) failed|(\d+) guards fired, (\d+) did not/g;
 
@@ -27,7 +34,14 @@ function counted(text) {
 
 module.exports = function expectAssertions(min) {
   if (!(Number.isInteger(min) && min > 0)) throw new Error('testcount: give the number of assertions this file runs');
-  let tail = '';
+  let tail = '', skipped = 0;
+  const api = {
+    skip(k, why) {
+      if (!(Number.isInteger(k) && k > 0) || !why) throw new Error('testcount.skip: a count and a reason');
+      skipped += k;
+      console.log('  SKIP  ' + k + ' assertion' + (k === 1 ? '' : 's') + ' — ' + why);
+    },
+  };
   const write = process.stdout.write.bind(process.stdout);
   process.stdout.write = function (chunk, ...rest) {
     tail += String(chunk);
@@ -35,12 +49,14 @@ module.exports = function expectAssertions(min) {
     return write(chunk, ...rest);
   };
   process.on('exit', () => {
-    const ran = counted(tail);
-    if (ran == null || ran < min) {
+    const ran = counted(tail), need = min - skipped;
+    if (ran == null || ran < need) {
       write('\n  FAIL  assertion count: ' + (ran == null ? 'no summary line was printed' : ran + ' ran')
-        + ', this file runs at least ' + min + ' — an assertion stopped running\n');
+        + ', this file runs at least ' + need + (skipped ? ' (' + min + ' less ' + skipped + ' declared skipped)' : '')
+        + ' — an assertion stopped running\n');
       process.exitCode = 1;
     }
   });
+  return api;
 };
 module.exports.counted = counted;

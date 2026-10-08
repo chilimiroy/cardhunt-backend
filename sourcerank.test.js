@@ -10,9 +10,10 @@
 // sourcerank.js is local-only (gitignored: ingest's price writer), so a
 // clone does not have it. Say so plainly instead of throwing
 // MODULE_NOT_FOUND; there is nothing here to test without it.
-require('./testcount')(48);   // assertions in a plain run — fewer fails the file (testcount.js)
+const TC = require('./testcount')(48);   // assertions in a plain run — fewer fails the file (testcount.js)
 if (!require('fs').existsSync(__dirname + '/sourcerank.js')) {
-  console.log('  SKIP  sourcerank.test.js — sourcerank.js is local-only and not in this checkout');
+  TC.skip(48, 'sourcerank.test.js — sourcerank.js is local-only (gitignored) and not in this checkout');
+  console.log('\n  0 passed, 0 failed');
   process.exit(0);
 }
 const sr = require('./sourcerank');

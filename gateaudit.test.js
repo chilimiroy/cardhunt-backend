@@ -10,7 +10,7 @@
 // the search resolver fixed and the endpoint's guard still refusing first.
 // Each assertion below names a path and the thing it must reach.
 'use strict';
-require('./testcount')(62);   // assertions in a plain run — fewer fails the file (testcount.js)
+const TC = require('./testcount')(62);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? pass++ : fail++; console.log('  ' + (c ? 'ok  ' : 'FAIL') + '  ' + n + (c || !d ? '' : '  — ' + d)); };
@@ -177,7 +177,7 @@ console.log('\n  one English gate — cardmatch.verify');
   if (fs.existsSync('ebayprobe.js')) {
     const pr = fs.readFileSync('ebayprobe.js', 'utf8');
     ok('ebayprobe (local) gates with cm.verify and asks cm.buildQuery', /cm\.verify\(/.test(pr) && /cm\.buildQuery\(/.test(pr));
-  }
+  } else TC.skip(1, 'ebayprobe.js is local-only (gitignored) and not in this checkout');
   const cm = require('./cardmatch');
   const cz = { name: 'Charizard VMAX', number: '74', setTotal: '73', setId: 'swsh3.5', setName: "Champion's Path" };
   ok('verify refuses "x4 Playset"', !cm.verify('Charizard VMAX 74/73 x4 Playset', cz, 'Raw').ok);

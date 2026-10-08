@@ -3,7 +3,7 @@
 //
 //   node testcount.test.js
 'use strict';
-require('./testcount')(12);
+require('./testcount')(15);
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };
@@ -34,6 +34,12 @@ r = run('last', `require(${TC})(5); console.log('9 passed, 0 failed'); console.l
 ok('the LAST summary line is the one read', r.code === 1);
 r = run('guards', `require(${TC})(12); console.log('  12 guards fired, 0 did not');`);
 ok('preservebreak\'s "N guards fired, M did not" is read', r.code === 0, r.out.replace(/\s+/g, ' ').trim().slice(0, 140));
+r = run('skipdeclared', `const tc = require(${TC})(3); tc.skip(1, 'a local-only file'); console.log('2 passed, 0 failed');`);
+ok('a DECLARED skip lowers the minimum by exactly its count, and says SKIP and why', r.code === 0 && /SKIP  1 assertion — a local-only file/.test(r.out), r.out.replace(/\s+/g, ' ').trim().slice(0, 140));
+r = run('skipshort', `const tc = require(${TC})(4); tc.skip(1, 'x'); console.log('2 passed, 0 failed');`);
+ok('…and no further: one more missing still FAILS', r.code === 1 && /at least 3 \(4 less 1 declared skipped\)/.test(r.out), r.out.replace(/\s+/g, ' ').trim().slice(0, 160));
+let skipThrew = false; try { require('./testcount')(5).skip(1); } catch (e) { skipThrew = true; }
+ok('a skip without a reason is refused', skipThrew);
 let threw = false; try { require('./testcount')(0); } catch (e) { threw = true; }
 ok('no count given: refuses to start', threw);
 fs.rmSync(dir, { recursive: true, force: true });
@@ -43,7 +49,7 @@ const files = fs.readdirSync(__dirname).filter(f => /\.test\.js$/.test(f) || f =
 const missing = [], table = [];
 for (const f of files) {
   const src = fs.readFileSync(path.join(__dirname, f), 'utf8');
-  const m = /^require\('\.\/testcount'\)\((\d+)\);/m.exec(src);
+  const m = /^(?:const TC = )?require\('\.\/testcount'\)\((\d+)\);/m.exec(src);
   if (!m) missing.push(f); else table.push(f + ' ' + m[1]);
   // Before anything that could print or exit: within the first 60 lines.
   if (m && src.slice(0, m.index).split('\n').length > 60) missing.push(f + ' (too late in the file)');

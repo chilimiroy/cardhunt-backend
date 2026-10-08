@@ -6,7 +6,7 @@
 // once, even with a refusal — is NOT. A report that names every set is as
 // useless as one that names none.
 'use strict';
-require('./testcount')(42);   // assertions in a plain run — fewer fails the file (testcount.js)
+const TC = require('./testcount')(42);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const sy = require('./setyield');
 let pass = 0, fail = 0;
@@ -135,7 +135,7 @@ if (!fs.existsSync(__dirname + '/ingest.js')) {
   if (fs.existsSync(__dirname + '/refresh-daily.cmd')) {
     const cmd = fs.readFileSync(__dirname + '/refresh-daily.cmd', 'utf8').trim().split(/\r?\n/).filter(l => l.trim() && !/^\s*(REM|@echo)/i.test(l));
     ok('refresh-daily.cmd ends on the node line (its exit code is the task result)', /^node ingest\.js refresh/.test(cmd[cmd.length - 1]), cmd[cmd.length - 1]);
-  }
+  } else TC.skip(1, 'refresh-daily.cmd is local-only (gitignored *.cmd) and not in this checkout');
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');

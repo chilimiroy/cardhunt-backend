@@ -936,8 +936,14 @@ html:not(.ch-noprice) .price-door { display: none !important; }
     <div class="cg" id="search-popular"></div>
     <div class="sec-h" style="margin-top:34px"><div><div class="sec-t">Trending cards</div><div class="sec-s" id="search-trending-sub">Loading&hellip;</div></div></div>
     <div class="cg" id="search-trending"></div>
+    <!-- Trending sets: approved accounts only (Roy, 2026-10-08) — a ranking by
+         price movement is price information even without a number. The same
+         door the Pokémon page's trending stands behind. -->
+    <div class="price-door" role="note" style="margin-top:34px"></div>
+    <div class="price-only">
     <div class="sec-h" style="margin-top:34px"><div><div class="sec-t">Trending sets</div><div class="sec-s" id="search-tsets-sub">Loading&hellip;</div></div></div>
     <div class="setrow2" id="search-tsets"></div>
+    </div><!-- /.price-only (trending sets) -->
   </div>
 </div>
 
@@ -2204,10 +2210,22 @@ async function loadSearchSections(){
     if (!r2.ok) throw new Error(t.error || ('HTTP ' + r2.status));
     set('search-trending-sub', t.cards.length ? t.rule : 'No card has a measured rise over ' + (t.window || 'the window') + ' yet.');
     document.getElementById('search-trending').innerHTML = (t.cards || []).filter(function (c) { return OUR_CARD_ID.test(c.id); }).map(function (c) { return tile(c); }).join('');
-    set('search-tsets-sub', t.sets.length ? t.setRule : 'No trending sets: no card has a measured rise over ' + (t.window || 'the window') + ' yet.');
+  } catch (e) { set('search-trending-sub', 'Could not load: ' + e.message); }
+  loadSearchTrendSets();
+}
+// Trending sets: the door (approved accounts only). Closed, nothing is asked
+// of the server; the section's .price-door says why.
+async function loadSearchTrendSets(){
+  if (!whenPrices(loadSearchTrendSets)) return;
+  var sub = document.getElementById('search-tsets-sub');
+  try {
+    var r = await fetch(BACKEND + '/api/trending/sets');
+    var t = await r.json();
+    if (!r.ok) throw new Error(t.error || ('HTTP ' + r.status));
+    if (sub) sub.textContent = t.sets.length ? t.setRule : 'No trending sets: no card has a measured rise over ' + (t.window || 'the window') + ' yet.';
     S.trendSets = t.sets || [];
     renderSearchSets();
-  } catch (e) { set('search-trending-sub', 'Could not load: ' + e.message); set('search-tsets-sub', 'Could not load: ' + e.message); }
+  } catch (e) { if (sub) sub.textContent = 'Could not load: ' + e.message; }
 }
 // A trending set is drawn with the Sets screen's own tile when the set list
 // has loaded, else by name — the tile needs the set's row (logo, date).
@@ -8054,6 +8072,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-43336f3-setlink &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-42cba24-trendsets &middot; click to hide</div>
 </body>
 </html>

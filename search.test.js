@@ -55,10 +55,16 @@ ok('/api/trending stays priced', /app\.get\('\/api\/trending', access\.priced/.t
 ok('popular reads search_log only — not listing_views', /FROM search_log/.test(pop) && !/listing_views/.test(pop));
 ok('popular answers gathering below the threshold, with the count so far', /t\.resolved < SEARCH_POPULAR_MIN/.test(pop) && /gathering: true, cards: \[\]/.test(pop));
 ok('popular says "not recording" when the table is missing (42P01)', /42P01/.test(pop) && /recording: false/.test(pop));
+ok('trending sets are approved-only: their own route, access.priced (a ranking by price movement)', /app\.get\('\/api\/trending\/sets', access\.priced/.test(S));
+ok('the public catalogue route sends no sets', !/sets[,:]/.test(cat.replace(/\/\/[^\n]*/g, '')));
+ok('the page: Trending sets behind the door — a .price-door, then .price-only around it',
+  /<div class="price-door" role="note"[^>]*><\/div>\s*<div class="price-only">\s*<div class="sec-h"[^>]*><div><div class="sec-t">Trending sets/.test(page));
+ok('the page asks for trending sets only when prices are open (whenPrices)', /if \(!whenPrices\(loadSearchTrendSets\)\) return;/.test(fn('loadSearchTrendSets')) && /\/api\/trending\/sets/.test(fn('loadSearchTrendSets')));
 ok('the catalogue trending sends no price, change or date', /cards: b\.cards\.slice\(0, 12\)\.map\(c => \(\{ id: c\.id, name: c\.name, nameEn: c\.nameEn, number: c\.number,\s*rarity: c\.rarity, image: c\.image, set: c\.set \}\)\)/.test(cat)
   && !/price|change/i.test(cat.replace(/measured TCGplayer price rose|No prices are shown here|\/\/[^\n]*/g, '')));
-ok('both trending routes share ONE builder (trendingBody)', /await trendingBody\(p\)/.test(tr) && /await trendingBody\(p\)/.test(cat) && (S.match(/async function trendingBody\(/g) || []).length === 1);
-ok('trending sets are derived from the same list and say so (setRule)', /bySet/.test(cat) && /setRule:/.test(cat));
+ok('every trending route shares ONE builder (trendingBody)', /await trendingBody\(p\)/.test(tr) && /await trendingBody\(p\)/.test(cat) && (S.match(/async function trendingBody\(/g) || []).length === 1);
+{ const ts = route('/api/trending/sets');
+  ok('trending sets are derived from the same list and say so (setRule)', /await trendingBody\(p\)/.test(ts) && /bySet/.test(ts) && /setRule:/.test(ts)); }
 const srch = route('/api/search');
 ok('every resolved search is recorded (logSearch) — query, card if ONE, candidate count', /logSearch\(q, confident \? top\.cardId : null, candidates\.length\)/.test(srch));
 const log = S.slice(S.indexOf('function logSearch('), S.indexOf('\n}', S.indexOf('function logSearch(')) + 2);

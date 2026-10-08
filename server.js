@@ -1120,16 +1120,35 @@ app.get('/api/trending', access.priced, async (req, res) => {
   catch (err) { res.status(500).json({ error: err.message, cards: [] }); }
 });
 
-// ── The search page's Trending cards and Trending sets (T6, 2026-10-08) ──
+// ── The search page's Trending cards (T6, 2026-10-08) ──
 // Catalogue, so public: the SAME list /api/trending ranks (biggest % risers
 // over 7 days, English — the only language re-priced), sent WITHOUT a
-// price, a change or a date. Nobody sees a figure here; the order is the
-// trending list's. "Trending sets" did not exist anywhere: it is derived
-// from that same list — the sets holding the most of this week's risers —
-// and says so in `setRule`, rather than being a second ranking.
+// price, a change or a date.
+const TRENDING_SEARCH = { sort: 'gain-pct', window: '7d', lang: 'en', limit: 60 };
 app.get('/api/trending/catalogue', access.optional, async (req, res) => {
-  const p = trending.parseParams({ sort: 'gain-pct', window: '7d', lang: 'en', limit: 60 });
-  if (!db) return res.status(503).json({ error: 'database not configured', cards: [], sets: [] });
+  const p = trending.parseParams(TRENDING_SEARCH);
+  if (!db) return res.status(503).json({ error: 'database not configured', cards: [] });
+  try {
+    const b = await trendingBody(p);
+    res.json({
+      window: b.windowLabel, lang: b.lang, eligible: b.eligible, coverage: b.coverage || null,
+      rule: 'The cards whose measured TCGplayer price rose most, as a percentage, over ' + b.windowLabel
+        + ' — the Pokémon page\'s "Biggest movers — % gain" list. No prices are shown here.',
+      cards: b.cards.slice(0, 12).map(c => ({ id: c.id, name: c.name, nameEn: c.nameEn, number: c.number,
+        rarity: c.rarity, image: c.image, set: c.set })),
+    });
+  } catch (err) { res.status(500).json({ error: err.message, cards: [] }); }
+});
+
+// ── Trending sets (Roy, 2026-10-08): APPROVED ACCOUNTS ONLY ──
+// The sets holding the most of the same list's risers. Its source is our
+// own data — price_history rows from TCGdex's TCGplayer block (the
+// tcgdex_tcgplayer_* sources, trending.TCGDEX_PATH); no eBay row is read.
+// But a ranking by price movement is price information even without a
+// number (Roy), so it is behind the door: access.priced, like /api/trending.
+app.get('/api/trending/sets', access.priced, async (req, res) => {
+  const p = trending.parseParams(TRENDING_SEARCH);
+  if (!db) return res.status(503).json({ error: 'database not configured', sets: [] });
   try {
     const b = await trendingBody(p);
     const bySet = new Map();
@@ -1138,16 +1157,10 @@ app.get('/api/trending/catalogue', access.optional, async (req, res) => {
       s.risers++; bySet.set(c.set.id, s);
     }
     const sets = [...bySet.values()].sort((a, b) => b.risers - a.risers || String(a.name).localeCompare(String(b.name))).slice(0, 8);
-    res.json({
-      window: b.windowLabel, lang: b.lang, eligible: b.eligible, coverage: b.coverage || null,
-      rule: 'The cards whose measured TCGplayer price rose most, as a percentage, over ' + b.windowLabel
-        + ' — the Pokémon page\'s "Biggest movers — % gain" list. No prices are shown here.',
-      setRule: 'The sets holding the most cards among those ' + b.cards.length + ' risers.',
-      cards: b.cards.slice(0, 12).map(c => ({ id: c.id, name: c.name, nameEn: c.nameEn, number: c.number,
-        rarity: c.rarity, image: c.image, set: c.set })),
-      sets,
-    });
-  } catch (err) { res.status(500).json({ error: err.message, cards: [], sets: [] }); }
+    res.json({ window: b.windowLabel, lang: b.lang,
+      setRule: 'The sets holding the most cards among the ' + b.cards.length + ' biggest % risers over ' + b.windowLabel + '.',
+      sets });
+  } catch (err) { res.status(500).json({ error: err.message, sets: [] }); }
 });
 
 // ── BEST DEALS (TASK T3, 2026-10-05; deals.js) ─────────────────

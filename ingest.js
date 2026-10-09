@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.9.9';   // bump when this file changes
+const VERSION = '5.10.0';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -638,35 +638,10 @@ async function hostDelay(host, ms) {
 }
 
 // ── 1. TCGPLAYER — their own search API. English + some JP singles.
-// Normalise a collector number for comparison.
-// TCGPlayer writes "125/094"; we store "125" or "125" zero-padded.
-function normNum(n) {
-  if (n === null || n === undefined) return null;
-  const s = String(n).split(/[\/／]/)[0].trim();
-  // Prefixed numbers (TG12, SWSH001, GG05) keep the prefix — otherwise
-  // TG12 would collide with plain #12, which is a different card.
-  const pre = s.match(/^([A-Za-z]+)0*(\d+)$/);
-  if (pre) return pre[1].toUpperCase() + String(parseInt(pre[2], 10));
-  const digits = s.replace(/[^0-9]/g, '');
-  if (!digits) return s.toUpperCase();
-  return String(parseInt(digits, 10));
-}
-
-// Pull the collector number out of a TCGPlayer search hit.
-function tcgHitNumber(hit) {
-  const ca = hit.customAttributes || {};
-  // TCGPlayer is inconsistent about which key holds the collector number
-  for (const k of ['number','Number','cardNumber','CardNumber','card_number','collectorNumber']) {
-    if (ca[k]) return normNum(ca[k]);
-  }
-  // Sometimes only in the display name: "Charizard ex (199/165)" or "... - 199/165"
-  const pn = String(hit.productName || '');
-  let m = pn.match(/[\(\-\s](\d{1,4}|[A-Z]{1,4}\d{1,3})\s*\/\s*[A-Z]*\d{1,4}\)?/);
-  if (m) return normNum(m[1]);
-  m = pn.match(/#\s*([A-Z]{0,4}\d{1,4})/i);
-  if (m) return normNum(m[1]);
-  return null;
-}
+// Collector numbers are compared WHOLE (cardnumber.js, TASK-product-matching
+// 2026-10-09): a prefix or suffix letter is part of the number. The private
+// normNum that lived here reduced "50a" to "50" and "XY177a" to "177".
+const { numberKey, tcgHitNumber, RULE: NUMBER_RULE } = require('./cardnumber');
 
 // \u2500\u2500 Reprints on the PRICING path (TASK T6, 2026-09-28) \u2500\u2500
 // cardmatch's REPRINT_OF already told the LISTINGS path that 30th-c #001 is
@@ -868,7 +843,7 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
 
   await hostDelay('tcgplayer', 1800);
   const q = `${cardName} ${opts.queryAs !== undefined ? opts.queryAs : (setName || '')}`.trim();
-  const wantNum = normNum(cardNumber);
+  const wantNum = numberKey(cardNumber);
 
   try {
     const r = await fetch('https://mp-search-api.tcgplayer.com/v1/search/request?q=' +
@@ -907,6 +882,7 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
     // "Mega Charizard X ex" appears at #013, #109, #125 and #130 in
     // Phantasmal Flames at wildly different prices. Matching by name alone
     // gave every variant the same wrong price.
+    let pool = usable;
     if (wantNum) {
       const exact = usable.filter(h => tcgHitNumber(h) === wantNum);
       if (exact.length) {
@@ -922,10 +898,19 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
           productId: hit.productId ?? null, listings: hit.totalListings ?? null
         };
       }
-      // The number is known but nothing matched it. Try rarity as a
-      // tiebreaker before giving up — a Rare Secret and a Rare Ultra with
-      // the same name are different TCGPlayer products.
-      const named = usable.filter(h => {
+      // The number is known but nothing matched it. A hit that states
+      // ANOTHER number is another card, always (TASK-product-matching,
+      // 2026-10-09). Until then both fallbacks below could take it: Skyridge
+      // Gengar H09 took Gengar (10), Piplup RC6 took Piplup 33, Garchomp
+      // 146 / 228 / 247 all took Garchomp 114 — 53 products on 106 cards.
+      // Only a hit stating NO readable number is left to them; none, and the
+      // card has no product. An unmatched card is honest; a wrong one is a
+      // wrong price.
+      pool = usable.filter(h => tcgHitNumber(h) === null);
+      if (!pool.length) return null;
+      // Try rarity as a tiebreaker before giving up — a Rare Secret and a
+      // Rare Ultra with the same name are different TCGPlayer products.
+      const named = pool.filter(h => {
         const g = String(h.productName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         return g.startsWith(want.slice(0, Math.min(8, want.length)));
       });
@@ -958,8 +943,8 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
       if (named.length > 1) return null;
     }
 
-    // Only one candidate, or no number to match on — safe to take it.
-    const hit = usable[0];
+    // Only one candidate stating no number, or no number to match on.
+    const hit = pool[0];
     return {
       price: hit.marketPrice,
       low: hit.lowestPrice || null,
@@ -2225,6 +2210,7 @@ async function safePriceFor(card) {
           // listing count goes with it: a 'market' on 0 listings is a stale
           // last sale (Torchic ☆: $4,500 on 0; Rayquaza ☆: no market at all).
           matched: res.matched, matchedNumber: res.matchedNumber, matchedBy: res.matchedBy,
+          numberRule: NUMBER_RULE,   // written by the whole-number matcher (cardnumber.js)
           tcgSet: res.set, productId: res.productId, listings: res.listings, low: res.low,
           recheck: 'last-resort fallback: re-price from TCGdex once it lists a TCGplayer price for this card' });
         // TCGdex's Cardmarket price, where it has one: a SECOND reading,

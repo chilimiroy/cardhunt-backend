@@ -18,7 +18,7 @@
 // "Is it gone?" is asserted against the page with comments stripped, because
 // the comments recording each removal name what was removed.
 'use strict';
-require('./testcount')(79);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(83);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -253,6 +253,76 @@ ok('it catches the set page\'s and the fallback\'s invented low/high in server.j
 ok('it catches the shape whatever the variable is called or how it is spaced',
   multiplied('x = { low: +(headlineUsd * 0.65).toFixed(2), high: +(foo*1.7) }', 't').fields.length === 1
   && multiplied('const shown = price * 0.95;', 't').values.length === 1 && multiplied('const pct = price * 100;', 't').values.length === 0);
+// ── C: ARITHMETIC on source figures, in every tracked file (Roy, 2026-10-10) ──
+// A and B above match ONE shape: a price-like name times a constant. The
+// page's pokemontcg.io fallback returned ((b.high + b.low) / 2) — two source
+// figures added and halved, no `*`, on a variable called `b` — so it passed
+// both, as the x 0.65 / x 1.7 block had passed the literal est*0.65 check
+// before it. And A and B read only the page and server.js. C reads every
+// tracked file except tests, for four shapes: two price-like figures combined
+// by + - * /, a figure and a constant (any operator; a lone * or / 100 is a
+// percentage), an average of two, and a median by index. Sort comparators and
+// cent rounding are not figures. Every hit is either REVIEWED (why it is not
+// a number shown or stored as a price) or OPEN (found, listed, not yet fixed:
+// Roy decides) — a new one fails until it is one or the other.
+console.log('\n  C: arithmetic on source figures (every tracked file)');
+const FIG = String.raw`(?:\b(?:[\w$]+\.)*(?:low|high|mid|market|marketPrice|lowPrice|highPrice|midPrice|directLowPrice|averageSellPrice|trendPrice|avg1|avg7|avg30|price|price_usd|_price|priceUsd|landed|base|est|median|yen|usd)\b(?:\(\))?)`;
+const ARITH = {
+  'two figures': new RegExp(FIG + String.raw`\s*[-+*/]\s*` + FIG, 'i'),
+  'figure and constant': new RegExp(FIG + String.raw`\s*[-+*/]\s*(\d*\.\d+|\d+)\b`, 'i'),
+  'average of two': /\([^()]*\+[^()]*\)\s*\/\s*2\b/,
+  'median by index': /\[\s*Math\.floor\(\s*[\w.]+\.length\s*\/\s*2\s*\)\s*\]/,
+};
+function arithmetic(text, file) {
+  const out = [];
+  text.split(/\r?\n/).forEach((raw, i) => {
+    if (/^\s*(\/\/|\*|<!--)/.test(raw)) return;
+    const l = raw.replace(/\/\/.*$/, '');
+    if (/\.sort\(|\(a, ?b\) =>/.test(l) || /\*\s*100\)\s*\/\s*100/.test(l)) return;
+    const k = Object.keys(ARITH).filter(s => ARITH[s].test(l));
+    if (k.length === 1 && k[0] === 'figure and constant' && /[*/]\s*100\b/.test(l)
+        && !/[*/]\s*\d/.test(l.replace(/[*/]\s*100\b/g, ''))) return;   // a percentage
+    if (k.length) out.push({ at: file + ':' + (i + 1), shapes: k, line: l.trim() });
+  });
+  return out;
+}
+const PROPOSED = 'proposed 2026-10-10 (Claude) — not yet confirmed by Roy';
+const REVIEWED_ARITHMETIC = [
+  { file: 'cardhunt_preview.html', re: /alert-price'\)\.value=\(base\*0\.85\)/, why: 'the alert form\'s target default (REVIEWED_MULTIPLIERS above)', decided: 'Roy, 2026-10-09' },
+  { file: 'gradeprice.js', re: /\(\(s\[mid - 1\] \+ s\[mid\]\) \/ 2\)/, why: 'a median of live listing prices, used only inside the server to choose; never shown or stored (§9.5, ebayterms.test.js)', decided: PROPOSED },
+  { file: 'gradeprice.js', re: /^b\.median - a\.median\);$/, why: 'the second line of a sort comparator', decided: PROPOSED },
+  { file: 'outlier.js', re: /\(s\[m - 1\] \+ s\[m\]\) \/ 2/, why: 'outlier.js\'s median: per card, per view, never shown or stored (§8.1(d), ebayterms.test.js)', decided: 'Roy, 2026-10-08 (the §8.1(d) ruling)' },
+  { file: 'outlier.js', re: /stats\.spread = stats\.high && stats\.low/, why: 'a ratio inside the outlier check (how spread a view is), never a price', decided: PROPOSED },
+  { file: 'server.js', re: /\(a\.landed - b\.landed\) \|\| \(a\.price - b\.price\)\);$/, why: 'the last line of a sort comparator', decided: PROPOSED },
+  { file: 'ingest.js', re: /const delta = card\.price \? \(\(res\.price - card\.price\) \/ card\.price\) \* 100/, why: 'a percentage change printed to the refresh log, never stored or shown', decided: PROPOSED },
+  { file: 'ingest.js', re: /medianYen: use\[Math\.floor\(use\.length \/ 2\)\]/, why: 'the Yahoo Auctions median: a median of N real results, stored as yahoojp_N with N in its name (the thin mark reads N) — a measured statistic, labelled', decided: PROPOSED },
+  { file: 'ingest.js', re: /const medianYen = use\[Math\.floor\(use\.length \/ 2\)\];/, why: 'the same Yahoo median, for a reverse printing\'s own row', decided: PROPOSED },
+];
+const OPEN_ARITHMETIC = [
+  { file: 'server.js', re: /e\.median = e\.prices\.length \? e\.prices\[Math\.floor\(e\.prices\.length \/ 2\)\]/,
+    found: '2026-10-10: /api/ebay/setprobe (tooling, key-protected) returns a median of eBay listing prices per epid — §9.5 says no eBay price median is shown. Listed, not fixed (Roy decides)' },
+  { file: 'ingest.js', re: /\.yen \/ 157\)/,
+    found: '2026-10-10: Yuyu-tei rows converted at a hardcoded 157 JPY/USD with no rate recorded — fixed by the next commit (fx.js, rate per row)' },
+];
+const tracked = execSync('git ls-files "*.js" "*.html"').toString().split(/\r?\n/).filter(f => f && !/\.test\.js$|^jptest\.js$|-disabled\.js$/.test(f));
+const hits = [].concat(...tracked.map(f => arithmetic(fs.readFileSync(f, 'utf8'), f)));
+const known = (h, list) => list.some(r => h.at.startsWith(r.file + ':') && r.re.test(h.line));
+const unknown = hits.filter(h => !known(h, REVIEWED_ARITHMETIC) && !known(h, OPEN_ARITHMETIC));
+ok('C: no arithmetic on source figures outside the reviewed and open lists (' + tracked.length + ' files, ' + hits.length + ' hits)',
+  unknown.length === 0, unknown.map(h => h.at + ' [' + h.shapes.join(', ') + '] ' + h.line.slice(0, 100)).join(' | '));
+ok('…every reviewed and open entry still matches a line (a stale entry is removed)',
+  REVIEWED_ARITHMETIC.concat(OPEN_ARITHMETIC).every(r => hits.some(h => h.at.startsWith(r.file + ':') && r.re.test(h.line))),
+  REVIEWED_ARITHMETIC.concat(OPEN_ARITHMETIC).filter(r => !hits.some(h => h.at.startsWith(r.file + ':') && r.re.test(h.line))).map(r => r.file + ' ' + r.re).join(' | '));
+for (const r of OPEN_ARITHMETIC) console.log('        OPEN: ' + r.file + ' — ' + r.found);
+let oldPage = null;
+try { oldPage = arithmetic(execSync('git show 0aaff72:cardhunt_preview.html', { maxBuffer: 1 << 26 }).toString(), 'page@0aaff72'); } catch (e) {}
+ok('C catches the low-high midpoint in the page as committed before (0aaff72)',
+  oldPage && oldPage.some(h => h.shapes.includes('average of two') && /b\.high \+ b\.low/.test(h.line)), oldPage ? oldPage.length + ' hits' : 'git show failed');
+ok('C catches the shapes whatever the names: (x.low + y.high) / 2, lo * 0.65, a - b on figures, s[Math.floor(s.length / 2)]',
+  arithmetic('return ((q.low + q.high) / 2);', 't').length === 1 && arithmetic('const v = q.low * 0.65;', 't').length === 1
+  && arithmetic('const d = a.market - b.market;', 't').length === 1 && arithmetic('m = s[Math.floor(s.length / 2)];', 't').length === 1
+  && arithmetic('const pct = (now - was) / was * 100;', 't').length === 0 && arithmetic('xs.sort((a, b) => a.price - b.price);', 't').length === 0);
+
 ok('the portfolio holds no invented holdings', /var PORT = \[\];/.test(code) && !/paid:\s*\d/.test(code));
 ok('nothing claims to auto-refresh', !/Auto-refreshing/.test(code));
 ok('no stale hardcoded catalogue count', !/20,324 cards/.test(code));

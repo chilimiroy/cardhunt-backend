@@ -1,5 +1,40 @@
 # CardHunt — Progress Log
 
+## 2026-10-09 (evening) — 106 cards held, invented low/high removed, TCGdex fields measured
+
+- **Hold extended to every collision:** `collisionscan.js` (read-only) writes
+  `pricehold-collisions.json` — 53 products, 106 cards — and pricehold.js holds
+  all of them (a card in two collisions names both products; four do).
+  `pricehold.test.js --db` fails when the file and the database disagree.
+  Deals: only en-hgssp-HGSS18 and en-np-36 of the 106 would be in the 80-card
+  pool; no live pick (7) is among the 106.
+- **Invented TCGplayer low/high removed** from the set-cards payload and the
+  server's live TCGdex fallback (that one around an ESTIMATE). nofabricated.test
+  had read only the page, and only the spelling `est*0.65|est*1.7`. Widened to
+  the page and server.js: no price-like field built as x a constant; any price
+  x a constant (not 100) only at reviewed sites — one, the alert form's
+  editable 85% default target. Shown to catch both as committed in b0b041a.
+- **TCGdex fields** (read-only over all 21,256 visible English cards; 21,255 on
+  TCGdex; GraphQL cross-checked against the card endpoint on 40 cards, 40/40):
+  - **Dex number — NOT stored.** It is an ARRAY: 17,642 cards have one, 121
+    have several (2: 109, 3: 10, 4: 1, 5: 1 — TAG TEAM, LEGEND halves,
+    ecard3-47 [138,140,142]); 3,613 none (2,862 Trainer, 568 Energy, 183
+    Pokémon — mostly 30th Celebration, where TCGdex leaves it out); 1 not on
+    TCGdex. The task says stop on several numbers: Roy decides integer[] or not.
+  - **Regulation mark — stored** (`writeRegulationMark`,
+    migration-regulation-mark.sql for Roy). 8,293 have a mark, 12,962 none, 1
+    not on TCGdex; marks D 1,256 · E 1,181 · F 1,156 · G 1,647 · H 1,303 ·
+    I 1,278 · J 469, plus "j" 1 and the string "None" 2, which the writer
+    refuses. Across the 55 REPRINT_OF pairs: 50 have no mark on either side,
+    5 have a mark on the original (D x2, E, F, G) and none on the reprint;
+    30th, 30th-c, cel25cc, base4 and lc carry no mark at all. On TCGdex's data
+    the mark does not tell an original from its reprint.
+  - **Card details:** PROPOSAL-card-details.md — shapes, coverage, sizes
+    (~8.1 MB for all eleven), columns for filterable single values, one jsonb
+    for the displayed lists. Nothing built.
+  - Coverage of any new field: about 2,900 English cards come due a night,
+    under the 4,000 cap — every card within 30 days of a migration.
+
 ## 2026-10-09 (later) — both sides of a collision held; how many collisions there are
 
 - **Held, both sides:** `pricehold.js` takes the nine cards of the four

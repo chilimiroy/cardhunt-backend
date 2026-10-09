@@ -105,7 +105,7 @@ app.use((req, res, next) => {
 //                               quota?probe=1) — all tooling
 //   /ebay/status, /api/scraper/test, /api/health/full   token checks
 //   X-CardHunt-Origin: tooling  sitecheck, linkaudit --live, setaudit,
-//   or ?origin=tooling          searchaudit, gradeprices — scripts that
+//   or ?origin=tooling          searchaudit — scripts that
 //                               drive /api/listings and /api/search
 // Only 'tooling' can be CLAIMED: it can only ever narrow what a caller may
 // spend, never widen it. Everything else is a user request.

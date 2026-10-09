@@ -2632,7 +2632,7 @@ function updatePrices(grade,base){
   var q = cc && cc._priceQuality;
   var note = q && q.note ? ' <span style="color:var(--warn);font-size:11px;font-weight:600">&middot; ' + liveEsc(q.note) + '</span>' : '';
   // The figure is the raw Near Mint price whatever is picked (Roy, 2026-10-10):
-  // no graded price is recorded anywhere (gradeprices.js is parked, §9.5), so
+  // no graded price is recorded anywhere (the graded-price script is parked, §9.5), so
   // under any other selection the box says whose price it is and that the
   // picked one has none — the raw number must never read as the graded one.
   markValueLabel(grade || S.activeGrade);
@@ -7986,6 +7986,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-bb7d0cd-rawlabel &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-5cb7fbb-gpparked &middot; click to hide</div>
 </body>
 </html>

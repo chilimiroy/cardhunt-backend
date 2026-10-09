@@ -24,13 +24,11 @@ ok('no typical-grade box either: raw x a multiplier was an estimate, and no esti
 ok('print-run groups show "from $Y" (a listing\'s own price) and no median', /'from ' \+ fmtCurrency\(g\.low\)/.test(fnOf(P, 'livePrintRuns')) && !/g\.median/.test(fnOf(P, 'livePrintRuns')));
 ok('the price-check line names its yardstick and prints no median', !/o\.median/.test(fnOf(P, 'liveOutlierNote')));
 {
-  const gp = path.join(__dirname, 'gradeprices.js');
-  if (!fs.existsSync(gp)) ok('gradeprices.js is not on this machine (gitignored) — its --write cannot be checked here', true);
-  else {
-    const src = read('gradeprices.js');
-    ok('gradeprices.js --write fails before anything runs, and the INSERT is gone',
-       /if \(args\.some\(a => \/\^--write\\b\/\.test\(a\)\)\)/.test(src) && /process\.exit\(2\)/.test(src) && !/INSERT INTO price_history\s*\n/.test(src));
-  }
+  // Parked 2026-10-10 (tracked, refuses to run at all — nofabricated.test.js runs it under a network trap).
+  const src = read('gradeprices-disabled.js');
+  ok('gradeprices-disabled.js: refuses before anything runs, --write is still refused under it, and the INSERT is gone',
+     /if \(require\.main === module\) \{/.test(src) && /if \(args\.some\(a => \/\^--write\\b\/\.test\(a\)\)\)/.test(src)
+     && /process\.exit\(2\)/.test(src) && !/INSERT INTO price_history\s*\n/.test(src));
 }
 
 console.log('\n  §8.1(d) — per-card medians stay inside the server');

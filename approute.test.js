@@ -156,6 +156,8 @@ async function waitForBoot(server, ms = 20000) {
       '/pricehold-collisions.json', '/collisionscan.js', '/cardnumber.js',
       // estimator.js was served here until 2026-10-09; deleted with every estimate.
       '/estimator.js',
+      // parked 2026-10-10: refuses to run; never served either.
+      '/gradeprices-disabled.js',
       // T3 (2026-09-29): tracked, and still never served — a design mockup
       // full of sample prices, and a script that writes prices.
       '/cardhunt-redesign.html', '/tcgdexharvest.js', '/tcgsetname.js',

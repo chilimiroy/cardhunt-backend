@@ -18,7 +18,7 @@
 // "Is it gone?" is asserted against the page with comments stripped, because
 // the comments recording each removal name what was removed.
 'use strict';
-require('./testcount')(69);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(79);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -98,6 +98,56 @@ ok('nothing in the page links to the compare overlay', !/compare-overlay|compare
   const routes = (server.match(/app\.(?:get|post|put|patch|delete)\('[^']*compare[^']*'/gi) || []);
   ok('the server has no card-compare endpoint (only the photo compare)',
     routes.length === 1 && /\/api\/listings\/:cardId\/compare'/.test(routes[0]), routes.join(', '));
+}
+
+// gradeprices (Roy, 2026-10-10): parked like compare. Graded prices cannot be
+// derived from eBay under §9.5, so a run spent eBay calls to produce nothing.
+// What would be observably different if the guard did nothing: the run would
+// reach the network. So the run happens here, under a trap on every way out
+// (fetch, http, https, net — pg too), and the trap is made to fire first.
+console.log('\n  gradeprices — parked, refuses to run, spends nothing');
+{
+  const f = 'gradeprices-disabled.js';
+  const src = fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '';
+  ok(f + ' exists and still holds the measuring code (a move, not a loss)',
+    /async function listingsFor\(/.test(src) && /async function hotTier\(/.test(src) && /function ebayBlocked\(/.test(src));
+  ok(f + ' says it is not loaded, served or run, and must not return reading eBay',
+    /NOT LOADED BY ANY PAGE\. NOT SERVED\. NOT RUN/.test(src) && /MUST NOT RETURN READING EBAY/.test(src) && /§9\.5/.test(src));
+  ok('the refusal comes before the first require and the first statement of the parked code',
+    src.indexOf('process.exit(2);') > 0 && src.indexOf("throw new Error('gradeprices-disabled.js is parked") > src.indexOf('process.exit(2);')
+    && src.indexOf("throw new Error('gradeprices-disabled.js is parked") < src.indexOf("require('./gradeprice')"));
+  let tracked = false;
+  try { execSync('git ls-files --error-unmatch ' + f, { stdio: 'ignore' }); tracked = true; } catch (e) {}
+  ok(f + ' is tracked in git (so this runs on a clean checkout)', tracked, 'git add ' + f);
+  ok('the old runnable name is gone (gradeprices.js neither on disk nor in the index)',
+    !fs.existsSync('gradeprices.js') && !execSync('git ls-files gradeprices.js').toString().trim());
+  const os = require('os'), { spawnSync } = require('child_process');
+  const mark = path.join(os.tmpdir(), 'gp-trap-' + process.pid + '.txt');
+  const trap = path.join(os.tmpdir(), 'gp-trap-' + process.pid + '.js');
+  fs.writeFileSync(trap, [
+    "const fs = require('fs'); const hit = w => fs.appendFileSync(" + JSON.stringify(mark) + ", w + '\\n');",
+    "for (const m of ['http', 'https']) { const x = require(m); const r = x.request, g = x.get;",
+    "  x.request = function () { hit(m); return r.apply(this, arguments); }; x.get = function () { hit(m); return g.apply(this, arguments); }; }",
+    "const net = require('net'); const c = net.connect; net.connect = net.createConnection = function () { hit('net'); return c.apply(this, arguments); };",
+    "if (globalThis.fetch) { const f0 = globalThis.fetch; globalThis.fetch = function () { hit('fetch'); return f0.apply(this, arguments); }; }",
+  ].join('\n'));
+  const run = (args) => { try { fs.unlinkSync(mark); } catch (e) {}
+    const r = spawnSync(process.execPath, ['-r', trap].concat(args), { cwd: __dirname, encoding: 'utf8', timeout: 20000,
+      env: Object.assign({}, process.env, { CARDHUNT_API: 'http://127.0.0.1:9' }) });
+    return { status: r.status, err: String(r.stderr || ''), hits: fs.existsSync(mark) ? fs.readFileSync(mark, 'utf8').trim() : '' }; };
+  const ctl = run(['-e', "fetch('http://127.0.0.1:9/').catch(() => {})"]);
+  ok('the trap fires: a plain fetch under it is recorded (else the next check proves nothing)', /fetch/.test(ctl.hits), JSON.stringify(ctl));
+  const r = run([f, '--limit=1', '--cards=en-base1-4']);
+  ok('running it refuses: exit 2, says it is parked, and makes NO network attempt (no eBay call, no API, no database)',
+    r.status === 2 && /is parked/.test(r.err) && /no eBay call was made/.test(r.err) && r.hits === '', JSON.stringify(r));
+  const rw = run([f, '--write']);
+  ok('...with --write too', rw.status === 2 && rw.hits === '', JSON.stringify(rw));
+  let threw = '';
+  try { require('./' + f); } catch (e) { threw = e.message; }
+  ok('requiring it throws before anything runs', /is parked: nothing may require it/.test(threw));
+  const names = execSync('git grep -l -e gradeprices-disabled -e "gradeprices\\.js" -- "*.js" "*.html" "*.cmd" "*.yml"').toString().trim().split(/\r?\n/).filter(Boolean);
+  ok('nothing that runs names it: only the file itself and tests', names.every(n => n === f || /\.test\.js$/.test(n)), names.join(', '));
+  try { fs.unlinkSync(trap); fs.unlinkSync(mark); } catch (e) {}
 }
 
 console.log('\n  photos — the seller’s images, never our artwork dressed up');

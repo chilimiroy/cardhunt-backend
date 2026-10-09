@@ -10,7 +10,7 @@
 //     claimed by two cards is trusted for neither (tcgdexprice.productConflicts).
 // Each half asserts what it KEEPS as well as what it refuses.
 'use strict';
-require('./testcount')(56);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(59);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const S = require('./tcgsetname.js');
 const T = require('./tcgdexprice.js');
@@ -124,6 +124,13 @@ if (fs.existsSync(__dirname + '/ingest.js')) {
   ok('variant rows are written WITH their variant, and only reverse keys', /variant, source_meta\)/.test(wvp) && /\^reverse/.test(wvp));
   ok('the writers record marketplace and source_meta',
     (I.match(/res\.marketplace \|\| res\.source\.split\('_'\)\[0\],\s*res\.meta/g) || []).length === 2);
+  // Yuyu-tei's yen (Roy, 2026-10-10): the live rate, recorded on every row — it was yen / 157.
+  const yi = I.slice(I.indexOf('async function yuyuteiIngest'), I.indexOf('async function evaluateAlerts'));
+  ok('Yuyu-tei converts at fx.js\'s live yen rate, never a constant', /const jpy = await fx\.usdPer\('JPY'\);/.test(yi)
+     && /const toUsd = yen => \+\(yen \* jpy\.rate\)\.toFixed\(2\);/.test(yi) && !/\/\s*157\b/.test(yi) && /toUsd\(pick\.yen\)/.test(yi));
+  ok('...records the rate, its date and source, and the yen, on every row it writes',
+     /fxRate: jpy\.rate, fxDate: jpy\.date, fxSource: jpy\.source/.test(yi) && /'yuyutei_shop','yuyutei','raw_nm',\$3\)`,\s*\[card\.api_card_id, toUsd\(pick\.yen\), JSON\.stringify\(fxMeta\(pick\.yen\)\)\]/.test(yi));
+  ok('...and writes nothing when only the pinned fallback rate is to hand', /if \(jpy\.stale && !dry && !flags\.includes\('--compare'\)\) \{[\s\S]{0,160}Nothing written/.test(yi));
 } else console.log('  SKIP  ingest.js wiring — not in this checkout');
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');

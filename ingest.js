@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.11.0';   // bump when this file changes
+const VERSION = '5.12.0';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -1600,6 +1600,21 @@ async function yuyuteiIngest(...flags) {
     ? '  Scope: every card in each set (overwrites nothing — appends)\n'
     : '  Scope: cards with no real price yet\n');
 
+  // The yen rate, LIVE and recorded on every row (Roy, 2026-10-10). Until then
+  // every shop price used a constant 157 yen to the dollar from August, no rate on
+  // the row. fx.js gives the ECB reference rate with its date; if it can only
+  // give its pinned fallback, nothing is written (a dry run still reports).
+  const jpy = await fx.usdPer('JPY');
+  console.log(`  Rate: 1 JPY = ${jpy.rate} USD (${(1 / jpy.rate).toFixed(2)} JPY/USD), ${jpy.source} ${jpy.date || 'undated'}`
+    + (jpy.stale ? '  — NOT LIVE' : ''));
+  if (jpy.stale && !dry && !flags.includes('--compare')) {
+    console.log('  FATAL: no live yen rate (fx.js answered its pinned fallback). Nothing written.\n');
+    return;
+  }
+  const toUsd = yen => +(yen * jpy.rate).toFixed(2);
+  const fxMeta = yen => ({ currency: 'JPY', original: yen, fxRate: jpy.rate, fxDate: jpy.date, fxSource: jpy.source,
+                           shop: 'yuyu-tei' });
+
   let index;
   try {
     index = await yt.fetchSetIndex();
@@ -1681,7 +1696,7 @@ async function yuyuteiIngest(...flags) {
         const cc = (byNum.get(ck) || []).filter(e => yt.matchesOurCard(e, card));
         const cp = yt.pickVariant(cc, card.name);
         if (!cp) continue;
-        const shop = +(cp.yen / 157).toFixed(2), have = +card.yahoo_price;
+        const shop = toUsd(cp.yen), have = +card.yahoo_price;
         if (have > 0 && shop > 0) {
           matched++;
           const ratio = have / shop;
@@ -1703,9 +1718,9 @@ async function yuyuteiIngest(...flags) {
       if (dry) continue;
 
       await db.query(
-        `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition)
-         VALUES ($1,$2,'yuyutei_shop','yuyutei','raw_nm')`,
-        [card.api_card_id, +(pick.yen / 157).toFixed(2)]).catch(() => {});
+        `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition, source_meta)
+         VALUES ($1,$2,'yuyutei_shop','yuyutei','raw_nm',$3)`,
+        [card.api_card_id, toUsd(pick.yen), JSON.stringify(fxMeta(pick.yen))]).catch(() => {});
       written++; setWritten++;
     }
 

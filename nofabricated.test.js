@@ -301,8 +301,6 @@ const REVIEWED_ARITHMETIC = [
 const OPEN_ARITHMETIC = [
   { file: 'server.js', re: /e\.median = e\.prices\.length \? e\.prices\[Math\.floor\(e\.prices\.length \/ 2\)\]/,
     found: '2026-10-10: /api/ebay/setprobe (tooling, key-protected) returns a median of eBay listing prices per epid — §9.5 says no eBay price median is shown. Listed, not fixed (Roy decides)' },
-  { file: 'ingest.js', re: /\.yen \/ 157\)/,
-    found: '2026-10-10: Yuyu-tei rows converted at a hardcoded 157 JPY/USD with no rate recorded — fixed by the next commit (fx.js, rate per row)' },
 ];
 const tracked = execSync('git ls-files "*.js" "*.html"').toString().split(/\r?\n/).filter(f => f && !/\.test\.js$|^jptest\.js$|-disabled\.js$/.test(f));
 const hits = [].concat(...tracked.map(f => arithmetic(fs.readFileSync(f, 'utf8'), f)));

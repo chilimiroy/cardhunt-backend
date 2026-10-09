@@ -1,6 +1,7 @@
 # PROPOSAL — card-detail fields from TCGdex (TASK-tcgdex-fields T3)
 
-Proposal only. **Nothing here is built and no column is added.** Roy decides.
+Proposal only. **Nothing here is built and no column is added.** Roy approved
+the column-versus-jsonb split on 2026-10-09; building waits for his go.
 
 All of it comes out of the response the nightly already fetches for every
 English card it prices (`ingest.js tcgdexPriceFor`): zero new requests. English
@@ -30,8 +31,42 @@ Trainer, 568 Energy), cross-checked against the card endpoint on 40 cards.
 All eleven, all English cards: about 8.1 MB of JSON.
 
 Not on the task's list but in the same response, and needed if a Trainer or
-Energy card is to show anything: `effect` (a Trainer's text), `trainerType`,
-`energyType`, `suffix` ("ex", "TAG TEAM-GX", …), `item`.
+Energy card is to show anything (added at Roy's request, 2026-10-09; measured
+over all 2,863 Trainer and 568 Energy cards, GraphQL, 0 errors):
+
+| field | shape (as returned) | on how many cards | size (JSON bytes, median / p95 / max) |
+|---|---|---|---|
+| `effect` | string, the card's rules text | Trainer 2,835 of 2,863 (none: 30th / 30th-c entries, dp5-91, …); Energy 211 of 568 (basic Energy has no text) | Trainer 142 / 339 / 588; Energy 265 / 437 / 562 |
+| `energyType` | string: `Normal` 336, `Special` 196 | Energy 532 of 568 (36 none); one Trainer carries `Special` | 8 / 9 / 9 |
+
+Also there, smaller: `trainerType` (Supporter 1,182, Item 863, Tool 331,
+Stadium 258, Rocket's Secret Machine 5, Technical Machine 4, none 220),
+`suffix`, `item`. Both `effect` and `energyType` go in `card_text` below, where
+the approved split already put them; neither needs a column of its own unless a
+filter ("Special Energy") is wanted.
+
+### Attack damage — ONE shape: a string, as printed
+
+The two endpoints disagree: GraphQL gives every damage as a string; the card
+endpoint gives `10` as a NUMBER and `"10+"`, `"20×"`, `"?"` as strings — two
+types in one field (checked on 2011bw-10 `[10, 20]`, 2011bw-6 `["10+"]`,
+base1-40 `[20, "?"]`). **Standardise on the string exactly as printed** (the
+GraphQL shape), written as `String(damage)` whichever endpoint answered.
+
+Why: of 22,790 attacks with a damage value, 4,932 (22%) are not a bare number —
+`N+` 3,202, `N×` 1,361, `Nx` 279, `N-` 59, `N＋` (full-width) 20, `N−` 4, `?` 3,
+`n/a` 3, one energy-cost string `{L}{C}{C}` (xya-28a). A number cannot hold
+"30+" or "?", and a field that is sometimes a number makes every reader branch.
+The printed text is what the page shows; no reader does arithmetic on it. The
+modifiers are kept as printed — `×` and `x`, `+` and `＋` are NOT folded
+together, because folding is inventing. 5,838 attacks have no damage (an effect
+only): stored without the key, never `"0"`.
+
+Source defects to carry, not repair: 15 cards have 18 attack entries with no name
+(GraphQL returns `null` in the list; the card endpoint a nameless
+`{cost, damage}` — e.g. 2012bw-8, whose second attack is printed as text
+inside the first's effect). The writer keeps an attack only when it has a name;
+the dropped count is printed by the run.
 
 ## Recommendation: columns for what is filtered on, jsonb for what is only shown
 
@@ -49,7 +84,7 @@ Energy card is to show anything: `effect` (a Trainer's text), `trainerType`,
 
 **One jsonb** — `card_text`: `{abilities, attacks, weaknesses, resistances,
 effect, trainerType, energyType, suffix}`, stored as the card endpoint returns
-them. These are lists of objects that are displayed, not queried: a column per
+them, except attack damage, always the printed string (above). These are lists of objects that are displayed, not queried: a column per
 attack would be invented structure (a card has 0–4 attacks, each with a cost
 list), and a child table would be a second write path for display text. jsonb is
 the honest shape. If a filter on them is ever wanted (e.g. "has an ability"), a

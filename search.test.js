@@ -47,7 +47,7 @@ const lt = fn('loadSearchTrend');
 ok('Most searched reads /api/search/popular; trending reads /api/trending/search', /\/api\/search\/popular/.test(ls) && /\/api\/trending\/search/.test(lt));
 ok('not recording / gathering are said in words, nothing drawn', /!d\.recording/.test(ls) && /d\.gathering/.test(ls) && /Still gathering/.test(ls));
 ok('every tile there is a catalogue tile: no price slot for anyone', (ls + lt).match(/cardTile\(/g).length === 2 && (ls + lt).match(/noPrice: true/g).length === 2);
-ok('cardTile: noPrice skips getBase (no estimate) and the price row', /var showPrice = pricesOpen\(\) && !opts\.noPrice;/.test(fn('cardTile')) && /var price = showPrice \? getBase\(c\) : 0;/.test(fn('cardTile')));
+ok('cardTile: noPrice skips getBase (no estimate) and the price row', /var showPrice = pricesOpen\(\) && !opts\.noPrice;/.test(fn('cardTile')) && /var price = showPrice \? getBase\(c, from\) : 0;/.test(fn('cardTile')));
 ok('the old pokemontcg-shaped loader is gone', !/loadSearchTrending/.test(code));
 
 console.log('\n  the server');

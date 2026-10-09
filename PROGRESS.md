@@ -1,5 +1,54 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 (one reader) — pokemontcg.io blocks, check C, the six re-measured, shop asks, the yen
+
+0 eBay calls. 11 pokemontcg.io requests (six cards; it answered 500/502 five times).
+
+### One reader of pokemontcg.io's blocks (pokemontcgblock.js)
+Six readers before, each its own way; the page took the MID listing as a market
+price and had a low-high midpoint branch. Now one figure: TCGplayer market, else
+TCGplayer's cheapest listing as an ask, else Cardmarket's sale figure; never the
+mid, never a reverse, never computed; dated, aged, "our stored copy" or "fetched
+now", marked past 45 days or as an ask. Stored copies: 13,120 cards hold a figure
+— 13,021 TCGplayer market at first, then (TCGplayer's ask before Cardmarket)
+13 asks and 86 Cardmarket; 13,030 marked. Under the old page code 14 blocks would
+have shown a mid; the midpoint branch matched no stored block (it was reachable).
+/api/price dated an undated figure "now"; it gives the source's date or null.
+
+### Why nofabricated.test.js missed the midpoint
+Its checks matched one shape — a price-like name times a constant — in the page
+and server.js only. The midpoint was ((b.high + b.low) / 2). Check C now reads
+every tracked file for: two figures combined, a figure and a constant (by
+number or by NAME — `yen / JPY_PER_USD` hid from the literal), an average of
+two, a median by index. 15 hits, each reviewed or OPEN. OPEN (not fixed):
+/api/ebay/setprobe returns a median of eBay listing prices per epid (§9.5);
+jpfilter.js converts every Yahoo listing and median at JPY_PER_USD = 157 with no
+rate recorded; jpcheck compares Yuyu-tei at 157 (tooling).
+
+### The six refusals, against pokemontcg.io live (2026-10-09 23:48 UTC)
+| card | live (copy) | refused rows | |
+|---|---|---|---|
+| Pikachu RC29 | market $155.61 ($165.93) | $3.53 | 44x below |
+| Emolga RC23 | $86.77 ($83.65) | $2.71 | 32x |
+| Druddigon BW80 | $17.25 ($15.97) | $1.42-3.91 | 4.4-12x |
+| Snivy RC1 | $3.11 ($3.08) | $0.40 | 7.8x |
+| Hoopa EX XY85 | $22.33 ($18.40) | $3.44-5.17 | 4.3-6.5x |
+| Charizard ☆ δ | no market; listings from $18,500 ($4,000) | $980-1,000, $4,000 x2 | ask rule |
+All stay refused. Ask rule: a row more than 3x below the cheapest copy for sale
+is refused (none above it). It adds Charizard's two $4,000 rows: 762 -> 764.
+
+### Yuyu-tei as asks
+8,976 Japanese headlines. Leave: Japanese trending price lists 11,565 eligible
+-> 2,589; movers and risers 0 (TCGdex rows only); alerts 0 (no active alert on
+one); deals 0 (English only).
+
+### The yen
+ECB via fx.js, 2026-10-09: 1 JPY = 0.00632 USD = 158.23 JPY/USD (frankfurter's
+three significant figures, ±0.08%) against 157: every Yuyu-tei price 0.78%
+lower at the next run. Of the 8,976: 2,383 move by a cent or more, 90 by $1 or
+more, largest $34.50 on $4,445.86; total $78,893 -> $78,291. Each row now records
+the yen, rate, date and source; a run with only the pinned fallback writes nothing.
+
 ## 2026-10-10 (asking price) — the listing floor, the marker, Yuyu-tei, stored as live
 
 0 eBay calls in code or runs. One pricing run: `safeprices en --set=ex15 --all`

@@ -1,5 +1,110 @@
 # CardHunt — Progress Log
 
+## 2026-10-09 (night) — one TCGplayer product, one card; dex numbers stored; TCGdex fields settled
+
+- **Migrations run (Roy):** `cards.illustrator`, `illustrator_checked_at`,
+  `regulation_mark`, `regulation_mark_checked_at` exist (information_schema);
+  the writers' UPDATEs plan cleanly (EXPLAIN, nothing executed), so the
+  "column is missing" branch no longer fires. All four were empty (0 of 23,736
+  English cards) before tonight's run; tonight's English batch is 1,333 cards
+  (`refresh en --dry`), each priced through TCGdex stores artist, mark, and —
+  once migration-dex-ids.sql runs — the dex numbers.
+- **Regulation mark falsified as a reprint key** (CLAUDE.md, beside Option S):
+  50 of 55 REPRINT_OF pairs carry no mark on either side; 30th and Classic
+  Collection carry none. Kept as printing era.
+- **Dex number stored as integer[]** (`writeDexIds`, migration-dex-ids.sql for
+  Roy): every number kept in TCGdex's order (TAG TEAM [25, 644]); '{}' = none
+  known; checked_at NULL = never asked; an empty answer never erases; a
+  non-integer array refused whole. All 21,255 measured arrays pass (3,613
+  empty, 121 several, max 1025).
+- **PROPOSAL-card-details.md:** effect (Trainer 2,835 of 2,863; Energy 211 of
+  568) and energyType (Normal 336, Special 196) added. Attack damage: ONE shape,
+  the printed string — the card endpoint gives `10` as a number and `"10+"` as a
+  string; 4,932 of 22,790 damage values (22%) are not a bare number. 15 cards
+  have 18 nameless attack entries (a source defect, dropped and counted).
+- **nofabricated.test.js:** the alert form's 85% default carries why it is
+  exempt and who decided (Roy, kept), printed on every run.
+
+### TASK-product-matching
+
+**The loose comparisons, both in ingest.js `tcgPlayerSearch`:**
+1. its private `normNum` reduced a number with a trailing letter to its digits
+   (50a and 50b both "50"; XY177a "177") — Aquapolis halves matched one
+   product "exactly";
+2. when no hit stated our number, the rarity and name-unique fallbacks took a
+   hit WHATEVER number it stated (H09 took Gengar (10); RC6 Piplup 33; Garchomp
+   146/228/247 took 114; svp 106 took Pikachu 190; sm2-169 Fighting Energy
+   took Energy Recycler 123; np-23 took Metang 49; BW77 took BW54; DP05/DP25
+   took DP48). Not only lettered/prefixed: plain numbers too.
+
+Fixed: `cardnumber.js` (one definition; ingest's copy deleted) compares whole —
+only padding and case fold; over 23,736 English cards it reads only the 37
+lettered numbers differently, and no two cards of a set share a key. The
+fallbacks take only a hit stating NO readable number. Rows carry
+`source_meta.numberRule`. No search budget changed.
+
+**Same fold elsewhere, NOT changed:** `cardmatch.normNum` (the listing gate —
+guarded by `verifyLetterNumber` first), `listingparse.normNum`, ingest's image
+fill (`parseInt(num)` fallback key, ~line 3890). **Another loose comparison in
+the same function, not this bug:** the sealed-product word list has no word
+boundaries — 273 English card names can never match (253 on "tin": Dratini,
+Victini, Giratina, every "Basic Fighting Energy"; Iron Bundle, Secret Box,
+Clemont's Backpack, Aaron's Collection).
+
+**Stored rows** (append-only, nothing deleted): collisionscan holds every
+tcgplayer_market row to the rule — refused when its product states another
+number (the name first, since old rows stored the folded number; reprints held
+to their printed number), and, on a card so proven mismatched, when it states
+none and the fixed matcher did not write it. 274 rows on 37 cards, by row id
+in pricehold-collisions.json; `pricehold.notRefusedSql` keeps them out of
+basePrintingSql. Across all 77,366 search rows the rule found no other card
+(73,255 old rows carry no metadata and cannot be judged).
+
+**Re-measured:** 23 products on 47 cards remain (16 TCGdex alone, 6 TCGdex +
+our search agreeing by number, 1 = 97703: our search HGSS18 by its own number
+vs TCGdex's pricing for np-36) — all held. Of the 106: **47 held, 37 mapped to
+one product id, 22 with none.**
+
+**The 59 released**, headline before (hold lifted) -> after:
+
+| card | before | after | change |
+|---|---|---|---|
+| sm2-169 Fighting Energy | $0.29 search | $25.60 TCGdex | +8728% |
+| sm11-247 Garchomp & Giratina GX | $3.06 search | $126.28 TCGdex | +4027% |
+| xy6-77a Shaymin EX | $10.71 search | $257.50 cardmarket_avg (07-27) | +2304% |
+| sm11-228 | $3.06 search | $62.43 TCGdex | +1940% |
+| sm11-146 | $3.06 search | $54.69 TCGdex | +1687% |
+| xyp-XY198a M Camerupt-EX | $7.33 | $47.45 cardmarket_avg | +547% |
+| xyp-XY177a Karen | $11.38 | $62.98 cardmarket_avg | +453% |
+| g1-28a Jolteon-EX | $32.72 | $174.10 cardmarket_avg | +432% |
+| xyp-XY200a M Sharpedo-EX | $25.49 | $85.00 cardmarket_avg | +233% |
+| np-27 Tropical Tidal Wave | $223.50 | $504.50 cardmarket_avg | +126% |
+| g1-RC5 Charizard | $28.42 | $60.86 tcgplayer_holofoil (07-27) | +114% |
+| ecard3-H09 Gengar | $509.99 | $0.30 stored ESTIMATE | -100% |
+| dpp-DP25 Tropical Wind | $249.00 | $0.24 stored ESTIMATE | -100% |
+| bwp-BW77 Pikachu | $99.99 | $0.44 stored ESTIMATE | -100% |
+| xy4-24a M Manectric EX | $13.55 | $26.00 cardmarket_avg | +92% |
+| sm4-63a Guzzlord-GX | $6.84 | $1.00 cardmarket_avg | -85% |
+| xy3-55a M Lucario EX | $48.20 | $9.50 cardmarket_avg | -80% |
+| g1-RC15 Meowstic | $6.40 | $9.31 tcgplayer_holofoil | +45% |
+| svp-106 Pikachu ex | $9.60 | $13.84 cardmarket_avg | +44% |
+
+28 unchanged (the other side of each pair: TCGdex or a search row stating the
+right number). 12 have no headline row: bw11-RC6/8/9/18/19/25, g1-RC9, dpp-DP05,
+ecard3-H10/H11/H20/H30 — the page falls to pokemontcg.io's per-card blob
+(H10 $1,249.94, H11 $1,000, H20 $338, H30 $659.99 — June/July; RC6 $14.48;
+DP05 $575 from 2026/03/09). The "after" rows dated 07-27 are pokemontcg.io
+readings, marked old by pricequality. Every one of the 59 is due tonight (no
+current headline), asked again by the fixed matcher.
+
+**Deals:** pool unchanged (80, floor $750); HGSS18 and np-36 stay held (97703),
+neither re-enters.
+
+**Tests:** cardnumber.test.js (the measured cases through the real matcher,
+and through the old one from git to show they catch it); pricehold.test.js
+--db fails on any product mapped to two cards not all held, and on any
+collision from our search alone.
+
 ## 2026-10-09 (evening) — 106 cards held, invented low/high removed, TCGdex fields measured
 
 - **Hold extended to every collision:** `collisionscan.js` (read-only) writes

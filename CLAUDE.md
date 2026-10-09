@@ -79,6 +79,7 @@ Shared, never copied — every duplicated implementation here has drifted.
 | `pricequality.js` | is a headline current and measured? est / old (>30 d) / thin / unsettled; drawn by `priceMarksHtml` |
 | `setyield.js` | a refresh that priced nothing for a set or 200+ cards in a row: named, exit 2 |
 | `printsql.js` | `basePrintingSql` — the headline rule every reader uses |
+| `cardnumber.js` · `pricehold.js` | is a product's number OUR card's (whole)? · cards on a shared product held, refused rows out |
 | `trending.js` · `querygap.js` | movers · every set's query asked once |
 
 ## What ships and what does not
@@ -684,7 +685,10 @@ reprints reusing number and set name). Reprints keyed by SET ID
 (`REPRINT_FAMILIES`, `REPRINT_OF`), never set name. *Archive:* "The master-ball mirror, found for the third time", "A reprint reuses the original numbering", "Ingesting a set can disable a gate that names it", "Superseded 2026-09-26: reprints are keyed by SET ID, both directions", "A collector number does not identify one card"
 
 **A lettered number is its own card** ("24a" ≠ "24"; `verifyLetterNumber`).
-(PROGRESS 2026-10-04)
+(PROGRESS 2026-10-04) **So is a prefixed one, on the PRICING path too**: the
+TCGplayer search compares numbers whole (`cardnumber.js`) and never takes a hit
+stating another number — its fold and fallback put 53 products on 106 cards;
+wrong rows are refused by id (`pricehold.notRefusedSql`). (PROGRESS 2026-10-09 (night))
 
 **The title's condition beats eBay's dropdown — the worse claim stands**; a range
 ("NM/LP") states its lower end (`worstStatedCondition`). It matters for the

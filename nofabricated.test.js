@@ -270,6 +270,8 @@ const FIG = String.raw`(?:\b(?:[\w$]+\.)*(?:low|high|mid|market|marketPrice|lowP
 const ARITH = {
   'two figures': new RegExp(FIG + String.raw`\s*[-+*/]\s*` + FIG, 'i'),
   'figure and constant': new RegExp(FIG + String.raw`\s*[-+*/]\s*(\d*\.\d+|\d+)\b`, 'i'),
+  // a constant by NAME is a constant too: yen / JPY_PER_USD hid from the literal check
+  'figure and named constant': new RegExp(FIG.replace('|yen|', '|yen|shipYen|') + String.raw`\s*[-+*/]\s*(?:[\w$]+\.)?[A-Z][A-Z0-9]*_[A-Z0-9_]+\b`),
   'average of two': /\([^()]*\+[^()]*\)\s*\/\s*2\b/,
   'median by index': /\[\s*Math\.floor\(\s*[\w.]+\.length\s*\/\s*2\s*\)\s*\]/,
 };
@@ -294,11 +296,16 @@ const REVIEWED_ARITHMETIC = [
   { file: 'outlier.js', re: /\(s\[m - 1\] \+ s\[m\]\) \/ 2/, why: 'outlier.js\'s median: per card, per view, never shown or stored (§8.1(d), ebayterms.test.js)', decided: 'Roy, 2026-10-08 (the §8.1(d) ruling)' },
   { file: 'outlier.js', re: /stats\.spread = stats\.high && stats\.low/, why: 'a ratio inside the outlier check (how spread a view is), never a price', decided: PROPOSED },
   { file: 'server.js', re: /\(a\.landed - b\.landed\) \|\| \(a\.price - b\.price\)\);$/, why: 'the last line of a sort comparator', decided: PROPOSED },
+  { file: 'server.js', re: /const hideBelow = mref && mref\.current && jpf\.isRawGrade\(grade\) \? mref\.price \* stampcheck\.SIBLING_HIDE_FRACTION/, why: 'the line below which an unchecked sibling row is hidden — a threshold inside the server, never shown as a price (T0)', decided: PROPOSED },
   { file: 'ingest.js', re: /const delta = card\.price \? \(\(res\.price - card\.price\) \/ card\.price\) \* 100/, why: 'a percentage change printed to the refresh log, never stored or shown', decided: PROPOSED },
   { file: 'ingest.js', re: /medianYen: use\[Math\.floor\(use\.length \/ 2\)\]/, why: 'the Yahoo Auctions median: a median of N real results, stored as yahoojp_N with N in its name (the thin mark reads N) — a measured statistic, labelled', decided: PROPOSED },
   { file: 'ingest.js', re: /const medianYen = use\[Math\.floor\(use\.length \/ 2\)\];/, why: 'the same Yahoo median, for a reverse printing\'s own row', decided: PROPOSED },
 ];
 const OPEN_ARITHMETIC = [
+  { file: 'jpfilter.js', re: /\(yen \/ JPY_PER_USD\)|\(shipYen \/ JPY_PER_USD\)/,
+    found: '2026-10-10: every Yahoo Auctions listing and the Yahoo medians the nightly stores are converted at JPY_PER_USD = 157, a constant, with no rate recorded (live: 158.23) — Roy decides' },
+  { file: 'ingest.js', re: /\(pick\.yen \/ JPY_PER_USD\)/,
+    found: '2026-10-10: jpcheck (tooling, nothing stored) compares Yuyu-tei at the same 157 — Roy decides' },
   { file: 'server.js', re: /e\.median = e\.prices\.length \? e\.prices\[Math\.floor\(e\.prices\.length \/ 2\)\]/,
     found: '2026-10-10: /api/ebay/setprobe (tooling, key-protected) returns a median of eBay listing prices per epid — §9.5 says no eBay price median is shown. Listed, not fixed (Roy decides)' },
 ];
@@ -319,6 +326,7 @@ ok('C catches the low-high midpoint in the page as committed before (0aaff72)',
 ok('C catches the shapes whatever the names: (x.low + y.high) / 2, lo * 0.65, a - b on figures, s[Math.floor(s.length / 2)]',
   arithmetic('return ((q.low + q.high) / 2);', 't').length === 1 && arithmetic('const v = q.low * 0.65;', 't').length === 1
   && arithmetic('const d = a.market - b.market;', 't').length === 1 && arithmetic('m = s[Math.floor(s.length / 2)];', 't').length === 1
+  && arithmetic('const usd = +(yen / JPY_PER_USD).toFixed(2);', 't').length === 1 && arithmetic('colour for price-DOWN rows', 't').length === 0
   && arithmetic('const pct = (now - was) / was * 100;', 't').length === 0 && arithmetic('xs.sort((a, b) => a.price - b.price);', 't').length === 0);
 
 ok('the portfolio holds no invented holdings', /var PORT = \[\];/.test(code) && !/paid:\s*\d/.test(code));

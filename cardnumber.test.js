@@ -9,7 +9,7 @@
 //
 //   node cardnumber.test.js
 'use strict';
-require('./testcount')(34);
+require('./testcount')(43);
 const fs = require('fs'), { execSync } = require('child_process');
 const cn = require('./cardnumber');
 let pass = 0, fail = 0;
@@ -48,11 +48,11 @@ const sliceFn = (src, name) => {
 function buildSearch(src, deps) {
   const body = sliceFn(src, 'tcgPlayerSearch');
   if (!/async function tcgPlayerSearch\(/.test(body)) throw new Error('tcgPlayerSearch not found');
-  const extra = deps.ownNumbers ? sliceFn(src, 'normNum') + sliceFn(src, 'tcgHitNumber') : '';
-  return answer => new Function('hostDelay', 'UA_SAFE', 'fetch', 'sameTcgSet', 'normTcgSetName', 'TCG_SET_NAME', 'numberKey', 'tcgHitNumber',
+  const extra = (deps.ownNumbers ? sliceFn(src, 'normNum') + sliceFn(src, 'tcgHitNumber') : '') + sliceFn(src, 'tcgSealedProduct');
+  return answer => new Function('hostDelay', 'UA_SAFE', 'fetch', 'sameTcgSet', 'normTcgSetName', 'TCG_SET_NAME', 'numberKey', 'tcgHitNumber', 'cmatch',
     extra + body + '\nreturn tcgPlayerSearch;')(
     async () => {}, 'UA', async () => ({ ok: true, json: async () => ({ results: [{ results: answer }] }) }),
-    () => true, s => String(s || '').toLowerCase(), {}, cn.numberKey, deps.ownNumbers ? undefined : cn.tcgHitNumber);
+    () => true, s => String(s || '').toLowerCase(), {}, cn.numberKey, deps.ownNumbers ? undefined : cn.tcgHitNumber, require('./cardmatch'));
 }
 const SRC = fs.readFileSync(__dirname + '/ingest.js', 'utf8').replace(/\r/g, '');
 let OLD = null;
@@ -70,6 +70,11 @@ const CASES = [
   ['Aquapolis Golduck 50a', 'Golduck', 'Aquapolis', '50a', [P('Golduck (50a)', '50a/147', 85813, 9, 'Aquapolis'), P('Golduck (50b)', '50b/147', 85814, 8, 'Aquapolis')], 85813, 85813],
   ['Aquapolis Golduck 50b', 'Golduck', 'Aquapolis', '50b', [P('Golduck (50a)', '50a/147', 85813, 9, 'Aquapolis'), P('Golduck (50b)', '50b/147', 85814, 8, 'Aquapolis')], 85814, 85813],
   ['Garchomp 146 vs Garchomp 114', 'Garchomp & Giratina GX', 'Unified Minds', '146', [P('Garchomp', '114/236', 195068, 3.06, 'Unified Minds')], null, 195068],
+  // The sealed word list (2026-10-09): unbounded, "tin" read the card's own name.
+  ['Dratini 147: its own product (the old list refused "tin" in Dratini)', 'Dratini', 'Scarlet & Violet 151', '147', [P('Dratini - 147/165', '147/165', 502001, 0.4, 'SV: Scarlet & Violet 151')], 502001, null],
+  ['Fighting Energy 6: its own product ("tin" in Fighting)', 'Fighting Energy', 'Scarlet & Violet Energies', '6', [P('Basic Fighting Energy', '006', 502002, 0.2, 'SVE: Scarlet & Violet Energies')], 502002, null],
+  ['Iron Bundle 56: its own product ("bundle" is its name)', 'Iron Bundle', 'Paradox Rift', '56', [P('Iron Bundle - 056/182', '056/182', 502003, 0.3, 'SV04: Paradox Rift')], 502003, null],
+  ['Garchomp & Giratina GX 247: its own product ("tin" in Giratina)', 'Garchomp & Giratina GX', 'Unified Minds', '247', [P('Garchomp & Giratina GX (Secret)', '247/236', 502004, 126, 'Unified Minds')], 502004, null],
 ];
 (async () => {
   console.log('\n  the matcher, on the measured cases');
@@ -84,6 +89,9 @@ const CASES = [
   ok('a single hit stating NO number is still taken by name (it states nothing to refuse it on)', r && r.productId === 1 && r.matchedBy === 'name_unique' && r.matchedNumber === null);
   r = await now([P('Zapdos ex', '29/165', 9, 30, 'Pokemon 151'), P('Zapdos ex', '192/165', 10, 60, 'Pokemon 151')])('Zapdos ex', '151', '192', null, { setId: 'x', queryAs: 'x' });
   ok('several same-name hits: the one stating our number', r && r.productId === 10);
+  r = await now([P('Giratina VSTAR Premium Collection', null, 7, 40, 'Lost Origin'), P('Pikachu ex Box', null, 9, 30, 'Lost Origin')])('Giratina VSTAR', 'Lost Origin', '131', null, { setId: 'x', queryAs: 'x' });
+  const r2 = await now([P('Victini Tin', null, 8, 20, 'Lost Origin')])('Victini', 'Lost Origin', '1', null, { setId: 'x', queryAs: 'x' });
+  ok('…and it still REFUSES sealed product: a Premium Collection, a Box, a Tin — even one carrying the card\'s own name', r === null && r2 === null, JSON.stringify([r, r2]));
 
   console.log('\n  made to fire: the old matcher (a7366c9) on the same cases');
   ok('the old ingest.js is readable from git', !!before);

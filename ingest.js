@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.10.0';   // bump when this file changes
+const VERSION = '5.10.1';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -817,6 +817,23 @@ async function tcgdexPriceFor(card) {
   };
 }
 
+// Is a TCGplayer hit a SEALED product (booster, tin, deck…) rather than a
+// card? Whole words (cmatch.boundedTerm), never read off the card's own name
+// (CLAUDE.md LESSONS 1). Until 2026-10-09 the list had no boundaries: "tin"
+// refused every hit for Dratini, Victini, Giratina and every "Basic Fighting
+// Energy", "pack" Clemont's Backpack, and "bundle" / "box" / "collection" the
+// cards named Iron Bundle, Secret Box, Aaron's Collection — none of them could
+// ever be matched. Plurals are listed, as the unbounded list caught them.
+function tcgSealedProduct(productName, cardName) {
+  const fold = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[‘’]/g, "'").toLowerCase();
+  const own = fold(cardName).trim();
+  let got = fold(productName);
+  if (own) got = got.split(own).join(' ~ ');
+  const words = ['booster', 'boosters', 'box', 'boxes', 'bundle', 'bundles', 'case', 'cases', 'collection', 'collections',
+    'tin', 'tins', 'deck', 'decks', 'pack', 'packs', 'sleeve', 'sleeves', 'binder', 'binders', 'portfolio', 'portfolios', 'elite trainer'];
+  return new RegExp(words.map(cmatch.boundedTerm).join('|'), 'i').test(got);
+}
+
 async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts = {}) {
   // TCGPlayer is a US/English marketplace. Japanese names return junk
   // matches from fuzzy search, so don't even ask.
@@ -863,14 +880,13 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
     if (!hits.length) return null;
 
     const want = cardName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const sealed = /booster|box|bundle|case|collection|tin|deck|pack|sleeve|binder|portfolio|elite trainer/i;
 
     const usable = hits.filter(h => {
       if (!h.marketPrice || h.marketPrice <= 0 || h.marketPrice > 50000) return false;
       if (opts.reprint && String(h.setName || '').toLowerCase() !== opts.reprint.tcgSet.toLowerCase()) return false;
       if (!opts.reprint && opts.setId && !sameTcgSet(h.setName, opts.setId, setName)) return false;
       const got = String(h.productName || '').toLowerCase();
-      if (sealed.test(got)) return false;
+      if (tcgSealedProduct(h.productName, cardName)) return false;
       const gotClean = got.replace(/[^a-z0-9]/g, '');
       return gotClean.includes(want.slice(0, Math.min(6, want.length)))
           || want.includes(gotClean.slice(0, Math.min(6, gotClean.length)));

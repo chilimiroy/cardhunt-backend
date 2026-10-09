@@ -30,7 +30,7 @@ rather than re-derive. `CLAUDE_ARCHIVE.md` is the full history (frozen
 "MOVED FROM CLAUDE.md, 2026-10-07 (compression)",
 "MOVED FROM CLAUDE.md, 2026-10-07 (budget, second pass)",
 "MOVED FROM CLAUDE.md, 2026-10-09 (budget, third pass)" — with "Windows: replacing ingest.js",
-"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)").
+"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)").
 "PROGRESS 2026-10-05: X" means the block headed X in PROGRESS.md's 2026-10-05
 entry — the verbatim measurements this file carried until then. **A bug's
 history may move to the archive; its lesson may not** — `claudesplit.test.js`
@@ -439,23 +439,15 @@ state and role (mechanics: archive, third pass).
 - **Live suites run SIGNED OUT** (Roy, 2026-10-07); **never** a service_role key or test
   account on a dev machine. (PROGRESS 2026-10-06 (night).)
 
-## Near you (local card shops) — PLANNED, needs a real data source
-Honest empty state. **Do not fill it with anything a source did not return.**
-Candidates to probe: Google Places, TCGplayer store locator, manual curation.
-
-## PSA cert lookups — the free bucket is not ours
-PSA's limiter answers 429 before reading the key; the free bucket is spent by
-others (2026-10-05). An allocation is Roy's email to PSA. Nothing calls PSA;
-certcheck steps 2-4 NOT BUILT.
-
-## Sold data — NO SOURCE, and the page says so
-The eBay sold scrape is gone and must not return in any form. Every licensed
-option needs Roy's application or written permission (*Archive:* "Sold data —
-NO SOURCE, and the page says so"). The page says "no licensed sold source".
-
-## Checkout and login — DISABLED, preserved outside the page
-Never loaded, never served; neither returns without a real payment/auth
-backend. `nofabricated.test.js` fails if a password or card input reappears.
+## Not built, and why (each section in full: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)")
+- **Near you**: an honest empty state; never filled with anything a source did not return
+  (*Archive:* "Near you (local card shops) — PLANNED, needs a real data source").
+- **PSA certs**: PSA answers 429 before reading the key (the free bucket is others'); an
+  allocation is Roy's email to PSA. certcheck steps 2-4 NOT BUILT.
+- **Sold data — NO SOURCE**: the eBay sold scrape never returns in any form; the page says
+  "no licensed sold source" (*Archive:* "Sold data — NO SOURCE, and the page says so").
+- **Checkout, login**: disabled, preserved outside the page (`nofabricated.test.js`; *Archive:*
+  "Checkout and login — DISABLED, preserved outside the page").
 
 ## T5 · Chinese — parked
 Do not spend time here.

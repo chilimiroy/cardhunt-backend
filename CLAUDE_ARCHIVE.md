@@ -4624,3 +4624,27 @@ Open: three detail items:
 > - 754 EN cards have no image, so no material reference (B2a, mep, trainer kits).
 > - Existing Yahoo base rows were not repaired for printing (143 of 191 JP cards
 >   holding both sit >5x the Yuyu-tei base) — `jpcheck` over them is owed.
+
+## MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)
+
+Moved verbatim when CLAUDE.md stood at 57,508 of its 60,000 characters,
+before the 2026-10-10 (asking price, marker) lines were written. Four "not built" sections, each kept
+in CLAUDE.md as one line.
+
+> ## Near you (local card shops) — PLANNED, needs a real data source
+> Honest empty state. **Do not fill it with anything a source did not return.**
+> Candidates to probe: Google Places, TCGplayer store locator, manual curation.
+> 
+> ## PSA cert lookups — the free bucket is not ours
+> PSA's limiter answers 429 before reading the key; the free bucket is spent by
+> others (2026-10-05). An allocation is Roy's email to PSA. Nothing calls PSA;
+> certcheck steps 2-4 NOT BUILT.
+> 
+> ## Sold data — NO SOURCE, and the page says so
+> The eBay sold scrape is gone and must not return in any form. Every licensed
+> option needs Roy's application or written permission (*Archive:* "Sold data —
+> NO SOURCE, and the page says so"). The page says "no licensed sold source".
+> 
+> ## Checkout and login — DISABLED, preserved outside the page
+> Never loaded, never served; neither returns without a real payment/auth
+> backend. `nofabricated.test.js` fails if a password or card input reappears.

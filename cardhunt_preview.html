@@ -518,6 +518,10 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   padding:4px 18px;margin-bottom:18px;box-shadow:var(--sh)}
 .selbox{min-width:0;min-height:96px;padding:12px 0}
 .selbox + .selbox{border-top:1px solid var(--bd)}
+/* The selector's heading: it filters listings; it is not a price view. */
+.selhead{padding:12px 0 10px;border-bottom:1px solid var(--bd)}
+.selhead-t{font-size:13px;font-weight:700;color:var(--ink)}
+.selhead-s{margin-top:2px;font-size:11px;color:var(--mu);line-height:1.5}
 .selother{margin-top:8px;padding-left:10px;border-left:2px solid var(--accent-soft)}
 .selchip.sm{padding:4px 10px;font-size:11px}
 /* Live listing rows: two-line title, and a visible link. */
@@ -2916,6 +2920,12 @@ function renderSelector() {
 
   var h = '<div class="selwrap">';
 
+  // ── WHAT THIS IS ── a filter on the listings, not a price view (Roy,
+  // 2026-10-10): no graded price is recorded, so picking a grade changes
+  // which listings show and nothing else. Reword when a graded source exists.
+  h += '<div class="selhead"><div class="selhead-t">Filter listings</div>'
+    + '<div class="selhead-s">Choose which listings are shown below. This does not change the price: no graded price is recorded.</div></div>';
+
   // ── STATUS ── one line; Other EXPANDS DOWNWARD onto a second line of
   // graders beneath the first rather than replacing it, so the five
   // statuses never move while a grader is being chosen.
@@ -3092,7 +3102,8 @@ function selGrade(grade,base){
   // selGrade. The other tabs still need this.
   if (S.ltab && S.ltab !== 'live' && S.ltab !== 'auction') buildMockListings(S.currentCard,base,S.ltab);
 
-  // Grade badge on card image
+  // Grade badge on card image: it names the listings filter, never a grade
+  // of this card's price (Roy, 2026-10-10) — and in words, not 'PSA *'.
   var oldBadge = document.getElementById('grade-badge');
   if (oldBadge) oldBadge.remove();
   updateValueBar(base);
@@ -3100,7 +3111,8 @@ function selGrade(grade,base){
     var badge = document.createElement('div');
     badge.id = 'grade-badge';
     badge.className = 'grade-badge';
-    badge.textContent = grade;
+    badge.textContent = 'Listings: ' + gradeText(grade);
+    badge.title = 'The listings below are filtered to ' + gradeText(grade) + '. No graded price is recorded.';
     var cview = document.querySelector('.cview');
     if (cview) { cview.style.position = 'relative'; cview.appendChild(badge); }
   }
@@ -6714,6 +6726,8 @@ var LANG_JA = {
   'no price recorded': '価格の記録なし',
   'price withheld': '価格は非表示',
   'Raw NM market value': '未鑑定（NM）の相場',
+  'Filter listings': '出品を絞り込む',
+  'Choose which listings are shown below. This does not change the price: no graded price is recorded.': '下に表示する出品を選びます。価格は変わりません。鑑定品の価格は記録されていません。',
   'No graded price is recorded.': '鑑定品の価格は記録されていません。',
   'No price is recorded for this condition.': 'この状態の価格は記録されていません。',
   'These open a search on the marketplace itself.': 'これらは各マーケット自体の検索を開きます。',
@@ -6813,6 +6827,8 @@ var LANG_ZH_TW = {
   'no price recorded': '沒有價格紀錄',
   'price withheld': '價格暫不顯示',
   'Raw NM market value': '未鑑定（NM）市場價值',
+  'Filter listings': '篩選刊登',
+  'Choose which listings are shown below. This does not change the price: no graded price is recorded.': '選擇下方顯示的刊登。這不會改變價格：沒有鑑定卡的價格紀錄。',
   'No graded price is recorded.': '沒有鑑定卡的價格紀錄。',
   'No price is recorded for this condition.': '沒有此品相的價格紀錄。',
   'These open a search on the marketplace itself.': '這些連結會在市集本身開啟搜尋。',
@@ -6912,6 +6928,8 @@ var LANG_ZH_CN = {
   'no price recorded': '没有价格记录',
   'price withheld': '价格暂不显示',
   'Raw NM market value': '未评级（NM）市场价值',
+  'Filter listings': '筛选在售',
+  'Choose which listings are shown below. This does not change the price: no graded price is recorded.': '选择下方显示的在售商品。这不会改变价格：没有评级卡的价格记录。',
   'No graded price is recorded.': '没有评级卡的价格记录。',
   'No price is recorded for this condition.': '没有此品相的价格记录。',
   'These open a search on the marketplace itself.': '这些链接会在市场本身打开搜索。',
@@ -7986,6 +8004,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-5cb7fbb-gpparked &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-7f7c878-gradefilter &middot; click to hide</div>
 </body>
 </html>

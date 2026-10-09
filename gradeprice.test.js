@@ -1,4 +1,4 @@
-require('./testcount')(31);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(33);   // assertions in a plain run — fewer fails the file (testcount.js)
 const gp = require('./gradeprice');
 let pass=0, fail=0;
 const chk=(l,c)=>{ c?pass++:fail++; console.log('  '+(c?'PASS':'FAIL')+'  '+l); };
@@ -118,6 +118,13 @@ console.log('\nTHE CARD PAGE: a graded selection never reads as a graded price (
   chk('updatePrices labels the box before any early return (held, other printing, no price)',
     /markValueLabel\(grade \|\| S\.activeGrade\);\n\s+document\.getElementById\('cd-mkt'\)\.innerHTML = !\(base > 0\)/.test(H)
     && H.indexOf('id="cd-mkt-lbl"') > 0 && H.indexOf('id="cd-mkt-note"') > 0);
+  const rs = H.slice(H.indexOf('function renderSelector() {'), H.indexOf('\nfunction setStatus('));
+  chk('the grade control heads "Filter listings" and says it changes no price (until a graded source exists)',
+    rs.indexOf('<div class="selhead-t">Filter listings</div>') > 0 && /This does not change the price: no graded price is recorded\./.test(rs)
+    && rs.indexOf('selhead') < rs.indexOf('── STATUS ──'));
+  const sg = H.slice(H.indexOf('function selGrade(grade,base){'), H.indexOf('\n}\n', H.indexOf('function selGrade(grade,base){')));
+  chk('the badge on the card image names the listings filter in words, not a grade of the price',
+    /badge\.textContent = 'Listings: ' \+ gradeText\(grade\);/.test(sg) && !/badge\.textContent = grade;/.test(sg));
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

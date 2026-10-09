@@ -14,12 +14,15 @@
 // block supports, or null:
 //   1. TCGplayer's market price (holofoil, 1st Ed. holo, 1st Ed., unlimited,
 //      normal — never the reverse, which is not the card's base price, T10);
-//   2. else a Cardmarket sale figure (average sell price, trend, 7-day
-//      average) — a market price, Europe's;
-//   3. else, where TCGplayer has listings but no market price, the cheapest
-//      listing as an ASKING price (pricequality.askOf's treatment).
-// A market price anywhere beats an ask. The mid listing is never a price (it
-// is the middle ask), and nothing is computed from two figures.
+//   2. else, where TCGplayer has listings but no market price, the cheapest
+//      listing as an ASKING price (pricequality.askOf's treatment);
+//   3. else a Cardmarket sale figure (average sell price, trend, 7-day
+//      average) — a market price, Europe's.
+// TCGplayer's own answer comes first, ask or not: with Cardmarket second,
+// Charizard ☆ δ's live block (TCGplayer: no market, listings from $18,500,
+// 2026-10-09) answered Cardmarket's average sell of 2026-01-16, $1,653.33.
+// The mid listing is never a price (it is the middle ask), and nothing is
+// computed from two figures.
 // Every answer carries: the source's own date, its age in days, whether it is
 // our stored copy (copy: true) or fetched just now (copy: false), and whether
 // it is marked (older than 45 days, or an ask) — a marked figure is shown with
@@ -51,12 +54,12 @@ function figureOf(tcgplayer, cardmarket, opts) {
     if (t[k] && pos(t[k].market)) { f = { price: t[k].market, basis: 'market', market: 'TCGplayer (US)', what: 'market price',
                                           printing: k, source: 'tcgplayer_' + k, block: tcgplayer }; break; }
   }
-  if (!f) for (const [field, what, source] of CM_FIGURES) {
-    if (pos(cm[field])) { f = { price: cm[field], basis: 'market', market: 'Cardmarket (EU)', what, source, block: cardmarket }; break; }
-  }
   if (!f) for (const k of TCG_PRINTINGS) {
     if (t[k] && pos(t[k].low)) { f = { price: t[k].low, basis: 'ask', market: 'TCGplayer (US)', what: 'cheapest listing',
                                        printing: k, source: 'tcgplayer_' + k + '_low', block: tcgplayer }; break; }
+  }
+  if (!f) for (const [field, what, source] of CM_FIGURES) {
+    if (pos(cm[field])) { f = { price: cm[field], basis: 'market', market: 'Cardmarket (EU)', what, source, block: cardmarket }; break; }
   }
   if (!f) return null;
   const date = dateOf(f.block);

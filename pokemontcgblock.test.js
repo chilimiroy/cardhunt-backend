@@ -1,4 +1,4 @@
-require('./testcount')(16);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(17);   // assertions in a plain run — fewer fails the file (testcount.js)
 // pokemontcgblock.test.js — ONE reader of pokemontcg.io's price blocks (Roy, 2026-10-10).
 //
 // Our stored copy (cards.tcgplayer_data / cardmarket_data, 12,697 dated
@@ -33,9 +33,13 @@ ok(F({ updatedAt: '2026/10/09', prices: { holofoil: { high: 30, low: 10 } } }, n
    'low and high: the low, as an ask — never their midpoint (20), a number no source produced');
 ok(F({ updatedAt: '2026/10/01', prices: { reverseHolofoil: { market: 9 } } }, null) === null,
    'a reverse printing is never the card\'s base figure (T10)');
-const eu = F({ updatedAt: '2026/10/01', prices: { holofoil: { low: 50 } } }, { updatedAt: '2026/10/01', prices: { averageSellPrice: 30, trendPrice: 28 } });
+// Charizard ☆ δ live (2026-10-09): TCGplayer no market, listings from $18,500; Cardmarket's block of 2026-01-16.
+const cz = F(live, { updatedAt: '2026/01/16', prices: { averageSellPrice: 1653.33, trendPrice: 838.41 } }, { copy: false });
+ok(cz.basis === 'ask' && cz.price === 18500 && cz.market === 'TCGplayer (US)',
+   'TCGplayer\'s own answer first, ask or not: Charizard ☆ δ is its $18,500 floor, not Cardmarket\'s January $1,653.33', cz);
+const eu = F({ updatedAt: '2026/10/01', prices: { holofoil: { mid: 50 } } }, { updatedAt: '2026/10/01', prices: { averageSellPrice: 30, trendPrice: 28 } });
 ok(eu.basis === 'market' && eu.price === 30 && eu.market === 'Cardmarket (EU)' && /European retail figure/.test(eu.text),
-   'a market price anywhere beats an ask: Cardmarket\'s average sell over TCGplayer\'s floor, said to be European');
+   'no TCGplayer figure at all (a mid is none): Cardmarket\'s average sell, said to be European');
 const fresh = F({ updatedAt: '2026/10/05', prices: { normal: { market: 2.5, mid: 3 } } }, null);
 ok(fresh.price === 2.5 && !fresh.marked && fresh.ageDays === 5, 'KEEP: a 5-day-old market price is not marked');
 ok(F({ prices: { normal: { market: 2 } } }, null).marked && /its date was not given/.test(F({ prices: { normal: { market: 2 } } }, null).text),

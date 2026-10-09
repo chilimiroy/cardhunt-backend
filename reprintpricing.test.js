@@ -58,7 +58,7 @@ ok('safePriceFor asks reprintPricing', /reprintPricing\(card\)/.test(spf));
 // back, the internal search is asked the reprint's question ONLY — its
 // printed number in its own TCGplayer set — never the name-and-set one.
 ok('a reprint gets NO name-only fallback (asked by printed number in its own set)',
-  /rp\s*\?\s*tcgPlayerSearch\(card\.name, rp\.tcgSet, rp\.number, card\.rarity, \{ reprint: rp \}\)\s*:\s*tcgPlayerSearch\(card\.name, card\.set_name/.test(spf)
+  /rp\s*\?\s*tcgPlayerSearch\(card\.name, rp\.tcgSet, rp\.number, card\.rarity, \{ reprint: rp, askOnly, memo \}\)\s*:\s*tcgPlayerSearch\(card\.name, card\.set_name/.test(spf)
   && !/cardmarketSearch\(|ebayBrowseActive\(/.test(spf));
 const tps = grab('async function tcgPlayerSearch');
 ok('tcgPlayerSearch filters hits to the reprint set by exact name',

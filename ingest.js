@@ -827,7 +827,6 @@ function tcgSealedProduct(productName, cardName) {
   return new RegExp(words.map(cmatch.boundedTerm).join('|'), 'i').test(got);
 }
 
-const TCG_SEARCH_MEMO = new Map();
 async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts = {}) {
   // TCGPlayer is a US/English marketplace. Japanese names return junk
   // matches from fuzzy search, so don't even ask.
@@ -856,8 +855,9 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
   const wantNum = numberKey(cardNumber);
 
   try {
-    // The ask pass reads the hits the market pass just fetched (one request per query).
-    let hits = TCG_SEARCH_MEMO.get(q);
+    // The ask pass reads the hits the market pass just fetched (opts.memo, one
+    // Map per card from safePriceFor): one request per query, never two.
+    let hits = opts.memo ? opts.memo.get(q) : null;
     if (!hits) {
     await hostDelay('tcgplayer', 1800);
     const r = await fetch('https://mp-search-api.tcgplayer.com/v1/search/request?q=' +
@@ -874,9 +874,7 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
     if (!r.ok) return null;
     const d = await r.json();
     hits = d?.results?.[0]?.results || [];
-    // the last few queries only: a market pass may ask two (our set name, then TCGplayer's)
-    if (TCG_SEARCH_MEMO.size >= 4) TCG_SEARCH_MEMO.delete(TCG_SEARCH_MEMO.keys().next().value);
-    TCG_SEARCH_MEMO.set(q, hits);
+    if (opts.memo) opts.memo.set(q, hits);
     }
     if (!hits.length) return null;
 
@@ -2148,9 +2146,10 @@ async function safePriceFor(card) {
       let second = null;
       if (td && td.price > 0) res = td;
       else if (td && TCGDEX_FALLBACK_OK.has(td.none)) {
+        const memo = new Map();   // this card's search answers, shared by its two passes
         const ask = askOnly => attempt(() => rp
-          ? tcgPlayerSearch(card.name, rp.tcgSet, rp.number, card.rarity, { reprint: rp, askOnly })
-          : tcgPlayerSearch(card.name, card.set_name, card.number, card.rarity, { setId: card.set_api_id, tcgdexIds: tcgdexProductIds(card.variants), askOnly }));
+          ? tcgPlayerSearch(card.name, rp.tcgSet, rp.number, card.rarity, { reprint: rp, askOnly, memo })
+          : tcgPlayerSearch(card.name, card.set_name, card.number, card.rarity, { setId: card.set_api_id, tcgdexIds: tcgdexProductIds(card.variants), askOnly, memo }));
         // A market price first; only where none matched, the listing floor as an ask.
         res = await ask(false);
         if (!res) res = await ask(true);

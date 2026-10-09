@@ -10,7 +10,7 @@
 // current and measured — 113 Yuyu-tei asks from one 28 Aug run, 10 English
 // rows 66-67 days old, 7 alternating (Torchic ☆ 4500/1200/4500/1200/4500).
 'use strict';
-require('./testcount')(66);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(67);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const pq = require('./pricequality'), PQ = pq, vm = require('vm');
 const DB = process.argv.includes('--db');
@@ -178,6 +178,8 @@ console.log('\n  an asking price: listings but no market price (Roy, 2026-10-10)
   ok(/opts\.askOnly\s*\? !\(h\.marketPrice > 0\) && h\.lowestPrice > 0/.test(tps) && /basis: 'ask'/.test(tps),
     'our search: the ask pass takes only products with NO market price, at their lowest listing');
   ok(/res = await ask\(false\);\s*if \(!res\) res = await ask\(true\);/.test(I), '...and is asked only when the market pass found nothing');
+  ok(/const memo = new Map\(\);/.test(I) && /let hits = opts\.memo \? opts\.memo\.get\(q\) : null;/.test(I) && !/TCG_SEARCH_MEMO/.test(I),
+    '...reading the market pass\'s answers through a per-card memo (no module-level cache to leak one card\'s hits into another\'s)');
   ok(/basis: res\.basis/.test(I) && /basis: b\.basis/.test(I), 'both nightly writers record the basis (search, TCGdex)');
   ok(/t\[k\]\.low > 0\)\s+return \{ price: t\[k\]\.low,\s+source: 'tcgplayer_' \+ k \+ '_low'/.test(I) && !/t\[k\]\.mid > 0/.test(I),
     'pokemontcg.io reader: no market -> the floor as `_low`; the mid ask is never a price');

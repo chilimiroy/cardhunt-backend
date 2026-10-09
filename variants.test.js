@@ -193,7 +193,7 @@ console.log('\n  3b. the page');
   ok('trending: movers apply basePrintingSql', /NOT LIKE 'reverse%'/.test(T.moverSql(T.parseParams({ sort: 'gain-pct' })).text));
   if (fs.existsSync('ingest.js')) {
     const ing = fs.readFileSync('ingest.js', 'utf8');
-    const ev = ing.slice(ing.indexOf('async function evaluateAlerts'), ing.indexOf('AS market_price', ing.indexOf('async function evaluateAlerts')));
+    const ev = ing.slice(ing.indexOf('async function evaluateAlerts'), ing.indexOf('lp ON TRUE', ing.indexOf('async function evaluateAlerts')));
     ok("evaluateAlerts' market price applies basePrintingSql", /basePrintingSql\('p', 'c'\)/.test(ev));
   }
   const PX = JSON.parse(fs.readFileSync('variants.pricing.fixture.json', 'utf8'));

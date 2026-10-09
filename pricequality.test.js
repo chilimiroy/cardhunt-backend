@@ -10,9 +10,9 @@
 // current and measured — 113 Yuyu-tei asks from one 28 Aug run, 10 English
 // rows 66-67 days old, 7 alternating (Torchic ☆ 4500/1200/4500/1200/4500).
 'use strict';
-require('./testcount')(52);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(66);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
-const pq = require('./pricequality');
+const pq = require('./pricequality'), PQ = pq, vm = require('vm');
 const DB = process.argv.includes('--db');
 let pass = 0, fail = 0;
 const ok = (c, label, d) => { if (c) pass++; else { fail++; console.log('  FAIL ' + label + (d !== undefined ? '  ' + JSON.stringify(d) : '')); } };
@@ -145,7 +145,7 @@ console.log('\n  every screen that shows a headline is wired');
   ok(np === 5 && /no price recorded/.test(code) && /price withheld/.test(code), 'no price says so in words, through one function: definition, set tile, cardTile, card page twice', np);
   const calls = (code.match(/priceMarksHtml\(/g) || []).length;
   ok(calls === 7, 'priceMarksHtml: one definition + set tile, card page, cardTile, cardSummaryTile, latest searches, alerts bar', calls);
-  ok(/estMark = priceMarksHtml\(isReal, c\._priceQuality, \{ origin: from\.origin \}\)/.test(code), 'set tile passes the card\'s quality, and where its number came from');
+  ok(/estMark = priceMarksHtml\(isReal, c\._priceQuality, \{ origin: from\.origin, source: c\._priceSource \}\)/.test(code), 'set tile passes the card\'s quality, where its number came from, and its source (a live _low ask)');
   ok(/thirdPartyOriginText\(from\.origin\)/.test(code.slice(code.indexOf('function updatePrices('))) && /q\.note/.test(code.slice(code.indexOf('function updatePrices('))),
      'the card page spells out a pokemontcg.io figure and a reviewed note');
   ok(/priceMarksHtml\(true, cc\._priceQuality, \{ skip: \['old'\], text: true \}\)/.test(code), 'card page badge passes it');
@@ -153,6 +153,46 @@ console.log('\n  every screen that shows a headline is wired');
   // The search page's trending is catalogue since T6 (2026-10-08): no price, so no mark to keep.
   ok(/quality: c\.priceQuality/.test(code), 'the Pokémon trending grid keeps it');
   ok(!/_priceQuality: c\.priceQuality/.test(code) && /noPrice: true/.test(code), 'the search page\'s trending draws no price at all (catalogue tiles)');
+}
+
+console.log('\n  an asking price: listings but no market price (Roy, 2026-10-10)');
+{
+  // Charizard ☆ δ as TCGplayer answered on 2026-10-09: product 84198, no marketPrice, lowestPrice 18,500.
+  const c = PQ.classify({ price: 18500, source: 'tcgplayer_market', recordedAt: '2026-10-09T22:30:00Z',
+    meta: { basis: 'ask', matchedBy: 'number', productId: 84198, listings: 5 } });
+  ok(c.flags[0] === 'ask' && c.ask && c.ask.text === 'Cheapest listed: $18,500 · TCGplayer, 9 Oct'
+     && c.ask.why === 'No recent sales, so no market price is available.', 'an ask row says "Cheapest listed: $18,500 · TCGplayer, 9 Oct" and why', c.ask);
+  ok(/an asking price, not a market value/.test(c.title), '...and its title says it is an asking price, not a market value');
+  const tdx = PQ.classify({ price: 4, source: 'tcgdex_tcgplayer_normal', recordedAt: '2026-10-08T03:00:00Z',
+    meta: { basis: 'ask', productId: 1, updated: '2026-10-07T10:00:00Z' } });
+  ok(tdx.ask && tdx.ask.date === '2026-10-07', 'a TCGdex ask is dated by TCGdex\'s own update, not when we stored it');
+  ok(PQ.isAsk('tcgplayer_holofoil_low', null) && !PQ.isAsk('tcgplayer_holofoil', null) && !PQ.isAsk('tcgplayer_holofoil_mid', null),
+    'pokemontcg.io rows (no source_meta): the `_low` name is an ask; a market row is not');
+  const mk = PQ.classify({ price: 204.41, source: 'tcgdex_tcgplayer_holofoil', recordedAt: new Date().toISOString(), meta: { basis: 'market', productId: 2 } });
+  ok(!mk.ask && !mk.flags.includes('ask'), 'KEEP: a market price is not an ask');
+  const I = fs.readFileSync(__dirname + '/ingest.js', 'utf8');
+  const tps = I.slice(I.indexOf('async function tcgPlayerSearch'), I.indexOf('// ── 2. (Cardmarket'));
+  ok(/opts\.askOnly\s*\? !\(h\.marketPrice > 0\) && h\.lowestPrice > 0/.test(tps) && /basis: 'ask'/.test(tps),
+    'our search: the ask pass takes only products with NO market price, at their lowest listing');
+  ok(/res = await ask\(false\);\s*if \(!res\) res = await ask\(true\);/.test(I), '...and is asked only when the market pass found nothing');
+  ok(/basis: res\.basis/.test(I) && /basis: b\.basis/.test(I), 'both nightly writers record the basis (search, TCGdex)');
+  ok(/t\[k\]\.low > 0\)\s+return \{ price: t\[k\]\.low,\s+source: 'tcgplayer_' \+ k \+ '_low'/.test(I) && !/t\[k\]\.mid > 0/.test(I),
+    'pokemontcg.io reader: no market -> the floor as `_low`; the mid ask is never a price');
+  // The page, run: the box label and line.
+  const at = H.indexOf('function markValueLabel(grade, ask) {'), at2 = H.indexOf('function askOfCard(c) {');
+  const els = { 'cd-mkt-lbl': { textContent: '' }, 'cd-mkt-note': { textContent: '' } };
+  const ctx = { document: { getElementById: id => els[id] || null } };
+  vm.createContext(ctx);
+  vm.runInContext(H.slice(at, H.indexOf('\n}\n', at) + 2) + H.slice(at2, H.indexOf('\n}\n', at2) + 2), ctx);
+  const a = ctx.askOfCard({ _price: 18500, _priceQuality: c });
+  ok(a && a.amount === '$18,500' && a.market === 'TCGplayer' && a.day === '9 Oct', 'the page reads the ask: $18,500 · TCGplayer, 9 Oct', a);
+  ctx.markValueLabel('Raw NM', a);
+  ok(els['cd-mkt-lbl'].textContent === 'Asking price' && els['cd-mkt-note'].textContent === 'No recent sales, so no market price is available.',
+    'the box is "Asking price", never "Market value", with why');
+  ctx.markValueLabel('PSA 10', a);
+  ok(els['cd-mkt-lbl'].textContent === 'Raw NM asking price' && /No graded price is recorded/.test(els['cd-mkt-note'].textContent), '...and under a grade, "Raw NM asking price"');
+  ok(ctx.askOfCard({ _price: 204.41, _priceQuality: mk }) === null, 'KEEP: a market price is not drawn as an ask');
+  ok(/: ask \? '<span[^']*>Cheapest listed:<\/span> '/.test(H), 'the card page draws "Cheapest listed:" for an ask');
 }
 
 (async () => {

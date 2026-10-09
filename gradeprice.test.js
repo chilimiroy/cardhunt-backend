@@ -106,7 +106,7 @@ chk('a zero-price listing is never usable', !gp.usable(L({ price:0, live:false }
 console.log('\nTHE CARD PAGE: a graded selection never reads as a graded price (Roy, 2026-10-10)\n');
 {
   const H = require('fs').readFileSync(__dirname + '/cardhunt_preview.html', 'utf8').replace(/\r/g, '');
-  const at = H.indexOf('function markValueLabel(grade) {');
+  const at = H.indexOf('function markValueLabel(grade, ask) {');
   const els = { 'cd-mkt-lbl': { textContent: '' }, 'cd-mkt-note': { textContent: '' } };
   const ctx = { document: { getElementById: id => els[id] || null } };
   require('vm').createContext(ctx); require('vm').runInContext(H.slice(at, H.indexOf('\n}\n', at) + 2), ctx);
@@ -116,7 +116,7 @@ console.log('\nTHE CARD PAGE: a graded selection never reads as a graded price (
   chk('a grader-wide pick (PSA *) and BGS 9.5 say the same', show('PSA *') === show('BGS 9.5') && /^Raw NM market value \| No graded/.test(show('PSA *')));
   chk('a raw condition other than NM says the figure is NM and that the condition has none', show('Raw LP') === 'Raw NM market value | No price is recorded for this condition.');
   chk('updatePrices labels the box before any early return (held, other printing, no price)',
-    /markValueLabel\(grade \|\| S\.activeGrade\);\n\s+document\.getElementById\('cd-mkt'\)\.innerHTML = !\(base > 0\)/.test(H)
+    /markValueLabel\(grade \|\| S\.activeGrade, ask\);\n\s+document\.getElementById\('cd-mkt'\)\.innerHTML = !\(base > 0\)/.test(H)
     && H.indexOf('id="cd-mkt-lbl"') > 0 && H.indexOf('id="cd-mkt-note"') > 0);
   const rs = H.slice(H.indexOf('function renderSelector() {'), H.indexOf('\nfunction setStatus('));
   chk('the grade control heads "Filter listings" and says it changes no price (until a graded source exists)',

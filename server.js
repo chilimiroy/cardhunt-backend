@@ -662,7 +662,9 @@ function extractPrice(card) {
   const t = (card.tcgplayer && card.tcgplayer.prices) || {};
   for (const k of ['holofoil','1stEditionHolofoil','reverseHolofoil','1stEdition','unlimited','normal']) {
     if (t[k] && t[k].market > 0) return { price: t[k].market, source: 'tcgplayer_' + k };
-    if (t[k] && t[k].mid > 0)    return { price: t[k].mid,    source: 'tcgplayer_' + k + '_mid' };
+    // No market price but listings: the cheapest, as an ASK (Roy, 2026-10-10;
+    // pricequality.isAsk reads the `_low` name) — never the mid ask as a market.
+    if (t[k] && t[k].low > 0)    return { price: t[k].low,    source: 'tcgplayer_' + k + '_low', basis: 'ask' };
   }
   const cm = (card.cardmarket && card.cardmarket.prices) || {};
   if (cm.averageSellPrice > 0) return { price: cm.averageSellPrice, source: 'cardmarket_avg' };
@@ -1527,7 +1529,7 @@ app.get('/api/price/:cardId', access.priced, async (req, res) => {
     let rawNm = 0, source = 'none';
     for (const key of ['holofoil','1stEditionHolofoil','reverseHolofoil','1stEdition','unlimited','normal']) {
       if (t[key] && t[key].market > 0) { rawNm = t[key].market; source = key; break; }
-      if (t[key] && t[key].mid > 0)    { rawNm = t[key].mid;    source = key + '_mid'; break; }
+      if (t[key] && t[key].low > 0)    { rawNm = t[key].low;    source = key + '_low'; break; }   // an ask (2026-10-10)
     }
     if (!rawNm && c.cardmarket && c.cardmarket.prices) {
       rawNm = c.cardmarket.prices.averageSellPrice || c.cardmarket.prices.trendPrice || 0;
@@ -1554,6 +1556,7 @@ app.get('/api/price/:cardId', access.priced, async (req, res) => {
     const result = {
       cardId, name: c.name, rarity: c.rarity,
       rawNm: parseFloat(rawNm.toFixed(2)), source,
+      basis: /_low$/.test(source) ? 'ask' : rawNm > 0 ? 'market' : null,
       isReal: rawNm > 0,
       tcgplayer_url: (c.tcgplayer && c.tcgplayer.url) || null,
       cardmarket_url: (c.cardmarket && c.cardmarket.url) || null,

@@ -70,8 +70,36 @@ function originOf(source, meta) {
     return { flag: 'eu', market: 'Cardmarket (EU)', what: s === 'cardmarket_avg' ? 'average sell price' : 'trend price', via: 'pokemontcg.io' };
   if (s === 'tcgdex_cardmarket') return { flag: 'eu', market: 'Cardmarket (EU)', what: 'price', via: 'TCGdex' };
   if (/^tcgplayer_/.test(s) && s !== 'tcgplayer_market')
-    return { flag: 'pokemontcg', market: 'TCGplayer (US)', what: /_mid$/.test(s) ? 'mid price' : 'market price', via: 'pokemontcg.io' };
+    return { flag: 'pokemontcg', market: 'TCGplayer (US)',
+             what: /_mid$/.test(s) ? 'mid price' : /_low$/.test(s) ? 'cheapest listing' : 'market price', via: 'pokemontcg.io' };
   return null;
+}
+
+// ── An asking price (Roy, 2026-10-10) ──
+// Where a source has listings but no market price (no recent sales), the
+// writers store the cheapest listing with basis 'ask' (tcgdexprice.basisPrice,
+// our search's ask pass; pokemontcg.io's `_low` rows record no source_meta, so
+// their name says it). It is shown as "Cheapest listed: $X · <market>, <date>",
+// never as a market value, and it feeds nothing (printsql.markedSql).
+function isAsk(source, meta) {
+  return !!((meta && meta.basis === 'ask') || /^tcgplayer_.*_low$/.test(String(source || '')));
+}
+// The source's own date for the figure where it gives one (TCGdex `updated`,
+// pokemontcg.io `updatedAt`), else when we recorded it.
+function figureDate(meta, recordedAt) {
+  const d = meta && (meta.updated || meta.updatedAt);
+  const t = Date.parse(d ? String(d).replace(/\//g, '-') : recordedAt);
+  return isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null;
+}
+function askOf(price, source, meta, recordedAt) {
+  if (!isAsk(source, meta)) return null;
+  const on = figureDate(meta, recordedAt);
+  const market = /cardmarket/.test(String(source)) ? 'Cardmarket' : 'TCGplayer';
+  const fmt = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+  const day = on ? new Date(on + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : null;
+  return { price: Number(price), market, date: on,
+           text: 'Cheapest listed: ' + fmt(price) + ' · ' + market + (day ? ', ' + day : ''),
+           why: 'No recent sales, so no market price is available.' };
 }
 
 // Reviewed statements about one card's price, shown wherever its price is
@@ -112,12 +140,15 @@ function classify({ price, source, recordedAt, meta, series, now }) {
       + (o.via === 'pokemontcg.io' ? "; pokemontcg.io's own date for it was not kept" : '')
       + (o.note ? '; ' + o.note : ''));
   }
+  // An ask is said first: what the number is, then why there is no market price.
+  const ask = askOf(p, source, meta, recordedAt);
+  if (ask) { flags.unshift('ask'); parts.unshift(ask.text + ' - an asking price, not a market value. ' + ask.why); }
   if (flags.includes('old')) parts.push(`recorded ${ageDays} days ago; no source has re-priced it since`);
   if (flags.includes('thin')) parts.push(n === 0 ? 'the source had no listings behind this figure'
                                                  : `from ${n} listing${n === 1 ? '' : 's'} only`);
   if (range) parts.push(`moved ${UNSETTLED_RATIO}x or more at least twice in ${WINDOW_DAYS} days `
                         + `(between $${range[0].toFixed(2)} and $${range[1].toFixed(2)})`);
-  return { kind: 'measured', flags, ageDays, listings: n, range,
+  return { kind: 'measured', flags, ageDays, listings: n, range, ask,
            label: flags.length ? flags.join(' · ') : 'current',
            title: parts.length ? parts.join('; ') : null };
 }
@@ -161,4 +192,4 @@ async function annotate(db, items) {
 }
 
 module.exports = { STALE_DAYS, UNSETTLED_RATIO, UNSETTLED_JUMPS, WINDOW_DAYS, THIN_YAHOO_N,
-                   NOTES, listingsBehind, jumps, originOf, classify, annotate };
+                   NOTES, listingsBehind, jumps, originOf, isAsk, figureDate, askOf, classify, annotate };

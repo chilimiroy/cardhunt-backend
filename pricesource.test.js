@@ -94,8 +94,8 @@ if (fs.existsSync(__dirname + '/ingest.js')) {
   const spf = I.slice(I.indexOf('async function safePriceFor'), I.indexOf('async function safePrices('));
   ok('safePriceFor asks TCGdex first', spf.indexOf('tcgdexPriceFor(card)') > 0
     && spf.indexOf('tcgdexPriceFor(card)') < spf.lastIndexOf('tcgPlayerSearch('));
-  ok('safePriceFor fallback passes the set id (and TCGdex\'s product ids, for the stamped-product rule)', /tcgPlayerSearch\(card\.name, card\.set_name, card\.number, card\.rarity,\s*\{ setId: card\.set_api_id, tcgdexIds: tcgdexProductIds\(card\.variants\) \}\)/.test(spf));
-  const tps = I.slice(I.indexOf('async function tcgPlayerSearch'), I.indexOf('async function tcgPlayerSearch') + 3000);
+  ok('safePriceFor fallback passes the set id (and TCGdex\'s product ids, for the stamped-product rule)', /tcgPlayerSearch\(card\.name, card\.set_name, card\.number, card\.rarity,\s*\{ setId: card\.set_api_id, tcgdexIds: tcgdexProductIds\(card\.variants\), askOnly \}\)/.test(spf));
+  const tps = I.slice(I.indexOf('async function tcgPlayerSearch'), I.indexOf('async function tcgPlayerSearch') + 4500);
   ok('tcgPlayerSearch filters hits by set', /opts\.setId && !sameTcgSet\(h\.setName, opts\.setId, setName\)/.test(tps));
   // 2026-10-02: our set name in the QUERY ranked TCGplayer's own card out of
   // the results for dpp and basep (88 cards unpriced); a second question in

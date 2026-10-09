@@ -215,14 +215,19 @@ for (const [label, fixture] of [['empty pricing', UNLISTED], ['no pricing field'
 }
 
 // ══════════════════════════════════════════════════════════════
-// 7. FALLBACK LADDER — a card with no marketPrice still prices
+// 7. NO MARKET PRICE — the listing floor, said to be an ask (Roy, 2026-10-10)
 // ══════════════════════════════════════════════════════════════
 
 {
   const r = T.parsePricing({ pricing: { tcgplayer: { unit: 'USD',
     normal: { lowPrice: 4, midPrice: 6, marketPrice: null } } } });
-  eq(r.tcgplayerBase.price, 6, 'falls back marketPrice -> midPrice');
+  eq(r.tcgplayerBase.price, 4, 'no market price: the cheapest listing ($4), never the mid ask ($6)');
+  eq(r.tcgplayerBase.basis, 'ask', '...labelled an ask');
   eq(r.tcgplayerBase.marketPrice, null, 'and records that marketPrice itself was absent');
+  const m = T.parsePricing({ pricing: { tcgplayer: { unit: 'USD', normal: { lowPrice: 4, midPrice: 6, marketPrice: 5 } } } });
+  ok(m.tcgplayerBase.price === 5 && m.tcgplayerBase.basis === 'market', 'a market price stands, basis market');
+  const mid = T.parsePricing({ pricing: { tcgplayer: { unit: 'USD', normal: { midPrice: 6, marketPrice: null } } } });
+  eq(mid.tcgplayerBase, null, 'a mid with no market and no floor is neither a sale nor a floor: no price');
 }
 
 {

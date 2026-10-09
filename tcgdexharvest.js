@@ -239,7 +239,7 @@ async function harvest(lang, flags) {
         source: sourceNameFor(p.tcgplayerBase.printing),
         marketplace: 'tcgplayer',
         meta: { printing: p.tcgplayerBase.printing, productId: p.tcgplayerBase.productId,
-                currency: 'USD', updated: p.tcgplayerUpdated }
+                currency: 'USD', updated: p.tcgplayerUpdated, basis: p.tcgplayerBase.basis }
       };
     } else if (p.cardmarket && !cmShared) {
       const conv = await fx.toUsd(p.cardmarket.price, p.cardmarket.unit);
@@ -270,7 +270,7 @@ async function harvest(lang, flags) {
       const vals = provenance ? `($1,$2,$3,'tcgplayer','raw_nm',$4,$5)` : `($1,$2,$3,'tcgplayer','raw_nm',$4)`;
       const args = [c.api_card_id, vp.price, 'tcgdex_tcgplayer_' + vp.variant, vp.variant];
       if (provenance) args.push(JSON.stringify({ printing: vp.printing, productId: vp.productId, currency: 'USD',
-                                                 updated: p.tcgplayerUpdated }));
+                                                 updated: p.tcgplayerUpdated, basis: vp.basis }));
       const r = await db.query(`INSERT INTO price_history ${cols} VALUES ${vals}`, args)
         .catch(e => { console.log(`  variant write failed ${c.api_card_id} ${vp.variant}: ${e.message}`); return null; });
       if (r) variantRows++;

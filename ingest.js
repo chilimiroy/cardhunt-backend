@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.10.4';   // bump when this file changes
+const VERSION = '5.11.0';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -174,11 +174,15 @@ function inferRarity(num, printed, name) {
 // consumer it had either displayed its number or wrote a row that was
 // displayed; none ranked, scheduled or ordered anything.
 
+// pokemontcg.io's block. A market price; where its TCGplayer block has listings
+// but no market (no recent sales), the cheapest listing, as an ASK — the
+// source name says so (`_low`), since these writers record no source_meta
+// (Roy, 2026-10-10; it was the mid ask, labelled `_mid`, read as a market).
 function extractPrice(card) {
   const t = (card.tcgplayer && card.tcgplayer.prices) || {};
   for (const k of ['holofoil','1stEditionHolofoil','reverseHolofoil','1stEdition','unlimited','normal']) {
     if (t[k] && t[k].market > 0) return { price: t[k].market, source: 'tcgplayer_' + k };
-    if (t[k] && t[k].mid > 0)    return { price: t[k].mid,    source: 'tcgplayer_' + k + '_mid' };
+    if (t[k] && t[k].low > 0)    return { price: t[k].low,    source: 'tcgplayer_' + k + '_low', basis: 'ask' };
   }
   const cm = (card.cardmarket && card.cardmarket.prices) || {};
   if (cm.averageSellPrice > 0) return { price: cm.averageSellPrice, source: 'cardmarket_avg' };
@@ -798,10 +802,11 @@ async function tcgdexPriceFor(card) {
   return {
     price: b.price, source: `tcgdex_tcgplayer_${b.printing}`, marketplace: 'tcgplayer',
     matched: d.name, matchedBy: 'productId',
-    meta: { printing: b.printing, productId: b.productId, currency: 'USD', updated: p.tcgplayerUpdated },
+    // basis 'ask': TCGdex has listings but no market price — the floor (tcgdexprice.basisPrice).
+    meta: { printing: b.printing, productId: b.productId, currency: 'USD', updated: p.tcgplayerUpdated, basis: b.basis },
     firstEdition: firstEdition && { price: firstEdition.price, source: `tcgdex_tcgplayer_${firstEdition.printing}`,
       meta: { printing: firstEdition.printing, productId: firstEdition.productId, currency: 'USD',
-              updated: p.tcgplayerUpdated, role: 'edition' } }
+              updated: p.tcgplayerUpdated, role: 'edition', basis: firstEdition.basis } }
   };
 }
 
@@ -822,6 +827,7 @@ function tcgSealedProduct(productName, cardName) {
   return new RegExp(words.map(cmatch.boundedTerm).join('|'), 'i').test(got);
 }
 
+const TCG_SEARCH_MEMO = new Map();
 async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts = {}) {
   // TCGPlayer is a US/English marketplace. Japanese names return junk
   // matches from fuzzy search, so don't even ask.
@@ -846,11 +852,14 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
     return second;
   }
 
-  await hostDelay('tcgplayer', 1800);
   const q = `${cardName} ${opts.queryAs !== undefined ? opts.queryAs : (setName || '')}`.trim();
   const wantNum = numberKey(cardNumber);
 
   try {
+    // The ask pass reads the hits the market pass just fetched (one request per query).
+    let hits = TCG_SEARCH_MEMO.get(q);
+    if (!hits) {
+    await hostDelay('tcgplayer', 1800);
     const r = await fetch('https://mp-search-api.tcgplayer.com/v1/search/request?q=' +
       encodeURIComponent(q) + '&isList=false', {
       method: 'POST',
@@ -864,13 +873,25 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
     });
     if (!r.ok) return null;
     const d = await r.json();
-    const hits = d?.results?.[0]?.results || [];
+    hits = d?.results?.[0]?.results || [];
+    // the last few queries only: a market pass may ask two (our set name, then TCGplayer's)
+    if (TCG_SEARCH_MEMO.size >= 4) TCG_SEARCH_MEMO.delete(TCG_SEARCH_MEMO.keys().next().value);
+    TCG_SEARCH_MEMO.set(q, hits);
+    }
     if (!hits.length) return null;
 
     const want = cardName.toLowerCase().replace(/[^a-z0-9]/g, '');
 
+    // opts.askOnly (Roy, 2026-10-10): the second pass, asked only when the
+    // market pass found nothing — products with listings and NO market price
+    // (no recent sales), priced at the cheapest listing and labelled an ask.
+    // Charizard ☆ δ: product 84198, no marketPrice, lowestPrice $18,500.
+    const priced = h => opts.askOnly
+      ? !(h.marketPrice > 0) && h.lowestPrice > 0 && h.lowestPrice <= 50000
+      : h.marketPrice > 0 && h.marketPrice <= 50000;
+    const priceOf = h => opts.askOnly ? { price: h.lowestPrice, basis: 'ask' } : { price: h.marketPrice, basis: 'market' };
     const usable = hits.filter(h => {
-      if (!h.marketPrice || h.marketPrice <= 0 || h.marketPrice > 50000) return false;
+      if (!priced(h)) return false;
       if (opts.reprint && String(h.setName || '').toLowerCase() !== opts.reprint.tcgSet.toLowerCase()) return false;
       if (!opts.reprint && opts.setId && !sameTcgSet(h.setName, opts.setId, setName)) return false;
       const got = String(h.productName || '').toLowerCase();
@@ -895,7 +916,7 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
       if (exact.length) {
         const hit = exact[0];
         return {
-          price: hit.marketPrice,
+          price: priceOf(hit).price, basis: priceOf(hit).basis,
           low: hit.lowestPrice || null,
           source: 'tcgplayer_market',
           matched: hit.productName,
@@ -934,7 +955,7 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
         if (byRarity.length === 1) {
           const hit = byRarity[0];
           return {
-            price: hit.marketPrice,
+            price: priceOf(hit).price, basis: priceOf(hit).basis,
             low: hit.lowestPrice || null,
             source: 'tcgplayer_market',
             matched: hit.productName,
@@ -953,7 +974,7 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
     // Only one candidate stating no number, or no number to match on.
     const hit = pool[0];
     return {
-      price: hit.marketPrice,
+      price: priceOf(hit).price, basis: priceOf(hit).basis,
       low: hit.lowestPrice || null,
       source: 'tcgplayer_market',
       matched: hit.productName,
@@ -2121,9 +2142,12 @@ async function safePriceFor(card) {
       let second = null;
       if (td && td.price > 0) res = td;
       else if (td && TCGDEX_FALLBACK_OK.has(td.none)) {
-        res = await attempt(() => rp
-          ? tcgPlayerSearch(card.name, rp.tcgSet, rp.number, card.rarity, { reprint: rp })
-          : tcgPlayerSearch(card.name, card.set_name, card.number, card.rarity, { setId: card.set_api_id, tcgdexIds: tcgdexProductIds(card.variants) }));
+        const ask = askOnly => attempt(() => rp
+          ? tcgPlayerSearch(card.name, rp.tcgSet, rp.number, card.rarity, { reprint: rp, askOnly })
+          : tcgPlayerSearch(card.name, card.set_name, card.number, card.rarity, { setId: card.set_api_id, tcgdexIds: tcgdexProductIds(card.variants), askOnly }));
+        // A market price first; only where none matched, the listing floor as an ask.
+        res = await ask(false);
+        if (!res) res = await ask(true);
         if (res) res.meta = Object.assign({}, res.meta || {}, {
           via: 'tcgplayer-internal-search', tcgdexNone: td.none,
           // WHICH product it matched (T2, 2026-10-02): Torchic ☆ alternated
@@ -2132,7 +2156,7 @@ async function safePriceFor(card) {
           // last sale (Torchic ☆: $4,500 on 0; Rayquaza ☆: no market at all).
           matched: res.matched, matchedNumber: res.matchedNumber, matchedBy: res.matchedBy,
           numberRule: NUMBER_RULE,   // written by the whole-number matcher (cardnumber.js)
-          tcgSet: res.set, productId: res.productId, listings: res.listings, low: res.low,
+          tcgSet: res.set, productId: res.productId, listings: res.listings, low: res.low, basis: res.basis,
           recheck: 'last-resort fallback: re-price from TCGdex once it lists a TCGplayer price for this card' });
         // TCGdex's Cardmarket price, where it has one: a SECOND reading,
         // stored beside the headline and never as it — EU retail, ~1.6x,
@@ -4261,10 +4285,14 @@ async function buildManifest(lang, arg1, arg2) {
         if (p.tcgplayerBase) {
           const src = `tcgdex_tcgplayer_${p.tcgplayerBase.printing}`;
           if (srk.canOverwrite(src, held.get(c.api_card_id))) {
+            // With its product, TCGdex's date and the basis, like every other
+            // TCGdex writer (until 2026-10-10 this row carried none of them).
             await db.query(
-              `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition)
-               VALUES ($1,$2,$3,'tcgplayer','raw_nm')`,
-              [c.api_card_id, p.tcgplayerBase.price, src]).catch(() => {});
+              `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition, source_meta)
+               VALUES ($1,$2,$3,'tcgplayer','raw_nm',$4)`,
+              [c.api_card_id, p.tcgplayerBase.price, src, JSON.stringify({ printing: p.tcgplayerBase.printing,
+                productId: p.tcgplayerBase.productId, currency: 'USD', updated: p.tcgplayerUpdated,
+                basis: p.tcgplayerBase.basis, via: 'manifest' })]).catch(() => {});
             pricesWritten++;
           } else pricesSkipped++;
         }

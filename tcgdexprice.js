@@ -91,6 +91,21 @@ function firstPrice(obj, fields) {
   return null;
 }
 
+// ── A market price, or the listing floor said to be an asking price ──
+// (Roy, 2026-10-10.) The ladder here was marketPrice -> midPrice -> lowPrice,
+// and the row it wrote said nothing of which: a card with no recent sales
+// showed TCGplayer's mid ASK as its "market price". Now: the market price
+// where there is one; where the source has listings but no market price,
+// the cheapest listing, basis 'ask' — shown as "Cheapest listed", never as a
+// market value, and fed to nothing (printsql.markedSql). Mid is dropped: it
+// is neither a sale nor the floor.
+function basisPrice(blk) {
+  if (!blk || typeof blk !== 'object') return null;
+  if (isUsablePrice(blk.marketPrice)) return { price: blk.marketPrice, basis: 'market' };
+  if (isUsablePrice(blk.lowPrice)) return { price: blk.lowPrice, basis: 'ask' };
+  return null;
+}
+
 /**
  * Split TCGdex's tcgplayer block into base and reverse printings.
  *
@@ -134,13 +149,12 @@ function splitTcgplayer(tcgplayer, printings) {
       const blk = tcgplayer[n];
       if (!blk || typeof blk !== 'object') continue;
       if (skip(n)) { out.skipped.push(n); continue; }
-      // marketPrice is the headline number; fall back down the ladder
-      // rather than returning nothing for a card that has a low/mid.
-      const price = firstPrice(blk, ['marketPrice', 'midPrice', 'lowPrice']);
-      if (price === null) continue;
+      // The market price, else the listing floor as an ask (basisPrice).
+      const bp = basisPrice(blk);
+      if (bp === null) continue;
       return {
         printing: n,
-        price,
+        price: bp.price, basis: bp.basis,
         marketPrice: isUsablePrice(blk.marketPrice) ? blk.marketPrice : null,
         lowPrice: isUsablePrice(blk.lowPrice) ? blk.lowPrice : null,
         midPrice: isUsablePrice(blk.midPrice) ? blk.midPrice : null,
@@ -214,8 +228,8 @@ function tcgplayerByEdition(tcgplayer, printings) {
     for (const n of names) {
       const blk = tcgplayer[n];
       if (!blk || typeof blk !== 'object' || skip(n)) continue;
-      const price = firstPrice(blk, ['marketPrice', 'midPrice', 'lowPrice']);
-      if (price !== null) return { printing: n, price, productId: blk.productId ?? null };
+      const bp = basisPrice(blk);
+      if (bp !== null) return { printing: n, price: bp.price, basis: bp.basis, productId: blk.productId ?? null };
     }
     return null;
   };
@@ -354,7 +368,7 @@ function printingPrices(card) {
   const out = [];
   const p = parsePricing(card);
   if (p.tcgplayerReverse) {
-    out.push({ variant: 'reverse', price: p.tcgplayerReverse.price,
+    out.push({ variant: 'reverse', price: p.tcgplayerReverse.price, basis: p.tcgplayerReverse.basis,
                productId: p.tcgplayerReverse.productId, printing: p.tcgplayerReverse.printing });
   }
   for (const v of (card && Array.isArray(card.variants_detailed) ? card.variants_detailed : [])) {
@@ -365,10 +379,10 @@ function printingPrices(card) {
     for (const k of ['holofoil', 'reverse-holofoil', 'normal']) {
       const blk = tp[k];
       if (!blk || blk.productId !== own) continue;
-      const price = firstPrice(blk, ['marketPrice', 'midPrice', 'lowPrice']);
-      if (price === null) continue;
+      const bp = basisPrice(blk);
+      if (bp === null) continue;
       const variant = 'reverse-' + String(v.foil).toLowerCase();
-      if (!out.some(o => o.variant === variant)) out.push({ variant, price, productId: own, printing: k });
+      if (!out.some(o => o.variant === variant)) out.push({ variant, price: bp.price, basis: bp.basis, productId: own, printing: k });
       break;
     }
   }
@@ -483,6 +497,6 @@ module.exports = {
   productConflicts, recordProductClaims, loadProductConflicts,
   printingsFromTcgdex, printingPrices,
   BASE_PRINTINGS, REVERSE_PRINTINGS, SOURCE, PRICING_LANGS, tcgplayerByEdition, UNLIMITED_KEYS, FIRST_EDITION_KEYS,
-  isUsablePrice, firstPrice, splitTcgplayer, readCardmarket, parsePricing,
+  isUsablePrice, firstPrice, basisPrice, splitTcgplayer, readCardmarket, parsePricing,
   pricingAllowedFor
 };

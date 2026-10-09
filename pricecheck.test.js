@@ -34,7 +34,8 @@ if (typeof E === 'function') {
   ok(!only1st.unlimited && only1st.firstEdition.price === 9.5, 'a card listed only as 1st Edition has no Unlimited figure');
   ok(!E(null).unlimited && !E(null).firstEdition, 'tcgplayer: null -> nothing (present-but-null provider)');
   ok(!E({ holofoil: { marketPrice: 0, midPrice: null } }).unlimited, 'a 0 price is "no data", not a price');
-  ok(E({ holofoil: { marketPrice: null, midPrice: 7 } }).unlimited.price === 7, 'falls back marketPrice -> midPrice');
+  ok(!E({ holofoil: { marketPrice: null, midPrice: 7 } }).unlimited, 'a mid ask alone is no price (2026-10-10)');
+  ok(E({ holofoil: { marketPrice: null, lowPrice: 5, midPrice: 7 } }).unlimited.basis === 'ask', 'no market: the floor, labelled an ask');
 }
 
 // ── 2. tcgdexPriceFor, the real function ──

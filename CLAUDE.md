@@ -30,7 +30,7 @@ rather than re-derive. `CLAUDE_ARCHIVE.md` is the full history (frozen
 "MOVED FROM CLAUDE.md, 2026-10-07 (compression)",
 "MOVED FROM CLAUDE.md, 2026-10-07 (budget, second pass)",
 "MOVED FROM CLAUDE.md, 2026-10-09 (budget, third pass)" — with "Windows: replacing ingest.js",
-"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)").
+"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)").
 "PROGRESS 2026-10-05: X" means the block headed X in PROGRESS.md's 2026-10-05
 entry — the verbatim measurements this file carried until then. **A bug's
 history may move to the archive; its lesson may not** — `claudesplit.test.js`
@@ -217,15 +217,9 @@ PROGRESS 2026-10-05: "The gates".
 `dropped[]`, `gate`; the payload carries `refused[]` (title / photo / back,
 capped at 300, never counted). Stored-price paths report to the console.
 
-**What the query asks decides what the gate can see** (2026-10-04): a slab asks
-the bare number, raw keeps the pair; set names by set id (`SET_WRITTEN_AS`);
-auctions via `buyingOptions`; "PSA 8 Card" is a grade not a lot; a slab is one
-card whatever is sealed inside (Roy); no-number cards by name only
-(`cm.PRINTS_NO_NUMBER`); a punctuation number (Unown ! ?) must stand alone;
-TCGdex via `cardid.tcgdexLocalId`; an empty panel says none-returned /
-all-refused / no market (`payload.market`). Re-run `node querygap.js en` after
-any change to `buildQuery` or a set's vocabulary. Open: raw titles with the
-pair and no set name are never fetched (unmeasured).
+**What the query asks decides what the gate can see** (2026-10-04; the rules:
+*Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)"). Re-run `node querygap.js en` after any change to
+`buildQuery` or a set's vocabulary.
 
 ## Open, and a decision rather than a fix
 (Full text: *Archive:* "Open, and a decision rather than a fix".)
@@ -237,11 +231,8 @@ pair and no set name are never fetched (unmeasured).
 - **Decided (Roy, 2026-10-05):** Yellow A Alternate (xya) is NOT deleted (own
   printed numbers, own listings); **no softer 0.2x price flag** — it would
   catch genuine damaged copies.
-- Cross-set lookalike FINDER: >=40% of a view price-flagged, then score against
-  same-Pokémon scans (PROGRESS 2026-10-05). Shipped pairs: PHOTO CHECKS.
-- 754 EN cards have no image, so no material reference (B2a, mep, trainer kits).
-- Existing Yahoo base rows were not repaired for printing (143 of 191 JP cards
-  holding both sit >5x the Yuyu-tei base) — `jpcheck` over them is owed.
+- Also open: a cross-set lookalike FINDER, 754 imageless EN cards, `jpcheck` over
+  old Yahoo base rows (*Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)").
 
 ---
 

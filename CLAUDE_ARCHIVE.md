@@ -4598,3 +4598,29 @@ Accounts:
 > - **Live suites run SIGNED OUT (Roy, 2026-10-07)**: priced checks SKIP and say why.
 >   **Never** a service_role key or test account on a dev machine (it bypasses RLS).
 > (PROGRESS 2026-10-06 (night).)
+
+## MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)
+
+Moved verbatim when CLAUDE.md stood at 57,601 of its 60,000 characters,
+before the 2026-10-10 lines were written (standing rule: compress before writing). Each keeps a
+line in CLAUDE.md; what is here is the detail.
+
+THE GATES: what the query asks:
+
+> **What the query asks decides what the gate can see** (2026-10-04): a slab asks
+> the bare number, raw keeps the pair; set names by set id (`SET_WRITTEN_AS`);
+> auctions via `buyingOptions`; "PSA 8 Card" is a grade not a lot; a slab is one
+> card whatever is sealed inside (Roy); no-number cards by name only
+> (`cm.PRINTS_NO_NUMBER`); a punctuation number (Unown ! ?) must stand alone;
+> TCGdex via `cardid.tcgdexLocalId`; an empty panel says none-returned /
+> all-refused / no market (`payload.market`). Re-run `node querygap.js en` after
+> any change to `buildQuery` or a set's vocabulary. Open: raw titles with the
+> pair and no set name are never fetched (unmeasured).
+
+Open: three detail items:
+
+> - Cross-set lookalike FINDER: >=40% of a view price-flagged, then score against
+>   same-Pokémon scans (PROGRESS 2026-10-05). Shipped pairs: PHOTO CHECKS.
+> - 754 EN cards have no image, so no material reference (B2a, mep, trainer kits).
+> - Existing Yahoo base rows were not repaired for printing (143 of 191 JP cards
+>   holding both sit >5x the Yuyu-tei base) — `jpcheck` over them is owed.

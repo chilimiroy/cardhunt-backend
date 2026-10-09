@@ -68,11 +68,11 @@ function slice(src, start) {
         return { status: r.status, ok: r.status === 200, json: async () => r.body };
       };
       // writeIllustrator (2026-10-08): the artist rides the same response; stubbed, recorded.
-      const f = new Function('db', 'tdxp', 'hostDelay', 'DELAY_TCGDEX', 'TCGDEX', 'fetch', 'sleep', 'console', 'tcgdexLocalId', 'writeIllustrator', 'writeRegulationMark',
+      const f = new Function('db', 'tdxp', 'hostDelay', 'DELAY_TCGDEX', 'TCGDEX', 'fetch', 'sleep', 'console', 'tcgdexLocalId', 'writeIllustrator', 'writeRegulationMark', 'writeDexIds',
         'let _tdxConflicts = null, _tdxWarned = false;\n' + src + '\nreturn tcgdexPriceFor;')(
         null, { parsePricing: tdxp.parsePricing, tcgplayerByEdition: tdxp.tcgplayerByEdition, printingsFromTcgdex: tdxp.printingsFromTcgdex, loadProductConflicts: async () => conflicts || { ready: true, tcgplayer: new Set() } },
         async () => {}, 0, 'https://tcgdex.test', fakeFetch, async () => {}, { log() {} }, require('./cardid').tcgdexLocalId,
-        async (card, ill) => { ARTISTS.push(ill === undefined ? '(undefined)' : ill); }, async () => {});
+        async (card, ill) => { ARTISTS.push(ill === undefined ? '(undefined)' : ill); }, async () => {}, async () => {});
       // A bare null (the old function) must count as failures, not crash.
       try { return (await f({ api_card_id: 'en-neo1-9', set_api_id: 'neo1', number: '9' })) || { bare: null }; }
       catch (e) { return { threw: e.message }; }

@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.9.8';   // bump when this file changes
+const VERSION = '5.9.9';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -759,6 +759,31 @@ async function writeRegulationMark(card, mark) {
   await db.query(`UPDATE cards SET regulation_mark = COALESCE($2, regulation_mark), regulation_mark_checked_at = NOW() WHERE api_card_id = $1`,
     [card.api_card_id, m]).catch(e => console.log('  (regulation mark not stored for ' + card.api_card_id + ': ' + e.message + ')'));
 }
+// ── The national dex number(s), from the same response (TASK-tcgdex-fields T1, Roy 2026-10-09) ──
+// TCGdex gives an ARRAY: a TAG TEAM card depicts two Pokémon ([25, 644]),
+// so every number is kept in TCGdex's order — keeping the first would be a lie
+// about the card. No numbers = '{}', "none known" (Trainers, Energy);
+// dex_ids_checked_at NULL = never asked. A response without numbers never
+// erases stored ones; an array with anything but a dex number in it is refused
+// whole, never stored in part. Needs migration-dex-ids.sql.
+let _dexCol = null, _dexWarned = false;
+async function writeDexIds(card, dexIds) {
+  if (_dexCol === null) _dexCol = (await db.query(
+    `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='cards' AND column_name='dex_ids'`)
+    .catch(() => ({ rows: [] }))).rows.length > 0;
+  if (!_dexCol) {
+    if (!_dexWarned) { _dexWarned = true; console.log('\n  cards.dex_ids is missing — run migration-dex-ids.sql. Dex numbers are not stored until then.\n'); }
+    return;
+  }
+  const ids = dexIds == null ? [] : dexIds;
+  if (!Array.isArray(ids) || !ids.every(n => Number.isInteger(n) && n >= 1 && n <= 2000)) {
+    console.log('  (dex number not stored for ' + card.api_card_id + ': TCGdex gave ' + JSON.stringify(dexIds).slice(0, 80) + ')');
+    return;
+  }
+  await db.query(`UPDATE cards SET dex_ids = CASE WHEN cardinality($2::int[]) > 0 THEN $2::int[] ELSE COALESCE(dex_ids, '{}') END,
+    dex_ids_checked_at = NOW() WHERE api_card_id = $1`,
+    [card.api_card_id, ids]).catch(e => console.log('  (dex number not stored for ' + card.api_card_id + ': ' + e.message + ')'));
+}
 async function tcgdexPriceFor(card) {
   if (!card.set_api_id || !String(card.api_card_id).startsWith('en-')) return { price: null, none: 'not-english' };
   if (!_tdxConflicts) {
@@ -787,6 +812,7 @@ async function tcgdexPriceFor(card) {
   if (!d) return { price: null, none: 'unreachable', detail: String(status) };
   await writeIllustrator(card, d.illustrator);
   await writeRegulationMark(card, d.regulationMark);
+  await writeDexIds(card, d.dexId);
   const p = tdxp.parsePricing(d);
   const b = p.tcgplayerBase;
   // No TCGplayer price: hand back TCGdex's Cardmarket block, which the caller

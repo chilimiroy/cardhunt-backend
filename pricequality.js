@@ -57,8 +57,15 @@ function jumps(series) {
 // tcgplayer_<printing>[_mid]; TCGdex writes tcgdex_cardmarket. Ten of the
 // cards released from a shared product on 2026-10-09 fell to a July
 // cardmarket_avg row, and the page called it nothing but "old".
-function originOf(source) {
+function originOf(source, meta) {
   const s = String(source || '');
+  // Our search's rows from before 2 October record no product and no match
+  // label: the fallback that took other cards' products wrote them, and
+  // nothing says which (Roy, 2026-10-09: left, shown with their age, re-asked
+  // first by value). ~2% of those checkable were wrong.
+  if (s === 'tcgplayer_market' && !(meta && meta.matchedBy))
+    return { flag: 'unchecked', market: 'TCGplayer (US)', what: 'market price', via: 'our TCGplayer search',
+             note: 'which product it matched was not recorded, so its collector number cannot be checked; it is asked again first' };
   if (s === 'cardmarket_avg' || s === 'cardmarket_trend')
     return { flag: 'eu', market: 'Cardmarket (EU)', what: s === 'cardmarket_avg' ? 'average sell price' : 'trend price', via: 'pokemontcg.io' };
   if (s === 'tcgdex_cardmarket') return { flag: 'eu', market: 'Cardmarket (EU)', what: 'price', via: 'TCGdex' };
@@ -95,13 +102,14 @@ function classify({ price, source, recordedAt, meta, series, now }) {
     range = [Math.min.apply(null, series.map(Number)), Math.max.apply(null, series.map(Number))];
   }
   const parts = [];
-  const o = originOf(source);
+  const o = originOf(source, meta);
   if (o) {
     flags.unshift(o.flag);
     const on = isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null;
-    parts.push(`${o.market} ${o.what}, read from ${o.via}` + (on ? `, recorded ${on}` + (ageDays > STALE_DAYS ? '' : ` (${ageDays} days ago)`) : '')
+    parts.push(`${o.market} ${o.what}, read from ${o.via}` + (on ? `, recorded ${on}` + (ageDays > STALE_DAYS && o.flag !== 'unchecked' ? '' : ` (${ageDays} days ago)`) : '')
       + (o.flag === 'eu' ? ' - a European retail figure, not the US market' : '')
-      + (o.via === 'pokemontcg.io' ? "; pokemontcg.io's own date for it was not kept" : ''));
+      + (o.via === 'pokemontcg.io' ? "; pokemontcg.io's own date for it was not kept" : '')
+      + (o.note ? '; ' + o.note : ''));
   }
   if (flags.includes('old')) parts.push(`recorded ${ageDays} days ago; no source has re-priced it since`);
   if (flags.includes('thin')) parts.push(n === 0 ? 'the source had no listings behind this figure'

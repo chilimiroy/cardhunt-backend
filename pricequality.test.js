@@ -10,7 +10,7 @@
 // current and measured — 113 Yuyu-tei asks from one 28 Aug run, 10 English
 // rows 66-67 days old, 7 alternating (Torchic ☆ 4500/1200/4500/1200/4500).
 'use strict';
-require('./testcount')(47);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(51);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const pq = require('./pricequality');
 const DB = process.argv.includes('--db');
@@ -24,34 +24,34 @@ console.log('\n  the rule — what it KEEPS as current');
 {
   const cur = C({ price: 78.35, source: 'tcgdex_tcgplayer_holofoil', recordedAt: ago(1), series: [77.9, 78.1, 78.35] });
   ok(cur.kind === 'measured' && cur.flags.length === 0 && cur.label === 'current', 'a fresh, steady TCGdex price carries no flag', cur);
-  ok(C({ price: 5, source: 'tcgplayer_market', recordedAt: ago(30) + '' }).flags.length === 0, '30 days is not yet old (the card page\'s own edge)');
+  ok(C({ price: 5, source: 'tcgplayer_market', recordedAt: ago(30) + '' , meta: { matchedBy: 'number' }}).flags.length === 0, '30 days is not yet old (the card page\'s own edge)');
   ok(C({ price: 3, source: 'yahoojp_3', recordedAt: ago(1) }).flags.length === 0, 'a Yahoo median of 3 items is not thin');
-  ok(C({ price: 3, source: 'tcgplayer_market', recordedAt: ago(1), meta: { listings: 4 } }).flags.length === 0, 'internal search with 4 listings is not thin');
-  ok(C({ price: 3, source: 'tcgplayer_market', recordedAt: ago(1), meta: { via: 'tcgplayer-internal-search' } }).listings === null,
+  ok(C({ price: 3, source: 'tcgplayer_market', recordedAt: ago(1), meta: { matchedBy: 'number', listings: 4 } }).flags.length === 0, 'internal search with 4 listings is not thin');
+  ok(C({ price: 3, source: 'tcgplayer_market', recordedAt: ago(1), meta: { matchedBy: 'number', via: 'tcgplayer-internal-search' } }).listings === null,
      'no listing count recorded: nothing claimed (rows before 0b0ddfb)');
-  ok(C({ price: 20, source: 'tcgplayer_market', recordedAt: ago(1), series: [10, 20, 20, 20] }).flags.length === 0,
+  ok(C({ price: 20, source: 'tcgplayer_market', recordedAt: ago(1), meta: { matchedBy: 'number' }, series: [10, 20, 20, 20] }).flags.length === 0,
      'ONE big move is a move, not unsettled');
-  ok(C({ price: 10.4, source: 'tcgplayer_market', recordedAt: ago(1), series: [10, 12, 10.5, 13, 10.4] }).flags.length === 0,
+  ok(C({ price: 10.4, source: 'tcgplayer_market', recordedAt: ago(1), meta: { matchedBy: 'number' }, series: [10, 12, 10.5, 13, 10.4] }).flags.length === 0,
      'wobble under 1.5x is not unsettled');
-  ok(C({ price: 4500, source: 'tcgplayer_market', recordedAt: ago(1), series: null }).flags.length === 0,
+  ok(C({ price: 4500, source: 'tcgplayer_market', recordedAt: ago(1), meta: { matchedBy: 'number' }, series: null }).flags.length === 0,
      'no series (lookup failed): nothing claimed about settledness');
 }
 
 console.log('\n  the rule — what it FLAGS');
 {
-  const torchic = C({ price: 4500, source: 'tcgplayer_market', recordedAt: ago(1), series: [4500, 1200, 4500, 1200, 4500] });
+  const torchic = C({ price: 4500, source: 'tcgplayer_market', recordedAt: ago(1), meta: { matchedBy: 'number' }, series: [4500, 1200, 4500, 1200, 4500] });
   ok(torchic.flags.includes('unsettled') && torchic.range[0] === 1200 && torchic.range[1] === 4500, 'Torchic ☆ 4500/1200 nightly is unsettled, with its range', torchic);
   ok(/1200\.00/.test(torchic.title) && /4500\.00/.test(torchic.title), '...and the reason names both figures', torchic.title);
   const ray = C({ price: 2500.99, source: 'tcgplayer_normal', recordedAt: ago(67) });
   ok(ray.flags.includes('old') && ray.ageDays === 67, 'Rayquaza ☆ 67 days old is old', ray);
   ok(C({ price: 2, source: 'yahoojp_2', recordedAt: ago(1) }).flags.includes('thin'), 'a Yahoo median of 2 items is thin');
-  ok(C({ price: 4500, source: 'tcgplayer_market', recordedAt: ago(1), meta: { listings: 0 } }).flags.includes('thin'),
+  ok(C({ price: 4500, source: 'tcgplayer_market', recordedAt: ago(1), meta: { matchedBy: 'number', listings: 0 } }).flags.includes('thin'),
      'a TCGplayer "market" on 0 listings is thin');
   const est = C({ price: 0.66, source: 'estimate', recordedAt: ago(1) });
   ok(est.kind === 'estimate' && est.flags[0] === 'estimate', 'an estimate is an estimate', est);
-  ok(C({ price: 0, source: 'tcgplayer_market', recordedAt: ago(1) }).kind === 'none'
+  ok(C({ price: 0, source: 'tcgplayer_market', recordedAt: ago(1) , meta: { matchedBy: 'number' }}).kind === 'none'
      && C({ price: null, source: null }).kind === 'none', 'no price: none');
-  const both = C({ price: 4500, source: 'tcgplayer_market', recordedAt: ago(40), series: [4500, 1200, 4500] });
+  const both = C({ price: 4500, source: 'tcgplayer_market', recordedAt: ago(40), meta: { matchedBy: 'number' }, series: [4500, 1200, 4500] });
   ok(both.flags.join() === 'old,unsettled', 'old AND unsettled both said', both.flags);
 }
 
@@ -72,7 +72,7 @@ const fnSrc = name => { const i = H.indexOf('function ' + name + '('); return i 
   const us = C({ price: 60.86, source: 'tcgplayer_holofoil', recordedAt: ago(67) });
   ok(us.flags[0] === 'pokemontcg' && /^TCGplayer \(US\) market price, read from pokemontcg\.io/.test(us.title), 'a July pokemontcg.io TCGplayer row says so', us);
   ok(C({ price: 9, source: 'tcgdex_cardmarket', recordedAt: ago(1) }).flags.join() === 'eu', 'TCGdex\'s Cardmarket row is EU too');
-  ok(pq.originOf('tcgplayer_market') === null && pq.originOf('tcgdex_tcgplayer_holofoil') === null && pq.originOf('estimate') === null,
+  ok(pq.originOf('tcgplayer_market', { matchedBy: 'number' }) === null && pq.originOf('tcgdex_tcgplayer_holofoil') === null && pq.originOf('estimate') === null,
      'KEEP: TCGplayer\'s US market as TCGdex or our search measured it carries no origin mark');
   const n = pq.NOTES['en-ecard3-H10'];
   ok(/\$198\.07/.test(n) && /\$1,249\.94/.test(n) && /cannot currently tell which is right/.test(n), 'Skyridge Gyarados H10: what we showed, what pokemontcg.io says, and that we cannot tell', n);
@@ -97,7 +97,7 @@ let marks = null;
   } catch (e) { ok(false, 'priceMarksHtml + liveEsc compile', e.message); }
 }
 if (marks) {
-  const qT = C({ price: 4500, source: 'tcgplayer_market', recordedAt: ago(40), series: [4500, 1200, 4500] });
+  const qT = C({ price: 4500, source: 'tcgplayer_market', recordedAt: ago(40), meta: { matchedBy: 'number' }, series: [4500, 1200, 4500] });
   const tile = marks(true, qT);
   ok(/>old</.test(tile) && />unsettled</.test(tile), 'a tile shows old and unsettled', tile);
   ok(/1200\.00/.test(tile), '...with the reason in its title');
@@ -110,6 +110,17 @@ if (marks) {
   const third = marks(false, null, { origin: { kind: 'pokemontcg.io', market: 'TCGplayer (US)', what: 'market price', date: '2026/06/29' } });
   ok(/>pokemontcg\.io</.test(third) && !/>est</.test(third) && /TCGplayer \(US\) market price, from pokemontcg\.io, dated/.test(third) && /not measured by us/.test(third),
      'a pokemontcg.io figure is marked pokemontcg.io with its date — never est', third);
+  const unl = C({ price: 3.38, source: 'tcgplayer_market', recordedAt: ago(13), meta: null });
+  ok(unl.flags.join() === 'unchecked' && /recorded 2026-09-19 \(13 days ago\)/.test(unl.title) && /was not recorded/.test(unl.title) && /asked again first/.test(unl.title),
+     'a search row from before 2 October (no match label) says its age, that its product was not recorded, and that it is re-asked', unl);
+  const IS = fs.readFileSync(__dirname + '/ingest.js', 'utf8');
+  ok(/const relabel = r\.held_source === 'tcgplayer_market' && !\(r\.held_meta && r\.held_meta\.matchedBy\) && !relabelAsked\[r\.api_card_id\]/.test(IS)
+     && /urgency: relabel \? 1e6 \+ \(parseFloat\(r\.price_usd\) \|\| 0\)/.test(IS) && /relabelAsked\[card\.api_card_id\] = /.test(IS),
+     'the nightly asks these first, dearest first, whatever their tier — once each (ingest-progress-relabel-<lang>.json)');
+  const unlTile = marks(true, unl);
+  ok(/>13 days old</.test(unlTile), 'on a tile its mark IS its age', unlTile);
+  const unlOld = C({ price: 3.38, source: 'tcgplayer_market', recordedAt: ago(45), meta: null });
+  ok(unlOld.flags.join() === 'unchecked,old' && /\(45 days ago\)/.test(unlOld.title), '...and past 30 days it is old as well, still with its age');
   const euTile = marks(true, C({ price: 257.5, source: 'cardmarket_avg', recordedAt: ago(67) }));
   ok(/>EU</.test(euTile) && /Cardmarket \(EU\)/.test(euTile), 'a Cardmarket headline is marked EU on a tile', euTile);
   ok(/>disputed</.test(marks(false, { kind: 'none', flags: [], note: 'We showed $198.07' })), 'a reviewed note is marked on a tile');

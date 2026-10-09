@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.10.2';   // bump when this file changes
+const VERSION = '5.10.3';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -5276,11 +5276,11 @@ async function refreshOne(lang, flags, run) {
   const rows = await db.query(`
     SELECT c.api_card_id, c.name, c.number, c.rarity, c.set_name, c.set_api_id,
            c.set_total, c.set_release, c.variants, c.name_en,
-           lp.price_usd, lp.recorded_at, lp.source AS held_source,
+           lp.price_usd, lp.recorded_at, lp.source AS held_source, lp.source_meta AS held_meta,
            EXTRACT(EPOCH FROM (NOW() - lp.recorded_at)) / 3600 AS age_hours
     FROM cards c
     LEFT JOIN LATERAL (
-      SELECT price_usd, recorded_at, source FROM price_history p
+      SELECT price_usd, recorded_at, source, source_meta FROM price_history p
       WHERE p.card_api_id = c.api_card_id AND p.source NOT LIKE 'estimate%'
         AND p.grade IS NULL AND ${require('./printsql').basePrintingSql('p', 'c')}
       ORDER BY recorded_at DESC LIMIT 1
@@ -5292,6 +5292,17 @@ async function refreshOne(lang, flags, run) {
   const due = [];
   const tierCounts = {};
   let neverPriced = 0;
+  // RE-ASKED FIRST, BY VALUE (Roy, 2026-10-09): a headline written by our
+  // TCGplayer search before 2 October carries no product and no match label —
+  // the fallback that took other cards' products wrote them, and nothing says
+  // which. Each such card is asked once more by the fixed matcher ahead of
+  // everything else, dearest first, whatever its tier says. Once only: a card
+  // the fixed matcher cannot match writes nothing, and would otherwise lead
+  // every night. Asked ones are kept in ingest-progress-relabel-<lang>.json.
+  const relabelFile = path.join(__dirname, 'ingest-progress-relabel-' + lang + '.json');
+  let relabelAsked = {};
+  try { relabelAsked = JSON.parse(fs.readFileSync(relabelFile, 'utf8')); } catch (e) { relabelAsked = {}; }
+  let relabelDue = 0;
 
   for (const r of rows.rows) {
     if (isDigitalSet(r.set_api_id)) continue;      // TCG Pocket has no market
@@ -5301,7 +5312,9 @@ async function refreshOne(lang, flags, run) {
 
     const age = r.age_hours === null ? Infinity : parseFloat(r.age_hours);
     if (age === Infinity) neverPriced++;
-    if (age >= tier.hours) {
+    const relabel = r.held_source === 'tcgplayer_market' && !(r.held_meta && r.held_meta.matchedBy) && !relabelAsked[r.api_card_id];
+    if (relabel) relabelDue++;
+    if (age >= tier.hours || relabel) {
       tierCounts[tier.name].due++;
       due.push({
         api_card_id: r.api_card_id, name: r.name, number: r.number,
@@ -5317,7 +5330,8 @@ async function refreshOne(lang, flags, run) {
         // How overdue, relative to this card's own interval, weighted by value.
         // A card that has never been priced is treated as one interval overdue —
         // not infinitely urgent, or 8,500 dormant commons drown out the hot tier.
-        urgency: (age === Infinity ? 1.5 : age / tier.hours)
+        relabel,
+        urgency: relabel ? 1e6 + (parseFloat(r.price_usd) || 0) : (age === Infinity ? 1.5 : age / tier.hours)
                  * (1 + Math.log10((parseFloat(r.price_usd) || 0) + 1))
                  * ({ hot: 8, active: 4, steady: 2, slow: 1.2, dormant: 1 }[tier.name] || 1)
       });
@@ -5333,6 +5347,7 @@ async function refreshOne(lang, flags, run) {
   console.log('  ' + '-'.repeat(34));
   console.log(`  TOTAL     ${String(rows.rows.length).padStart(6)} ${String(due.length).padStart(8)}`);
   if (neverPriced) console.log(`  ${neverPriced} have never had a real price`);
+  if (relabelDue) console.log(`  ${relabelDue} carry a search price from before 2 October (no product recorded): asked first, dearest first`);
   console.log('');
 
   if (!due.length) { console.log('  Nothing is due.\n'); return { state: 'complete', done: 0, of: 0 }; }
@@ -5380,6 +5395,10 @@ async function refreshOne(lang, flags, run) {
     }
     const card = batch[i];
     const res = await safePriceFor(card);
+    if (card.relabel) {
+      relabelAsked[card.api_card_id] = new Date().toISOString().slice(0, 10);
+      try { fs.writeFileSync(relabelFile, JSON.stringify(relabelAsked)); } catch (e) { /* the next run asks it again */ }
+    }
     await writeVariantPrices(card, res);
     await writeSecondReading(card, res);
     await writeEditionPrice(card, res);

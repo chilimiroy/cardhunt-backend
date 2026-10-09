@@ -78,7 +78,7 @@ Shared, never copied — every duplicated implementation here has drifted.
 | `pricequality.js` | is a headline current and measured? est / old (>30 d) / thin / unsettled; drawn by `priceMarksHtml` |
 | `setyield.js` | a refresh that priced nothing for a set or 200+ cards in a row: named, exit 2 |
 | `printsql.js` | `basePrintingSql` — the headline rule every reader uses |
-| `cardnumber.js` · `pricehold.js` | is a product's number OUR card's (whole)? · cards on a shared product held, refused rows out |
+| `cardnumber.js` · `pricehold.js` | is a product's number OUR card's (whole)? · cards on a shared product held, refused rows out, an estimate 5x off the card's own record held (`estimatescan.js`) |
 | `trending.js` · `querygap.js` | movers · every set's query asked once |
 
 ## What ships and what does not
@@ -622,8 +622,9 @@ era can be evidence in another**: no card was gold before 2004
 (`goldBeforeGold`). *Archive:* "The original measurement, still true of the coarse field", "`art` is in the name of every expensive card", "Rarity is the card's; printing is the copy's (T10, 2026-09-29)", "\"PSA10\" unspaced — read for unambiguous graders only (`7c3f856`)"
 
 **A word list must never read the card's own identity** — "light" refused all
-of Forbidden Light; 236 cards refused on their own name (`maskOwnIdentity`;
-`ownname.test.js --db`). (PROGRESS 2026-10-04)
+of Forbidden Light (`maskOwnIdentity`; `ownname.test.js --db`; PROGRESS
+2026-10-04); "tin" in the TCGplayer sealed list, 273 cards (`tcgSealedProduct`;
+PROGRESS 2026-10-09 (late)).
 
 **A filter measured at "0 wrong" may only have been measured one way** — say
 which direction a number is. (PROGRESS 2026-10-04, 2026-10-06)
@@ -669,8 +670,10 @@ reprints reusing number and set name). Reprints keyed by SET ID
 **A lettered number is its own card** ("24a" ≠ "24"; `verifyLetterNumber`).
 (PROGRESS 2026-10-04) **So is a prefixed one, on the PRICING path too**: the
 TCGplayer search compares numbers whole (`cardnumber.js`) and never takes a hit
-stating another number — its fold and fallback put 53 products on 106 cards;
-wrong rows are refused by id (`pricehold.notRefusedSql`). (PROGRESS 2026-10-09 (night))
+stating another number; wrong rows are refused by id (`pricehold.notRefusedSql`).
+A collision scan cannot see a product of a card we do not hold — count the
+fallback's rows by `matchedBy`; 74k unlabelled rows cannot be judged.
+(PROGRESS 2026-10-09 (night), (late))
 
 **The title's condition beats eBay's dropdown — the worse claim stands**; a range
 ("NM/LP") states its lower end (`worstStatedCondition`); it matters for the
@@ -804,7 +807,11 @@ the server accepts it (`nofabricated.test.js`). *Archive:* "The page was still i
 party** — no server gate can reach either (`door.test.js`; PROGRESS 2026-10-07 (later)).
 
 **A price says when it was measured — on every screen**, decided once
-(`pricequality.js`), drawn by one function. (PROGRESS 2026-10-02)
+(`pricequality.js`), drawn by one function. (PROGRESS 2026-10-02) **And whose
+figure it is**: a Cardmarket price says EU, a pokemontcg.io figure says so with
+its date — never "est" (`originOf`, `getBase(c, out)`). **An estimate 5x or more
+from the card's own measured record shows no number** (`estimatescan.js`).
+(PROGRESS 2026-10-09 (late))
 
 **Cache keys carry everything the value depends on.** *Archive:* "A number cached per card is wrong when it depends on the grade"
 

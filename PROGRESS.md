@@ -1,5 +1,127 @@
 # CardHunt — Progress Log
 
+## 2026-10-09 (late) — the fallback's blast radius; estimates held; the sealed list bounded; whose figure a price is
+
+All read from storage; no ingest re-run, no TCGplayer search, 0 eBay calls.
+
+### How many cards got their product through the fallback
+
+collisionscan only sees a product two of our cards claim. The fallback could
+also hand a card a product of a card we do not hold, which collides with
+nothing. Measured over what is stored:
+
+- **23,007 cards carry a product id** (22,950 when last counted; the nightly
+  added more): 22,282 from TCGdex (per-printing ids or its pricing block),
+  2,102 from our TCGplayer search (1,354 both, 748 ours only).
+- **Of the 2,102, 2,071 were matched by number and 31 by the fallback**
+  (30 `name_unique`, 1 `rarity`; 47 rows). Of the 31:
+  - **27 took a product stating another number** — every one already refused
+    by row id since 2026-10-09 (night): collisionscan's refusal reads EVERY
+    search row, not only collisions. One of them was the invisible case:
+    np-23 Metang took "Metang (Delta Species) - 49/113 (Prerelease)" at $57.19
+    and collided with nothing; it now shows $295.24 (tcgplayer_normal).
+  - **4 took a product stating no number** (My First Battle mfb-12 / 14 / 29 /
+    30). The fixed matcher still takes a numberless hit, so their price would
+    not change — if TCGplayer answers the same hits, which storage cannot say.
+- **The fallback cards, before -> what the page shows now, largest moves by value:**
+
+| card | took | was | now |
+|---|---|---|---|
+| ecard3-H10 Gyarados | Gyarados (11) | $198.07 | $1,249.94 pokemontcg.io holofoil 2026-06-29 |
+| ecard3-H11 Houndoom | Houndoom (12) | $111.04 | $1,000 pokemontcg.io holofoil 2026-07-15 |
+| ecard3-H09 Gengar | Gengar (10) | $509.99 | $0.30 est -> now held (below) |
+| dpp-DP05 Tropical Wind | Tropical Wind - DP48 | $249 | $575 pokemontcg.io normal 2026-03-09 |
+| ecard3-H30 Umbreon | Umbreon (32) | $354.93 | $659.99 pokemontcg.io holofoil 2026-04-06 |
+| np-27 Tropical Tidal Wave | Tropical Wind - 026 | $223.50 | $504.50 cardmarket_avg |
+| ecard3-H20 Moltres | Moltres (states 21) | $74.39 | $338 pokemontcg.io holofoil 2026-07-15 |
+| dpp-DP25 Tropical Wind | Tropical Wind - DP48 | $249 | $0.24 est |
+| np-23 Metang | Metang 49/113 (Prerelease) | $57.19 | $295.24 tcgplayer_normal |
+| sm11-247 Garchomp & Giratina GX | Garchomp (114) | $3.06 | $126.28 TCGdex |
+
+  The rest: BW77 $99.99 -> $0.44 est; XY200a $25.49 -> $85; sm11-228 / 146
+  $3.06 -> $62.43 / $54.69; XY177a $11.38 -> $62.98; XY198a $7.33 -> $47.45;
+  RC25 $0.62 -> $39.50; g1-RC5 $28.42 -> $60.86; sm2-169 $0.29 -> $25.60;
+  g1-RC9 $3.10 -> $16; RC6 / 8 / 18 / 19 / 9 up to $14.48; svp-106 $9.60 ->
+  $13.84; g1-RC15 $6.40 -> $9.31; the four mfb cards unchanged.
+
+- **What storage cannot determine:** 74,277 search rows carry no product and
+  no match label (73,255 written 2026-07-27..09-30 with no metadata, 1,022 on
+  09-30..10-01 with only `via`). The same fallback wrote them — it predates
+  tracking — but nothing says which product each took. **958 visible English
+  cards show one as their headline today.** The only check storage allows is
+  pokemontcg.io's own per-card TCGplayer price: of 991 such cards before the
+  TCG Pocket filter, 311 have one, and 6
+  sit more than 3x from it — the fallback's signature on a prefixed number:
+  g1-RC29 Pikachu $3.53 vs $165.93, bw11-RC23 Emolga $2.71 vs $83.65, bwp-BW80
+  Druddigon $1.49 vs $15.97, bw11-RC1 Snivy $0.40 vs $3.08, xyp-XY85 Hoopa EX
+  $5.17 vs $18.40, ex15-100 Charizard ☆ δ $1,000 vs $4,000. Not refused: a
+  ratio is evidence, not the product. Each is re-asked when due, by the fixed
+  matcher.
+- **A different defect, found on the way (number right, printing wrong):** 22
+  search headlines are a "[Staff]" stamped product and 61 a "(Prerelease)"
+  one, matched by number — e.g. smp-SM132 Delcatty $82.98 for "(Prerelease)
+  [Staff]" against pokemontcg.io's $8.20. The whole-number rule cannot see a
+  stamp. Not changed; a decision for Roy.
+
+### Estimates held when they contradict the card's own record
+
+- `estimatescan.js` (read-only) -> `pricehold-estimates.json` -> pricehold:
+  a card whose displayed number is our estimate (headline estimate row, or no
+  headline and no blob so the page runs estimator.js) is held when the estimate
+  is **5x or more** from the median of its own measured raw rows (any source,
+  refused rows excluded). Only its estimate rows leave the headline; a
+  measured price, once recorded, shows by itself.
+- **Why 5x.** Not from the estimator's own error: over 14,295 cards holding both
+  an estimate row and measured rows, it misses the measured median by 4.1x at
+  the median, 17x at p75, 61x at p90, 402x at p99 — a bar set there excuses
+  anything. 5x is past what a card's own record explains: Cardmarket's EU
+  retail ~1.6x TCGplayer; the median card's furthest reading 1.7x from its own
+  median (p90 8.1x, over 21,785 cards with 3+ readings — mixed printings).
+- **Today: 11,059 visible cards display an estimate (8,313 Chinese, 2,733
+  Japanese, 13 English); one has a measured record of its own** — H09, est
+  $0.30 against TCGdex's Cardmarket $190.50-$195.23 (median $192.97, 643x).
+  It is held. DP25 ($0.24) and BW77 ($0.44) are not: their only non-estimate
+  rows were the refused rows of other cards, so they have no record of their
+  own to contradict. Decision for Roy.
+
+### The sealed-product word list
+
+- Unbounded `/booster|box|bundle|case|collection|tin|deck|pack|.../` in the
+  TCGplayer search refused any hit whose name contained one: **273 English
+  cards (246 visible; 59 names)** — tin 227, box 7, bundle 5, booster 5,
+  pack 1, collection 1 (Dratini, Victini, Giratina, Tinkaton, Fighting Energy,
+  Iron Bundle, Secret Box, Ancient Booster Energy Capsule, Clemont's Backpack,
+  Aaron's Collection). Earlier "253 on tin" counted hidden cards.
+- Of the 246: 206 are priced by TCGdex (the search is never asked). 40 fall to
+  the search; **32 of them show a fallback or an estimate today**: 17 a TCGdex
+  Cardmarket row, 9 a July pokemontcg.io tcgplayer_holofoil row, 5 the page's
+  pokemontcg.io blob, 1 a stored estimate (30th-013 Victini $0.12). The other
+  8 have search rows from products named differently ("Unit Energy FDY").
+- `tcgSealedProduct()`: words bounded by `cmatch.boundedTerm`, the card's own
+  name masked first, plurals listed. ingest.js 5.10.1.
+
+### Whose figure a price is
+
+- The ten cards released onto a July `cardmarket_avg` row now say "EU" —
+  Cardmarket (EU) average sell price, read from pokemontcg.io, recorded
+  2026-07-27, a European retail figure; the two on `tcgplayer_holofoil` say
+  pokemontcg.io's TCGplayer (US) figure, with the date. Rule:
+  `pricequality.originOf` (every legacy pokemontcg.io row, and TCGdex's
+  Cardmarket row).
+- **The page marked pokemontcg.io's per-card figure "est"** ("no market data
+  held — estimate") whenever a card had no headline: H10's $1,249.94 read as
+  our estimate. `getBase(c, out)` now reports the origin; the card page and
+  tiles say "pokemontcg.io", the market, the figure and its date, "not measured
+  by us".
+- H10 carries a reviewed note (`pricequality.NOTES`): we showed $198.07,
+  pokemontcg.io says $1,249.94, the $198.07 came from a product named
+  "Gyarados (11)", and we cannot currently tell which is right.
+
+### CLAUDE.md
+
+Compressed first: 59,984 -> 58,208 (archive "MOVED FROM CLAUDE.md, 2026-10-09
+(budget, third pass)"); then the rule lines for the above.
+
 ## 2026-10-09 (night) — one TCGplayer product, one card; dex numbers stored; TCGdex fields settled
 
 - **Migrations run (Roy):** `cards.illustrator`, `illustrator_checked_at`,

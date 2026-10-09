@@ -1026,7 +1026,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
           <div class="cd-viewwrap" id="cd-viewwrap" data-view="boxes">
             <div class="cd-view cd-view-boxes">
               <div class="pboxes">
-                <div class="pbox"><div class="pbl">Market value</div><div class="pbv" id="cd-mkt">—</div><div class="pbs up" id="cd-chg"></div></div>
+                <div class="pbox"><div class="pbl" id="cd-mkt-lbl">Market value</div><div class="pbv" id="cd-mkt">—</div><div class="pbs up" id="cd-chg"></div><div class="pbs" id="cd-mkt-note" style="color:var(--mu)"></div></div>
                 <div class="pbox"><div class="pbl">Last sold</div><div class="pbv" id="cd-sold">—</div><div class="pbs" id="cd-soldd" style="color:var(--mu)"></div></div>
               </div>
               <div style="background:var(--w);border:1px solid var(--bd);border-radius:var(--r);padding:14px 18px;box-shadow:var(--sh)">
@@ -2631,6 +2631,11 @@ function updatePrices(grade,base){
   var third = !priceIsReal && from.origin && from.origin.kind === 'pokemontcg.io' ? thirdPartyOriginText(from.origin) : '';
   var q = cc && cc._priceQuality;
   var note = q && q.note ? ' <span style="color:var(--warn);font-size:11px;font-weight:600">&middot; ' + liveEsc(q.note) + '</span>' : '';
+  // The figure is the raw Near Mint price whatever is picked (Roy, 2026-10-10):
+  // no graded price is recorded anywhere (gradeprices.js is parked, §9.5), so
+  // under any other selection the box says whose price it is and that the
+  // picked one has none — the raw number must never read as the graded one.
+  markValueLabel(grade || S.activeGrade);
   document.getElementById('cd-mkt').innerHTML = !(base > 0) ? noPriceHtml(cc)
     : '$' + base.toFixed(2) + (third ? '<span style="font-size:11px;color:var(--am);margin-left:6px;'
         + 'font-weight:600" title="' + liveEsc(third) + '">pokemontcg.io</span>' : '');
@@ -2671,6 +2676,17 @@ function updatePrices(grade,base){
       + priceMarksHtml(true, cc._priceQuality, { skip: ['old'], text: true }) + note
     : third ? '<span style="color:var(--am)">&#9679; ' + liveEsc(third) + '</span>' + note
     : note;
+}
+
+// "Market value" under Raw NM; under anything else, "Raw NM market value"
+// and a plain line saying the selection has no price of its own.
+function markValueLabel(grade) {
+  var g = String(grade || 'Raw NM');
+  var graded = !/^raw/i.test(g);
+  var lbl = document.getElementById('cd-mkt-lbl'), sub = document.getElementById('cd-mkt-note');
+  if (lbl) lbl.textContent = g === 'Raw NM' ? 'Market value' : 'Raw NM market value';
+  if (sub) sub.textContent = graded ? 'No graded price is recorded.'
+    : (g === 'Raw NM' || g === 'Raw') ? '' : 'No price is recorded for this condition.';
 }
 
 // When the headline was recorded (T2, 2026-10-02). The page never said, so
@@ -6697,6 +6713,9 @@ var LANG_JA = {
   'no licensed sold source · see eBay sold link': '正規の落札データ源なし · eBayの落札リンクを参照',
   'no price recorded': '価格の記録なし',
   'price withheld': '価格は非表示',
+  'Raw NM market value': '未鑑定（NM）の相場',
+  'No graded price is recorded.': '鑑定品の価格は記録されていません。',
+  'No price is recorded for this condition.': 'この状態の価格は記録されていません。',
   'These open a search on the marketplace itself.': 'これらは各マーケット自体の検索を開きます。',
   'The results are not checked by us': '検索結果は当サイトでは確認していません',
   '— a search box returns whatever it matches, including merchandise, fan art and other cards with the same name. The listings above are the ones confirmed to be this exact card.': '— 検索ボックスは一致するものを何でも返します。グッズ、ファンアート、同名の別カードも含まれます。上の出品は、このカードそのものと確認できたものです。',
@@ -6793,6 +6812,9 @@ var LANG_ZH_TW = {
   'no licensed sold source · see eBay sold link': '沒有授權的成交資料來源 · 請見 eBay 成交連結',
   'no price recorded': '沒有價格紀錄',
   'price withheld': '價格暫不顯示',
+  'Raw NM market value': '未鑑定（NM）市場價值',
+  'No graded price is recorded.': '沒有鑑定卡的價格紀錄。',
+  'No price is recorded for this condition.': '沒有此品相的價格紀錄。',
   'These open a search on the marketplace itself.': '這些連結會在市集本身開啟搜尋。',
   'The results are not checked by us': '搜尋結果未經我們檢查',
   '— a search box returns whatever it matches, including merchandise, fan art and other cards with the same name. The listings above are the ones confirmed to be this exact card.': '— 搜尋框會回傳所有相符的結果，包括周邊商品、同人創作與同名的其他卡牌。上方的刊登才是確認為這張卡本身的。',
@@ -6889,6 +6911,9 @@ var LANG_ZH_CN = {
   'no licensed sold source · see eBay sold link': '没有授权的成交数据来源 · 请见 eBay 成交链接',
   'no price recorded': '没有价格记录',
   'price withheld': '价格暂不显示',
+  'Raw NM market value': '未评级（NM）市场价值',
+  'No graded price is recorded.': '没有评级卡的价格记录。',
+  'No price is recorded for this condition.': '没有此品相的价格记录。',
   'These open a search on the marketplace itself.': '这些链接会在市场本身打开搜索。',
   'The results are not checked by us': '搜索结果未经我们检查',
   '— a search box returns whatever it matches, including merchandise, fan art and other cards with the same name. The listings above are the ones confirmed to be this exact card.': '— 搜索框会返回所有匹配的结果，包括周边商品、同人作品和同名的其他卡牌。上方的在售才是确认为这张卡本身的。',
@@ -7961,6 +7986,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261009-72acb9a-noest &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-bb7d0cd-rawlabel &middot; click to hide</div>
 </body>
 </html>

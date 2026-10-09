@@ -19,7 +19,7 @@
 // global scope, with the page's own 144 top-level identifiers already
 // declared in it — and proves the export appears.
 // ══════════════════════════════════════════════════════════════
-require('./testcount')(28);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(21);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
@@ -79,8 +79,7 @@ function loadLikeBrowser(src, label) {
 }
 
 console.log('\nEACH MODULE, IN A SCOPE THAT ALREADY HAS THE PAGE IN IT\n');
-const EXPECTED = { 'cardmatch.js': 'CardMatch', 'estimator.js': 'Estimator',
-                   'gradeprice.js': 'GradePrice' };
+const EXPECTED = { 'cardmatch.js': 'CardMatch', 'gradeprice.js': 'GradePrice' };   // estimator.js deleted 2026-10-09
 
 for (const f of served) {
   const src = read(f);

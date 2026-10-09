@@ -18,7 +18,7 @@
 // preloaded with -r (the costmeter.js pattern) — nothing in server.js
 // knows about tests. Tokens are HS256, minted with a test secret.
 
-require('./testcount')(313);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(312);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), os = require('os'), path = require('path'), crypto = require('crypto');
 const { spawn } = require('child_process');
 let pass = 0, fail = 0;
@@ -98,7 +98,6 @@ const ROUTES = [
   ['get', '/app', 'public', 'the page itself — anonymous visitors browse it'],
   ['get', '/set-logos/:file', 'public', 'set logo images for the catalogue, each file named in SET_LOGOS'],
   ['get', '/gradeprice.js', 'public', 'a module the page loads'],
-  ['get', '/estimator.js', 'public', 'a module the page loads'],
   ['get', '/cardmatch.js', 'public', 'a module the page loads'],
   ['get', '/api/probe/sources', 'public', 'which sources answer from Render; registered ids only, no URL; no user data'],
   ['get', '/ebay/status', 'public', 'eBay credential check; no user data'],

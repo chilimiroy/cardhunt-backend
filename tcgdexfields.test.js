@@ -17,7 +17,7 @@ const rd = f => fs.readFileSync(__dirname + '/' + f, 'utf8').replace(/\r/g, '');
 const I = rd('ingest.js'), S = rd('server.js'), H = rd('cardhunt_preview.html');
 const M = rd('migration-regulation-mark.sql').replace(/--.*$/gm, '');
 const fnOf = name => { const i = I.indexOf('function ' + name + '('); return i < 0 ? '' : I.slice(i, I.indexOf('\n}\n', i)); };
-const READERS = S + H + rd('cardmatch.js') + rd('estimator.js') + rd('printsql.js') + rd('stampcheck.js');
+const READERS = S + H + rd('cardmatch.js') + rd('printsql.js') + rd('stampcheck.js');
 
 console.log('  T2 — the regulation mark, stored');
 ok('the migration adds regulation_mark and regulation_mark_checked_at', /ADD COLUMN IF NOT EXISTS regulation_mark text;/.test(M) && /ADD COLUMN IF NOT EXISTS regulation_mark_checked_at timestamptz;/.test(M));

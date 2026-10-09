@@ -11,9 +11,9 @@ const original = fs.readFileSync(PAGE, 'utf8');
 // [label, mutate(html) -> html, substring of the assertion that must fail]
 const breaks = [
   ['served module loses its async attribute',
-    h => h.replace('<script async src="https://cardhunt-backend.onrender.com/estimator.js">',
-                   '<script src="https://cardhunt-backend.onrender.com/estimator.js">'),
-    'estimator.js tag carries async'],
+    h => h.replace('<script async src="https://cardhunt-backend.onrender.com/cardmatch.js">',
+                   '<script src="https://cardhunt-backend.onrender.com/cardmatch.js">'),
+    'cardmatch.js tag carries async'],
 
   ['served module src made root-relative (breaks file:// fallback)',
     h => h.replace('src="https://cardhunt-backend.onrender.com/gradeprice.js"',

@@ -25,7 +25,7 @@
 // Read the whole output. A commit in this project was once pushed green
 // because only the last four lines were read.
 
-require('./testcount')(129);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(126);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -123,7 +123,7 @@ console.log('\n1. THE THREE SERVED MODULES');
 // window.Estimator / window.GradePrice. A copy pasted inline defeats the
 // entire point — that is the estimator split, which had four
 // implementations disagreeing by up to 9x on one card.
-for (const mod of ['cardmatch', 'estimator', 'gradeprice']) {
+for (const mod of ['cardmatch', 'gradeprice']) {   // estimator.js deleted 2026-10-09 (no estimate is shown)
   const tag = new RegExp('<script[^>]*\\bsrc=["\'][^"\']*\\b' + mod + '\\.js["\'][^>]*>', 'i');
   const m = html.match(tag);
   ok(mod + '.js is loaded by a <script src> tag', !!m);

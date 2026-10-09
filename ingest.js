@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.10.3';   // bump when this file changes
+const VERSION = '5.10.4';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -170,19 +170,9 @@ function inferRarity(num, printed, name) {
   if (n > t * 0.42) return 'Uncommon';
   return 'Common';
 }
-// Estimates come from estimator.js — the single implementation, shared with
-// server.js and the frontend. This file used to carry its own copy with no
-// vintage multiplier, which is half of why the same card could be priced 9x
-// apart on two screens. Standalone module on purpose: a revert of this file
-// cannot take the estimator with it.
-const estimator = require('./estimator');
-
-function estimate(rarity, id, name, setRelease, number, setTotal) {
-  return estimator.estimatePrice({
-    rarity: normRarity(rarity), cardId: id, name,
-    number, setTotal, setRelease
-  });
-}
+// No estimate is written (Roy, 2026-10-09): estimator.js is deleted. Every
+// consumer it had either displayed its number or wrote a row that was
+// displayed; none ranked, scheduled or ordered anything.
 
 function extractPrice(card) {
   const t = (card.tcgplayer && card.tcgplayer.prices) || {};
@@ -354,9 +344,7 @@ async function ingestSet(setId, lang, setName, printedTotal, opts = {}) {
     const num = (held && !held.padded) ? String(c.localId).replace(/^0+(?=\d)/, '') : String(c.localId);
     const pi = pIndex[num] || pIndex[num.replace(/^0+/, '')] || {};
     const rarity = normRarity(pi.rarity) || normRarity(c.rarity) || inferRarity(num, printed, c.name);
-    const price = (pi.price && pi.price > 0)
-      ? pi.price
-      : estimate(rarity, `${setId}-${num}`, c.name, td.releaseDate || null, num, printed);
+    const price = (pi.price && pi.price > 0) ? pi.price : null;   // no estimate
     const nameEn = lang === 'en' ? null
       : (enIndex[num] || enIndex[num.replace(/^0+/, '')] || (pi.name || null));
     return {
@@ -376,7 +364,7 @@ async function ingestSet(setId, lang, setName, printedTotal, opts = {}) {
       set_series: held ? held.set_series : ((td.serie && td.serie.name) || null),
       set_release: held ? held.set_release : (td.releaseDate || null),
       tcgplayer: pi.tcgplayer || null, cardmarket: pi.cardmarket || null,
-      price, price_source: (pi.price && pi.price > 0) ? (pi.source || 'tcgplayer') : 'estimate'
+      price, price_source: (pi.price && pi.price > 0) ? (pi.source || 'tcgplayer') : null
     };
   });
 
@@ -389,7 +377,7 @@ async function ingestSet(setId, lang, setName, printedTotal, opts = {}) {
     cards: rows.length,
     written: res.written,
     failed: res.failed,
-    real: rows.filter(r => r.price_source !== 'estimate').length
+    real: rows.filter(r => r.price > 0).length
   };
 }
 
@@ -1856,92 +1844,6 @@ async function evaluateAlerts(lang, ...flags) {
   console.log(`\n  ${checked} checked, ${fired} fired${dry ? ' (nothing written)' : ''}\n`);
 }
 
-// ══════════════════════════════════════════════════════════════
-// node ingest.js estfix <lang> [--write] [--limit=N] [--include-digital]
-//
-// Estimates are a function of rarity, so when `manifest` corrects a rarity
-// every estimate written under the old one is silently stale. Pokegear 3.0
-// (en-sv01-186) sat at $46.41 — an estimate computed while the card was
-// mis-inferred as a Rare Ultra from its position at 186 of 198.
-//
-// Recomputes every estimate from the rarity the card holds NOW and appends
-// a corrected row. price_history is append-only, so nothing is destroyed.
-// ══════════════════════════════════════════════════════════════
-async function estFix(lang, ...flags) {
-  if (!db) { console.log('  DATABASE_URL required'); return; }
-  const write = flags.includes('--write');
-  const limit = parseInt((flags.find(f => f.startsWith('--limit=')) || '--limit=0').slice(8)) || 0;
-
-  const params = [];
-  let where = `p.source = 'estimate'`;
-  if (lang && lang !== 'all') { params.push(lang + '-%'); where += ` AND c.api_card_id LIKE $1`; }
-
-  const rows = await db.query(`
-    SELECT c.api_card_id, c.name, c.rarity, c.set_api_id, c.number, c.set_total,
-           c.set_release, p.price_usd AS stored,
-           p.source AS current_source
-    FROM cards c
-    JOIN LATERAL (SELECT price_usd, source FROM price_history ph
-                  WHERE ph.card_api_id = c.api_card_id AND ph.grade IS NULL
-                  ORDER BY recorded_at DESC LIMIT 1) p ON true
-    WHERE ${where}
-    ORDER BY p.price_usd DESC ${limit ? 'LIMIT ' + limit : ''}`, params);
-
-  console.log(`\n${'='.repeat(80)}`);
-  console.log(`  ESTIMATE RECOMPUTE — ${lang || 'all'}   ${rows.rows.length} cards on a stale estimate`);
-  console.log(`${'='.repeat(80)}\n`);
-
-  // TCG Pocket cards have no physical market at any price. Correcting their
-  // estimate would only make a number that should not exist look tidier.
-  const skipDigital = !flags.includes('--include-digital');
-  let skipped = 0;
-
-  const bad = [];
-  for (const c of rows.rows) {
-    if (skipDigital && isDigitalSet(c.set_api_id || setIdFromCardId(c.api_card_id))) { skipped++; continue; }
-    // Without set_release this recomputed a 1999 card at 2024 prices and
-    // called the stored value stale — 2,143 pre-2007 Japanese cards would
-    // have been "corrected" downward.
-    const want = estimate(c.rarity, c.api_card_id, c.name,
-                          c.set_release, c.number, c.set_total);
-    const stored = parseFloat(c.stored);
-    if (Math.abs(want - stored) > Math.max(0.02, stored * 0.02)) bad.push({ ...c, want, stored });
-  }
-  if (skipped) console.log(`  ${skipped} digital-only cards skipped (--include-digital to override)\n`);
-
-  console.log(`  ${bad.length} disagree with the card's current rarity\n`);
-  console.log('  card                      rarity                stored ->  correct');
-  console.log('  ' + '-'.repeat(76));
-  for (const b of bad.slice(0, 30))
-    console.log(`  ${String(b.api_card_id).padEnd(24)} ${String(b.rarity || '-').padEnd(21)} ` +
-      `$${String(b.stored.toFixed(2)).padEnd(9)} $${b.want.toFixed(2)}`);
-  if (bad.length > 30) console.log(`  ... and ${bad.length - 30} more`);
-
-  const overpriced = bad.filter(b => b.stored > b.want * 2).length;
-  console.log(`\n  ${overpriced} of ${bad.length} are overstated by more than 2x\n`);
-
-  if (!write) { console.log(`  Run with --write to append corrected estimates.\n`); return; }
-
-  let n = 0, refused = 0;
-  for (const b of bad) {
-    // An estimate is the lowest confidence level and must lose to every
-    // real observation. The query above only selects cards whose CURRENT
-    // price is already an estimate, so this should never fire — which is
-    // exactly why it is here: if that selection ever widens, a recomputed
-    // estimate must not be able to bury a market price. See sourcerank.js.
-    if (!srank.canOverwrite('estimate', b.current_source || 'estimate')) {
-      refused++;
-      continue;
-    }
-    await db.query(
-      `INSERT INTO price_history (card_api_id, price_usd, source, condition)
-       VALUES ($1, $2, 'estimate', 'raw_nm')`, [b.api_card_id, b.want]);
-    n++;
-    if (n % 500 === 0) process.stdout.write(`  ${n}/${bad.length}\r`);
-  }
-  console.log(`  ${n} corrected estimates written` +
-    (refused ? `, ${refused} refused — a real price held the slot` : '') + '\n');
-}
 
 // ══════════════════════════════════════════════════════════════
 // RARITY BACKFILL — node ingest.js rarityfill <lang> [--dry] [--set=X]
@@ -4775,7 +4677,7 @@ async function limitlessIngest(lang, onlySet) {
       set_series: (s.serie && s.serie.name) || null,
       set_release: s.releaseDate || null,
       tcgplayer: null, cardmarket: null,
-      price: 0, price_source: 'estimate'
+      price: 0, price_source: null
     }));
 
     const w = await upsertCards(rows);
@@ -5483,7 +5385,7 @@ async function main() {
   console.log(`  Digital-only sets: ${digitalSource}`);
 
   const KNOWN = ['status','prices','scrape','safeprices','clean','test','diagnose',
-                 'reprice','ids','verify','retry','names','pokedex','setmeta','imgclean','imgreport','setcover','pricefix','pricecheck','filtertest','ytest','jpcheck','jppurge','yuyutei','rarityfill','alerts','estfix','manifest','verifyset','setgap','cardgap','lmset','lmingest','nameprobe','cnprobe','audit','refresh','imgprobe','imgfetch','imgsrc','imgscrape','tcgdexprices','all',
+                 'reprice','ids','verify','retry','names','pokedex','setmeta','imgclean','imgreport','setcover','pricefix','pricecheck','filtertest','ytest','jpcheck','jppurge','yuyutei','rarityfill','alerts','manifest','verifyset','setgap','cardgap','lmset','lmingest','nameprobe','cnprobe','audit','refresh','imgprobe','imgfetch','imgsrc','imgscrape','tcgdexprices','all',
                  'en','ja','zh-tw','zh-cn','fr','de','it','es','pt','ko'];
   if (!KNOWN.includes(cmd)) {
     console.log(`\n  Unknown command: "${cmd}"`);
@@ -5531,7 +5433,6 @@ async function main() {
   else if (cmd === 'yuyutei')    { await yuyuteiIngest(...process.argv.slice(3)); }
   else if (cmd === 'rarityfill') { await rarityFill(process.argv[3], ...process.argv.slice(4)); }
   else if (cmd === 'alerts')     { await evaluateAlerts(process.argv[3], ...process.argv.slice(4)); }
-  else if (cmd === 'estfix')     { await estFix(process.argv[3], ...process.argv.slice(4)); }
   else if (cmd === 'manifest')   { await buildManifest(process.argv[3], process.argv[4], process.argv[5]); }
   // TASK.md T1. Delegates to tcgdexharvest.js — the logic is standalone so
   // that a revert of THIS file cannot take it, which has happened twice.

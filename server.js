@@ -12,7 +12,6 @@ const ebay = require('./ebaycall');
 // link and an API call ask eBay the same question. cardmatch decides;
 // listingparse labels. See TASK.md T1/T1b.
 const cm = require('./cardmatch');
-const estimator = require('./estimator');
 const gp = require('./gradeprice');
 const lp = require('./listingparse');
 // The gap no keyword can close: a title indistinguishable from a genuine one
@@ -6860,14 +6859,6 @@ app.get('/gradeprice.js', (req, res) => {
   res.set('Cache-Control', 'public, max-age=300');
   res.sendFile(require('path').join(__dirname, 'gradeprice.js'), err => {
     if (err && !res.headersSent) res.status(500).send('// gradeprice.js unavailable');
-  });
-});
-
-app.get('/estimator.js', (req, res) => {
-  res.type('application/javascript');
-  res.set('Cache-Control', 'public, max-age=300');
-  res.sendFile(require('path').join(__dirname, 'estimator.js'), err => {
-    if (err && !res.headersSent) res.status(500).send('// estimator.js unavailable');
   });
 });
 

@@ -1,5 +1,65 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 (asking price) — the listing floor, the marker, Yuyu-tei, stored as live
+
+0 eBay calls in code or runs. One pricing run: `safeprices en --set=ex15 --all`
+(the 70 Dragon Frontiers cards not priced in 7 days; TCGdex and TCGplayer only).
+
+### pokemontcg.io's answer for Charizard ☆ δ, live vs our copy
+Live, `GET /v2/cards/ex15-100`, 2026-10-09 22:12 UTC (HTTP 500, 502, 500, then
+200): `tcgplayer.updatedAt "2026/10/09"`, `holofoil { low 18500, mid 27500,
+high 39500, market null }`. Our copy, `cards.tcgplayer_data`: `updatedAt
+"2026/07/27"`, `holofoil { low 20000, mid 29750, high 39500, market 4000 }`.
+The figures reported 2026-10-09 as pokemontcg.io's were the July copy.
+TCGplayer's own search: product 84198 "Charizard Star (Delta Species)", 100/101,
+no marketPrice, lowestPrice 18,500, 5 listings.
+
+### Asking price
+Every reader filled "no market price" with something read as one: TCGdex's
+ladder market -> mid -> low (stored with no basis), pokemontcg.io's `_mid`, and
+our search dropped such products. Now the floor, `basis: 'ask'` (`_low` for
+pokemontcg.io rows), shown "Cheapest listed: $X · TCGplayer, <date>" / "No
+recent sales, so no market price is available." Charizard: row 212201, $18,500,
+product 84198. An ask has its own chart series and no place in the
+price-position box. TCGdex rows stored before today cannot say if they were a
+market price or a mid/low stand-in (never recorded); the nightly rewrites each.
+
+### The marker (◷, "price may be out of date") — counted before wiring
+Of 21,161 English / 11,730 Japanese headlines: older than 45 d 81 / 165
+(at 30 d: 99 / 9,516 — the stopped Yuyu-tei job); product unknown 1,011 / —;
+every row without a product 1,191 / —; union marked 1,174 / 165. Not used:
+"most rows unknown" (16,504, 78% of English), lowest-listing multiples from the
+July copy (183 at 5x its own market, 1,592 at 5x our headline). Feeds nothing:
+trending price lists, movers, risers, deals job and shelf, alerts. --db: the
+real trending queries return no marked card; removing each filter fails the test.
+
+### Yuyu-tei (not run)
+`node ingest.js yuyutei` (default scope: cards whose only price is Yuyu-tei —
+the 9,061 the 08-28 run wrote; `--all` would also append to 2,049 priced by
+Yahoo). 1 index page + 108 set pages at >= 1.5 s (~3 min of requests), then ~9k
+single INSERTs (the 08-29 log has no timings; estimate 10-20 min). Answers from
+home and Render. Schedulable like the nightly (a line in refresh-daily.cmd, or a
+weekly task). Before scheduling: it converts at a hardcoded 157 JPY/USD and
+records no rate (fx.js does), writes no source_meta, and has no --hours bound.
+Its rows are shop asks but are not marked as asks (they are the Japanese
+headline for ~9k cards) — open.
+
+### Stored figures read as live (stored as live)
+1. `cards.tcgplayer_data` / `cardmarket_data` (pokemontcg.io copy; 12,697 dated
+   2026-07-27): sent with every card (set and card endpoints, /api/price); the
+   page's getBase shows it for 28 English cards, dated and labelled — but via mid
+   and a computed low-high midpoint, and unmarked though 75+ days old.
+2. collisionscan REVIEWED_OFF refused six cards' rows "more than 3x from
+   pokemontcg.io" against that July copy — Charizard's ~$1,000 rows were refused
+   against a $4,000 pokemontcg.io no longer reports.
+3. NOTES H10 "pokemontcg.io says $1,249.94" — dated (2026-06-29), worded as current.
+4. Yuyu-tei rows and jpfilter: 157 JPY/USD hardcoded, rate unrecorded.
+5. TCGdex rows before today: "market" may be a stand-in (above).
+Fix: one accessor for the stored blocks (date, age, "our copy of pokemontcg.io")
+used by every reader, a test that nothing else reads them, the marker past 45 d,
+no mid or midpoint; about half a day, 0 network. Refreshing the copy: ~170
+pokemontcg.io pages (it 500s often), ~30 min.
+
 ## 2026-10-10 — refused rows off the chart, the grade control, gradeprices parked
 
 0 eBay calls. Roy's rule: refused means refused everywhere a reader can see it.

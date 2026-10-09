@@ -52,7 +52,7 @@ Render API (server.js v5.6.0)  -- reads Supabase FIRST (45,781 cards)
 | Frontend | `cardhunt_preview.html` | Render at **`/app`**; local file is the fallback |
 | API | `server.js` v5.6.0 | Render |
 | Database | Supabase Postgres | `cards`, `price_history`, `alerts`, `portfolio`, `users`, `listing_photo_verdicts`, `listing_views` |
-| Ingestion | `ingest.js` v5.10.4 | Local only — never deployed; **tracked** in git |
+| Ingestion | `ingest.js` v5.11.0 | Local only — never deployed; **tracked** in git |
 
 ## The module map
 
@@ -76,9 +76,9 @@ Shared, never copied — every duplicated implementation here has drifted.
 | `backcheck.js` | card BACK: other family's back refuses, own back labels, nothing found claims nothing |
 | `stampcheck.js` (material) | gold/black NOVELTY card? (`materialJudge`; rules in PHOTO CHECKS) |
 | `deals.js` | best deals: cheapest trusted Buy It Now vs a current measured price, from cached views only |
-| `pricequality.js` | is a headline current and measured? est / old (>30 d) / thin / unsettled; drawn by `priceMarksHtml` |
+| `pricequality.js` | is a headline current and measured? old (>45 d) / thin / unsettled / ask; the MARKER's reasons (`markOf`); drawn by `priceMarksHtml` |
 | `setyield.js` | a refresh that priced nothing for a set or 200+ cards in a row: named, exit 2 |
-| `printsql.js` | `basePrintingSql` — the headline rule every reader uses |
+| `printsql.js` | `basePrintingSql` — the headline rule every reader uses; `markedSql` — a headline that feeds nothing |
 | `cardnumber.js` · `pricehold.js` | is a product's number OUR card's (whole)? · cards on a shared product held, refused rows out (incl. a stamped product not TCGdex's), reviewed one-card holds (`REVIEWED`) |
 | `trending.js` · `querygap.js` | movers · every set's query asked once |
 
@@ -125,8 +125,9 @@ PROGRESS 2026-10-09 (no estimates)). **No estimate is shown anywhere.**
 | Japanese | 14,463 | 11,730 | 0 | 0 | 2,733 |
 | Chinese (parked) | 8,313 | 0 | 0 | 0 | 8,313 |
 
-- Japanese "old" = one Yuyu-tei run (2026-08-28) never repeated; the nightly
-  asks only Yahoo. Re-running or scheduling `node ingest.js yuyutei` is an
+- Japanese "old" = one Yuyu-tei run (2026-08-28) never repeated — a stopped job, not
+  staleness (165 past 45 d are marked). What re-running costs: PROGRESS 2026-10-10 (Yuyu-tei).
+  The nightly asks only Yahoo. Re-running or scheduling `node ingest.js yuyutei` is an
   open decision.
 - Alert evaluation still triggers on an unsettled price (open).
 - **Grade picker: no per-grade price for any grade** — no source (multiplier deleted;
@@ -798,6 +799,17 @@ its date — never "est" (`originOf`, `getBase(c, out)`). (PROGRESS 2026-10-09 (
 says "no price recorded" (`noPriceHtml`). The estimator missed 4x for the typical
 card, 17x for a quarter; estimator.js and the grade multipliers are deleted.
 (PROGRESS 2026-10-09 (no estimates))
+**Listings but no market price: the floor, dated, called an asking price** — "Cheapest
+listed: $X · TCGplayer, 9 Oct", never a market value; the mid ask is never a price
+(`tcgdexprice.basisPrice`, search ask pass, `_low`). **A price that may be out of date is
+shown with the marker (◷) and feeds NOTHING** — not deals, alerts, movers, risers or
+trending lists: `printsql.markedSql` on the row each consumer CHOSE (>45 d, an ask,
+product unknown, no product anywhere in the card's history); `marked.test.js`.
+(PROGRESS 2026-10-10 (asking price))
+**A stored copy of a source is not the source** — quote it as "our copy, dated X", and
+fetch the source before calling a figure its current answer: the $4,000 / $20,000 /
+$29,750 "pokemontcg.io" figures were `cards.tcgplayer_data` of 2026-07-27; live it said
+market null, low $18,500 (PROGRESS 2026-10-10 (stored as live)).
 
 **Cache keys carry everything the value depends on.** *Archive:* "A number cached per card is wrong when it depends on the grade"
 

@@ -41,9 +41,8 @@ ok('Skyridge Gengar H09\'s rows for Gengar (10) are among them, and Golduck 50a\
 ok('every refused row is out of the headline rule, on the alias it is given', ph.REFUSED.every(r => printsql.basePrintingSql('ph', 'c').includes(r.row)) && /p2\.id NOT IN \(/.test(printsql.basePrintingSql('p2', 'c2')));
 ok('every hold says why, names the other card(s) or who decided, and when it comes off', ids.every(id => /price withheld/.test(ph.HELD[id].reason) && ph.HELD[id].removeWhen
   && (ph.HELD[id].kind === 'reviewed' ? /\d{4}-\d{2}-\d{2}/.test(ph.HELD[id].decided) : ph.HELD[id].with.length)));
-ok('Charizard ☆ δ (en-ex15-100) is held: its $4,000 is corroborated by nothing independent, Cardmarket puts it nearer $1,000 (Roy, 2026-10-09)',
-  ph.HELD['en-ex15-100'] && ph.HELD['en-ex15-100'].kind === 'reviewed' && /\$4,000/.test(ph.HELD['en-ex15-100'].reason) && /Cardmarket/.test(ph.HELD['en-ex15-100'].reason)
-  && printsql.basePrintingSql('ph', 'c').includes("'en-ex15-100'"));
+ok('Charizard ☆ δ (en-ex15-100) is released (Roy, 2026-10-10): shown as its listing floor, an asking price with the marker, not held',
+  !ph.HELD['en-ex15-100'] && !('en-ex15-100' in ph.REVIEWED) && !printsql.basePrintingSql('ph', 'c').includes("'en-ex15-100'"));
 ok('every held id is one of ours (safe to quote into SQL)', ids.every(id => isOurCardId(id) && !/['\\]/.test(id)));
 
 console.log('\n  no estimate is ever a headline (Roy, 2026-10-09)');

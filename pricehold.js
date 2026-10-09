@@ -65,16 +65,12 @@ for (const [id, h] of Object.entries(HELD)) {
 // Each names what was measured and who decided. Held exactly like a shared
 // product (no headline, no price blob, the reason shown); it comes off when
 // a source we can match by product prices the card.
-const REVIEWED = {
-  'en-ex15-100': {
-    decided: 'Roy, 2026-10-09',
-    reason: "price withheld: our last TCGplayer reading for Charizard ☆ δ is $4,000 (2026-08-27, product not recorded), and our readings"
-      + " alternated $980 / $990 / $4,000 / $4,000 / $1,000 / $1,000. pokemontcg.io's $4,000 is the same TCGplayer market figure,"
-      + " not a second source (its own listings start at $20,000); TCGdex has no price for this card; Cardmarket's EU figures"
-      + " ($838 trend, $1,483.81 30-day average, $1,653.33 average sell) put it nearer $1,000. We cannot tell which is right.",
-    removeWhen: 'a source matched by product (TCGdex, or our search with the product recorded) prices the card',
-  },
-};
+// Charizard ☆ δ (en-ex15-100) was held here 2026-10-09 (its $4,000 corroborated
+// by nothing) and released 2026-10-10 (Roy): TCGplayer has listings for it
+// (product 84198, cheapest $18,500) and no market price, so its headline is
+// that floor, shown as an asking price with the marker — a labelled figure is
+// more use than a blank. Its $4,000 rows stay stored and are no headline.
+const REVIEWED = {};
 for (const [id, r] of Object.entries(REVIEWED)) {
   if (!HELD[id]) HELD[id] = { kind: 'reviewed', products: [], product: null, with: [], origins: ['reviewed'],
                               reason: r.reason, decided: r.decided, removeWhen: r.removeWhen };

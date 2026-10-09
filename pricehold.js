@@ -89,7 +89,7 @@ function heldFor(cardId) { return HELD[cardId] || null; }
 function apply(obj, cardId) {
   const h = heldFor(cardId || (obj && obj.id));
   if (!h || !obj) return obj;
-  return Object.assign(obj, { _price: null, _priceIsReal: false, _priceSource: null, tcgplayer: null, cardmarket: null,
+  return Object.assign(obj, { _price: null, _priceIsReal: false, _priceSource: null, tcgplayer: null, cardmarket: null, _stored: null,
     priceHeld: { reason: h.reason, product: h.product, products: h.products, with: h.with } });
 }
 module.exports = { FILE, COLLISIONS, HELD, REFUSED, REVIEWED, notHeldSql, notRefusedSql, heldFor, apply };

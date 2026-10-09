@@ -25,6 +25,7 @@ const outlier = require('./outlier');
 const digital = require('./digital');
 const printsql = require('./printsql');   // T10: which stored row is a card's BASE price
 const pricehold = require('./pricehold');   // 2026-10-09: cards whose price is held (no number)
+const ptblock = require('./pokemontcgblock'); // 2026-10-10: the ONE reader of pokemontcg.io's price blocks
 const pricequality = require('./pricequality');   // T1: is that headline current and measured?
 // A card id not matching ^(en|ja|zh-tw|zh-cn)- is a bug, not a card:
 // refused at every entry point that takes one, never served. cardid.js.
@@ -658,18 +659,12 @@ function normRarity(r) {
 }
 
 
+// A pokemontcg.io card fetched just now: its one figure, by the one reader of
+// its blocks (pokemontcgblock.js — market, else Cardmarket's, else the floor as
+// an ask; never the mid listing, never a reverse, never a computed number).
 function extractPrice(card) {
-  const t = (card.tcgplayer && card.tcgplayer.prices) || {};
-  for (const k of ['holofoil','1stEditionHolofoil','reverseHolofoil','1stEdition','unlimited','normal']) {
-    if (t[k] && t[k].market > 0) return { price: t[k].market, source: 'tcgplayer_' + k };
-    // No market price but listings: the cheapest, as an ASK (Roy, 2026-10-10;
-    // pricequality.isAsk reads the `_low` name) — never the mid ask as a market.
-    if (t[k] && t[k].low > 0)    return { price: t[k].low,    source: 'tcgplayer_' + k + '_low', basis: 'ask' };
-  }
-  const cm = (card.cardmarket && card.cardmarket.prices) || {};
-  if (cm.averageSellPrice > 0) return { price: cm.averageSellPrice, source: 'cardmarket_avg' };
-  if (cm.trendPrice > 0)       return { price: cm.trendPrice,       source: 'cardmarket_trend' };
-  return null;
+  const f = ptblock.liveFigure(card);
+  return f ? { price: f.price, source: f.source, basis: f.basis, figure: f } : null;
 }
 
 app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
@@ -769,8 +764,9 @@ app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
               // What we hold, or nothing (2026-10-09). This used to INVENT a
               // TCGplayer block — low = price x 0.65, high = price x 1.7 — under
               // TCGplayer's name: the card endpoint's T10 fix, never made here.
-              tcgplayer: r.tcgplayer_data || null,
-              cardmarket: r.cardmarket_data || null,
+              // Our stored pokemontcg.io copy reaches the page only as its one
+              // figure, dated, aged and called our copy (2026-10-10).
+              _stored: ptblock.storedFigure(r),
               // No estimate is ever a price (Roy, 2026-10-09): no headline = null.
               _price: price > 0 && !isEstimate ? price : null,
               _priceSource: isEstimate ? null : r.price_source,
@@ -823,7 +819,7 @@ app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
         const raw = String(c.number), bare = raw.replace(/^0+/, '');
         const rec = {
           price: p ? p.price : null, source: p ? p.source : null,
-          tcgplayer: c.tcgplayer || null, cardmarket: c.cardmarket || null,
+          figure: p ? p.figure : null,
           rarity: c.rarity, supertype: c.supertype, images: c.images
         };
         pIndex[raw] = rec; pIndex[bare] = rec;
@@ -890,10 +886,9 @@ app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
             small: c.image ? `${c.image}/low.png` : (pi.images ? pi.images.small : ''),
             large: c.image ? `${c.image}/high.png` : (pi.images ? pi.images.large : '')
           },
-          // pokemontcg.io's block when it sent one, else nothing — never a
-          // TCGplayer block invented around an ESTIMATE (2026-10-09).
-          tcgplayer: pi.tcgplayer || null,
-          cardmarket: pi.cardmarket || null,
+          // pokemontcg.io's figure, fetched now, by the one reader — never its
+          // raw block, never a TCGplayer block invented around an ESTIMATE.
+          _stored: pi.figure || null,
           _price: price,
           _priceSource: (pi.price && pi.price > 0) ? (pi.source || 'tcgplayer') : null,
           _priceIsReal: !!(pi.price && pi.price > 0),
@@ -914,6 +909,8 @@ app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
       if (!c.rarity) rarity = inferRarity(c.number, setTotal, c.name) || rarity;
       return Object.assign({}, c, {
         rarity,
+        tcgplayer: undefined, cardmarket: undefined,   // only the figure leaves (pokemontcgblock.js)
+        _stored: p ? p.figure : null,
         _price: p ? p.price : null,   // no estimate (Roy, 2026-10-09)
         _priceSource: p ? p.source : null,
         _priceIsReal: !!p
@@ -1024,8 +1021,8 @@ app.get('/api/cards/:cardId', access.optional, async (req, res) => {
           // labelled `tcgplayer` — the T7 fabricated-numbers pattern on the
           // server side (found 2026-09-29, T10). The page never drew it; any
           // other reader of this API would have taken it as TCGplayer's.
-          tcgplayer: c.tcgplayer_data || null,
-          cardmarket: c.cardmarket_data || null,
+          // Our stored pokemontcg.io copy: its one figure, dated and aged (2026-10-10).
+          _stored: ptblock.storedFigure(c),
           // No estimate is ever a price (Roy, 2026-10-09): no headline = null.
           _price: price > 0 && !isEstimate ? price : null,
           _priceSource: isEstimate ? null : c.price_source,
@@ -1496,8 +1493,8 @@ app.get('/api/price/:cardId', access.priced, async (req, res) => {
               source: h.source,
               date: h.recorded_at
             })),
-            tcgplayer_prices: c.tcgplayer_data || null,
-            cardmarket_prices: c.cardmarket_data || null,
+            // our stored pokemontcg.io copy, as its one dated figure (2026-10-10)
+            stored: ptblock.storedFigure(c),
             updated: best ? best.recorded_at : null,
             _source: 'cardhunt_db'
           };
@@ -1528,16 +1525,8 @@ app.get('/api/price/:cardId', access.priced, async (req, res) => {
       note: 'Not in the CardZon database and not found on pokemontcg.io'
     });
 
-    const t = (c.tcgplayer && c.tcgplayer.prices) || {};
-    let rawNm = 0, source = 'none';
-    for (const key of ['holofoil','1stEditionHolofoil','reverseHolofoil','1stEdition','unlimited','normal']) {
-      if (t[key] && t[key].market > 0) { rawNm = t[key].market; source = key; break; }
-      if (t[key] && t[key].low > 0)    { rawNm = t[key].low;    source = key + '_low'; break; }   // an ask (2026-10-10)
-    }
-    if (!rawNm && c.cardmarket && c.cardmarket.prices) {
-      rawNm = c.cardmarket.prices.averageSellPrice || c.cardmarket.prices.trendPrice || 0;
-      if (rawNm) source = 'cardmarket';
-    }
+    const fig = ptblock.liveFigure(c);   // the one reader (pokemontcgblock.js)
+    const rawNm = fig ? fig.price : 0, source = fig ? fig.source.replace(/^tcgplayer_/, '') : 'none';
 
 
     // ── DO NOT WRITE THIS INTO price_history ──────────────────
@@ -1559,12 +1548,11 @@ app.get('/api/price/:cardId', access.priced, async (req, res) => {
     const result = {
       cardId, name: c.name, rarity: c.rarity,
       rawNm: parseFloat(rawNm.toFixed(2)), source,
-      basis: /_low$/.test(source) ? 'ask' : rawNm > 0 ? 'market' : null,
+      basis: fig ? fig.basis : null, figure: fig,
       isReal: rawNm > 0,
       tcgplayer_url: (c.tcgplayer && c.tcgplayer.url) || null,
       cardmarket_url: (c.cardmarket && c.cardmarket.url) || null,
-      tcgplayer_prices: t,
-      updated: (c.tcgplayer && c.tcgplayer.updatedAt) || new Date().toISOString(),
+      updated: fig ? fig.date : null,   // the source's own date, never 'now' (2026-10-10)
       _source: 'pokemontcg'
     };
     cSet(`price_${cardId}`, result);

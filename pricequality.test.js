@@ -79,11 +79,12 @@ const fnSrc = name => { const i = H.indexOf('function ' + name + '('); return i 
   // getBase says where its number came from — a pokemontcg.io figure is not an estimate.
   const gb = new Function('pricesOpen', 'mockP', fnSrc('getBase') + '\nreturn getBase;')(() => true, () => 0.3);
   const o1 = {}, o2 = {}, o3 = {};
-  gb({ id: 'en-ecard3-H10', tcgplayer: { updatedAt: '2026/06/29', prices: { holofoil: { market: 1249.94 } } } }, o1);
-  gb({ id: 'x', cardmarket: { updatedAt: '2026/07/27', prices: { averageSellPrice: 9 } } }, o2);
-  gb({ id: 'y' }, o3);
-  ok(o1.origin && o1.origin.kind === 'pokemontcg.io' && o1.origin.market === 'TCGplayer (US)' && o1.origin.date === '2026/06/29'
-     && o2.origin.market === 'Cardmarket (EU)' && o3.origin.kind === 'none', 'getBase reports a pokemontcg.io figure as one, and nothing else as no price', [o1, o2, o3]);
+  const PB = require('./pokemontcgblock');
+  gb({ id: 'en-ecard3-H10', _stored: PB.storedFigure({ tcgplayer_data: { updatedAt: '2026/06/29', prices: { holofoil: { market: 1249.94 } } } }) }, o1);
+  gb({ id: 'x', _stored: PB.storedFigure({ cardmarket_data: { updatedAt: '2026/07/27', prices: { averageSellPrice: 9 } } }) }, o2);
+  gb({ id: 'y', tcgplayer: { updatedAt: '2026/10/01', prices: { holofoil: { market: 5 } } } }, o3);   // a raw block: the page no longer reads it
+  ok(o1.origin && o1.origin.kind === 'pokemontcg.io' && o1.origin.market === 'TCGplayer (US)' && o1.origin.date === '2026-06-29' && o1.origin.copy === true
+     && o2.origin.market === 'Cardmarket (EU)' && o3.origin.kind === 'none', 'getBase reports the server\'s pokemontcg.io figure as one (our copy, dated); a raw block is no price', [o1, o2, o3]);
 }
 
 console.log('\n  the page draws the server\'s answer — the REAL priceMarksHtml');
@@ -108,9 +109,11 @@ if (marks) {
   const page = marks(true, qT, { skip: ['old'], text: true });
   ok(!/>old</.test(page) && /unsettled: /.test(page), 'card page: old left to the date line, unsettled spelled out', page);
   ok(!/<script/i.test(marks(true, { flags: ['old'], title: '<script>x</script>' })), 'the reason is escaped');
-  const third = marks(false, null, { origin: { kind: 'pokemontcg.io', market: 'TCGplayer (US)', what: 'market price', date: '2026/06/29' } });
-  ok(/>pokemontcg\.io</.test(third) && !/>est</.test(third) && /TCGplayer \(US\) market price, from pokemontcg\.io, dated/.test(third) && /not measured by us/.test(third),
-     'a pokemontcg.io figure is marked pokemontcg.io with its date — never est', third);
+  const f3 = require('./pokemontcgblock').storedFigure({ tcgplayer_data: { updatedAt: '2026/06/29', prices: { holofoil: { market: 1249.94 } } } });
+  const third = marks(false, null, { origin: Object.assign({ kind: 'pokemontcg.io' }, f3) });
+  ok(/>pokemontcg\.io</.test(third) && !/>est</.test(third) && /TCGplayer \(US\) market price, our stored copy of pokemontcg\.io(&#39;|')s figure, dated 2026-06-29/.test(third)
+     && /Not measured by us/.test(third) && /&#9719;/.test(third),
+     'a pokemontcg.io figure is marked pokemontcg.io, called our copy, with its date — and past 45 days the marker; never est', third);
   const unl = C({ price: 3.38, source: 'tcgplayer_market', recordedAt: ago(13), meta: null });
   ok(unl.flags.join() === 'unchecked,marked' && /recorded 2026-09-19 \(13 days ago\)/.test(unl.title) && /was not recorded/.test(unl.title) && /asked again first/.test(unl.title),
      'a search row from before 2 October (no match label) says its age, that its product was not recorded, and that it is re-asked', unl);
@@ -192,8 +195,8 @@ console.log('\n  an asking price: listings but no market price (Roy, 2026-10-10)
   ok(/const memo = new Map\(\);/.test(I) && /let hits = opts\.memo \? opts\.memo\.get\(q\) : null;/.test(I) && !/TCG_SEARCH_MEMO/.test(I),
     '...reading the market pass\'s answers through a per-card memo (no module-level cache to leak one card\'s hits into another\'s)');
   ok(/basis: res\.basis/.test(I) && /basis: b\.basis/.test(I), 'both nightly writers record the basis (search, TCGdex)');
-  ok(/t\[k\]\.low > 0\)\s+return \{ price: t\[k\]\.low,\s+source: 'tcgplayer_' \+ k \+ '_low'/.test(I) && !/t\[k\]\.mid > 0/.test(I),
-    'pokemontcg.io reader: no market -> the floor as `_low`; the mid ask is never a price');
+  ok(/const f = require\('\.\/pokemontcgblock'\)\.liveFigure\(card\);/.test(I) && !/t\[k\]\.mid > 0/.test(I) && !/t\[k\]\.low > 0/.test(I),
+    'pokemontcg.io reader: ingest asks the one reader (no market -> the floor as `_low`; the mid ask is never a price)');
   // The page, run: the box label and line.
   const at = H.indexOf('function markValueLabel(grade, ask) {'), at2 = H.indexOf('function askOfCard(c) {');
   const els = { 'cd-mkt-lbl': { textContent: '' }, 'cd-mkt-note': { textContent: '' } };

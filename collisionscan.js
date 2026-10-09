@@ -49,9 +49,12 @@ function statedNumber(meta) {
 // headlines are left (6 bad of 311 checkable, ~2%), shown with their age and
 // re-asked first by value (refresh). Measured: PROGRESS 2026-10-09 (late).
 const REVIEWED_OFF = { ratio: 3, decided: 'Roy, 2026-10-09', cards: ['en-g1-RC29', 'en-bw11-RC23', 'en-bwp-BW80', 'en-bw11-RC1', 'en-xyp-XY85', 'en-ex15-100'] };
-function pokemontcgFigure(tp, p) {
-  const v = Object.values(tp || {}).map(x => x && (x.market > 0 ? x.market : x.mid > 0 ? x.mid : 0)).filter(x => x > 0);
-  return v.length ? v.reduce((a, x) => Math.abs(Math.log(x / p)) < Math.abs(Math.log(a / p)) ? x : a) : null;
+// The stored copy's figure, by the one reader (pokemontcgblock.js): a market
+// price only — an ask is no yardstick for a sale (2026-10-10). Until then this
+// took whichever printing's market OR MID was closest to the row.
+function pokemontcgFigure(row) {
+  const f = require('./pokemontcgblock').storedFigure(row);
+  return f && f.basis === 'market' ? f.price : null;
 }
 function refusedRow(card, meta) {
   const stated = statedNumber(meta), asked = numberKey(askedNumber(card));
@@ -115,12 +118,12 @@ async function scan(db) {
     if (statedNumber(m) === null) refuse(r, 'states no number, on a card the old matcher mismatched', { asked: numberKey(askedNumber(cards.get(r.card_api_id))), stated: null });
   }
   // The reviewed six (REVIEWED_OFF): unlabelled rows more than 3x from pokemontcg.io's figure.
-  const rev = (await db.query(`SELECT ph.id, ph.card_api_id, ph.price_usd::float AS p, ph.source_meta, c.tcgplayer_data->'prices' AS tp
+  const rev = (await db.query(`SELECT ph.id, ph.card_api_id, ph.price_usd::float AS p, ph.source_meta, c.tcgplayer_data, c.cardmarket_data
       FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
       WHERE ph.source = 'tcgplayer_market' AND ph.card_api_id = ANY($1) AND NOT COALESCE(ph.source_meta ? 'matchedBy', false)`, [REVIEWED_OFF.cards])).rows;
   for (const r of rev) {
     if (refusedIds.has(String(r.id))) continue;
-    const f = pokemontcgFigure(r.tp, r.p);
+    const f = pokemontcgFigure(r);
     if (f && Math.max(f / r.p, r.p / f) > REVIEWED_OFF.ratio)
       refuse(r, 'unlabelled search row more than 3x from pokemontcg.io (reviewed, ' + REVIEWED_OFF.decided + ')', { pokemontcg: f, price: r.p });
   }

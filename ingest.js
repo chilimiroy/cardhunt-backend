@@ -174,20 +174,13 @@ function inferRarity(num, printed, name) {
 // consumer it had either displayed its number or wrote a row that was
 // displayed; none ranked, scheduled or ordered anything.
 
-// pokemontcg.io's block. A market price; where its TCGplayer block has listings
-// but no market (no recent sales), the cheapest listing, as an ASK — the
-// source name says so (`_low`), since these writers record no source_meta
-// (Roy, 2026-10-10; it was the mid ask, labelled `_mid`, read as a market).
+// pokemontcg.io's block, read by the one reader (pokemontcgblock.js, Roy
+// 2026-10-10): a market price, else Cardmarket's, else the cheapest listing as
+// an ASK — the source name says so (`_low`), since these writers record no
+// source_meta. Never the mid listing, never the reverse printing as the base.
 function extractPrice(card) {
-  const t = (card.tcgplayer && card.tcgplayer.prices) || {};
-  for (const k of ['holofoil','1stEditionHolofoil','reverseHolofoil','1stEdition','unlimited','normal']) {
-    if (t[k] && t[k].market > 0) return { price: t[k].market, source: 'tcgplayer_' + k };
-    if (t[k] && t[k].low > 0)    return { price: t[k].low,    source: 'tcgplayer_' + k + '_low', basis: 'ask' };
-  }
-  const cm = (card.cardmarket && card.cardmarket.prices) || {};
-  if (cm.averageSellPrice > 0) return { price: cm.averageSellPrice, source: 'cardmarket_avg' };
-  if (cm.trendPrice > 0)       return { price: cm.trendPrice,       source: 'cardmarket_trend' };
-  return null;
+  const f = require('./pokemontcgblock').liveFigure(card);
+  return f ? { price: f.price, source: f.source, basis: f.basis } : null;
 }
 
 // ── DB WRITE ──────────────────────────────────────────────────

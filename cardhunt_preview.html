@@ -1966,23 +1966,17 @@ function getBase(c, out) {
   if (c.priceHeld) return 0;
   // Backend serves merged real prices from our own database
   if (c._price && c._price > 0) { if (out) out.origin = { kind: 'ours' }; return parseFloat(Number(c._price).toFixed(2)); }
-  var t = (c.tcgplayer && c.tcgplayer.prices) ? c.tcgplayer.prices : {};
-  var tFrom = function (what) { return { kind: 'pokemontcg.io', market: 'TCGplayer (US)', what: what, date: (c.tcgplayer && c.tcgplayer.updatedAt) || null }; };
-  // reverseHolofoil is NOT a base price (T10): it sat ahead of 'normal'
-  // here, the page-side twin of the 241 cards whose headline was a reverse.
-  var buckets = ['holofoil','1stEditionHolofoil','1stEdition','unlimited','normal'];
-  for (var bi = 0; bi < buckets.length; bi++) {
-    var b = t[buckets[bi]];
-    if (!b) continue;
-    if (b.market && b.market > 0) { if (out) out.origin = tFrom('market price'); return parseFloat(b.market.toFixed(2)); }
-    if (b.mid && b.mid > 0) { if (out) out.origin = tFrom('mid price'); return parseFloat(b.mid.toFixed(2)); }
-    if (b.high && b.low) { if (out) out.origin = tFrom('low-high midpoint'); return parseFloat(((b.high + b.low) / 2).toFixed(2)); }
+  // pokemontcg.io's figure, as the server's ONE reader of its blocks gave it
+  // (pokemontcgblock.js, Roy 2026-10-10): dated, aged, our stored copy or
+  // fetched now, marked past 45 days or when it is an ask. The page reads no
+  // block itself: it once took the MID listing as a market price and computed
+  // the midpoint of low and high — a number no source produced.
+  var f = c._stored;
+  if (f && f.price > 0) {
+    if (out) out.origin = { kind: 'pokemontcg.io', market: f.market, what: f.what, date: f.date, ageDays: f.ageDays,
+                            copy: f.copy !== false, basis: f.basis, marked: !!f.marked, text: f.text };
+    return parseFloat(Number(f.price).toFixed(2));
   }
-  var cm = (c.cardmarket && c.cardmarket.prices) ? c.cardmarket.prices : {};
-  var cFrom = function (what) { return { kind: 'pokemontcg.io', market: 'Cardmarket (EU)', what: what, date: (c.cardmarket && c.cardmarket.updatedAt) || null }; };
-  if (cm.averageSellPrice > 0) { if (out) out.origin = cFrom('average sell price'); return parseFloat(cm.averageSellPrice.toFixed(2)); }
-  if (cm.trendPrice > 0) { if (out) out.origin = cFrom('trend price'); return parseFloat(cm.trendPrice.toFixed(2)); }
-  if (cm.avg7 > 0) { if (out) out.origin = cFrom('7-day average'); return parseFloat(cm.avg7.toFixed(2)); }
   // No measured price: no number (Roy, 2026-10-09). This used to return
   // mockP()'s estimate, which missed the measured price by 4x for the typical
   // card and 17x for a quarter of them.
@@ -2004,12 +1998,9 @@ function noPriceHtml(c) {
 // and the tile's title alike.
 function thirdPartyOriginText(o) {
   if (!o || o.kind !== 'pokemontcg.io') return '';
-  var t = o.date ? Date.parse(String(o.date).replace(/\//g, '-')) : NaN;
-  var age = isFinite(t) ? Math.floor((Date.now() - t) / 86400000) : null;
-  return o.market + ' ' + o.what + ', from pokemontcg.io'
-    + (isFinite(t) ? ', dated ' + new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) + ' (' + age + ' days old)' : ', undated')
-    + (o.market.indexOf('EU') >= 0 ? ' - a European retail figure, not the US market' : '')
-    + ' - not measured by us';
+  // The server's sentence (pokemontcgblock.figureOf): whose figure, which, our
+  // copy or fetched now, its date and age, and why it may be out of date.
+  return String(o.text || '') + ' Not measured by us.';
 }
 
 // genPD() - the synthetic price curve - is gone; the card page draws /api/history.
@@ -2716,7 +2707,10 @@ function askOfCard(c) {
   if (!c) return null;
   var a = c._priceQuality && c._priceQuality.ask;
   if (!a && /^tcgplayer_.*_low$/.test(String(c._priceSource || '')) && c._price > 0)
-    a = { price: c._price, market: 'TCGplayer', date: null, why: 'No recent sales, so no market price is available.' };
+    a = { price: c._price, market: 'TCGplayer', date: (c._stored && c._stored.date) || null, why: 'No recent sales, so no market price is available.' };
+  // pokemontcg.io's block with listings and no market price (pokemontcgblock.js)
+  if (!a && !(c._price > 0) && c._stored && c._stored.basis === 'ask')
+    a = { price: c._stored.price, market: 'TCGplayer', date: c._stored.date, why: 'No recent sales, so no market price is available.' };
   if (!a || !(a.price > 0)) return null;
   var t = a.date ? Date.parse(a.date + 'T00:00:00Z') : NaN;
   return { amount: '$' + Number(a.price).toLocaleString('en-US', { maximumFractionDigits: 2 }), market: a.market,
@@ -2759,7 +2753,10 @@ function priceMarksHtml(isReal, q, opts) {
   var out = '';
   var third = !isReal && opts.origin && opts.origin.kind === 'pokemontcg.io';
   if (third) out += '<span style="font-size:9px;color:var(--am);margin-left:4px;font-weight:600"'
-    + ' title="' + liveEsc(thirdPartyOriginText(opts.origin)) + '">pokemontcg.io</span>';
+    + ' title="' + liveEsc(thirdPartyOriginText(opts.origin)) + '">' + (opts.origin.basis === 'ask' ? 'asking price' : 'pokemontcg.io') + '</span>'
+    // its marker: past 45 days, or an ask (pokemontcgblock.js)
+    + (opts.origin.marked ? '<span class="pqm" role="img" aria-label="price may be out of date" style="font-size:12px;color:var(--am);margin-left:4px;font-weight:700;cursor:help"'
+      + ' title="' + liveEsc(thirdPartyOriginText(opts.origin)) + '">&#9719;</span>' : '');
   if (q && q.note && !opts.text) out += '<span class="pqf" style="font-size:9px;color:var(--warn);margin-left:4px;font-weight:600"'
     + ' title="' + liveEsc(q.note) + '">disputed</span>';
   // A live pokemontcg.io card (no classification sent) whose figure is its cheapest listing.
@@ -8082,6 +8079,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-e7041f4-askfix &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-0aaff72-oneblock &middot; click to hide</div>
 </body>
 </html>

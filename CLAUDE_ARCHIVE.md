@@ -4515,3 +4515,86 @@ LESSONS:
 > - A zero-false threshold is set by the hardest genuine photo, found by widening:
 >   0.35 was clean on 378 rows and refused a genuine SIR on 1,990 more (0.40).
 >   One card's sample is not a rate.
+
+---
+
+## MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)
+
+Moved verbatim when CLAUDE.md reached 59,056 of its 60,000 characters (Roy,
+2026-10-09: compress again before writing). Each carried a rule that stays in
+CLAUDE.md in a line, or repeated one stated there; what is here is the detail.
+
+THE RULES THAT KEEP BEING RE-LEARNED:
+
+> # THE RULES THAT KEEP BEING RE-LEARNED
+> 1. **Probe before building.**
+> 2. **Test what a gate ALLOWS, not only what it blocks.**
+> 3. **A fallback must announce itself.**
+> 4. **Cross-check two paths that should agree.**
+> 5. **A fix is not installed until every path that needs it HAS it.**
+> 6. **The size of an apparent win is a reason to check it harder.**
+> 7. **Never scrape eBay.**
+> 8. **Use a literal-text editor for regex escapes**, then the 0x08 byte check.
+> 9. **One definition per thing.** A dormant branch is deleted, not zeroed.
+> 10. **Make a guard fire before believing it.**
+> 11. **State an eBay change's calls per card view before shipping it.**
+> 12. **Compare a card's rows with the marketplace's own page.**
+> 13. **Keep this file under 60k characters** — one line and a pointer per finding.
+
+LOGGING:
+
+> # LOGGING
+> `PROGRESS.md` is the narrative record, dated, newest first, with what was
+> measured. `TASK.md` holds the current work only. A durable lesson goes into
+> LESSONS here **as one rule with a pointer**, and into the code; the
+> measurement and story go in PROGRESS.md.
+
+STATE coverage, 2026-09-22:
+
+> **Coverage, 2026-09-22** (Supabase directly): English 220 sets / 23,752 cards,
+> 88.6% real prices, 93.8% art · Japanese 138 / 14,023, 82.5%, 83.1% · Chinese
+> Trad. 83 / 7,436, 0%, 95.6% · Simp. 8 / 877, 0%, **0% art**.
+>
+> - `price_history` 102,636 rows; **zero carry an eBay source** (terms).
+
+PHOTO CHECKS queue order:
+
+> - **Queue order (`stampcheck.PRIO`, Roy 2026-10-07):** top-25 colour, then top-25
+>   comparisons + hidden rows + backs, then other colour. Top 25 = first 25 in
+>   `compareOrder` (cheapest Buy It Now, then auctions). Comparisons past 25 run
+>   only when scrolled into view (`POST /api/listings/:id/compare`) or from stored
+>   verdicts; hidden rows always. Downloads run off the worker (≤12 ahead).
+
+PHOTO CHECKS table (with its measured column):
+
+> | problem | caught by | on which cards | measured |
+> |---|---|---|---|
+> | 30th / Celebrations reprint | stamp template from OUR scan, 0.70 + title words + price band | 55 originals (`30th-c-020` no stamp) | 92.5% of reprint photos; 0/491 genuine |
+> | a different card listed under ours, both scans held | lookalike, per-pair margin (`LOOKALIKES`) | bubble Mew ↔ 30th Mew (0.40); Mewtwo ☆ and Dragonite ex ↔ their Evolutions cards (0.30); Base Charizard ← gold Charizard ex 228 (**one way**, 0.10) | both ways, 2026-10-06 |
+> | same-name card of the same set | sibling, margin 0.40 | 6,962 English cards (2026-10-06) | JPEG refs 0/~1,470 genuine. **PNG refs (86): ONE direction only** — catching untested |
+> | named replica | title words | all | 0/896 right titles refused |
+> | implausible price | outlier (flag) | ≥5 priced or current stored price | 0/864 right flagged |
+> | other-language copy | title; Japanese-family **back** | all / on demand, flagged rows, `MOST_FAKED` | back 11/12 JA, 0/52 EN |
+> | gold/black/silver metal novelty, title silent (2026-10-05) | material check: colour vs our scan, outlier flag, metal photo — two refuse, one flags | English cards with a scan (TCGdex .jpg, or pokemontcg.io .png for 806) | **0/195 genuine refused**; 0 genuine of 1,990 rows |
+> | rainbow / silver metal (colour like the card) | price + metal photo only | same | Pikachu VMAX: 4 of its metal refused — most kept |
+> | different illustration outside a held pair | **NOTHING** | — | |
+> | printed counterfeit, real back | **NOTHING** (back would LABEL it) | — | |
+
+Accounts:
+
+> `auth.js` verifies the token (ES256 via JWKS). `/api/me` is the ONLY source of the
+> signed-in state AND the role; nothing reads the `auth` schema (mechanics: archive, third pass).
+> - **master** = token email in `CARDZON_MASTER_EMAILS` (Render env); approved /
+>   pending / rejected in `user_access` (`roles.js`).
+> - **ONE gate, `access.js`**, named on each protected route's own line; 401 / 403
+>   pending|rejected / 403 masters only / 503 fail-closed. `access.test.js` fails on an
+>   unclassified route (public needs a reason) — add every new route there.
+> - Pending/rejected: the closed door (`door.test.js`); a signed-out visitor browses.
+> - **RLS ON for every public table** (`migration-rls.sql`); API roles read own rows
+>   only, write nothing — every write goes through the server. A new table needs RLS
+>   (`rls.test.js --db` fails). Proof: `node rlsprobe.js [--token=<jwt>]`.
+> - Pre-sign-in alerts move only when their browser claims its `ch_user` id.
+> - **Tests cannot change the schema**: every test connects via `schemaguard.testPool()/testClient()` (refuses DDL before sending); schema comes from the server's first-use migration or a `migration-*.sql` Roy runs (`schemaguard.test.js`).
+> - **Live suites run SIGNED OUT (Roy, 2026-10-07)**: priced checks SKIP and say why.
+>   **Never** a service_role key or test account on a dev machine (it bypasses RLS).
+> (PROGRESS 2026-10-06 (night).)

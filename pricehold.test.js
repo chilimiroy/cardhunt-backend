@@ -29,7 +29,7 @@ ok('the Ninetales-Gyarados-Starmie trio stays held (TCGdex gives all three one p
 ok('the Umbreon pair, the Gengar pair and Garchomp 146/228/247 are released', ['en-ecard3-32', 'en-ecard3-H30', 'en-ecard3-10', 'en-ecard3-H09', 'en-sm11-146', 'en-sm11-228', 'en-sm11-247', 'en-sm11-114'].every(id => !ph.HELD[id]));
 
 console.log('\n  refused rows (our search\'s, stating another number)');
-ok('the refused rows are measured, named by row id, each with why', ph.REFUSED.length >= 274 && ph.REFUSED.every(r => /^\d+$/.test(r.row) && r.card && /states (another|no) number|stamped product|TCGdex maps a/.test(r.why)), ph.REFUSED.length + ' rows');
+ok('the refused rows are measured, named by row id, each with why', ph.REFUSED.length >= 274 && ph.REFUSED.every(r => /^\d+$/.test(r.row) && r.card && /states (another|no) number|stamped product|TCGdex maps a|reviewed/.test(r.why)), ph.REFUSED.length + ' rows');
 ok('the six reviewed search headlines more than 3x from pokemontcg.io are refused by row id (Roy, 2026-10-09), Pikachu RC29 among them',
   require('./collisionscan').REVIEWED_OFF.cards.length === 6
   && require('./collisionscan').REVIEWED_OFF.cards.every(id => ph.REFUSED.some(r => r.card === id && /reviewed/.test(r.why))));

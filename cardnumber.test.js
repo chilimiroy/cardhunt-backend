@@ -9,7 +9,7 @@
 //
 //   node cardnumber.test.js
 'use strict';
-require('./testcount')(33);
+require('./testcount')(34);
 const fs = require('fs'), { execSync } = require('child_process');
 const cn = require('./cardnumber');
 let pass = 0, fail = 0;
@@ -96,6 +96,7 @@ const CASES = [
   console.log('\n  one definition');
   ok('ingest.js has no private normNum or tcgHitNumber left', !/function normNum\(|function tcgHitNumber\(/.test(SRC) && /require\('\.\/cardnumber'\)/.test(SRC));
   ok('every row the matcher writes carries the rule it was written under', /numberRule: NUMBER_RULE/.test(SRC) && cn.RULE === 'whole-number-2026-10-09');
+  ok('collisionscan.js reads stored rows with the same rule', /require\('\.\/cardnumber'\)/.test(fs.readFileSync(__dirname + '/collisionscan.js', 'utf8')));
   console.log(`\n  ${pass} passed, ${fail} failed\n`);
   process.exit(fail ? 1 : 0);
 })();

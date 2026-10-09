@@ -62,7 +62,9 @@ function notSecondReadingSql(ph = 'ph') {
 // reader already calls this, so each rule reaches all of them at once (rule 5).
 // A HELD card (pricehold.js: two of our cards priced as one TCGplayer
 // product, mapping unconfirmed) has no headline at all — not a real row and
-// not an estimate. Here, so every headline reader drops it at once.
+// not an estimate. Here, so every headline reader drops it at once. So is a
+// REFUSED row (pricehold.notRefusedSql): one our search wrote for a product
+// stating another collector number than the card's (TASK-product-matching).
 const pricehold = require('./pricehold');
 function basePrintingSql(ph = 'ph', c = 'c') {
   return `((COALESCE(${ph}.variant, '') NOT LIKE 'reverse%'
@@ -71,7 +73,8 @@ function basePrintingSql(ph = 'ph', c = 'c') {
            WHERE vp->>'key' NOT LIKE 'reverse%')))
      AND ${baseEditionSql(ph)}
      AND ${notSecondReadingSql(ph)}
-     AND ${pricehold.notHeldSql(ph)})`;
+     AND ${pricehold.notHeldSql(ph)}
+     AND ${pricehold.notRefusedSql(ph)})`;
 }
 
 // The same rule in JS, for a row already in hand — used ONLY by tests to

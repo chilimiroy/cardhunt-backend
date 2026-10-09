@@ -5,7 +5,7 @@
 //   node pricehold.test.js --db    also: the real headline query returns nothing for a held card,
 //                                  and still returns the unheld cards' prices
 'use strict';
-require('./testcount')(15);
+require('./testcount')(20);
 const fs = require('fs'), vm = require('vm');
 const ph = require('./pricehold'), printsql = require('./printsql'), { isOurCardId } = require('./cardid');
 let pass = 0, fail = 0;
@@ -15,13 +15,22 @@ console.log('\n  pricehold.test.js\n');
 console.log('  the list');
 const ids = Object.keys(ph.HELD);
 // The list is the catalogue-wide measurement (pricehold-collisions.json,
-// collisionscan.js --write): 53 products over 106 cards on 2026-10-09.
+// collisionscan.js --write): 53 products over 106 cards on 2026-10-09; 23
+// over 47 once our search's rows were held to the whole-number rule
+// (TASK-product-matching) — every one left involves TCGdex's own mapping.
 const listed = new Set(ph.COLLISIONS.flatMap(c => c.cards.map(x => x.id)));
 ok('EVERY card of EVERY collision is held — both sides, not the first claimant', ids.length === listed.size && [...listed].every(id => ph.HELD[id])
   && ph.COLLISIONS.every(c => c.cards.length >= 2 && c.cards.every(x => ph.HELD[x.id].products.includes(c.product))), ids.length + ' held of ' + listed.size);
-ok('the catalogue-wide list, not one night\'s: >= 53 products, >= 106 cards, the four 08/10 products among them',
-  ph.COLLISIONS.length >= 53 && ids.length >= 106 && ['85669', '86201', '90056', '97703'].every(p => ph.COLLISIONS.some(c => c.product === p)), ph.COLLISIONS.length + ' / ' + ids.length);
-ok('the Umbreon pair and the Ninetales-Gyarados trio are held', ['en-ecard3-32', 'en-ecard3-H30', 'en-ru1-3', 'en-ru1-5', 'en-ru1-6'].every(id => ph.HELD[id]));
+ok('the catalogue-wide list: 23 products on 47 cards, 97703 (HGSS18 / np-36) among them', ph.COLLISIONS.length === 23 && ids.length === 47 && ph.COLLISIONS.some(c => c.product === '97703'), ph.COLLISIONS.length + ' / ' + ids.length);
+ok('every product left is held because TCGdex maps it, never by our search alone', ph.COLLISIONS.every(c => c.origin !== 'our-search' && c.cards.some(x => x.via.some(v => v.startsWith('tcgdex')))));
+ok('the Ninetales-Gyarados-Starmie trio stays held (TCGdex gives all three one product)', ['en-ru1-3', 'en-ru1-5', 'en-ru1-6'].every(id => ph.HELD[id]));
+ok('the Umbreon pair, the Gengar pair and Garchomp 146/228/247 are released', ['en-ecard3-32', 'en-ecard3-H30', 'en-ecard3-10', 'en-ecard3-H09', 'en-sm11-146', 'en-sm11-228', 'en-sm11-247', 'en-sm11-114'].every(id => !ph.HELD[id]));
+
+console.log('\n  refused rows (our search\'s, stating another number)');
+ok('the refused rows are measured, named by row id, each with why', ph.REFUSED.length >= 274 && ph.REFUSED.every(r => /^\d+$/.test(r.row) && r.card && /states (another|no) number/.test(r.why)), ph.REFUSED.length + ' rows');
+ok('Skyridge Gengar H09\'s rows for Gengar (10) are among them, and Golduck 50a\'s own (50a) row is not',
+  ph.REFUSED.some(r => r.card === 'en-ecard3-H09' && r.matched === 'Gengar (10)') && !ph.REFUSED.some(r => r.card === 'en-ecard2-50a'));
+ok('every refused row is out of the headline rule, on the alias it is given', ph.REFUSED.every(r => printsql.basePrintingSql('ph', 'c').includes(r.row)) && /p2\.id NOT IN \(/.test(printsql.basePrintingSql('p2', 'c2')));
 ok('every hold says why, names the other card(s), and when it comes off', ids.every(id => /price withheld/.test(ph.HELD[id].reason) && ph.HELD[id].with.length && ph.HELD[id].removeWhen));
 ok('every held id is one of ours (safe to quote into SQL)', ids.every(id => isOurCardId(id) && !/['\\]/.test(id)));
 
@@ -71,6 +80,17 @@ ok('the card page draws a dash and the reason, as a warning', /if \(cc && cc\.pr
       const key = list => list.map(c => c.product + ':' + c.cards.map(x => x.id).join(',')).sort().join('|');
       ok('pricehold-collisions.json matches the database today (re-run collisionscan.js --write if not)', key(now.collisions) === key(ph.COLLISIONS),
         now.collisions.length + ' products now vs ' + ph.COLLISIONS.length + ' in the file');
+      ok('…and its refused rows too', now.refused.map(r => r.row).sort().join() === ph.REFUSED.map(r => r.row).sort().join(), now.refused.length + ' rows now vs ' + ph.REFUSED.length);
+      // T3 (TASK-product-matching): no TCGplayer product on two of our cards,
+      // except where TCGdex itself gives it to both — and then every card on it is held.
+      const unheld = now.collisions.filter(c => c.cards.some(x => !ph.HELD[x.id]));
+      ok('no TCGplayer product id is mapped to more than one card without every card on it held', unheld.length === 0,
+        unheld.map(c => c.product + ': ' + c.cards.map(x => x.id).join(', ')).join(' | '));
+      ok('our search maps no product to two cards (none left from our matching alone)', !now.collisions.some(c => c.origin === 'our-search'));
+      const rel = await q(['en-ecard3-32', 'en-ecard3-H30', 'en-sm11-247']);
+      const at = id => rel.find(r => r.api_card_id === id) || {};
+      ok('released: Umbreon 32 and Garchomp 247 have a headline; H30 has none (its only rows were Umbreon 32\'s product)',
+        at('en-ecard3-32').price_usd > 0 && at('en-sm11-247').price_usd > 0 && at('en-ecard3-H30').price_usd == null, JSON.stringify(rel));
       const u = await q(['en-base1-4', 'en-sv03.5-199', 'en-dpp-DP01']);
       ok('unheld cards beside them keep their headline', u.filter(r => r.price_usd != null).length >= 2, JSON.stringify(u));
     } finally { await db.end(); }

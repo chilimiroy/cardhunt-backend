@@ -12,10 +12,38 @@
 // An id held by two or more of our cards means one of the mappings is wrong.
 // `origin` says where: the source (TCGdex gives both cards the id), our search
 // (alone, or onto an id TCGdex gives another card), or both.
-// The matching itself is NOT changed here — that is a task of its own.
+//
+// Our search's rows are held to the matcher's own rule (cardnumber.js,
+// TASK-product-matching 2026-10-09): a stored tcgplayer_market row whose
+// product states ANOTHER collector number than the one we asked for is a
+// REFUSED row — not a mapping, and (pricehold.notRefusedSql) not a headline.
+// The evidence is the number in the product's name where it states one
+// ("Porygon (103b)"), else the stored matchedNumber: rows written before the
+// fix stored the number through the old fold ("103b" -> "103"), so the name
+// is the better witness. A reprint is asked by its PRINTED number (CC002 asks
+// "4"), so that is the number it is held to. A row stating no number is
+// refused only on a card the old matcher is proven to have mismatched, and
+// never when the fixed matcher wrote it (source_meta.numberRule) — the fixed
+// matcher still takes a hit stating no number. Rows are not deleted.
 'use strict';
 const fs = require('fs'), path = require('path');
 const OUT = path.join(__dirname, 'pricehold-collisions.json');
+const { numberKey, tcgHitNumber, RULE } = require('./cardnumber');
+const cm = require('./cardmatch');
+
+// The number our search asked for this card, and the one the stored row's
+// product states; refused when both are known and differ.
+function askedNumber(card) {
+  const rp = cm.reprintOf({ api_card_id: card.api_card_id, number: card.number });
+  return rp ? rp.number : card.number;
+}
+function statedNumber(meta) {
+  return tcgHitNumber({ productName: meta && meta.matched }) || numberKey(meta && meta.matchedNumber);
+}
+function refusedRow(card, meta) {
+  const stated = statedNumber(meta), asked = numberKey(askedNumber(card));
+  return stated !== null && asked !== null && stated !== asked ? { asked, stated } : null;
+}
 
 async function scan(db) {
   const cards = new Map((await db.query(`SELECT api_card_id, name, number, set_api_id FROM cards`)).rows.map(r => [r.api_card_id, r]));
@@ -28,10 +56,38 @@ async function scan(db) {
       FROM price_history WHERE source LIKE 'tcgdex_tcgplayer_%' AND source_meta ? 'productId'
       ORDER BY card_api_id, source, recorded_at DESC`)).rows)
     claims.push({ pid: String(r.pid), card: r.card_api_id, via: 'tcgdex-pricing' });
-  for (const r of (await db.query(`SELECT DISTINCT ON (card_api_id) card_api_id, source_meta->>'productId' AS pid
-      FROM price_history WHERE source = 'tcgplayer_market' AND source_meta ? 'productId'
-      ORDER BY card_api_id, recorded_at DESC`)).rows)
-    claims.push({ pid: String(r.pid), card: r.card_api_id, via: 'our-search' });
+  // Every row our search wrote, newest first. Pass 1: a row whose product
+  // states another number is refused. Pass 2: on a card pass 1 caught — the
+  // old matcher is PROVEN to have mismatched it — a row that states no number
+  // and was not written by the fixed matcher is refused too: it cannot show
+  // it is not the same wrong product (Skyridge Gengar H09 held Gengar (10)'s
+  // $509.99 on rows from before product ids were recorded).
+  const ours = (await db.query(`SELECT id, card_api_id, source_meta
+      FROM price_history WHERE source = 'tcgplayer_market'
+      ORDER BY card_api_id, recorded_at DESC, id DESC`)).rows.filter(r => cards.has(r.card_api_id));
+  const refused = [], refusedIds = new Set(), mismatched = new Set(), ourLatest = new Map();
+  const refuse = (r, why, extra) => {
+    const m = r.source_meta || {};
+    refused.push(Object.assign({ row: String(r.id), card: r.card_api_id, product: m.productId != null ? String(m.productId) : null, why, matched: m.matched || null }, extra));
+    refusedIds.add(String(r.id));
+  };
+  for (const r of ours) {
+    const bad = refusedRow(cards.get(r.card_api_id), r.source_meta);
+    if (bad) { refuse(r, 'states another number', bad); mismatched.add(r.card_api_id); }
+  }
+  for (const r of ours) {
+    if (refusedIds.has(String(r.id)) || !mismatched.has(r.card_api_id)) continue;
+    const m = r.source_meta || {};
+    if (m.numberRule === RULE) continue;
+    if (statedNumber(m) === null) refuse(r, 'states no number, on a card the old matcher mismatched', { asked: numberKey(askedNumber(cards.get(r.card_api_id))), stated: null });
+  }
+  for (const r of ours) {
+    const m = r.source_meta || {};
+    if (refusedIds.has(String(r.id)) || m.productId == null || ourLatest.has(r.card_api_id)) continue;
+    ourLatest.set(r.card_api_id, String(m.productId));
+  }
+  for (const [card, pid] of ourLatest) claims.push({ pid, card, via: 'our-search' });
+  refused.sort((a, b) => a.card.localeCompare(b.card) || Number(a.row) - Number(b.row));
   const byPid = new Map();
   for (const c of claims) {
     if (!cards.has(c.card)) continue;
@@ -50,7 +106,7 @@ async function scan(db) {
       cards: [...e.keys()].sort().map(id => ({ id, name: cards.get(id).name, number: cards.get(id).number, set: cards.get(id).set_api_id, via: [...e.get(id)].sort() })) });
   }
   collisions.sort((a, b) => a.product.localeCompare(b.product, undefined, { numeric: true }));
-  return { cardsWithId: new Set(claims.filter(c => cards.has(c.card)).map(c => c.card)).size, products: byPid.size, collisions };
+  return { cardsWithId: new Set(claims.filter(c => cards.has(c.card)).map(c => c.card)).size, products: byPid.size, collisions, refused };
 }
 
 async function main() {
@@ -64,11 +120,12 @@ async function main() {
     const org = {}; for (const c of r.collisions) org[c.origin] = (org[c.origin] || 0) + 1;
     console.log(`${r.cardsWithId} cards carry a product id (${r.products} ids); ${r.collisions.length} ids map to more than one card, ${n} cards`);
     console.log('  by cards per id: ' + JSON.stringify(per) + '   by origin: ' + JSON.stringify(org));
+    console.log(`  our search: ${r.refused.length} stored rows refused (another number stated, or none on a card it mismatched), on ${new Set(r.refused.map(x => x.card)).size} cards`);
     if (process.argv.includes('--write')) {
-      fs.writeFileSync(OUT, JSON.stringify({ measuredAt: new Date().toISOString(), collisions: r.collisions }, null, 1) + '\n');
+      fs.writeFileSync(OUT, JSON.stringify({ measuredAt: new Date().toISOString(), collisions: r.collisions, refused: r.refused }, null, 1) + '\n');
       console.log('  wrote ' + path.basename(OUT));
     }
   } finally { await db.end(); }
 }
-module.exports = { scan, OUT };
+module.exports = { scan, OUT, refusedRow, askedNumber, statedNumber };
 if (require.main === module) main().catch(e => { console.error('collisionscan failed: ' + e.message); process.exit(1); });

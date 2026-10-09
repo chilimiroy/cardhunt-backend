@@ -17,8 +17,9 @@
 // nine cards one nightly batch collided on; the catalogue-wide measurement
 // found 53 product ids over 106 cards (PROGRESS 2026-10-09 (later)), all held.
 // pricehold.test.js --db fails when the database no longer matches the file.
-// A hold comes off when its card is matched to a product of its own — the
-// product-id matching is a task of its own, not done here.
+// A hold comes off when its card is matched to a product of its own. The
+// matching was fixed 2026-10-09 (cardnumber.js; TASK-product-matching): the
+// rows the loose matcher wrote are refused below, and 59 of the 106 came off.
 // Required by printsql.js and server.js; tracked.
 // ══════════════════════════════════════════════════════════════
 'use strict';
@@ -31,7 +32,19 @@ const ORIGIN = {
   'our-search-onto-tcgdex-id': 'our TCGplayer search matched a card to another card\'s product',
   'our-search': 'our TCGplayer search matched them to one product',
 };
-const COLLISIONS = require(FILE).collisions;
+const MEASURED = require(FILE);
+const COLLISIONS = MEASURED.collisions;
+// ── Refused rows (TASK-product-matching, 2026-10-09) ──
+// Our TCGplayer search used to match a lettered or prefixed number to the
+// plain one, and to take a name hit stating ANOTHER number (cardnumber.js).
+// The rows it wrote that way are not deleted (price_history is append-only)
+// and are not the card's price: each is named here by row id, measured by
+// collisionscan.js with the matcher's own rule, and kept out of the headline
+// (notRefusedSql, in printsql.basePrintingSql) and out of the mappings. The
+// fixed matcher writes no such row, so the list only shrinks.
+const REFUSED = MEASURED.refused || [];
+const REFUSED_IDS = REFUSED.map(r => String(r.row));
+if (!REFUSED_IDS.every(id => /^\d+$/.test(id))) throw new Error('pricehold: a refused row id is not a number');
 const HELD = {};
 for (const c of COLLISIONS) {
   const ids = c.cards.map(x => x.id);
@@ -52,6 +65,10 @@ const ids = Object.keys(HELD);
 function notHeldSql(ph = 'ph') {
   return ids.length ? `${ph}.card_api_id NOT IN (${ids.map(i => "'" + i + "'").join(', ')})` : 'TRUE';
 }
+// Row ids are digits only (checked above), so quoting is plain.
+function notRefusedSql(ph = 'ph') {
+  return REFUSED_IDS.length ? `${ph}.id NOT IN (${REFUSED_IDS.join(', ')})` : 'TRUE';
+}
 function heldFor(cardId) { return HELD[cardId] || null; }
 // For a card payload already built: no headline, no third-party price blob.
 function apply(obj, cardId) {
@@ -60,4 +77,4 @@ function apply(obj, cardId) {
   return Object.assign(obj, { _price: null, _priceIsReal: false, _priceSource: null, tcgplayer: null, cardmarket: null,
     priceHeld: { reason: h.reason, product: h.product, products: h.products, with: h.with } });
 }
-module.exports = { FILE, COLLISIONS, HELD, notHeldSql, heldFor, apply };
+module.exports = { FILE, COLLISIONS, HELD, REFUSED, notHeldSql, notRefusedSql, heldFor, apply };

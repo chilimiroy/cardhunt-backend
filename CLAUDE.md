@@ -307,7 +307,10 @@ Rules of the gate:
   "which card is this" over all scans (STOPPED); OCR (CLOSED); **refusing on
   eBay's Set aspect** (Option S: 25 of 42 unstamped rows filed under the
   reprint's Set were genuine originals, a $1,000 Base Charizard among them; Set
-  is a headline flag only — PROGRESS 2026-10-08 (Set split)). Base Set 2's mark
+  is a headline flag only — PROGRESS 2026-10-08 (Set split)); **the regulation
+  mark** (50 of 55 `REPRINT_OF` pairs have none on either side; 30th and
+  Classic Collection carry none — kept as printing era, PROGRESS 2026-10-09
+  (evening)). Base Set 2's mark
   needs alignment first. Numbers and PROGRESS block names:
   *Archive:* "MOVED FROM CLAUDE.md, 2026-10-07 (budget, second pass)".
 - **References are stored, never fetched in a request** (`refscans.js`,

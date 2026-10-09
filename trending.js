@@ -71,6 +71,9 @@ const digital = require('./digital');
 // row of ANY printing, so a card whose only real price was a reverse showed
 // it here while its own page showed an estimate — T2, 2026-09-30, 6 cards.
 const printsql = require('./printsql');
+// The current end passes basePrintingSql (held cards and refused rows out);
+// the earlier end is not a headline, so it names the refusal itself.
+const pricehold = require('./pricehold');
 
 const SORTS = {
   'price-desc': { label: 'Price: high to low',               kind: 'price' },
@@ -171,6 +174,8 @@ function moverSql(p) {
                 AND COALESCE(cur.edition, '') = COALESCE(ph.edition, '')
                 AND COALESCE(cur.variant, '') = COALESCE(ph.variant, '')
         WHERE ${REAL} AND ${TCGDEX_PATH}
+          -- the earlier end too: a refused row is no card's price (pricehold.js)
+          AND ${pricehold.notRefusedSql('ph')}
           AND (cur.source_meta->>'productId' IS NULL OR ph.source_meta->>'productId' IS NULL
                OR ph.source_meta->>'productId' = cur.source_meta->>'productId' )
           AND ph.recorded_at <= cur.recorded_at - make_interval(days => $3)

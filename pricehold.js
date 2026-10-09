@@ -10,7 +10,8 @@
 // and alerts all lose it at once), the card endpoints say priceHeld with the
 // reason and send no third-party price blob, and the page draws no number for
 // it — not the blob, not an estimate. Rows are not deleted: price_history is
-// append-only and /api/history still charts what was recorded.
+// append-only and /api/history still charts a held card's recorded rows —
+// but never a REFUSED row, there or anywhere a reader can see it.
 //
 // The list is MEASURED, not typed: pricehold-collisions.json, written by
 // `node collisionscan.js --write` (read-only on the database). It began as the

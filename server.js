@@ -2013,7 +2013,10 @@ app.post('/api/admin/reports/:id/state', access.master, async (req, res) => {
 //   * estimates never appear;
 //   * one series per source + edition + variant — editions are separate
 //     markets, and averaging across sources manufactures movement;
-//   * `series` names each one, so the page can draw the card's own market.
+//   * `series` names each one, so the page can draw the card's own market;
+//   * a REFUSED row (pricehold.notRefusedSql) is never drawn — refused means
+//     refused everywhere a reader can see it (Roy, 2026-10-10). It stays in
+//     the table (append-only); H09 drew Gengar #10's $499.99-$509.99 here.
 // No date limit: price_history starts 2026-07-27, and "All" means all.
 app.get('/api/history/:cardId', access.priced, async (req, res) => {
   if (!db) return res.json({ data: [], series: [] });
@@ -2029,6 +2032,7 @@ app.get('/api/history/:cardId', access.priced, async (req, res) => {
       FROM price_history
       WHERE card_api_id = $1 AND grade IS NULL
         AND source NOT LIKE 'estimate%' AND price_usd > 0
+        AND ${pricehold.notRefusedSql('price_history')}
       GROUP BY 1, 2, 3, 4 ORDER BY 1`, [req.params.cardId]);
     const series = {};
     for (const r of rows.rows) {
@@ -2037,7 +2041,7 @@ app.get('/api/history/:cardId', access.priced, async (req, res) => {
         variant: r.variant || null, points: [] }).points.push({ date: r.date, price: r.price, n: r.n });
     }
     res.json({ cardId: req.params.cardId, series: Object.values(series),
-      note: 'Measured, ungraded prices only. Estimates are never included.' });
+      note: 'Measured, ungraded prices only. Estimates and refused rows are never included.' });
   } catch (err) { res.status(500).json({ error: err.message, series: [] }); }
 });
 

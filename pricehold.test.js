@@ -5,7 +5,7 @@
 //   node pricehold.test.js --db    also: the real headline query returns nothing for a held card,
 //                                  and still returns the unheld cards' prices
 'use strict';
-require('./testcount')(24);
+require('./testcount')(27);
 const fs = require('fs'), vm = require('vm');
 const ph = require('./pricehold'), printsql = require('./printsql'), { isOurCardId } = require('./cardid');
 let pass = 0, fail = 0;
@@ -58,6 +58,18 @@ const S = fs.readFileSync(__dirname + '/server.js', 'utf8').replace(/\r/g, '');
 ok('the card endpoint wraps its payload in pricehold.apply', /return res\.json\(\{ data: pricehold\.apply\(\{/.test(S) && /\}, c\.api_card_id\) \}\);/.test(S));
 ok('the set-cards payload wraps each card in pricehold.apply', /return pricehold\.apply\(\{\n\s+id: r\.api_card_id,/.test(S) && /\}, r\.api_card_id\);\n\s+\}\);/.test(S));
 ok('the deals pool refuses a held card by name too', /&& !pricehold\.heldFor\(id\)\)\.slice\(0, n\)/.test(S));
+
+console.log('\n  refused means refused everywhere a reader can see it (Roy, 2026-10-10)');
+const hist = S.slice(S.indexOf("app.get('/api/history/:cardId'"), S.indexOf('\n});\n', S.indexOf("app.get('/api/history/:cardId'")));
+ok('the price-history chart (/api/history) leaves out every refused row — H09 drew Gengar #10\'s product',
+  /AND \$\{pricehold\.notRefusedSql\('price_history'\)\}/.test(hist) && ph.notRefusedSql('price_history').includes(ph.REFUSED[0].row));
+const T = require('./trending');
+const mv = T.moverSql(T.parseParams({ sort: 'gain-pct' })).text;
+const prevEnd = mv.slice(mv.indexOf('prev AS ('));
+ok('movers and risers: the EARLIER end leaves out refused rows too (the current end is a headline, so basePrintingSql)',
+  prevEnd.includes(ph.notRefusedSql('ph')) && mv.slice(0, mv.indexOf('prev AS (')).includes(printsql.basePrintingSql('ph', 'c')));
+ok('price lists and the coverage count read through basePrintingSql (refused and held out)',
+  [T.priceSql(T.parseParams({})).text, T.currentSql(T.parseParams({})).text].every(t => t.includes(ph.notRefusedSql('ph'))));
 
 console.log('\n  the payload');
 const held = ph.apply({ id: 'en-ru1-5', _price: 1400, _priceIsReal: true, _priceSource: 'tcgdex_tcgplayer_normal', tcgplayer: { prices: { normal: { market: 1400 } } }, cardmarket: {} });

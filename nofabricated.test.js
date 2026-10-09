@@ -18,7 +18,7 @@
 // "Is it gone?" is asserted against the page with comments stripped, because
 // the comments recording each removal name what was removed.
 'use strict';
-require('./testcount')(63);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(68);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -154,6 +154,48 @@ ok('buildMockListings holds no marketplace price multipliers', !/pct:\s*[0-9.]+/
 ok('the embedded Ascended Heroes list carries no typed-in prices',
   !/ME2PT5_PREMIUM[\s\S]{0,40000}?tcgplayer:\{prices/.test(code.slice(code.indexOf('const ME2PT5_PREMIUM'), code.indexOf('ME2PT5_PREMIUM.forEach'))));
 ok('the TCGdex fallback invents no low/high around its estimate', !/est\*0\.65|est\*1\.7/.test(code));
+
+// ── Prices made by multiplying a price by a constant — page AND server ──
+// (2026-10-09) The set-cards payload and the server's live TCGdex fallback
+// built a "tcgplayer" block of low = price x 0.65, high = price x 1.7 — under
+// TCGplayer's name. The check above read only the PAGE, and only the literal
+// spelling est*0.65 / est*1.7: `price * 0.65` on the server passed it.
+// A: a price-like FIELD computed as something x a constant: never, anywhere.
+// B: any price-like VALUE multiplied by a constant other than 100 (a
+//    percentage): only the reviewed sites in REVIEWED_MULTIPLIERS, each with
+//    why it is not a price claim — a new one fails until someone reviews it.
+console.log('\n  prices made by multiplying a price by a constant (page and server)');
+const PRICE_FIELD = /\b(low|high|mid|market|marketPrice|lowPrice|highPrice|midPrice|directLow|price|avg\d*|trend|value)\s*:\s*[^,}\n]*?[\w)\]]\s*\*\s*(\d*\.\d+|\d+)\b/i;
+const PRICE_VALUE = /\b(price|_price|base|market|est|estimate|headline|landed|cost|value)\b\s*\*\s*(\d*\.\d+|\d+)\b/i;
+const REVIEWED_MULTIPLIERS = [
+  // The alert form's TARGET default: 85% of the headline, in an input the
+  // user edits — a suggestion for the alert, not a market figure shown.
+  { re: /getElementById\('alert-price'\)\.value=\(base\*0\.85\)/, why: 'alert form default target, editable' },
+];
+function multiplied(text, file) {
+  const out = { fields: [], values: [] };
+  text.split(/\r?\n/).forEach((raw, i) => {
+    if (/^\s*(\/\/|\*|<!--)/.test(raw)) return;
+    const l = raw.replace(/\/\/.*$/, '');
+    if (PRICE_FIELD.test(l)) out.fields.push(file + ':' + (i + 1) + ' ' + l.trim().slice(0, 90));
+    const m = PRICE_VALUE.exec(l);
+    if (m && m[2] !== '100' && !REVIEWED_MULTIPLIERS.some(r => r.re.test(l))) out.values.push(file + ':' + (i + 1) + ' ' + l.trim().slice(0, 90));
+  });
+  return out;
+}
+const scanned = [multiplied(html, 'cardhunt_preview.html'), multiplied(server, 'server.js')];
+const fields = [].concat(...scanned.map(s => s.fields)), values = [].concat(...scanned.map(s => s.values));
+ok('A: no price-like field is built as a price x a constant (page and server)', fields.length === 0, fields.join(' | '));
+ok('B: no price is multiplied by a constant outside the reviewed sites (' + REVIEWED_MULTIPLIERS.length + ' reviewed)', values.length === 0, values.join(' | '));
+ok('…and every reviewed site still exists (a stale allowance is removed, not kept)', REVIEWED_MULTIPLIERS.every(r => r.re.test(html) || r.re.test(server)));
+// Made to fire: the server as committed before this fix, and the shape itself.
+let before = null;
+try { before = multiplied(require('child_process').execSync('git show b0b041a:server.js', { maxBuffer: 1 << 26 }).toString(), 'server.js@b0b041a'); } catch (e) {}
+ok('it catches the set page\'s and the fallback\'s invented low/high in server.js as committed before (b0b041a)',
+  before && before.fields.length >= 2 && before.fields.some(f => /0\.65/.test(f)) && before.fields.some(f => /1\.7/.test(f)), before ? before.fields.length + ' fields' : 'git show failed');
+ok('it catches the shape whatever the variable is called or how it is spaced',
+  multiplied('x = { low: +(headlineUsd * 0.65).toFixed(2), high: +(foo*1.7) }', 't').fields.length === 1
+  && multiplied('const shown = price * 0.95;', 't').values.length === 1 && multiplied('const pct = price * 100;', 't').values.length === 0);
 ok('the portfolio holds no invented holdings', /var PORT = \[\];/.test(code) && !/paid:\s*\d/.test(code));
 ok('nothing claims to auto-refresh', !/Auto-refreshing/.test(code));
 ok('no stale hardcoded catalogue count', !/20,324 cards/.test(code));

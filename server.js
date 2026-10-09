@@ -781,9 +781,10 @@ app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
                      releaseDate: r.set_release || null },
               images: { small: r.image_small, large: r.image_large },
               imageLang: r.image_lang || null,
-              tcgplayer: r.tcgplayer_data || (price > 0 ? { prices: { holofoil: {
-                market: price, low: +(price * 0.65).toFixed(2),
-                mid: price, high: +(price * 1.7).toFixed(2) } } } : null),
+              // What we hold, or nothing (2026-10-09). This used to INVENT a
+              // TCGplayer block — low = price x 0.65, high = price x 1.7 — under
+              // TCGplayer's name: the card endpoint's T10 fix, never made here.
+              tcgplayer: r.tcgplayer_data || null,
               cardmarket: r.cardmarket_data || null,
               _price: price,
               _priceSource: r.price_source || 'estimate',
@@ -903,8 +904,9 @@ app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
             small: c.image ? `${c.image}/low.png` : (pi.images ? pi.images.small : ''),
             large: c.image ? `${c.image}/high.png` : (pi.images ? pi.images.large : '')
           },
-          tcgplayer: pi.tcgplayer || { prices: { holofoil: {
-            market: price, low: +(price*0.65).toFixed(2), mid: price, high: +(price*1.7).toFixed(2) } } },
+          // pokemontcg.io's block when it sent one, else nothing — never a
+          // TCGplayer block invented around an ESTIMATE (2026-10-09).
+          tcgplayer: pi.tcgplayer || null,
           cardmarket: pi.cardmarket || null,
           _price: price,
           _priceSource: (pi.price && pi.price > 0) ? (pi.source || 'tcgplayer') : 'estimate',

@@ -42,6 +42,17 @@ function askedNumber(card) {
 function statedNumber(meta) {
   return tcgHitNumber({ productName: meta && meta.matched }) || numberKey(meta && meta.matchedNumber);
 }
+// Reviewed (Roy, 2026-10-09): six cards whose headline was a search row written
+// before 2 October (no product, no match label) sitting more than 3x from
+// pokemontcg.io's own TCGplayer figure for the card — the fallback's signature.
+// Their unlabelled search rows that far off are refused. The other ~952 such
+// headlines are left (6 bad of 311 checkable, ~2%), shown with their age and
+// re-asked first by value (refresh). Measured: PROGRESS 2026-10-09 (late).
+const REVIEWED_OFF = { ratio: 3, decided: 'Roy, 2026-10-09', cards: ['en-g1-RC29', 'en-bw11-RC23', 'en-bwp-BW80', 'en-bw11-RC1', 'en-xyp-XY85', 'en-ex15-100'] };
+function pokemontcgFigure(tp, p) {
+  const v = Object.values(tp || {}).map(x => x && (x.market > 0 ? x.market : x.mid > 0 ? x.mid : 0)).filter(x => x > 0);
+  return v.length ? v.reduce((a, x) => Math.abs(Math.log(x / p)) < Math.abs(Math.log(a / p)) ? x : a) : null;
+}
 function refusedRow(card, meta) {
   const stated = statedNumber(meta), asked = numberKey(askedNumber(card));
   return stated !== null && asked !== null && stated !== asked ? { asked, stated } : null;
@@ -103,6 +114,16 @@ async function scan(db) {
     if (m.numberRule === RULE) continue;
     if (statedNumber(m) === null) refuse(r, 'states no number, on a card the old matcher mismatched', { asked: numberKey(askedNumber(cards.get(r.card_api_id))), stated: null });
   }
+  // The reviewed six (REVIEWED_OFF): unlabelled rows more than 3x from pokemontcg.io's figure.
+  const rev = (await db.query(`SELECT ph.id, ph.card_api_id, ph.price_usd::float AS p, ph.source_meta, c.tcgplayer_data->'prices' AS tp
+      FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
+      WHERE ph.source = 'tcgplayer_market' AND ph.card_api_id = ANY($1) AND NOT COALESCE(ph.source_meta ? 'matchedBy', false)`, [REVIEWED_OFF.cards])).rows;
+  for (const r of rev) {
+    if (refusedIds.has(String(r.id))) continue;
+    const f = pokemontcgFigure(r.tp, r.p);
+    if (f && Math.max(f / r.p, r.p / f) > REVIEWED_OFF.ratio)
+      refuse(r, 'unlabelled search row more than 3x from pokemontcg.io (reviewed, ' + REVIEWED_OFF.decided + ')', { pokemontcg: f, price: r.p });
+  }
   // TCGdex's pricing mapping: its latest row per card and printing, refused rows left out.
   for (const r of (await db.query(`SELECT DISTINCT ON (card_api_id, source) card_api_id, source_meta->>'productId' AS pid
       FROM price_history WHERE source LIKE 'tcgdex_tcgplayer_%' AND source_meta ? 'productId' AND NOT (id = ANY($1::bigint[]))
@@ -154,5 +175,5 @@ async function main() {
     }
   } finally { await db.end(); }
 }
-module.exports = { scan, OUT, refusedRow, askedNumber, statedNumber };
+module.exports = { scan, OUT, refusedRow, askedNumber, statedNumber, REVIEWED_OFF };
 if (require.main === module) main().catch(e => { console.error('collisionscan failed: ' + e.message); process.exit(1); });

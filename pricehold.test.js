@@ -5,7 +5,7 @@
 //   node pricehold.test.js --db    also: the real headline query returns nothing for a held card,
 //                                  and still returns the unheld cards' prices
 'use strict';
-require('./testcount')(25);
+require('./testcount')(26);
 const fs = require('fs'), vm = require('vm');
 const ph = require('./pricehold'), printsql = require('./printsql'), { isOurCardId } = require('./cardid');
 let pass = 0, fail = 0;
@@ -30,6 +30,9 @@ ok('the Umbreon pair, the Gengar pair and Garchomp 146/228/247 are released', ['
 
 console.log('\n  refused rows (our search\'s, stating another number)');
 ok('the refused rows are measured, named by row id, each with why', ph.REFUSED.length >= 274 && ph.REFUSED.every(r => /^\d+$/.test(r.row) && r.card && /states (another|no) number|stamped product|TCGdex maps a/.test(r.why)), ph.REFUSED.length + ' rows');
+ok('the six reviewed search headlines more than 3x from pokemontcg.io are refused by row id (Roy, 2026-10-09), Pikachu RC29 among them',
+  require('./collisionscan').REVIEWED_OFF.cards.length === 6
+  && require('./collisionscan').REVIEWED_OFF.cards.every(id => ph.REFUSED.some(r => r.card === id && /reviewed/.test(r.why))));
 ok('a stamped product is refused unless TCGdex maps the card to it: Delcatty SM132 [Staff] rows out, Lycanroc SM118 (Prerelease) rows kept',
   ph.REFUSED.some(r => r.card === 'en-smp-SM132' && /stamped/.test(r.why)) && !ph.REFUSED.some(r => r.card === 'en-smp-SM118'));
 ok('Skyridge Gengar H09\'s rows for Gengar (10) are among them, and Golduck 50a\'s own (50a) row is not',

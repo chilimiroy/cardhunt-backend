@@ -1,5 +1,5 @@
 {
- "measuredAt": "2026-10-09T17:10:40.584Z",
+ "measuredAt": "2026-10-09T17:12:56.389Z",
  "collisions": [
   {
    "product": "84971",
@@ -556,6 +556,15 @@
  ],
  "refused": [
   {
+   "row": "194202",
+   "card": "en-bw11-RC1",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 3.08,
+   "price": 0.4
+  },
+  {
    "row": "73381",
    "card": "en-bw11-RC18",
    "product": null,
@@ -662,6 +671,15 @@
    "matched": "Cinccino",
    "asked": "RC19",
    "stated": "105"
+  },
+  {
+   "row": "193628",
+   "card": "en-bw11-RC23",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 83.65,
+   "price": 2.71
   },
   {
    "row": "73389",
@@ -1598,6 +1616,33 @@
    "matched": "Pikachu - BW54",
    "asked": "BW77",
    "stated": "BW54"
+  },
+  {
+   "row": "59200",
+   "card": "en-bwp-BW80",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 15.97,
+   "price": 3.91
+  },
+  {
+   "row": "129341",
+   "card": "en-bwp-BW80",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 15.97,
+   "price": 1.42
+  },
+  {
+   "row": "194654",
+   "card": "en-bwp-BW80",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 15.97,
+   "price": 1.49
   },
   {
    "row": "58616",
@@ -2734,6 +2779,51 @@
    "stated": "32"
   },
   {
+   "row": "54904",
+   "card": "en-ex15-100",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 4000,
+   "price": 980
+  },
+  {
+   "row": "81552",
+   "card": "en-ex15-100",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 4000,
+   "price": 990
+  },
+  {
+   "row": "87905",
+   "card": "en-ex15-100",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 4000,
+   "price": 990
+  },
+  {
+   "row": "118672",
+   "card": "en-ex15-100",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 4000,
+   "price": 1000
+  },
+  {
+   "row": "121955",
+   "card": "en-ex15-100",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 4000,
+   "price": 1000
+  },
+  {
    "row": "55444",
    "card": "en-g1-28a",
    "product": null,
@@ -2876,6 +2966,15 @@
    "matched": "Meowstic EX",
    "asked": "RC15",
    "stated": "37"
+  },
+  {
+   "row": "157685",
+   "card": "en-g1-RC29",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 165.93,
+   "price": 3.53
   },
   {
    "row": "56537",
@@ -7088,6 +7187,33 @@
    "matched": "Chesnaught (Prerelease)",
    "asked": null,
    "stated": null
+  },
+  {
+   "row": "78446",
+   "card": "en-xyp-XY85",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 18.4,
+   "price": 3.44
+  },
+  {
+   "row": "129894",
+   "card": "en-xyp-XY85",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 18.4,
+   "price": 4.76
+  },
+  {
+   "row": "194005",
+   "card": "en-xyp-XY85",
+   "product": null,
+   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "matched": null,
+   "pokemontcg": 18.4,
+   "price": 5.17
   },
   {
    "row": "78453",

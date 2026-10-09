@@ -5395,13 +5395,13 @@ async function refreshOne(lang, flags, run) {
     }
     const card = batch[i];
     const res = await safePriceFor(card);
+    await writeVariantPrices(card, res);
+    await writeSecondReading(card, res);
+    await writeEditionPrice(card, res);
     if (card.relabel) {
       relabelAsked[card.api_card_id] = new Date().toISOString().slice(0, 10);
       try { fs.writeFileSync(relabelFile, JSON.stringify(relabelAsked)); } catch (e) { /* the next run asks it again */ }
     }
-    await writeVariantPrices(card, res);
-    await writeSecondReading(card, res);
-    await writeEditionPrice(card, res);
 
     if (res && res.price > 0) {
       // A lower-confidence source must never replace a higher-confidence

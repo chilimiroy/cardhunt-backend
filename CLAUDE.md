@@ -30,7 +30,7 @@ rather than re-derive. `CLAUDE_ARCHIVE.md` is the full history (frozen
 "MOVED FROM CLAUDE.md, 2026-10-07 (compression)",
 "MOVED FROM CLAUDE.md, 2026-10-07 (budget, second pass)",
 "MOVED FROM CLAUDE.md, 2026-10-09 (budget, third pass)" — with "Windows: replacing ingest.js",
-"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)").
+"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)").
 "PROGRESS 2026-10-05: X" means the block headed X in PROGRESS.md's 2026-10-05
 entry — the verbatim measurements this file carried until then. **A bug's
 history may move to the archive; its lesson may not** — `claudesplit.test.js`
@@ -373,11 +373,7 @@ with named gaps", "On demand — US page 1, the rest when asked (T2, 2026-09-30)
 - **Open = 1 call; nothing expands by itself, not even on zero US results**
   (`noautoexpand.test.js`); "Search 7 more" / "Load more" are buttons stating
   their cost; home tiles `?cachedOnly=1` = 0 calls. Shipping is never a filter.
-- Sources: `LISTING_SOURCES` (yahoo local only, yuyutei shop-ask, ebay);
-  `UNAVAILABLE` gives a reason for the rest. eBay credentials on Render only;
-  every call via `ebaycall.js` -> `ebayquota.js`; cached 15 min, never stored.
-- Remaining: auctions from Render (fetch locally -> store -> serve, with fetch
-  age); the rest is in STATE and the sources table.
+- Sources (`LISTING_SOURCES`, `UNAVAILABLE`) and what remains: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)".
 
 ## T3 · Alert engine on real data — BUILT
 The page reads and writes `/api/alerts`; evaluated at the end of each
@@ -403,13 +399,9 @@ schtasks /Run   /TN "CardHunt nightly refresh"
 `task-watch.ps1` logs task state hourly to `task-watch.log`.
 
 ## Movers and best deals — BUILT 2026-10-05
-- **Movers** (`trending.js`): both ends `tcgdex_tcgplayer_*`, same printing and
-  productId; pricequality-marked cards left out; window stated; `coverage` says
-  when a list is thin and why.
-- **Best deals — ON (Roy, 2026-10-08), approved accounts.** A 3-hourly job
-  (`.github/workflows/deals-refresh.yml`) runs `deals.pickVouched` on 80 cards
-  by value; `deal_picks` keeps card, item id, found_at. The shelf shows OUR data;
-  a click fetches live, deletes a sold pick (PROGRESS 2026-10-08 (deals supply)).
+- **Movers** (`trending.js`): both ends TCGdex rows, same printing and product; a
+  marked card never ranks. **Best deals ON (Roy, 2026-10-08)**: a 3-hourly job, 80
+  cards; the shelf shows OUR data, a click fetches live. Detail: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)".
 
 ## Page language — EN/JA/zh-TW/zh-CN (T5; TASK-ui 2026-10-07)
 Picker between currency and bell; `ch_lang` set before paint. One exact-text table

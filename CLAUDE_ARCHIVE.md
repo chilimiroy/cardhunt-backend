@@ -4648,3 +4648,26 @@ in CLAUDE.md as one line.
 > ## Checkout and login — DISABLED, preserved outside the page
 > Never loaded, never served; neither returns without a real payment/auth
 > backend. `nofabricated.test.js` fails if a password or card input reappears.
+
+## MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)
+
+Moved verbatim when CLAUDE.md stood at 58,457 of its 60,000 characters,
+before the 2026-10-10 (one reader, shop asks) lines were written. Each keeps a line in CLAUDE.md.
+
+T2 sources and remaining:
+
+> - Sources: `LISTING_SOURCES` (yahoo local only, yuyutei shop-ask, ebay);
+>   `UNAVAILABLE` gives a reason for the rest. eBay credentials on Render only;
+>   every call via `ebaycall.js` -> `ebayquota.js`; cached 15 min, never stored.
+> - Remaining: auctions from Render (fetch locally -> store -> serve, with fetch
+>   age); the rest is in STATE and the sources table.
+
+Movers and best deals:
+
+> - **Movers** (`trending.js`): both ends `tcgdex_tcgplayer_*`, same printing and
+>   productId; pricequality-marked cards left out; window stated; `coverage` says
+>   when a list is thin and why.
+> - **Best deals — ON (Roy, 2026-10-08), approved accounts.** A 3-hourly job
+>   (`.github/workflows/deals-refresh.yml`) runs `deals.pickVouched` on 80 cards
+>   by value; `deal_picks` keeps card, item id, found_at. The shelf shows OUR data;
+>   a click fetches live, deletes a sold pick (PROGRESS 2026-10-08 (deals supply)).

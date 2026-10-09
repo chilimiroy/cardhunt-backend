@@ -5,7 +5,7 @@
 //   node pricehold.test.js --db    also: the real headline query returns nothing for a held card,
 //                                  and still returns the unheld cards' prices
 'use strict';
-require('./testcount')(23);
+require('./testcount')(24);
 const fs = require('fs'), vm = require('vm');
 const ph = require('./pricehold'), printsql = require('./printsql'), { isOurCardId } = require('./cardid');
 let pass = 0, fail = 0;
@@ -14,16 +14,17 @@ console.log('\n  pricehold.test.js\n');
 
 console.log('  the list');
 const ids = Object.keys(ph.HELD);
+const collIds = ids.filter(id => ph.HELD[id].kind !== 'reviewed');   // reviewed holds (one card, Roy) apart
 // The list is the catalogue-wide measurement (pricehold-collisions.json,
 // collisionscan.js --write): 53 products over 106 cards on 2026-10-09; 23
 // over 47 once our search's rows were held to the whole-number rule
 // (TASK-product-matching) — every one left involves TCGdex's own mapping.
 const listed = new Set(ph.COLLISIONS.flatMap(c => c.cards.map(x => x.id)));
-ok('EVERY card of EVERY collision is held — both sides, not the first claimant', ids.length === listed.size && [...listed].every(id => ph.HELD[id])
-  && ph.COLLISIONS.every(c => c.cards.length >= 2 && c.cards.every(x => ph.HELD[x.id].products.includes(c.product))), ids.length + ' held of ' + listed.size);
+ok('EVERY card of EVERY collision is held — both sides, not the first claimant', collIds.length === listed.size && [...listed].every(id => ph.HELD[id])
+  && ph.COLLISIONS.every(c => c.cards.length >= 2 && c.cards.every(x => ph.HELD[x.id].products.includes(c.product))), collIds.length + ' held of ' + listed.size);
 ok('the catalogue-wide list: 22 products on 45 cards; 97703 (HGSS18 / np-36) is gone — it is a [Staff] product stating HGSS18, refused on both cards',
-  ph.COLLISIONS.length === 22 && ids.length === 45 && !ph.COLLISIONS.some(c => c.product === '97703')
-  && ph.REFUSED.some(r => r.card === 'en-np-36' && r.product === '97703') && ph.REFUSED.some(r => r.card === 'en-hgssp-HGSS18' && r.product === '97703'), ph.COLLISIONS.length + ' / ' + ids.length);
+  ph.COLLISIONS.length === 22 && collIds.length === 45 && !ph.COLLISIONS.some(c => c.product === '97703')
+  && ph.REFUSED.some(r => r.card === 'en-np-36' && r.product === '97703') && ph.REFUSED.some(r => r.card === 'en-hgssp-HGSS18' && r.product === '97703'), ph.COLLISIONS.length + ' / ' + collIds.length);
 ok('every product left is held because TCGdex maps it, never by our search alone', ph.COLLISIONS.every(c => c.origin !== 'our-search' && c.cards.some(x => x.via.some(v => v.startsWith('tcgdex')))));
 ok('the Ninetales-Gyarados-Starmie trio stays held (TCGdex gives all three one product)', ['en-ru1-3', 'en-ru1-5', 'en-ru1-6'].every(id => ph.HELD[id]));
 ok('the Umbreon pair, the Gengar pair and Garchomp 146/228/247 are released', ['en-ecard3-32', 'en-ecard3-H30', 'en-ecard3-10', 'en-ecard3-H09', 'en-sm11-146', 'en-sm11-228', 'en-sm11-247', 'en-sm11-114'].every(id => !ph.HELD[id]));
@@ -38,7 +39,11 @@ ok('a stamped product is refused unless TCGdex maps the card to it: Delcatty SM1
 ok('Skyridge Gengar H09\'s rows for Gengar (10) are among them, and Golduck 50a\'s own (50a) row is not',
   ph.REFUSED.some(r => r.card === 'en-ecard3-H09' && r.matched === 'Gengar (10)') && !ph.REFUSED.some(r => r.card === 'en-ecard2-50a'));
 ok('every refused row is out of the headline rule, on the alias it is given', ph.REFUSED.every(r => printsql.basePrintingSql('ph', 'c').includes(r.row)) && /p2\.id NOT IN \(/.test(printsql.basePrintingSql('p2', 'c2')));
-ok('every hold says why, names the other card(s), and when it comes off', ids.every(id => /price withheld/.test(ph.HELD[id].reason) && ph.HELD[id].with.length && ph.HELD[id].removeWhen));
+ok('every hold says why, names the other card(s) or who decided, and when it comes off', ids.every(id => /price withheld/.test(ph.HELD[id].reason) && ph.HELD[id].removeWhen
+  && (ph.HELD[id].kind === 'reviewed' ? /\d{4}-\d{2}-\d{2}/.test(ph.HELD[id].decided) : ph.HELD[id].with.length)));
+ok('Charizard ☆ δ (en-ex15-100) is held: its $4,000 is corroborated by nothing independent, Cardmarket puts it nearer $1,000 (Roy, 2026-10-09)',
+  ph.HELD['en-ex15-100'] && ph.HELD['en-ex15-100'].kind === 'reviewed' && /\$4,000/.test(ph.HELD['en-ex15-100'].reason) && /Cardmarket/.test(ph.HELD['en-ex15-100'].reason)
+  && printsql.basePrintingSql('ph', 'c').includes("'en-ex15-100'"));
 ok('every held id is one of ours (safe to quote into SQL)', ids.every(id => isOurCardId(id) && !/['\\]/.test(id)));
 
 console.log('\n  no estimate is ever a headline (Roy, 2026-10-09)');

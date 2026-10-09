@@ -60,6 +60,24 @@ for (const [id, h] of Object.entries(HELD)) {
   h.reason = 'price withheld: ' + id + ' and ' + h.with.join(', ') + ' are mapped to the same TCGplayer product ('
     + h.products.join(', ') + ') — ' + h.origins.map(o => ORIGIN[o] || o).join('; ') + '. One of the mappings is wrong and we cannot tell which.';
 }
+// ── Reviewed holds: one card, a headline nothing independent corroborates ──
+// Each names what was measured and who decided. Held exactly like a shared
+// product (no headline, no price blob, the reason shown); it comes off when
+// a source we can match by product prices the card.
+const REVIEWED = {
+  'en-ex15-100': {
+    decided: 'Roy, 2026-10-09',
+    reason: "price withheld: our last TCGplayer reading for Charizard ☆ δ is $4,000 (2026-08-27, product not recorded), and our readings"
+      + " alternated $980 / $990 / $4,000 / $4,000 / $1,000 / $1,000. pokemontcg.io's $4,000 is the same TCGplayer market figure,"
+      + " not a second source (its own listings start at $20,000); TCGdex has no price for this card; Cardmarket's EU figures"
+      + " ($838 trend, $1,483.81 30-day average, $1,653.33 average sell) put it nearer $1,000. We cannot tell which is right.",
+    removeWhen: 'a source matched by product (TCGdex, or our search with the product recorded) prices the card',
+  },
+};
+for (const [id, r] of Object.entries(REVIEWED)) {
+  if (!HELD[id]) HELD[id] = { kind: 'reviewed', products: [], product: null, with: [], origins: ['reviewed'],
+                              reason: r.reason, decided: r.decided, removeWhen: r.removeWhen };
+}
 const ids = Object.keys(HELD);
 // Ids are ours (cardid shape), so quoting is plain; asserted by the test.
 function notHeldSql(ph = 'ph') {
@@ -77,4 +95,4 @@ function apply(obj, cardId) {
   return Object.assign(obj, { _price: null, _priceIsReal: false, _priceSource: null, tcgplayer: null, cardmarket: null,
     priceHeld: { reason: h.reason, product: h.product, products: h.products, with: h.with } });
 }
-module.exports = { FILE, COLLISIONS, HELD, REFUSED, notHeldSql, notRefusedSql, heldFor, apply };
+module.exports = { FILE, COLLISIONS, HELD, REFUSED, REVIEWED, notHeldSql, notRefusedSql, heldFor, apply };

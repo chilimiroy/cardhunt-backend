@@ -65,7 +65,7 @@ ok('apply leaves an unheld card alone', free._price === 928.32 && free.tcgplayer
 
 console.log('\n  the page');
 const H = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8').replace(/\r/g, '');
-const gb = H.slice(H.indexOf('function getBase(c) {'), H.indexOf('\n}\n', H.indexOf('function getBase(c) {')) + 2);
+const gb = H.slice(H.indexOf('function getBase(c, out) {'), H.indexOf('\n}\n', H.indexOf('function getBase(c, out) {')) + 2);
 const ctx = { pricesOpen: () => true, mockP: () => 77.7 };
 vm.createContext(ctx); vm.runInContext(gb, ctx);
 ok('getBase: a held card has no number — not the blob, not the estimate',

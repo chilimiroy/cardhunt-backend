@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.10.1';   // bump when this file changes
+const VERSION = '5.10.2';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -641,7 +641,7 @@ async function hostDelay(host, ms) {
 // Collector numbers are compared WHOLE (cardnumber.js, TASK-product-matching
 // 2026-10-09): a prefix or suffix letter is part of the number. The private
 // normNum that lived here reduced "50a" to "50" and "XY177a" to "177".
-const { numberKey, tcgHitNumber, RULE: NUMBER_RULE } = require('./cardnumber');
+const { numberKey, tcgHitNumber, RULE: NUMBER_RULE, stampedNotOurs, tcgdexProductIds } = require('./cardnumber');
 
 // \u2500\u2500 Reprints on the PRICING path (TASK T6, 2026-09-28) \u2500\u2500
 // cardmatch's REPRINT_OF already told the LISTINGS path that 30th-c #001 is
@@ -887,6 +887,9 @@ async function tcgPlayerSearch(cardName, setName, cardNumber, cardRarity, opts =
       if (!opts.reprint && opts.setId && !sameTcgSet(h.setName, opts.setId, setName)) return false;
       const got = String(h.productName || '').toLowerCase();
       if (tcgSealedProduct(h.productName, cardName)) return false;
+      // A stamped product ([Staff], (Prerelease)) is another card unless TCGdex
+      // maps ours to that very product (cardnumber.stampedNotOurs, 2026-10-09).
+      if (stampedNotOurs(h.productName, h.productId, opts.tcgdexIds)) return false;
       const gotClean = got.replace(/[^a-z0-9]/g, '');
       return gotClean.includes(want.slice(0, Math.min(6, want.length)))
           || want.includes(gotClean.slice(0, Math.min(6, gotClean.length)));
@@ -2218,7 +2221,7 @@ async function safePriceFor(card) {
       else if (td && TCGDEX_FALLBACK_OK.has(td.none)) {
         res = await attempt(() => rp
           ? tcgPlayerSearch(card.name, rp.tcgSet, rp.number, card.rarity, { reprint: rp })
-          : tcgPlayerSearch(card.name, card.set_name, card.number, card.rarity, { setId: card.set_api_id }));
+          : tcgPlayerSearch(card.name, card.set_name, card.number, card.rarity, { setId: card.set_api_id, tcgdexIds: tcgdexProductIds(card.variants) }));
         if (res) res.meta = Object.assign({}, res.meta || {}, {
           via: 'tcgplayer-internal-search', tcgdexNone: td.none,
           // WHICH product it matched (T2, 2026-10-02): Torchic ☆ alternated
@@ -5307,6 +5310,7 @@ async function refreshOne(lang, flags, run) {
         // nightly Yahoo match ran with setTotal null, which jpfilter fails
         // CLOSED on — valid comparables silently lost, every night.
         set_total: r.set_total, set_api_id: r.set_api_id,
+        variants: r.variants,   // the search's stamped-product rule reads TCGdex's ids (2026-10-09)
         price: parseFloat(r.price_usd) || 0,
         tier: tier.name,
         neverPriced: age === Infinity,

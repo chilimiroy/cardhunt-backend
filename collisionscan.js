@@ -25,10 +25,12 @@
 // refused only on a card the old matcher is proven to have mismatched, and
 // never when the fixed matcher wrote it (source_meta.numberRule) — the fixed
 // matcher still takes a hit stating no number. Rows are not deleted.
+// A row whose product is STAMPED ([Staff], (Prerelease)) is refused the same
+// way unless TCGdex maps the card to that very product (2026-10-09).
 'use strict';
 const fs = require('fs'), path = require('path');
 const OUT = path.join(__dirname, 'pricehold-collisions.json');
-const { numberKey, tcgHitNumber, RULE } = require('./cardnumber');
+const { numberKey, tcgHitNumber, RULE, stampedNotOurs, tcgdexProductIds } = require('./cardnumber');
 const cm = require('./cardmatch');
 
 // The number our search asked for this card, and the one the stored row's
@@ -46,16 +48,12 @@ function refusedRow(card, meta) {
 }
 
 async function scan(db) {
-  const cards = new Map((await db.query(`SELECT api_card_id, name, number, set_api_id FROM cards`)).rows.map(r => [r.api_card_id, r]));
+  const cards = new Map((await db.query(`SELECT api_card_id, name, number, set_api_id, variants FROM cards`)).rows.map(r => [r.api_card_id, r]));
   const claims = [];
   for (const r of (await db.query(`SELECT api_card_id, vp->>'tcgplayer' AS pid
       FROM cards, jsonb_array_elements(variants->'printings') vp
       WHERE variants IS NOT NULL AND vp ? 'tcgplayer' AND vp->>'tcgplayer' <> ''`)).rows)
     claims.push({ pid: String(r.pid), card: r.api_card_id, via: 'tcgdex-variants' });
-  for (const r of (await db.query(`SELECT DISTINCT ON (card_api_id, source) card_api_id, source_meta->>'productId' AS pid
-      FROM price_history WHERE source LIKE 'tcgdex_tcgplayer_%' AND source_meta ? 'productId'
-      ORDER BY card_api_id, source, recorded_at DESC`)).rows)
-    claims.push({ pid: String(r.pid), card: r.card_api_id, via: 'tcgdex-pricing' });
   // Every row our search wrote, newest first. Pass 1: a row whose product
   // states another number is refused. Pass 2: on a card pass 1 caught — the
   // old matcher is PROVEN to have mismatched it — a row that states no number
@@ -73,7 +71,31 @@ async function scan(db) {
   };
   for (const r of ours) {
     const bad = refusedRow(cards.get(r.card_api_id), r.source_meta);
-    if (bad) { refuse(r, 'states another number', bad); mismatched.add(r.card_api_id); }
+    if (bad) { refuse(r, 'states another number', bad); mismatched.add(r.card_api_id); continue; }
+    // A stamped product ([Staff], (Prerelease)) is another card unless TCGdex
+    // maps ours to that very product (cardnumber.stampedNotOurs, 2026-10-09).
+    const m = r.source_meta || {};
+    if (stampedNotOurs(m.matched, m.productId, tcgdexProductIds(cards.get(r.card_api_id).variants))) {
+      refuse(r, 'stamped product, not the one TCGdex maps this card to', { asked: null, stated: null });
+      mismatched.add(r.card_api_id);
+    }
+  }
+  // TCGdex's pricing rows carry a product id but no product name. Where one of
+  // our search rows has named that product, TCGdex's rows for it are held to
+  // the same two rules (2026-10-09): np-36 Tropical Tidal Wave was priced
+  // $1,400 by TCGdex on product 97703, which our search read as "Tropical Tidal
+  // Wave - HGSS18 (Worlds 10) [Staff]" — another number, and stamped.
+  const named = new Map();
+  for (const r of ours) { const m = r.source_meta || {}; if (m.productId != null && m.matched && !named.has(String(m.productId))) named.set(String(m.productId), m.matched); }
+  const tdxRows = named.size ? (await db.query(`SELECT id, card_api_id, source_meta FROM price_history
+      WHERE source LIKE 'tcgdex_tcgplayer_%' AND source_meta->>'productId' = ANY($1)`, [[...named.keys()]])).rows.filter(r => cards.has(r.card_api_id)) : [];
+  for (const r of tdxRows) {
+    const pid = String(r.source_meta.productId), name = named.get(pid), card = cards.get(r.card_api_id);
+    const bad = refusedRow(card, { matched: name });
+    const stamped = !bad && stampedNotOurs(name, pid, tcgdexProductIds(card.variants));
+    if (bad || stamped) refuse(Object.assign({}, r, { source_meta: Object.assign({}, r.source_meta, { matched: name }) }),
+      bad ? 'TCGdex maps a product stating another number' : 'TCGdex maps a stamped product', bad || { asked: null, stated: null });
+    if (bad || stamped) mismatched.add(r.card_api_id);   // its unlabelled search rows are unproven too (np-36)
   }
   for (const r of ours) {
     if (refusedIds.has(String(r.id)) || !mismatched.has(r.card_api_id)) continue;
@@ -81,6 +103,11 @@ async function scan(db) {
     if (m.numberRule === RULE) continue;
     if (statedNumber(m) === null) refuse(r, 'states no number, on a card the old matcher mismatched', { asked: numberKey(askedNumber(cards.get(r.card_api_id))), stated: null });
   }
+  // TCGdex's pricing mapping: its latest row per card and printing, refused rows left out.
+  for (const r of (await db.query(`SELECT DISTINCT ON (card_api_id, source) card_api_id, source_meta->>'productId' AS pid
+      FROM price_history WHERE source LIKE 'tcgdex_tcgplayer_%' AND source_meta ? 'productId' AND NOT (id = ANY($1::bigint[]))
+      ORDER BY card_api_id, source, recorded_at DESC`, [[...refusedIds]])).rows)
+    claims.push({ pid: String(r.pid), card: r.card_api_id, via: 'tcgdex-pricing' });
   for (const r of ours) {
     const m = r.source_meta || {};
     if (refusedIds.has(String(r.id)) || m.productId == null || ourLatest.has(r.card_api_id)) continue;

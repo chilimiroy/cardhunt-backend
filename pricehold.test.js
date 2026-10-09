@@ -5,7 +5,7 @@
 //   node pricehold.test.js --db    also: the real headline query returns nothing for a held card,
 //                                  and still returns the unheld cards' prices
 'use strict';
-require('./testcount')(24);
+require('./testcount')(25);
 const fs = require('fs'), vm = require('vm');
 const ph = require('./pricehold'), printsql = require('./printsql'), { isOurCardId } = require('./cardid');
 let pass = 0, fail = 0;
@@ -21,13 +21,17 @@ const ids = Object.keys(ph.HELD);
 const listed = new Set(ph.COLLISIONS.flatMap(c => c.cards.map(x => x.id)));
 ok('EVERY card of EVERY collision is held — both sides, not the first claimant', ids.length === listed.size && [...listed].every(id => ph.HELD[id])
   && ph.COLLISIONS.every(c => c.cards.length >= 2 && c.cards.every(x => ph.HELD[x.id].products.includes(c.product))), ids.length + ' held of ' + listed.size);
-ok('the catalogue-wide list: 23 products on 47 cards, 97703 (HGSS18 / np-36) among them', ph.COLLISIONS.length === 23 && ids.length === 47 && ph.COLLISIONS.some(c => c.product === '97703'), ph.COLLISIONS.length + ' / ' + ids.length);
+ok('the catalogue-wide list: 22 products on 45 cards; 97703 (HGSS18 / np-36) is gone — it is a [Staff] product stating HGSS18, refused on both cards',
+  ph.COLLISIONS.length === 22 && ids.length === 45 && !ph.COLLISIONS.some(c => c.product === '97703')
+  && ph.REFUSED.some(r => r.card === 'en-np-36' && r.product === '97703') && ph.REFUSED.some(r => r.card === 'en-hgssp-HGSS18' && r.product === '97703'), ph.COLLISIONS.length + ' / ' + ids.length);
 ok('every product left is held because TCGdex maps it, never by our search alone', ph.COLLISIONS.every(c => c.origin !== 'our-search' && c.cards.some(x => x.via.some(v => v.startsWith('tcgdex')))));
 ok('the Ninetales-Gyarados-Starmie trio stays held (TCGdex gives all three one product)', ['en-ru1-3', 'en-ru1-5', 'en-ru1-6'].every(id => ph.HELD[id]));
 ok('the Umbreon pair, the Gengar pair and Garchomp 146/228/247 are released', ['en-ecard3-32', 'en-ecard3-H30', 'en-ecard3-10', 'en-ecard3-H09', 'en-sm11-146', 'en-sm11-228', 'en-sm11-247', 'en-sm11-114'].every(id => !ph.HELD[id]));
 
 console.log('\n  refused rows (our search\'s, stating another number)');
-ok('the refused rows are measured, named by row id, each with why', ph.REFUSED.length >= 274 && ph.REFUSED.every(r => /^\d+$/.test(r.row) && r.card && /states (another|no) number/.test(r.why)), ph.REFUSED.length + ' rows');
+ok('the refused rows are measured, named by row id, each with why', ph.REFUSED.length >= 274 && ph.REFUSED.every(r => /^\d+$/.test(r.row) && r.card && /states (another|no) number|stamped product|TCGdex maps a/.test(r.why)), ph.REFUSED.length + ' rows');
+ok('a stamped product is refused unless TCGdex maps the card to it: Delcatty SM132 [Staff] rows out, Lycanroc SM118 (Prerelease) rows kept',
+  ph.REFUSED.some(r => r.card === 'en-smp-SM132' && /stamped/.test(r.why)) && !ph.REFUSED.some(r => r.card === 'en-smp-SM118'));
 ok('Skyridge Gengar H09\'s rows for Gengar (10) are among them, and Golduck 50a\'s own (50a) row is not',
   ph.REFUSED.some(r => r.card === 'en-ecard3-H09' && r.matched === 'Gengar (10)') && !ph.REFUSED.some(r => r.card === 'en-ecard2-50a'));
 ok('every refused row is out of the headline rule, on the alias it is given', ph.REFUSED.every(r => printsql.basePrintingSql('ph', 'c').includes(r.row)) && /p2\.id NOT IN \(/.test(printsql.basePrintingSql('p2', 'c2')));
@@ -57,9 +61,9 @@ ok('the set-cards payload wraps each card in pricehold.apply', /return pricehold
 ok('the deals pool refuses a held card by name too', /&& !pricehold\.heldFor\(id\)\)\.slice\(0, n\)/.test(S));
 
 console.log('\n  the payload');
-const held = ph.apply({ id: 'en-np-36', _price: 1400, _priceIsReal: true, _priceSource: 'tcgdex_tcgplayer_normal', tcgplayer: { prices: { normal: { market: 1400 } } }, cardmarket: {} });
+const held = ph.apply({ id: 'en-ru1-5', _price: 1400, _priceIsReal: true, _priceSource: 'tcgdex_tcgplayer_normal', tcgplayer: { prices: { normal: { market: 1400 } } }, cardmarket: {} });
 ok('apply: no headline, no TCGplayer or Cardmarket blob, priceHeld with the reason',
-  held._price === null && held._priceIsReal === false && held.tcgplayer === null && held.cardmarket === null && /97703/.test(held.priceHeld.reason));
+  held._price === null && held._priceIsReal === false && held.tcgplayer === null && held.cardmarket === null && new RegExp(ph.HELD['en-ru1-5'].product).test(held.priceHeld.reason));
 const free = ph.apply({ id: 'en-base1-4', _price: 928.32, tcgplayer: { x: 1 } });
 ok('apply leaves an unheld card alone', free._price === 928.32 && free.tcgplayer && !free.priceHeld);
 

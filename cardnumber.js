@@ -67,4 +67,20 @@ function tcgHitNumber(hit) {
 // a row it wrote is never mistaken for one the loose matcher wrote.
 const RULE = 'whole-number-2026-10-09';
 
-module.exports = { numberKey, sameNumber, tcgHitNumber, RULE };
+// A STAMPED product — "[Staff]", "(Prerelease)" — is another card, the way H09
+// is not 9 (Roy, 2026-10-09): Delcatty SM132 took "(Prerelease) [Staff]" at
+// $82.98 against $8.20 for the card. EXCEPT where TCGdex maps our card to that
+// very product: 33 Sun & Moon promos were only ever printed with the
+// Prerelease stamp, TCGdex's own id for them IS the "(Prerelease)" product,
+// and its price agrees with pokemontcg.io's within ~1.3x. tcgdexIds: the
+// card's TCGplayer ids from cards.variants (tcgdexProductIds).
+const STAMPED = /\[staff\]|\bpre-?release\b/i;
+function isStampedProduct(productName) { return STAMPED.test(String(productName || '')); }
+function tcgdexProductIds(variants) {
+  return ((variants && variants.printings) || []).map(p => p && p.tcgplayer).filter(Boolean).map(String);
+}
+function stampedNotOurs(productName, productId, tcgdexIds) {
+  return isStampedProduct(productName) && !(tcgdexIds || []).includes(String(productId));
+}
+
+module.exports = { numberKey, sameNumber, tcgHitNumber, RULE, isStampedProduct, tcgdexProductIds, stampedNotOurs };

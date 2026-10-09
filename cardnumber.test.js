@@ -9,7 +9,7 @@
 //
 //   node cardnumber.test.js
 'use strict';
-require('./testcount')(43);
+require('./testcount')(50);
 const fs = require('fs'), { execSync } = require('child_process');
 const cn = require('./cardnumber');
 let pass = 0, fail = 0;
@@ -49,10 +49,10 @@ function buildSearch(src, deps) {
   const body = sliceFn(src, 'tcgPlayerSearch');
   if (!/async function tcgPlayerSearch\(/.test(body)) throw new Error('tcgPlayerSearch not found');
   const extra = (deps.ownNumbers ? sliceFn(src, 'normNum') + sliceFn(src, 'tcgHitNumber') : '') + sliceFn(src, 'tcgSealedProduct');
-  return answer => new Function('hostDelay', 'UA_SAFE', 'fetch', 'sameTcgSet', 'normTcgSetName', 'TCG_SET_NAME', 'numberKey', 'tcgHitNumber', 'cmatch',
+  return answer => new Function('hostDelay', 'UA_SAFE', 'fetch', 'sameTcgSet', 'normTcgSetName', 'TCG_SET_NAME', 'numberKey', 'tcgHitNumber', 'cmatch', 'stampedNotOurs',
     extra + body + '\nreturn tcgPlayerSearch;')(
     async () => {}, 'UA', async () => ({ ok: true, json: async () => ({ results: [{ results: answer }] }) }),
-    () => true, s => String(s || '').toLowerCase(), {}, cn.numberKey, deps.ownNumbers ? undefined : cn.tcgHitNumber, require('./cardmatch'));
+    () => true, s => String(s || '').toLowerCase(), {}, cn.numberKey, deps.ownNumbers ? undefined : cn.tcgHitNumber, require('./cardmatch'), cn.stampedNotOurs);
 }
 const SRC = fs.readFileSync(__dirname + '/ingest.js', 'utf8').replace(/\r/g, '');
 let OLD = null;
@@ -92,6 +92,25 @@ const CASES = [
   r = await now([P('Giratina VSTAR Premium Collection', null, 7, 40, 'Lost Origin'), P('Pikachu ex Box', null, 9, 30, 'Lost Origin')])('Giratina VSTAR', 'Lost Origin', '131', null, { setId: 'x', queryAs: 'x' });
   const r2 = await now([P('Victini Tin', null, 8, 20, 'Lost Origin')])('Victini', 'Lost Origin', '1', null, { setId: 'x', queryAs: 'x' });
   ok('…and it still REFUSES sealed product: a Premium Collection, a Box, a Tin — even one carrying the card\'s own name', r === null && r2 === null, JSON.stringify([r, r2]));
+
+  console.log('\n  a stamped product ([Staff], (Prerelease)) is another card — unless TCGdex maps ours to it');
+  ok('the words: [Staff], (Prerelease), Pre-Release, "Steam Siege Prerelease"; not "Prerelease" inside another word, not a plain promo',
+    cn.isStampedProduct('Delcatty - SM132 (Prerelease) [Staff]') && cn.isStampedProduct('Bouffalant - 136 [Staff]') && cn.isStampedProduct('Volcanion (XY Steam Siege Prerelease)')
+    && cn.isStampedProduct('Pikachu (Pre-Release)') && !cn.isStampedProduct('Delcatty - SM132') && !cn.isStampedProduct('Staffordshire'));
+  const staff = P('Delcatty - SM132 (Prerelease) [Staff]', 'SM132', 172936, 82.98, 'SM Promos'), plain = P('Delcatty - SM132', 'SM132', 172937, 8.2, 'SM Promos');
+  const del = tdx => ({ setId: 'x', queryAs: 'x', tcgdexIds: tdx });
+  r = await now([staff])('Delcatty', 'SM Black Star Promos', 'SM132', null, del(['172937']));
+  ok('Delcatty SM132: the [Staff] product alone is refused (it was $82.98 against $8.20)', r === null, JSON.stringify(r));
+  r = await now([staff, plain])('Delcatty', 'SM Black Star Promos', 'SM132', null, del(['172937']));
+  ok('…with both answered, the unstamped one (TCGdex\'s own id) is taken', r && r.productId === 172937, JSON.stringify(r));
+  r = await now([P('Lycanroc - SM118 (Prerelease)', 'SM118', 166294, 15.78, 'SM Promos')])('Lycanroc', 'SM Black Star Promos', 'SM118', null, del(['166294']));
+  ok('what it ALLOWS: Lycanroc SM118 "(Prerelease)" is taken — TCGdex maps the card to that very product (printed only stamped)', r && r.productId === 166294, JSON.stringify(r));
+  r = await now([P('Koraidon - 091 (Prerelease)', '091', 9091, 2.84, 'SV Promos')])('Koraidon', 'SV Black Star Promos', '091', null, del([]));
+  ok('a "(Prerelease)" product with no TCGdex mapping is refused', r === null, JSON.stringify(r));
+  const o = before ? await before([staff])('Delcatty', 'SM Black Star Promos', 'SM132', null, del(['172937'])) : null;
+  ok('made to fire: the old matcher (a7366c9) took the [Staff] product', o && o.productId === 172936, JSON.stringify(o));
+  const src = fs.readFileSync(__dirname + '/ingest.js', 'utf8');
+  ok('the nightly hands the search TCGdex\'s ids (variants travel with each due card)', /tcgdexIds: tcgdexProductIds\(card\.variants\)/.test(src) && /variants: r\.variants,/.test(src));
 
   console.log('\n  made to fire: the old matcher (a7366c9) on the same cases');
   ok('the old ingest.js is readable from git', !!before);

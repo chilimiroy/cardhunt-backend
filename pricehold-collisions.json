@@ -1,5 +1,5 @@
 {
- "measuredAt": "2026-10-09T14:12:56.675Z",
+ "measuredAt": "2026-10-09T17:10:40.584Z",
  "collisions": [
   {
    "product": "84971",
@@ -152,30 +152,6 @@
      "set": "ecard2",
      "via": [
       "tcgdex-variants"
-     ]
-    }
-   ]
-  },
-  {
-   "product": "97703",
-   "origin": "our-search-onto-tcgdex-id",
-   "cards": [
-    {
-     "id": "en-hgssp-HGSS18",
-     "name": "Tropical Tidal Wave",
-     "number": "HGSS18",
-     "set": "hgssp",
-     "via": [
-      "our-search"
-     ]
-    },
-    {
-     "id": "en-np-36",
-     "name": "Tropical Tidal Wave",
-     "number": "36",
-     "set": "np",
-     "via": [
-      "tcgdex-pricing"
      ]
     }
    ]
@@ -940,6 +916,600 @@
    "stated": "60"
   },
   {
+   "row": "73761",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "87426",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "94799",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "99422",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "118723",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "121969",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "125154",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "130622",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "133501",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "137075",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "142507",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "148316",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "153384",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "195225",
+   "card": "en-bwp-BW28",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW28",
+   "stated": null
+  },
+  {
+   "row": "198130",
+   "card": "en-bwp-BW28",
+   "product": "96874",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Tropical Beach - BW28 (Worlds 11) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "204181",
+   "card": "en-bwp-BW28",
+   "product": "96874",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Tropical Beach - BW28 (Worlds 11) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "208430",
+   "card": "en-bwp-BW28",
+   "product": "96874",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Tropical Beach - BW28 (Worlds 11) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "58598",
+   "card": "en-bwp-BW40",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW40",
+   "stated": null
+  },
+  {
+   "row": "89321",
+   "card": "en-bwp-BW40",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW40",
+   "stated": null
+  },
+  {
+   "row": "95945",
+   "card": "en-bwp-BW40",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW40",
+   "stated": null
+  },
+  {
+   "row": "99603",
+   "card": "en-bwp-BW40",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW40",
+   "stated": null
+  },
+  {
+   "row": "120424",
+   "card": "en-bwp-BW40",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW40",
+   "stated": null
+  },
+  {
+   "row": "123336",
+   "card": "en-bwp-BW40",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW40",
+   "stated": null
+  },
+  {
+   "row": "145827",
+   "card": "en-bwp-BW40",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW40",
+   "stated": null
+  },
+  {
+   "row": "195936",
+   "card": "en-bwp-BW40",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW40",
+   "stated": null
+  },
+  {
+   "row": "203294",
+   "card": "en-bwp-BW40",
+   "product": "90403",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Volcarona - BW40 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "57536",
+   "card": "en-bwp-BW48",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW48",
+   "stated": null
+  },
+  {
+   "row": "88997",
+   "card": "en-bwp-BW48",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW48",
+   "stated": null
+  },
+  {
+   "row": "95821",
+   "card": "en-bwp-BW48",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW48",
+   "stated": null
+  },
+  {
+   "row": "100541",
+   "card": "en-bwp-BW48",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW48",
+   "stated": null
+  },
+  {
+   "row": "120256",
+   "card": "en-bwp-BW48",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW48",
+   "stated": null
+  },
+  {
+   "row": "123130",
+   "card": "en-bwp-BW48",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW48",
+   "stated": null
+  },
+  {
+   "row": "131519",
+   "card": "en-bwp-BW48",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW48",
+   "stated": null
+  },
+  {
+   "row": "140494",
+   "card": "en-bwp-BW48",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW48",
+   "stated": null
+  },
+  {
+   "row": "153815",
+   "card": "en-bwp-BW48",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW48",
+   "stated": null
+  },
+  {
+   "row": "198673",
+   "card": "en-bwp-BW48",
+   "product": "83520",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Altaria - BW48 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "209274",
+   "card": "en-bwp-BW48",
+   "product": "83520",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Altaria - BW48 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "57537",
+   "card": "en-bwp-BW51",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW51",
+   "stated": null
+  },
+  {
+   "row": "88998",
+   "card": "en-bwp-BW51",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW51",
+   "stated": null
+  },
+  {
+   "row": "100122",
+   "card": "en-bwp-BW51",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW51",
+   "stated": null
+  },
+  {
+   "row": "122564",
+   "card": "en-bwp-BW51",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW51",
+   "stated": null
+  },
+  {
+   "row": "134176",
+   "card": "en-bwp-BW51",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW51",
+   "stated": null
+  },
+  {
+   "row": "146153",
+   "card": "en-bwp-BW51",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW51",
+   "stated": null
+  },
+  {
+   "row": "195932",
+   "card": "en-bwp-BW51",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW51",
+   "stated": null
+  },
+  {
+   "row": "203290",
+   "card": "en-bwp-BW51",
+   "product": "84492",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Crobat - BW51 (Team Plasma) (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "56507",
+   "card": "en-bwp-BW53",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW53",
+   "stated": null
+  },
+  {
+   "row": "88441",
+   "card": "en-bwp-BW53",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW53",
+   "stated": null
+  },
+  {
+   "row": "95542",
+   "card": "en-bwp-BW53",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW53",
+   "stated": null
+  },
+  {
+   "row": "100368",
+   "card": "en-bwp-BW53",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW53",
+   "stated": null
+  },
+  {
+   "row": "119861",
+   "card": "en-bwp-BW53",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW53",
+   "stated": null
+  },
+  {
+   "row": "128016",
+   "card": "en-bwp-BW53",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW53",
+   "stated": null
+  },
+  {
+   "row": "137906",
+   "card": "en-bwp-BW53",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW53",
+   "stated": null
+  },
+  {
+   "row": "151082",
+   "card": "en-bwp-BW53",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW53",
+   "stated": null
+  },
+  {
+   "row": "196020",
+   "card": "en-bwp-BW53",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW53",
+   "stated": null
+  },
+  {
+   "row": "203217",
+   "card": "en-bwp-BW53",
+   "product": "85528",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Flygon - BW53 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "56412",
+   "card": "en-bwp-BW75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW75",
+   "stated": null
+  },
+  {
+   "row": "88390",
+   "card": "en-bwp-BW75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW75",
+   "stated": null
+  },
+  {
+   "row": "95508",
+   "card": "en-bwp-BW75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW75",
+   "stated": null
+  },
+  {
+   "row": "100355",
+   "card": "en-bwp-BW75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW75",
+   "stated": null
+  },
+  {
+   "row": "118828",
+   "card": "en-bwp-BW75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW75",
+   "stated": null
+  },
+  {
+   "row": "122695",
+   "card": "en-bwp-BW75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW75",
+   "stated": null
+  },
+  {
+   "row": "131286",
+   "card": "en-bwp-BW75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW75",
+   "stated": null
+  },
+  {
+   "row": "142943",
+   "card": "en-bwp-BW75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW75",
+   "stated": null
+  },
+  {
+   "row": "153912",
+   "card": "en-bwp-BW75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW75",
+   "stated": null
+  },
+  {
+   "row": "198633",
+   "card": "en-bwp-BW75",
+   "product": "87344",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Metagross - BW75 (Team Plasma) (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "205928",
+   "card": "en-bwp-BW75",
+   "product": "87344",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Metagross - BW75 (Team Plasma) (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
    "row": "68743",
    "card": "en-bwp-BW77",
    "product": null,
@@ -1028,6 +1598,159 @@
    "matched": "Pikachu - BW54",
    "asked": "BW77",
    "stated": "BW54"
+  },
+  {
+   "row": "58616",
+   "card": "en-bwp-BW84",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW84",
+   "stated": null
+  },
+  {
+   "row": "89468",
+   "card": "en-bwp-BW84",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW84",
+   "stated": null
+  },
+  {
+   "row": "96008",
+   "card": "en-bwp-BW84",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW84",
+   "stated": null
+  },
+  {
+   "row": "100674",
+   "card": "en-bwp-BW84",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW84",
+   "stated": null
+  },
+  {
+   "row": "122552",
+   "card": "en-bwp-BW84",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW84",
+   "stated": null
+  },
+  {
+   "row": "131438",
+   "card": "en-bwp-BW84",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW84",
+   "stated": null
+  },
+  {
+   "row": "142980",
+   "card": "en-bwp-BW84",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW84",
+   "stated": null
+  },
+  {
+   "row": "195892",
+   "card": "en-bwp-BW84",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW84",
+   "stated": null
+  },
+  {
+   "row": "203241",
+   "card": "en-bwp-BW84",
+   "product": "88318",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Porygon-Z (Team Plasma) - BW84 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "59024",
+   "card": "en-bwp-BW96",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW96",
+   "stated": null
+  },
+  {
+   "row": "90245",
+   "card": "en-bwp-BW96",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW96",
+   "stated": null
+  },
+  {
+   "row": "101134",
+   "card": "en-bwp-BW96",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW96",
+   "stated": null
+  },
+  {
+   "row": "119813",
+   "card": "en-bwp-BW96",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW96",
+   "stated": null
+  },
+  {
+   "row": "128797",
+   "card": "en-bwp-BW96",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW96",
+   "stated": null
+  },
+  {
+   "row": "149276",
+   "card": "en-bwp-BW96",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "BW96",
+   "stated": null
+  },
+  {
+   "row": "202160",
+   "card": "en-bwp-BW96",
+   "product": "97092",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Tornadus EX - BW96 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "209503",
+   "card": "en-bwp-BW96",
+   "product": "89979",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Tornadus EX - BW96 (Prerelease)",
+   "asked": null,
+   "stated": null
   },
   {
    "row": "195139",
@@ -2290,6 +3013,465 @@
    "stated": "27"
   },
   {
+   "row": "52584",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "81529",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "87891",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "94769",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "99394",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "118692",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "121934",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "125116",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "130583",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "133406",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "137033",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "142470",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "148278",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "153349",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "193543",
+   "card": "en-hgssp-HGSS18",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "HGSS18",
+   "stated": null
+  },
+  {
+   "row": "197847",
+   "card": "en-hgssp-HGSS18",
+   "product": "97703",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Tropical Tidal Wave - HGSS18 (Worlds 10) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "202433",
+   "card": "en-hgssp-HGSS18",
+   "product": "97703",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Tropical Tidal Wave - HGSS18 (Worlds 10) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "205239",
+   "card": "en-hgssp-HGSS18",
+   "product": "97703",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Tropical Tidal Wave - HGSS18 (Worlds 10) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "211862",
+   "card": "en-hgssp-HGSS18",
+   "product": "97703",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Tropical Tidal Wave - HGSS18 (Worlds 10) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "52241",
+   "card": "en-mep-002",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "2",
+   "stated": null
+  },
+  {
+   "row": "82237",
+   "card": "en-mep-002",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "2",
+   "stated": null
+  },
+  {
+   "row": "95332",
+   "card": "en-mep-002",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "2",
+   "stated": null
+  },
+  {
+   "row": "126083",
+   "card": "en-mep-002",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "2",
+   "stated": null
+  },
+  {
+   "row": "146545",
+   "card": "en-mep-002",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "2",
+   "stated": null
+  },
+  {
+   "row": "199762",
+   "card": "en-mep-002",
+   "product": "656802",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Inteleon - 002 [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "52250",
+   "card": "en-mep-017",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "17",
+   "stated": null
+  },
+  {
+   "row": "82517",
+   "card": "en-mep-017",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "17",
+   "stated": null
+  },
+  {
+   "row": "98075",
+   "card": "en-mep-017",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "17",
+   "stated": null
+  },
+  {
+   "row": "123673",
+   "card": "en-mep-017",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "17",
+   "stated": null
+  },
+  {
+   "row": "140811",
+   "card": "en-mep-017",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "17",
+   "stated": null
+  },
+  {
+   "row": "193898",
+   "card": "en-mep-017",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "17",
+   "stated": null
+  },
+  {
+   "row": "211109",
+   "card": "en-mep-017",
+   "product": "663193",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Toxtricity (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "47336",
+   "card": "en-mep-066",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "66",
+   "stated": null
+  },
+  {
+   "row": "52192",
+   "card": "en-mep-066",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "66",
+   "stated": null
+  },
+  {
+   "row": "82409",
+   "card": "en-mep-066",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "66",
+   "stated": null
+  },
+  {
+   "row": "97983",
+   "card": "en-mep-066",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "66",
+   "stated": null
+  },
+  {
+   "row": "100845",
+   "card": "en-mep-066",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "66",
+   "stated": null
+  },
+  {
+   "row": "123994",
+   "card": "en-mep-066",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "66",
+   "stated": null
+  },
+  {
+   "row": "131475",
+   "card": "en-mep-066",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "66",
+   "stated": null
+  },
+  {
+   "row": "140464",
+   "card": "en-mep-066",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "66",
+   "stated": null
+  },
+  {
+   "row": "151359",
+   "card": "en-mep-066",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "66",
+   "stated": null
+  },
+  {
+   "row": "195040",
+   "card": "en-mep-066",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "66",
+   "stated": null
+  },
+  {
+   "row": "211010",
+   "card": "en-mep-066",
+   "product": "685500",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Tyrantrum - 066 [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "47767",
+   "card": "en-mep-076",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "76",
+   "stated": null
+  },
+  {
+   "row": "52195",
+   "card": "en-mep-076",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "76",
+   "stated": null
+  },
+  {
+   "row": "82239",
+   "card": "en-mep-076",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "76",
+   "stated": null
+  },
+  {
+   "row": "98034",
+   "card": "en-mep-076",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "76",
+   "stated": null
+  },
+  {
+   "row": "126129",
+   "card": "en-mep-076",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "76",
+   "stated": null
+  },
+  {
+   "row": "134418",
+   "card": "en-mep-076",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "76",
+   "stated": null
+  },
+  {
+   "row": "193868",
+   "card": "en-mep-076",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "76",
+   "stated": null
+  },
+  {
+   "row": "210704",
+   "card": "en-mep-076",
+   "product": "694687",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Crobat - 076 [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
    "row": "55134",
    "card": "en-np-23",
    "product": null,
@@ -2414,6 +3596,42 @@
    "matched": "Tropical Wind - 026 (2004 World Championships) [Participation]",
    "asked": "27",
    "stated": "26"
+  },
+  {
+   "row": "195191",
+   "card": "en-np-36",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "36",
+   "stated": null
+  },
+  {
+   "row": "198340",
+   "card": "en-np-36",
+   "product": "97703",
+   "why": "TCGdex maps a product stating another number",
+   "matched": "Tropical Tidal Wave - HGSS18 (Worlds 10) [Staff]",
+   "asked": "36",
+   "stated": "HGSS18"
+  },
+  {
+   "row": "202435",
+   "card": "en-np-36",
+   "product": "97703",
+   "why": "TCGdex maps a product stating another number",
+   "matched": "Tropical Tidal Wave - HGSS18 (Worlds 10) [Staff]",
+   "asked": "36",
+   "stated": "HGSS18"
+  },
+  {
+   "row": "205240",
+   "card": "en-np-36",
+   "product": "97703",
+   "why": "TCGdex maps a product stating another number",
+   "matched": "Tropical Tidal Wave - HGSS18 (Worlds 10) [Staff]",
+   "asked": "36",
+   "stated": "HGSS18"
   },
   {
    "row": "75281",
@@ -2650,6 +3868,1293 @@
    "stated": "63"
   },
   {
+   "row": "58590",
+   "card": "en-smp-SM10",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM10",
+   "stated": null
+  },
+  {
+   "row": "88492",
+   "card": "en-smp-SM10",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM10",
+   "stated": null
+  },
+  {
+   "row": "119391",
+   "card": "en-smp-SM10",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM10",
+   "stated": null
+  },
+  {
+   "row": "122722",
+   "card": "en-smp-SM10",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM10",
+   "stated": null
+  },
+  {
+   "row": "137582",
+   "card": "en-smp-SM10",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM10",
+   "stated": null
+  },
+  {
+   "row": "151079",
+   "card": "en-smp-SM10",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM10",
+   "stated": null
+  },
+  {
+   "row": "199529",
+   "card": "en-smp-SM10",
+   "product": "127182",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Shiinotic - SM10 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "205941",
+   "card": "en-smp-SM10",
+   "product": "127182",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Shiinotic - SM10 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "60346",
+   "card": "en-smp-SM115",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM115",
+   "stated": null
+  },
+  {
+   "row": "89201",
+   "card": "en-smp-SM115",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM115",
+   "stated": null
+  },
+  {
+   "row": "95744",
+   "card": "en-smp-SM115",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM115",
+   "stated": null
+  },
+  {
+   "row": "102082",
+   "card": "en-smp-SM115",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM115",
+   "stated": null
+  },
+  {
+   "row": "120650",
+   "card": "en-smp-SM115",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM115",
+   "stated": null
+  },
+  {
+   "row": "122906",
+   "card": "en-smp-SM115",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM115",
+   "stated": null
+  },
+  {
+   "row": "142841",
+   "card": "en-smp-SM115",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM115",
+   "stated": null
+  },
+  {
+   "row": "153965",
+   "card": "en-smp-SM115",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM115",
+   "stated": null
+  },
+  {
+   "row": "207427",
+   "card": "en-smp-SM115",
+   "product": "166289",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Pheromosa - SM115 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "58836",
+   "card": "en-smp-SM13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM13",
+   "stated": null
+  },
+  {
+   "row": "90157",
+   "card": "en-smp-SM13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM13",
+   "stated": null
+  },
+  {
+   "row": "95487",
+   "card": "en-smp-SM13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM13",
+   "stated": null
+  },
+  {
+   "row": "121315",
+   "card": "en-smp-SM13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM13",
+   "stated": null
+  },
+  {
+   "row": "123599",
+   "card": "en-smp-SM13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM13",
+   "stated": null
+  },
+  {
+   "row": "131293",
+   "card": "en-smp-SM13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM13",
+   "stated": null
+  },
+  {
+   "row": "140370",
+   "card": "en-smp-SM13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM13",
+   "stated": null
+  },
+  {
+   "row": "151501",
+   "card": "en-smp-SM13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM13",
+   "stated": null
+  },
+  {
+   "row": "199556",
+   "card": "en-smp-SM13",
+   "product": "127187",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Oranguru - SM13 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "60495",
+   "card": "en-smp-SM132",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM132",
+   "stated": null
+  },
+  {
+   "row": "88490",
+   "card": "en-smp-SM132",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM132",
+   "stated": null
+  },
+  {
+   "row": "101836",
+   "card": "en-smp-SM132",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM132",
+   "stated": null
+  },
+  {
+   "row": "120015",
+   "card": "en-smp-SM132",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM132",
+   "stated": null
+  },
+  {
+   "row": "125477",
+   "card": "en-smp-SM132",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM132",
+   "stated": null
+  },
+  {
+   "row": "146809",
+   "card": "en-smp-SM132",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM132",
+   "stated": null
+  },
+  {
+   "row": "207658",
+   "card": "en-smp-SM132",
+   "product": "172936",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Delcatty - SM132 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "61226",
+   "card": "en-smp-SM218",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM218",
+   "stated": null
+  },
+  {
+   "row": "89184",
+   "card": "en-smp-SM218",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM218",
+   "stated": null
+  },
+  {
+   "row": "103261",
+   "card": "en-smp-SM218",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM218",
+   "stated": null
+  },
+  {
+   "row": "120803",
+   "card": "en-smp-SM218",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM218",
+   "stated": null
+  },
+  {
+   "row": "134563",
+   "card": "en-smp-SM218",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM218",
+   "stated": null
+  },
+  {
+   "row": "158330",
+   "card": "en-smp-SM218",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM218",
+   "stated": null
+  },
+  {
+   "row": "208014",
+   "card": "en-smp-SM218",
+   "product": "201941",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Buzzwole - SM218 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "60204",
+   "card": "en-smp-SM221",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM221",
+   "stated": null
+  },
+  {
+   "row": "88794",
+   "card": "en-smp-SM221",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM221",
+   "stated": null
+  },
+  {
+   "row": "119401",
+   "card": "en-smp-SM221",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM221",
+   "stated": null
+  },
+  {
+   "row": "122838",
+   "card": "en-smp-SM221",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM221",
+   "stated": null
+  },
+  {
+   "row": "137617",
+   "card": "en-smp-SM221",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM221",
+   "stated": null
+  },
+  {
+   "row": "148946",
+   "card": "en-smp-SM221",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM221",
+   "stated": null
+  },
+  {
+   "row": "207231",
+   "card": "en-smp-SM221",
+   "product": "201945",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Blacephalon - SM221 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "60086",
+   "card": "en-smp-SM49",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM49",
+   "stated": null
+  },
+  {
+   "row": "89332",
+   "card": "en-smp-SM49",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM49",
+   "stated": null
+  },
+  {
+   "row": "102585",
+   "card": "en-smp-SM49",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM49",
+   "stated": null
+  },
+  {
+   "row": "126642",
+   "card": "en-smp-SM49",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM49",
+   "stated": null
+  },
+  {
+   "row": "134414",
+   "card": "en-smp-SM49",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM49",
+   "stated": null
+  },
+  {
+   "row": "158262",
+   "card": "en-smp-SM49",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM49",
+   "stated": null
+  },
+  {
+   "row": "207015",
+   "card": "en-smp-SM49",
+   "product": "139091",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Bewear - SM49 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "76511",
+   "card": "en-smp-SM72",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM72",
+   "stated": null
+  },
+  {
+   "row": "89635",
+   "card": "en-smp-SM72",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM72",
+   "stated": null
+  },
+  {
+   "row": "101925",
+   "card": "en-smp-SM72",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM72",
+   "stated": null
+  },
+  {
+   "row": "120478",
+   "card": "en-smp-SM72",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM72",
+   "stated": null
+  },
+  {
+   "row": "123083",
+   "card": "en-smp-SM72",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM72",
+   "stated": null
+  },
+  {
+   "row": "131488",
+   "card": "en-smp-SM72",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM72",
+   "stated": null
+  },
+  {
+   "row": "143006",
+   "card": "en-smp-SM72",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM72",
+   "stated": null
+  },
+  {
+   "row": "157836",
+   "card": "en-smp-SM72",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM72",
+   "stated": null
+  },
+  {
+   "row": "203063",
+   "card": "en-smp-SM72",
+   "product": "151708",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Alolan Raichu - SM72 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "59684",
+   "card": "en-smp-SM75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM75",
+   "stated": null
+  },
+  {
+   "row": "90900",
+   "card": "en-smp-SM75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM75",
+   "stated": null
+  },
+  {
+   "row": "102397",
+   "card": "en-smp-SM75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM75",
+   "stated": null
+  },
+  {
+   "row": "120406",
+   "card": "en-smp-SM75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM75",
+   "stated": null
+  },
+  {
+   "row": "129476",
+   "card": "en-smp-SM75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM75",
+   "stated": null
+  },
+  {
+   "row": "149474",
+   "card": "en-smp-SM75",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM75",
+   "stated": null
+  },
+  {
+   "row": "207069",
+   "card": "en-smp-SM75",
+   "product": "151705",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Registeel - SM75 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "58852",
+   "card": "en-smp-SM94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM94",
+   "stated": null
+  },
+  {
+   "row": "90163",
+   "card": "en-smp-SM94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM94",
+   "stated": null
+  },
+  {
+   "row": "95194",
+   "card": "en-smp-SM94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM94",
+   "stated": null
+  },
+  {
+   "row": "121324",
+   "card": "en-smp-SM94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM94",
+   "stated": null
+  },
+  {
+   "row": "123545",
+   "card": "en-smp-SM94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM94",
+   "stated": null
+  },
+  {
+   "row": "125827",
+   "card": "en-smp-SM94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM94",
+   "stated": null
+  },
+  {
+   "row": "134484",
+   "card": "en-smp-SM94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM94",
+   "stated": null
+  },
+  {
+   "row": "140160",
+   "card": "en-smp-SM94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM94",
+   "stated": null
+  },
+  {
+   "row": "151472",
+   "card": "en-smp-SM94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM94",
+   "stated": null
+  },
+  {
+   "row": "157739",
+   "card": "en-smp-SM94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "SM94",
+   "stated": null
+  },
+  {
+   "row": "209096",
+   "card": "en-smp-SM94",
+   "product": "158168",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Wash Rotom - SM94 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "63888",
+   "card": "en-svp-021",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "21",
+   "stated": null
+  },
+  {
+   "row": "132022",
+   "card": "en-svp-021",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "21",
+   "stated": null
+  },
+  {
+   "row": "194312",
+   "card": "en-svp-021",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "21",
+   "stated": null
+  },
+  {
+   "row": "202041",
+   "card": "en-svp-021",
+   "product": "501893",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Murkrow - 021 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "64614",
+   "card": "en-svp-022",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "22",
+   "stated": null
+  },
+  {
+   "row": "132854",
+   "card": "en-svp-022",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "22",
+   "stated": null
+  },
+  {
+   "row": "140568",
+   "card": "en-svp-022",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "22",
+   "stated": null
+  },
+  {
+   "row": "193831",
+   "card": "en-svp-022",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "22",
+   "stated": null
+  },
+  {
+   "row": "202055",
+   "card": "en-svp-022",
+   "product": "527564",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Pelipper - 022 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "209771",
+   "card": "en-svp-022",
+   "product": "527564",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Pelipper - 022 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "72081",
+   "card": "en-svp-037",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "37",
+   "stated": null
+  },
+  {
+   "row": "92254",
+   "card": "en-svp-037",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "37",
+   "stated": null
+  },
+  {
+   "row": "121321",
+   "card": "en-svp-037",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "37",
+   "stated": null
+  },
+  {
+   "row": "131915",
+   "card": "en-svp-037",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "37",
+   "stated": null
+  },
+  {
+   "row": "151866",
+   "card": "en-svp-037",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "37",
+   "stated": null
+  },
+  {
+   "row": "203568",
+   "card": "en-svp-037",
+   "product": "512896",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Cleffa - 037 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "62267",
+   "card": "en-svp-038",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "38",
+   "stated": null
+  },
+  {
+   "row": "129173",
+   "card": "en-svp-038",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "38",
+   "stated": null
+  },
+  {
+   "row": "194013",
+   "card": "en-svp-038",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "38",
+   "stated": null
+  },
+  {
+   "row": "211212",
+   "card": "en-svp-038",
+   "product": "513426",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Togekiss - 038 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "62772",
+   "card": "en-svp-039",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "39",
+   "stated": null
+  },
+  {
+   "row": "88890",
+   "card": "en-svp-039",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "39",
+   "stated": null
+  },
+  {
+   "row": "100025",
+   "card": "en-svp-039",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "39",
+   "stated": null
+  },
+  {
+   "row": "119982",
+   "card": "en-svp-039",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "39",
+   "stated": null
+  },
+  {
+   "row": "122891",
+   "card": "en-svp-039",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "39",
+   "stated": null
+  },
+  {
+   "row": "194046",
+   "card": "en-svp-039",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "39",
+   "stated": null
+  },
+  {
+   "row": "202034",
+   "card": "en-svp-039",
+   "product": "513429",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Mawile - 039 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "209660",
+   "card": "en-svp-039",
+   "product": "513429",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Mawile - 039 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "71931",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "87438",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "94812",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "101725",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "118839",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "124865",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "130628",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "133457",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "137091",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "142521",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "148330",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "153398",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "195227",
+   "card": "en-svp-045",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "45",
+   "stated": null
+  },
+  {
+   "row": "198146",
+   "card": "en-svp-045",
+   "product": "583700",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Paradise Resort - 045 (World Championships 2023) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "202498",
+   "card": "en-svp-045",
+   "product": "583700",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Paradise Resort - 045 (World Championships 2023) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "205306",
+   "card": "en-svp-045",
+   "product": "583700",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Paradise Resort - 045 (World Championships 2023) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "73061",
+   "card": "en-svp-089",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "89",
+   "stated": null
+  },
+  {
+   "row": "92461",
+   "card": "en-svp-089",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "89",
+   "stated": null
+  },
+  {
+   "row": "103281",
+   "card": "en-svp-089",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "89",
+   "stated": null
+  },
+  {
+   "row": "127546",
+   "card": "en-svp-089",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "89",
+   "stated": null
+  },
+  {
+   "row": "149447",
+   "card": "en-svp-089",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "89",
+   "stated": null
+  },
+  {
+   "row": "202246",
+   "card": "en-svp-089",
+   "product": "543950",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Feraligatr - 089 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "59538",
+   "card": "en-svp-090",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "90",
+   "stated": null
+  },
+  {
+   "row": "90886",
+   "card": "en-svp-090",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "90",
+   "stated": null
+  },
+  {
+   "row": "102468",
+   "card": "en-svp-090",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "90",
+   "stated": null
+  },
+  {
+   "row": "126664",
+   "card": "en-svp-090",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "90",
+   "stated": null
+  },
+  {
+   "row": "146717",
+   "card": "en-svp-090",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "90",
+   "stated": null
+  },
+  {
+   "row": "199823",
+   "card": "en-svp-090",
+   "product": "543951",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Metang - 090 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "71570",
+   "card": "en-svp-091",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "91",
+   "stated": null
+  },
+  {
+   "row": "89950",
+   "card": "en-svp-091",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "91",
+   "stated": null
+  },
+  {
+   "row": "100198",
+   "card": "en-svp-091",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "91",
+   "stated": null
+  },
+  {
+   "row": "138956",
+   "card": "en-svp-091",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "91",
+   "stated": null
+  },
+  {
+   "row": "194307",
+   "card": "en-svp-091",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "91",
+   "stated": null
+  },
+  {
+   "row": "202069",
+   "card": "en-svp-091",
+   "product": "543952",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Koraidon - 091 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
    "row": "195799",
    "card": "en-svp-106",
    "product": null,
@@ -2666,6 +5171,375 @@
    "matched": "Pikachu - 190",
    "asked": "106",
    "stated": "190"
+  },
+  {
+   "row": "61777",
+   "card": "en-svp-136",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "136",
+   "stated": null
+  },
+  {
+   "row": "89781",
+   "card": "en-svp-136",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "136",
+   "stated": null
+  },
+  {
+   "row": "100194",
+   "card": "en-svp-136",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "136",
+   "stated": null
+  },
+  {
+   "row": "122599",
+   "card": "en-svp-136",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "136",
+   "stated": null
+  },
+  {
+   "row": "131685",
+   "card": "en-svp-136",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "136",
+   "stated": null
+  },
+  {
+   "row": "148661",
+   "card": "en-svp-136",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "136",
+   "stated": null
+  },
+  {
+   "row": "195992",
+   "card": "en-svp-136",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "136",
+   "stated": null
+  },
+  {
+   "row": "203330",
+   "card": "en-svp-136",
+   "product": "580337",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Bouffalant - 136 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "67124",
+   "card": "en-svp-150",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "150",
+   "stated": null
+  },
+  {
+   "row": "87412",
+   "card": "en-svp-150",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "150",
+   "stated": null
+  },
+  {
+   "row": "94821",
+   "card": "en-svp-150",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "150",
+   "stated": null
+  },
+  {
+   "row": "99443",
+   "card": "en-svp-150",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "150",
+   "stated": null
+  },
+  {
+   "row": "121730",
+   "card": "en-svp-150",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "150",
+   "stated": null
+  },
+  {
+   "row": "125177",
+   "card": "en-svp-150",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "150",
+   "stated": null
+  },
+  {
+   "row": "133100",
+   "card": "en-svp-150",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "150",
+   "stated": null
+  },
+  {
+   "row": "137092",
+   "card": "en-svp-150",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "150",
+   "stated": null
+  },
+  {
+   "row": "142529",
+   "card": "en-svp-150",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "150",
+   "stated": null
+  },
+  {
+   "row": "148338",
+   "card": "en-svp-150",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "150",
+   "stated": null
+  },
+  {
+   "row": "153410",
+   "card": "en-svp-150",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "150",
+   "stated": null
+  },
+  {
+   "row": "195229",
+   "card": "en-svp-150",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "150",
+   "stated": null
+  },
+  {
+   "row": "204191",
+   "card": "en-svp-150",
+   "product": "583726",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Paradise Resort - 150 (World Championships 2024) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "208440",
+   "card": "en-svp-150",
+   "product": "583726",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Paradise Resort - 150 (World Championships 2024) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "60580",
+   "card": "en-svp-181",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "181",
+   "stated": null
+  },
+  {
+   "row": "91889",
+   "card": "en-svp-181",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "181",
+   "stated": null
+  },
+  {
+   "row": "126046",
+   "card": "en-svp-181",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "181",
+   "stated": null
+  },
+  {
+   "row": "146882",
+   "card": "en-svp-181",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "181",
+   "stated": null
+  },
+  {
+   "row": "199847",
+   "card": "en-svp-181",
+   "product": "623233",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "N's Darmanitan - 181 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "62078",
+   "card": "en-svp-183",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "183",
+   "stated": null
+  },
+  {
+   "row": "128886",
+   "card": "en-svp-183",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "183",
+   "stated": null
+  },
+  {
+   "row": "138018",
+   "card": "en-svp-183",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "183",
+   "stated": null
+  },
+  {
+   "row": "193983",
+   "card": "en-svp-183",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "183",
+   "stated": null
+  },
+  {
+   "row": "202062",
+   "card": "en-svp-183",
+   "product": "624472",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Lillie's Ribombee - 183 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "209801",
+   "card": "en-svp-183",
+   "product": "624472",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Lillie's Ribombee - 183 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "58803",
+   "card": "en-svp-184",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "184",
+   "stated": null
+  },
+  {
+   "row": "90391",
+   "card": "en-svp-184",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "184",
+   "stated": null
+  },
+  {
+   "row": "102399",
+   "card": "en-svp-184",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "184",
+   "stated": null
+  },
+  {
+   "row": "126504",
+   "card": "en-svp-184",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "184",
+   "stated": null
+  },
+  {
+   "row": "131031",
+   "card": "en-svp-184",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "184",
+   "stated": null
+  },
+  {
+   "row": "133974",
+   "card": "en-svp-184",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "184",
+   "stated": null
+  },
+  {
+   "row": "193856",
+   "card": "en-svp-184",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "184",
+   "stated": null
+  },
+  {
+   "row": "198127",
+   "card": "en-svp-184",
+   "product": "623238",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Hop's Snorlax - 184 (Prerelease)",
+   "asked": null,
+   "stated": null
   },
   {
    "row": "60206",
@@ -2866,6 +5740,753 @@
    "stated": "77"
   },
   {
+   "row": "59526",
+   "card": "en-xyp-XY10",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY10",
+   "stated": null
+  },
+  {
+   "row": "88500",
+   "card": "en-xyp-XY10",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY10",
+   "stated": null
+  },
+  {
+   "row": "97763",
+   "card": "en-xyp-XY10",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY10",
+   "stated": null
+  },
+  {
+   "row": "126118",
+   "card": "en-xyp-XY10",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY10",
+   "stated": null
+  },
+  {
+   "row": "151546",
+   "card": "en-xyp-XY10",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY10",
+   "stated": null
+  },
+  {
+   "row": "203509",
+   "card": "en-xyp-XY10",
+   "product": "96370",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Dragalge - XY10 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "56613",
+   "card": "en-xyp-XY127",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY127",
+   "stated": null
+  },
+  {
+   "row": "88523",
+   "card": "en-xyp-XY127",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY127",
+   "stated": null
+  },
+  {
+   "row": "95596",
+   "card": "en-xyp-XY127",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY127",
+   "stated": null
+  },
+  {
+   "row": "102080",
+   "card": "en-xyp-XY127",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY127",
+   "stated": null
+  },
+  {
+   "row": "120647",
+   "card": "en-xyp-XY127",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY127",
+   "stated": null
+  },
+  {
+   "row": "122902",
+   "card": "en-xyp-XY127",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY127",
+   "stated": null
+  },
+  {
+   "row": "140205",
+   "card": "en-xyp-XY127",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY127",
+   "stated": null
+  },
+  {
+   "row": "151327",
+   "card": "en-xyp-XY127",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY127",
+   "stated": null
+  },
+  {
+   "row": "196036",
+   "card": "en-xyp-XY127",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY127",
+   "stated": null
+  },
+  {
+   "row": "203243",
+   "card": "en-xyp-XY127",
+   "product": "118863",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Moltres (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "78351",
+   "card": "en-xyp-XY128",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY128",
+   "stated": null
+  },
+  {
+   "row": "90080",
+   "card": "en-xyp-XY128",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY128",
+   "stated": null
+  },
+  {
+   "row": "119619",
+   "card": "en-xyp-XY128",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY128",
+   "stated": null
+  },
+  {
+   "row": "123482",
+   "card": "en-xyp-XY128",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY128",
+   "stated": null
+  },
+  {
+   "row": "131792",
+   "card": "en-xyp-XY128",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY128",
+   "stated": null
+  },
+  {
+   "row": "145963",
+   "card": "en-xyp-XY128",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY128",
+   "stated": null
+  },
+  {
+   "row": "195961",
+   "card": "en-xyp-XY128",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY128",
+   "stated": null
+  },
+  {
+   "row": "203364",
+   "card": "en-xyp-XY128",
+   "product": "118865",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "White Kyurem (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "78353",
+   "card": "en-xyp-XY129",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY129",
+   "stated": null
+  },
+  {
+   "row": "91363",
+   "card": "en-xyp-XY129",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY129",
+   "stated": null
+  },
+  {
+   "row": "125969",
+   "card": "en-xyp-XY129",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY129",
+   "stated": null
+  },
+  {
+   "row": "149185",
+   "card": "en-xyp-XY129",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY129",
+   "stated": null
+  },
+  {
+   "row": "202183",
+   "card": "en-xyp-XY129",
+   "product": "118868",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Zygarde (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "58874",
+   "card": "en-xyp-XY13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY13",
+   "stated": null
+  },
+  {
+   "row": "90161",
+   "card": "en-xyp-XY13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY13",
+   "stated": null
+  },
+  {
+   "row": "100288",
+   "card": "en-xyp-XY13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY13",
+   "stated": null
+  },
+  {
+   "row": "120663",
+   "card": "en-xyp-XY13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY13",
+   "stated": null
+  },
+  {
+   "row": "123540",
+   "card": "en-xyp-XY13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY13",
+   "stated": null
+  },
+  {
+   "row": "151019",
+   "card": "en-xyp-XY13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY13",
+   "stated": null
+  },
+  {
+   "row": "196083",
+   "card": "en-xyp-XY13",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY13",
+   "stated": null
+  },
+  {
+   "row": "203347",
+   "card": "en-xyp-XY13",
+   "product": "96374",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Machamp - XY13 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "57384",
+   "card": "en-xyp-XY130",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY130",
+   "stated": null
+  },
+  {
+   "row": "88828",
+   "card": "en-xyp-XY130",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY130",
+   "stated": null
+  },
+  {
+   "row": "100081",
+   "card": "en-xyp-XY130",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY130",
+   "stated": null
+  },
+  {
+   "row": "120147",
+   "card": "en-xyp-XY130",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY130",
+   "stated": null
+  },
+  {
+   "row": "122980",
+   "card": "en-xyp-XY130",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY130",
+   "stated": null
+  },
+  {
+   "row": "145808",
+   "card": "en-xyp-XY130",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY130",
+   "stated": null
+  },
+  {
+   "row": "195922",
+   "card": "en-xyp-XY130",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY130",
+   "stated": null
+  },
+  {
+   "row": "204866",
+   "card": "en-xyp-XY130",
+   "product": "118869",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Tyranitar (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "60021",
+   "card": "en-xyp-XY144",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY144",
+   "stated": null
+  },
+  {
+   "row": "91144",
+   "card": "en-xyp-XY144",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY144",
+   "stated": null
+  },
+  {
+   "row": "95705",
+   "card": "en-xyp-XY144",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY144",
+   "stated": null
+  },
+  {
+   "row": "100458",
+   "card": "en-xyp-XY144",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY144",
+   "stated": null
+  },
+  {
+   "row": "122519",
+   "card": "en-xyp-XY144",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY144",
+   "stated": null
+  },
+  {
+   "row": "131422",
+   "card": "en-xyp-XY144",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY144",
+   "stated": null
+  },
+  {
+   "row": "143003",
+   "card": "en-xyp-XY144",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY144",
+   "stated": null
+  },
+  {
+   "row": "153985",
+   "card": "en-xyp-XY144",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY144",
+   "stated": null
+  },
+  {
+   "row": "198662",
+   "card": "en-xyp-XY144",
+   "product": "129375",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Yanmega - XY144 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "206163",
+   "card": "en-xyp-XY144",
+   "product": "129375",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Yanmega - XY144 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "78359",
+   "card": "en-xyp-XY145",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY145",
+   "stated": null
+  },
+  {
+   "row": "88906",
+   "card": "en-xyp-XY145",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY145",
+   "stated": null
+  },
+  {
+   "row": "101838",
+   "card": "en-xyp-XY145",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY145",
+   "stated": null
+  },
+  {
+   "row": "120040",
+   "card": "en-xyp-XY145",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY145",
+   "stated": null
+  },
+  {
+   "row": "128829",
+   "card": "en-xyp-XY145",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY145",
+   "stated": null
+  },
+  {
+   "row": "137898",
+   "card": "en-xyp-XY145",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY145",
+   "stated": null
+  },
+  {
+   "row": "151104",
+   "card": "en-xyp-XY145",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY145",
+   "stated": null
+  },
+  {
+   "row": "203490",
+   "card": "en-xyp-XY145",
+   "product": "129376",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Volcanion (XY Steam Siege Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "59217",
+   "card": "en-xyp-XY146",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY146",
+   "stated": null
+  },
+  {
+   "row": "89209",
+   "card": "en-xyp-XY146",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY146",
+   "stated": null
+  },
+  {
+   "row": "97904",
+   "card": "en-xyp-XY146",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY146",
+   "stated": null
+  },
+  {
+   "row": "102237",
+   "card": "en-xyp-XY146",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY146",
+   "stated": null
+  },
+  {
+   "row": "120883",
+   "card": "en-xyp-XY146",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY146",
+   "stated": null
+  },
+  {
+   "row": "125879",
+   "card": "en-xyp-XY146",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY146",
+   "stated": null
+  },
+  {
+   "row": "137834",
+   "card": "en-xyp-XY146",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY146",
+   "stated": null
+  },
+  {
+   "row": "149049",
+   "card": "en-xyp-XY146",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY146",
+   "stated": null
+  },
+  {
+   "row": "195976",
+   "card": "en-xyp-XY146",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY146",
+   "stated": null
+  },
+  {
+   "row": "203257",
+   "card": "en-xyp-XY146",
+   "product": "129379",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Clawitzer - XY146 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "78361",
+   "card": "en-xyp-XY147",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY147",
+   "stated": null
+  },
+  {
+   "row": "88839",
+   "card": "en-xyp-XY147",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY147",
+   "stated": null
+  },
+  {
+   "row": "95450",
+   "card": "en-xyp-XY147",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY147",
+   "stated": null
+  },
+  {
+   "row": "100722",
+   "card": "en-xyp-XY147",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY147",
+   "stated": null
+  },
+  {
+   "row": "119772",
+   "card": "en-xyp-XY147",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY147",
+   "stated": null
+  },
+  {
+   "row": "125413",
+   "card": "en-xyp-XY147",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY147",
+   "stated": null
+  },
+  {
+   "row": "137738",
+   "card": "en-xyp-XY147",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY147",
+   "stated": null
+  },
+  {
+   "row": "148838",
+   "card": "en-xyp-XY147",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY147",
+   "stated": null
+  },
+  {
+   "row": "195996",
+   "card": "en-xyp-XY147",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY147",
+   "stated": null
+  },
+  {
+   "row": "203180",
+   "card": "en-xyp-XY147",
+   "product": "129381",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Hoopa - XY147 (Prerelease) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
    "row": "56509",
    "card": "en-xyp-XY177a",
    "product": null,
@@ -3044,6 +6665,627 @@
    "matched": "M Sharpedo EX - XY200",
    "asked": "XY200A",
    "stated": "XY200"
+  },
+  {
+   "row": "59524",
+   "card": "en-xyp-XY21",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY21",
+   "stated": null
+  },
+  {
+   "row": "90710",
+   "card": "en-xyp-XY21",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY21",
+   "stated": null
+  },
+  {
+   "row": "128159",
+   "card": "en-xyp-XY21",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY21",
+   "stated": null
+  },
+  {
+   "row": "149437",
+   "card": "en-xyp-XY21",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY21",
+   "stated": null
+  },
+  {
+   "row": "202186",
+   "card": "en-xyp-XY21",
+   "product": "96383",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Bronzong - XY21 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "57372",
+   "card": "en-xyp-XY39",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY39",
+   "stated": null
+  },
+  {
+   "row": "88927",
+   "card": "en-xyp-XY39",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY39",
+   "stated": null
+  },
+  {
+   "row": "100096",
+   "card": "en-xyp-XY39",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY39",
+   "stated": null
+  },
+  {
+   "row": "120170",
+   "card": "en-xyp-XY39",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY39",
+   "stated": null
+  },
+  {
+   "row": "125807",
+   "card": "en-xyp-XY39",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY39",
+   "stated": null
+  },
+  {
+   "row": "134389",
+   "card": "en-xyp-XY39",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY39",
+   "stated": null
+  },
+  {
+   "row": "148757",
+   "card": "en-xyp-XY39",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY39",
+   "stated": null
+  },
+  {
+   "row": "195974",
+   "card": "en-xyp-XY39",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY39",
+   "stated": null
+  },
+  {
+   "row": "203255",
+   "card": "en-xyp-XY39",
+   "product": "96413",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Kingdra - XY39 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "57923",
+   "card": "en-xyp-XY46",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY46",
+   "stated": null
+  },
+  {
+   "row": "89191",
+   "card": "en-xyp-XY46",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY46",
+   "stated": null
+  },
+  {
+   "row": "95876",
+   "card": "en-xyp-XY46",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY46",
+   "stated": null
+  },
+  {
+   "row": "100610",
+   "card": "en-xyp-XY46",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY46",
+   "stated": null
+  },
+  {
+   "row": "120320",
+   "card": "en-xyp-XY46",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY46",
+   "stated": null
+  },
+  {
+   "row": "123187",
+   "card": "en-xyp-XY46",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY46",
+   "stated": null
+  },
+  {
+   "row": "137668",
+   "card": "en-xyp-XY46",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY46",
+   "stated": null
+  },
+  {
+   "row": "149015",
+   "card": "en-xyp-XY46",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY46",
+   "stated": null
+  },
+  {
+   "row": "195981",
+   "card": "en-xyp-XY46",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY46",
+   "stated": null
+  },
+  {
+   "row": "203287",
+   "card": "en-xyp-XY46",
+   "product": "100503",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Altaria - XY46 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "78426",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "87528",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "94817",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "99493",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "118748",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "122044",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "125236",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "130705",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "133516",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "137158",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "142528",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "148385",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "153411",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "195231",
+   "card": "en-xyp-XY60",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY60",
+   "stated": null
+  },
+  {
+   "row": "198221",
+   "card": "en-xyp-XY60",
+   "product": "102802",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Gyarados - XY60 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "202556",
+   "card": "en-xyp-XY60",
+   "product": "102802",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Gyarados - XY60 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "205374",
+   "card": "en-xyp-XY60",
+   "product": "102802",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Gyarados - XY60 (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "60575",
+   "card": "en-xyp-XY68",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY68",
+   "stated": null
+  },
+  {
+   "row": "91765",
+   "card": "en-xyp-XY68",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY68",
+   "stated": null
+  },
+  {
+   "row": "102922",
+   "card": "en-xyp-XY68",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY68",
+   "stated": null
+  },
+  {
+   "row": "126994",
+   "card": "en-xyp-XY68",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY68",
+   "stated": null
+  },
+  {
+   "row": "146772",
+   "card": "en-xyp-XY68",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY68",
+   "stated": null
+  },
+  {
+   "row": "199827",
+   "card": "en-xyp-XY68",
+   "product": "108597",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Chesnaught (Prerelease)",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "78453",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "87590",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "97563",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "99779",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "118877",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "122098",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "125323",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "133135",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "137235",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "142627",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "148435",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "153500",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "195234",
+   "card": "en-xyp-XY91",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY91",
+   "stated": null
+  },
+  {
+   "row": "198253",
+   "card": "en-xyp-XY91",
+   "product": "199312",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Champions Festival (2015) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "202602",
+   "card": "en-xyp-XY91",
+   "product": "199312",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Champions Festival (2015) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "205408",
+   "card": "en-xyp-XY91",
+   "product": "199312",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Champions Festival (2015) [Staff]",
+   "asked": null,
+   "stated": null
+  },
+  {
+   "row": "78456",
+   "card": "en-xyp-XY94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY94",
+   "stated": null
+  },
+  {
+   "row": "91822",
+   "card": "en-xyp-XY94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY94",
+   "stated": null
+  },
+  {
+   "row": "102587",
+   "card": "en-xyp-XY94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY94",
+   "stated": null
+  },
+  {
+   "row": "126682",
+   "card": "en-xyp-XY94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY94",
+   "stated": null
+  },
+  {
+   "row": "146567",
+   "card": "en-xyp-XY94",
+   "product": null,
+   "why": "states no number, on a card the old matcher mismatched",
+   "matched": null,
+   "asked": "XY94",
+   "stated": null
+  },
+  {
+   "row": "202150",
+   "card": "en-xyp-XY94",
+   "product": "114014",
+   "why": "stamped product, not the one TCGdex maps this card to",
+   "matched": "Trevenant (Prerelease)",
+   "asked": null,
+   "stated": null
   }
  ]
 }

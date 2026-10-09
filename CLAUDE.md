@@ -87,8 +87,7 @@ Shared, never copied — every duplicated implementation here has drifted.
 `git ls-files` is the authority; `setlist.test.js` asserts every `*.test.js`,
 `ingest.js`, `CLAUDE.md`, `PROGRESS.md`, `jptest.js` are in the index.
 Gitignored (need a DB URL or residential IP):
-`jpreconcile.js`, `tcgdexprobe.js`, `yahoogate.js`,
-`gradeprices.js`. `.gitignore` covers data, logs, credentials, scratch only.
+`jpreconcile.js`, `tcgdexprobe.js`, `yahoogate.js`. `.gitignore` covers data, logs, credentials, scratch only.
 
 - **Tracked is not deployed.** Render runs `server.js`; nothing requires
   `ingest.js`, and `/ingest.js` 404s (`approute.test.js`). Keys come from env
@@ -97,7 +96,9 @@ Gitignored (need a DB URL or residential IP):
 - **A file the server requires is not local tooling** (`yuyutei.js` ignored =
   `MODULE_NOT_FOUND` on boot). The audit tools are tracked so their findings
   are reproducible.
-- `checkout-disabled.js`, `login-disabled.js`: preserved, never loaded/served.
+- `checkout-disabled.js`, `login-disabled.js`, `compare-disabled.js`: preserved, never loaded/served.
+  `gradeprices-disabled.js` (PARKED 2026-10-10): exits 2 before anything runs, 0 eBay calls
+  (`nofabricated.test.js` runs it under a network trap).
 - git is last-match-wins; `git check-ignore` says nothing for a tracked file
   without `--no-index`. Being in the index is the guarantee.
 
@@ -128,9 +129,10 @@ PROGRESS 2026-10-09 (no estimates)). **No estimate is shown anywhere.**
   asks only Yahoo. Re-running or scheduling `node ingest.js yuyutei` is an
   open decision.
 - Alert evaluation still triggers on an unsettled price (open).
-- **Grade picker: no per-grade price for any grade** — no source (the multiplier is
-  deleted; `gradeprices.js` reads a `gradePrice` the listings payload dropped on
-  2026-10-08, §9.5). It filters the listings by grade; "Market value" is the raw price.
+- **Grade picker: no per-grade price for any grade** — no source (multiplier deleted;
+  gradeprices parked). It is labelled a listings filter ("Filter listings", badge
+  "Listings: PSA 10"); under any other pick the box reads "Raw NM market value" and
+  "No graded price is recorded." Reword both when a graded price source exists.
 
 - `price_history`: **zero rows carry an eBay source** (terms).
   `listing_photo_verdicts` holds hashed keys only — no title, price, URL, photo.
@@ -192,7 +194,7 @@ PROGRESS 2026-10-05: "The gates".
 | **P** | ingest `safePriceFor`/`refresh` -> TCGdex, else `tcgPlayerSearch`/`reprintPricing` | stored English prices |
 | **Q** | ingest `yahooJapanSearch` | stored Japanese medians |
 | **T** | `tcgdexprices` / `manifest --prices` | stored prices by TCGdex id |
-| **G** | `gradeprices.js` | grade aggregates via `/api/listings` |
+| **G** | `gradeprices-disabled.js` | PARKED — refuses to run (§9.5) |
 
 ## The gates
 
@@ -490,7 +492,6 @@ node ingest.js clean [--delete]                     # junk price audit
 node ingest.js jpcheck <lang> [...]                 # JP prices vs Yahoo
 node ingest.js jppurge [...]                        # remove bad JP rows
 node ingest.js alerts <userId> [...]                # evaluate alerts
-node gradeprices.js --limit=5 [--write]             # what each grade is worth
 node ingest.js tcgdexprices <lang> [--dry] [--set=X] [--max=N] [--gaps-only]
 node tcgdexharvest.js <lang> --dry                  # same, standalone
 node tcgdexprobe.js xcheck en 40                    # ours vs TCGdex
@@ -656,6 +657,8 @@ reprints reusing number and set name). Reprints keyed by SET ID
 (PROGRESS 2026-10-04) **So is a prefixed one, on the PRICING path too**: the
 TCGplayer search compares numbers whole (`cardnumber.js`) and never takes a hit
 stating another number; wrong rows are refused by id (`pricehold.notRefusedSql`).
+**Refused means refused everywhere a reader can see it**: headline, chart (`/api/history`),
+movers' and risers' BOTH ends (Roy, 2026-10-10); the row stays stored.
 A collision scan cannot see a product of a card we do not hold — count the
 fallback's rows by `matchedBy`; 74k unlabelled rows cannot be judged (shown with
 their age, re-asked first by value). **A stamped product ([Staff], (Prerelease))
@@ -757,6 +760,8 @@ licence §8.1(b)(c), read 2026-10-08 — the old "never stored" was stricter).
 and tile medians removed); no combined number shown — the deal % only CHOOSES.
 §8.1(d) — outlier.js medians and the deal % are per card, per view, never
 shown, never stored: OUTSIDE the clause (`ebayterms.test.js`). Uncertain reading = remove the thing.
+**Graded prices cannot be derived from eBay under §9.5** — gradeprices is parked
+(`gradeprices-disabled.js`); it returns only reading a graded-price source of its own.
 *Archive:* "A read endpoint must never write", "eBay listings are cached, never stored"
 
 **Before inventing a source, check what the current query already computes.**

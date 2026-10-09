@@ -1,5 +1,44 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 — refused rows off the chart, the grade control, gradeprices parked
+
+0 eBay calls. Roy's rule: refused means refused everywhere a reader can see it.
+
+### Refused rows
+- **Chart (`/api/history`)**: 762 refused rows on 98 cards reached it (759
+  `tcgplayer_market`, 3 `tcgdex_tcgplayer_normal`). Now `notRefusedSql`.
+  H09: before, 17 points $499.99-$509.99 (Gengar #10's product) + 4 Cardmarket;
+  after, the 4 Cardmarket points only. All 762 rows still stored.
+- **Movers and risers** (`trending.js`; `/api/trending/search` reads the same
+  builder): the current end passed `basePrintingSql`; the EARLIER end did not.
+  Measured: 0 pairs used a refused earlier end (24h 303, 7d 3,805, 30d 42 pairs),
+  but the 3 refused TCGdex-path rows could have. Now named there too.
+- **Consequence to know: Charizard ☆ δ (held)**: its chart now shows only the
+  $4,000 points — the refused rows were its ~$1,000 ones (PROGRESS 2026-10-09
+  (checks)), which Cardmarket sides with. The card shows no price either way.
+
+### The price box under a grade
+Graded pick: "Raw NM market value" + "No graded price is recorded." Raw LP/MP/…:
+"Raw NM market value" + "No price is recorded for this condition." Raw NM:
+unchanged. The number is the same raw headline.
+
+### gradeprices parked
+`gradeprices.js` (gitignored) -> `gradeprices-disabled.js` (tracked): exits 2
+before its first require; requiring it throws; the code below the guard is
+byte-identical. `nofabricated.test.js` runs it under a trap on fetch, http,
+https and net (made to fire first on a plain fetch): 0 network attempts, with
+and without `--write`. Graded prices cannot be derived from eBay under §9.5.
+
+### The grade control
+The selector opens "Filter listings — Choose which listings are shown below.
+This does not change the price: no graded price is recorded." The image badge
+read the bare grade ("PSA 10", or the wire format "PSA *"); it reads
+"Listings: PSA 10" / "Listings: PSA — any grade". Status and Condition unchanged.
+
+### CLAUDE.md
+Compressed first: 57,601 -> 57,020 (archive "MOVED FROM CLAUDE.md, 2026-10-10
+(budget, fifth pass)"); 57,508 with the new lines.
+
 ## 2026-10-09 (checks) — the grade picker, estimates elsewhere, Charizard ☆ δ
 
 0 eBay calls (listings checked with `?dryRun=1`, which sends nothing).

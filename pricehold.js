@@ -60,7 +60,25 @@ for (const [id, h] of Object.entries(HELD)) {
   h.reason = 'price withheld: ' + id + ' and ' + h.with.join(', ') + ' are mapped to the same TCGplayer product ('
     + h.products.join(', ') + ') — ' + h.origins.map(o => ORIGIN[o] || o).join('; ') + '. One of the mappings is wrong and we cannot tell which.';
 }
+// ── Estimates held (Roy, 2026-10-09) ──
+// A card whose only number would be OUR ESTIMATE, sitting 5x or more from the
+// card's own measured record (Skyridge Gengar H09: est $0.30, TCGdex measured
+// $190-$195), shows no number. The list is measured by estimatescan.js --write
+// (pricehold-estimates.json; the multiple and why it is 5 are there). Unlike a
+// shared product this holds only the ESTIMATE: its estimate rows leave the
+// headline (notEstimateHeldSql), and apply() holds a payload only while it
+// carries no real price — a measured price, when one is recorded, shows.
+const ESTIMATES = require(path.join(__dirname, 'pricehold-estimates.json'));
+const ESTIMATE_HELD = {};
+for (const e of ESTIMATES.held) {
+  ESTIMATE_HELD[e.id] = { kind: 'estimate', estimate: e.estimate, median: e.median, with: [],
+    reason: 'price withheld: the only number we have for this card is our estimate ($' + e.estimate + '), and its own recorded prices put it near $'
+      + e.median + ' (median of ' + e.readings + ' readings, ' + e.sources.join(', ') + ', ' + e.first + ' to ' + e.last + ') — ' + e.ratio
+      + 'x apart. An estimate that far from what this card has been measured at is not shown.',
+    removeWhen: 'a measured price is recorded for the card (it then shows by itself); the list is re-measured by estimatescan.js --write' };
+}
 const ids = Object.keys(HELD);
+const estIds = Object.keys(ESTIMATE_HELD);
 // Ids are ours (cardid shape), so quoting is plain; asserted by the test.
 function notHeldSql(ph = 'ph') {
   return ids.length ? `${ph}.card_api_id NOT IN (${ids.map(i => "'" + i + "'").join(', ')})` : 'TRUE';
@@ -69,12 +87,17 @@ function notHeldSql(ph = 'ph') {
 function notRefusedSql(ph = 'ph') {
   return REFUSED_IDS.length ? `${ph}.id NOT IN (${REFUSED_IDS.join(', ')})` : 'TRUE';
 }
-function heldFor(cardId) { return HELD[cardId] || null; }
+// An estimate-held card's estimate rows are out of the headline; its measured rows are not.
+function notEstimateHeldSql(ph = 'ph') {
+  return estIds.length ? `NOT (${ph}.source LIKE 'estimate%' AND ${ph}.card_api_id IN (${estIds.map(i => "'" + i + "'").join(', ')}))` : 'TRUE';
+}
+function heldFor(cardId) { return HELD[cardId] || ESTIMATE_HELD[cardId] || null; }
 // For a card payload already built: no headline, no third-party price blob.
 function apply(obj, cardId) {
   const h = heldFor(cardId || (obj && obj.id));
   if (!h || !obj) return obj;
+  if (h.kind === 'estimate' && obj._priceIsReal && obj._price > 0) return obj;
   return Object.assign(obj, { _price: null, _priceIsReal: false, _priceSource: null, tcgplayer: null, cardmarket: null,
     priceHeld: { reason: h.reason, product: h.product, products: h.products, with: h.with } });
 }
-module.exports = { FILE, COLLISIONS, HELD, REFUSED, notHeldSql, notRefusedSql, heldFor, apply };
+module.exports = { FILE, COLLISIONS, HELD, REFUSED, ESTIMATE_HELD, notHeldSql, notRefusedSql, notEstimateHeldSql, heldFor, apply };

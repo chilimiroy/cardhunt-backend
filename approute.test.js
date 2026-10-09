@@ -17,7 +17,7 @@
 // .bak files; express.static(__dirname) would publish every one, so the
 // exposure check requests them rather than reading the route table.
 
-require('./testcount')(84);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(86);   // assertions in a plain run — fewer fails the file (testcount.js)
 const { spawn } = require('child_process');
 const path = require('path');
 const vm = require('vm');
@@ -155,6 +155,7 @@ async function waitForBoot(server, ms = 20000) {
       // Tracked 2026-10-08 so their tests run on a clean checkout; never served.
       '/ebayprobe.js', '/refresh-daily.cmd', '/refreshrun.js', '/testcount.js',
       '/pricehold-collisions.json', '/collisionscan.js', '/cardnumber.js',
+      '/pricehold-estimates.json', '/estimatescan.js',
       // T3 (2026-09-29): tracked, and still never served — a design mockup
       // full of sample prices, and a script that writes prices.
       '/cardhunt-redesign.html', '/tcgdexharvest.js', '/tcgsetname.js',

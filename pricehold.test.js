@@ -5,7 +5,7 @@
 //   node pricehold.test.js --db    also: the real headline query returns nothing for a held card,
 //                                  and still returns the unheld cards' prices
 'use strict';
-require('./testcount')(20);
+require('./testcount')(24);
 const fs = require('fs'), vm = require('vm');
 const ph = require('./pricehold'), printsql = require('./printsql'), { isOurCardId } = require('./cardid');
 let pass = 0, fail = 0;
@@ -33,6 +33,19 @@ ok('Skyridge Gengar H09\'s rows for Gengar (10) are among them, and Golduck 50a\
 ok('every refused row is out of the headline rule, on the alias it is given', ph.REFUSED.every(r => printsql.basePrintingSql('ph', 'c').includes(r.row)) && /p2\.id NOT IN \(/.test(printsql.basePrintingSql('p2', 'c2')));
 ok('every hold says why, names the other card(s), and when it comes off', ids.every(id => /price withheld/.test(ph.HELD[id].reason) && ph.HELD[id].with.length && ph.HELD[id].removeWhen));
 ok('every held id is one of ours (safe to quote into SQL)', ids.every(id => isOurCardId(id) && !/['\\]/.test(id)));
+
+console.log('\n  estimates held (an estimate 5x or more from the card\'s own measured record)');
+const ES = require('./pricehold-estimates.json');
+ok('the list is measured at the multiple estimatescan.js holds at (5), and Skyridge Gengar H09 is on it',
+  ES.multiple === 5 && require('./estimatescan').MULTIPLE === 5 && ph.ESTIMATE_HELD['en-ecard3-H09'] && ES.held.every(e => e.ratio >= ES.multiple && e.readings > 0),
+  ES.held.map(e => e.id + ' ' + e.ratio + 'x').join(', '));
+ok('its estimate rows leave the headline rule, its measured rows do not',
+  printsql.basePrintingSql('ph', 'c').includes(ph.notEstimateHeldSql('ph')) && /NOT \(ph\.source LIKE 'estimate%' AND ph\.card_api_id IN \('en-ecard3-H09'/.test(ph.notEstimateHeldSql('ph')));
+const g = ph.apply({ id: 'en-ecard3-H09', _price: 0.3, _priceIsReal: false, _priceSource: 'estimate' });
+ok('made to fire: H09 with only its estimate shows no number, and says the estimate and its own median',
+  g._price === null && g.priceHeld && /\$0\.3\b/.test(g.priceHeld.reason) && /\$192\.97|median of \d+ readings/.test(g.priceHeld.reason), g.priceHeld && g.priceHeld.reason);
+const real = ph.apply({ id: 'en-ecard3-H09', _price: 1300, _priceIsReal: true, _priceSource: 'tcgplayer_market' });
+ok('…and what it ALLOWS: once a measured price is recorded it shows, unheld', real._price === 1300 && !real.priceHeld);
 
 console.log('\n  the headline rule');
 const sql = printsql.basePrintingSql('ph', 'c');
@@ -91,6 +104,11 @@ ok('the card page draws a dash and the reason, as a warning', /if \(cc && cc\.pr
       const at = id => rel.find(r => r.api_card_id === id) || {};
       ok('released: Umbreon 32 and Garchomp 247 have a headline; H30 has none (its only rows were Umbreon 32\'s product)',
         at('en-ecard3-32').price_usd > 0 && at('en-sm11-247').price_usd > 0 && at('en-ecard3-H30').price_usd == null, JSON.stringify(rel));
+      const es = await require('./estimatescan').scan(db);
+      ok('pricehold-estimates.json matches the database today (re-run estimatescan.js --write if not)',
+        es.held.map(e => e.id).sort().join() === ES.held.map(e => e.id).sort().join(), es.held.map(e => e.id).join(', ') + ' now vs ' + ES.held.map(e => e.id).join(', '));
+      const gh = await q(['en-ecard3-H09']);
+      ok('H09: the real headline query returns no estimate', gh.length === 1 && gh[0].price_usd == null, JSON.stringify(gh));
       const u = await q(['en-base1-4', 'en-sv03.5-199', 'en-dpp-DP01']);
       ok('unheld cards beside them keep their headline', u.filter(r => r.price_usd != null).length >= 2, JSON.stringify(u));
     } finally { await db.end(); }

@@ -143,6 +143,8 @@ function priceSql(p) {
              COUNT(*) OVER () AS eligible
       FROM latest l JOIN cards c ON c.api_card_id = l.card_api_id
       WHERE ${digital.visibleSql('c')}
+        -- the headline chosen above, if MARKED, ranks nowhere (printsql.markedSql)
+        AND NOT ${printsql.markedSql('l')}
       ORDER BY l.price_usd ${dir}, c.api_card_id
       LIMIT $2`,
     values: [langPattern(p.lang), p.limit],
@@ -165,17 +167,21 @@ function moverSql(p) {
           AND ${printsql.basePrintingSql('ph', 'c')}
           AND ph.recorded_at > NOW() - make_interval(days => $2)
         ORDER BY ph.card_api_id, ph.recorded_at DESC),
+      -- a MARKED current price (an ask; product unknown) moves nothing
+      curu AS (SELECT * FROM cur WHERE NOT ${printsql.markedSql('cur')}),
       prev AS (
         SELECT DISTINCT ON (ph.card_api_id)
                ph.card_api_id, ph.price_usd, ph.recorded_at
         FROM price_history ph
-        JOIN cur ON cur.card_api_id = ph.card_api_id
+        JOIN curu cur ON cur.card_api_id = ph.card_api_id
                 AND cur.source = ph.source
                 AND COALESCE(cur.edition, '') = COALESCE(ph.edition, '')
                 AND COALESCE(cur.variant, '') = COALESCE(ph.variant, '')
         WHERE ${REAL} AND ${TCGDEX_PATH}
           -- the earlier end too: a refused row is no card's price (pricehold.js)
           AND ${pricehold.notRefusedSql('ph')}
+          -- nor is an ask an earlier price: a floor against a sale is no move
+          AND COALESCE(ph.source_meta->>'basis', '') <> 'ask'
           AND (cur.source_meta->>'productId' IS NULL OR ph.source_meta->>'productId' IS NULL
                OR ph.source_meta->>'productId' = cur.source_meta->>'productId' )
           AND ph.recorded_at <= cur.recorded_at - make_interval(days => $3)
@@ -185,7 +191,7 @@ function moverSql(p) {
              cur.price_usd AS price, cur.source AS price_source,
              cur.recorded_at AS price_date, cur.source_meta AS price_meta,
              prev.price_usd AS prev_price, prev.recorded_at AS prev_date
-      FROM cur JOIN prev USING (card_api_id)
+      FROM curu cur JOIN prev USING (card_api_id)
       JOIN cards c ON c.api_card_id = cur.card_api_id
       WHERE ${digital.visibleSql('c')}`,
     values: [langPattern(p.lang), MAX_AGE_DAYS, w.days, w.days + w.tolDays],
@@ -199,6 +205,7 @@ function currentSql(p) {
       FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
       WHERE ${REAL} AND ph.card_api_id LIKE $1 AND ${TCGDEX_PATH}
         AND ${printsql.basePrintingSql('ph', 'c')} AND ${digital.visibleSql('c')}
+        AND COALESCE(ph.source_meta->>'basis', '') <> 'ask'
         AND ph.recorded_at > NOW() - make_interval(days => $2)`,
     values: [langPattern(p.lang), MAX_AGE_DAYS],
   };

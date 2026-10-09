@@ -1787,16 +1787,21 @@ async function evaluateAlerts(lang, ...flags) {
 
   const alerts = await db.query(`
     SELECT a.*, c.name, c.number, c.set_api_id, c.set_total, c.set_release,
-           (SELECT price_usd FROM price_history p
-             WHERE p.card_api_id = a.card_api_id
-               AND p.grade IS NULL
-               AND p.source NOT LIKE 'estimate%'
-               -- the card page's base-printing rule: an "above" alert must
-               -- not fire on a reverse price the card page never shows (T2)
-               AND ${require('./printsql').basePrintingSql('p', 'c')}
-             ORDER BY recorded_at DESC LIMIT 1) AS market_price
+           -- A MARKED headline (printsql.markedSql: old, an ask, product
+           -- unknown) feeds no alert (Roy, 2026-10-10): the card has no
+           -- market price to alert on, said in the run's output.
+           CASE WHEN lp.marked THEN NULL ELSE lp.price_usd END AS market_price, lp.marked AS market_marked
     FROM alerts a
     LEFT JOIN cards c ON c.api_card_id = a.card_api_id
+    LEFT JOIN LATERAL (
+      SELECT p.price_usd, ${require('./printsql').markedSql('p')} AS marked FROM price_history p
+       WHERE p.card_api_id = a.card_api_id
+         AND p.grade IS NULL
+         AND p.source NOT LIKE 'estimate%'
+         -- the card page's base-printing rule: an "above" alert must
+         -- not fire on a reverse price the card page never shows (T2)
+         AND ${require('./printsql').basePrintingSql('p', 'c')}
+       ORDER BY p.recorded_at DESC LIMIT 1) lp ON TRUE
     WHERE ${where}`, params);
 
   if (!alerts.rows.length) { console.log('  Alerts: none active\n'); return; }
@@ -1811,6 +1816,7 @@ async function evaluateAlerts(lang, ...flags) {
     const type   = String(a.alert_type || '').toLowerCase();
     const target = a.target_price != null ? parseFloat(a.target_price) : null;
     const market = a.market_price != null ? parseFloat(a.market_price) : null;
+    if (a.market_marked) console.log(`  marked  ${a.card_api_id}: its price may be out of date — not used to evaluate this alert`);
     let hit = null;
 
     const needsListing = /below|deal|new_listing|pct/.test(type);

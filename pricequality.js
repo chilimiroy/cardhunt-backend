@@ -20,7 +20,10 @@
 // hold, and it is shown — saying what it is.
 'use strict';
 
-const STALE_DAYS = 30;          // older than this: no source has re-priced it
+// Older than this: no source has re-priced it — and the headline is MARKED
+// (printsql.MARK_DAYS, one number). 30 until 2026-10-10 (Roy): at 30, one
+// Yuyu-tei run nobody repeated made 9,516 Japanese prices "old".
+const STALE_DAYS = require('./printsql').MARK_DAYS;
 const UNSETTLED_RATIO = 1.5;    // a move this large between two readings...
 const UNSETTLED_JUMPS = 2;      // ...at least twice inside the window
 const WINDOW_DAYS = 60;
@@ -110,9 +113,23 @@ const NOTES = {
     + 'The $198.07 came from a TCGplayer product named "Gyarados (11)". We cannot currently tell which is right.',
 };
 
+// ── The marker: "this price may be out of date" (Roy, 2026-10-10) ──
+// The JS twin of printsql.markedSql, giving the REASONS the page shows on the
+// marker. productHistory: does this card hold any measured, unrefused row
+// naming a TCGplayer product (annotate asks; null = not known, claims nothing).
+function markOf({ ageDays, source, meta, productHistory, id }) {
+  const s = String(source || ''), reasons = [];
+  if (ageDays != null && ageDays > STALE_DAYS) reasons.push({ key: 'old', text: `recorded ${ageDays} days ago (over ${STALE_DAYS}); nothing has re-priced it` });
+  if (isAsk(s, meta)) reasons.push({ key: 'ask', text: 'the cheapest listing, not a sale - there is no market price' });
+  const tcg = /^tcgplayer_/.test(s) || /^tcgdex_tcgplayer_/.test(s) || s === 'TCGPlayer market price';
+  if (tcg && !(meta && meta.productId != null)) reasons.push({ key: 'product', text: 'which TCGplayer product it priced was not recorded, so its collector number cannot be checked' });
+  if (/^en-/.test(String(id || '')) && productHistory === false) reasons.push({ key: 'history', text: "none of this card's recorded prices names a TCGplayer product" });
+  return reasons;
+}
+
 // The classification. `series`: the headline source's own readings for this
 // card inside WINDOW_DAYS, oldest first (may be omitted: no unsettled flag).
-function classify({ price, source, recordedAt, meta, series, now }) {
+function classify({ price, source, recordedAt, meta, series, now, productHistory, id }) {
   now = now == null ? Date.now() : now;
   const p = price == null ? null : Number(price);
   if (!source || p == null || !(p > 0)) return { kind: 'none', flags: [], label: 'no price held' };
@@ -148,9 +165,32 @@ function classify({ price, source, recordedAt, meta, series, now }) {
                                                  : `from ${n} listing${n === 1 ? '' : 's'} only`);
   if (range) parts.push(`moved ${UNSETTLED_RATIO}x or more at least twice in ${WINDOW_DAYS} days `
                         + `(between $${range[0].toFixed(2)} and $${range[1].toFixed(2)})`);
-  return { kind: 'measured', flags, ageDays, listings: n, range, ask,
+  // Marked: shown with the marker, fed to nothing (printsql.markedSql).
+  const reasons = markOf({ ageDays, source, meta, productHistory, id });
+  let marked = null;
+  if (reasons.length) {
+    flags.push('marked');
+    const on = figureDate(meta, recordedAt);
+    marked = { reasons: reasons.map(r => r.key),
+      text: 'This price may be out of date: ' + reasons.map(r => r.text).join('; ') + '.'
+        + ' Source: ' + s2name(source) + (on ? ', ' + on : '') + '.'
+        + ' Shown for reference only: it moves no deal, alert or trending list.' };
+  }
+  return { kind: 'measured', flags, ageDays, listings: n, range, ask, marked,
            label: flags.length ? flags.join(' · ') : 'current',
            title: parts.length ? parts.join('; ') : null };
+}
+
+// Whose figure, in words, for the marker.
+function s2name(source) {
+  const s = String(source || '');
+  if (/^tcgdex_tcgplayer_/.test(s)) return 'TCGplayer via TCGdex';
+  if (s === 'tcgplayer_market') return 'TCGplayer, our search';
+  if (/^tcgplayer_/.test(s)) return 'TCGplayer via pokemontcg.io';
+  if (/cardmarket/.test(s)) return 'Cardmarket';
+  if (/^yuyutei/.test(s)) return 'Yuyu-tei (shop ask)';
+  if (/^yahoojp/.test(s)) return 'Yahoo! Auctions Japan';
+  return s;
 }
 
 // Annotate headlines in one query. items: [{ id, price, source, recordedAt, meta }].
@@ -175,6 +215,18 @@ async function annotate(db, items) {
         ORDER BY ph.recorded_at`, [real.map(x => x.id)])).rows;
     } catch (e) { rows = null; }   // a failed lookup claims nothing about settledness
   }
+  // Which English cards hold any measured, unrefused row naming a product (the
+  // marker's "history" reason). A failed lookup claims nothing (null).
+  let withProduct = null;
+  const en = real.filter(x => /^en-/.test(x.id)).map(x => x.id);
+  if (db && en.length) {
+    try {
+      const ph = require('./pricehold');
+      withProduct = new Set((await db.query(`SELECT DISTINCT pk.card_api_id AS id FROM price_history pk
+        WHERE pk.card_api_id = ANY($1) AND pk.grade IS NULL AND pk.source NOT LIKE 'estimate%' AND pk.price_usd > 0
+          AND pk.source_meta->>'productId' IS NOT NULL AND ${ph.notRefusedSql('pk')}`, [en])).rows.map(r => r.id));
+    } catch (e) { withProduct = null; }
+  }
   const series = new Map();
   for (const r of rows || []) {
     const k = r.id + '\u0000' + r.source;
@@ -183,7 +235,8 @@ async function annotate(db, items) {
   }
   for (const x of items) {
     if (!x || !x.id) continue;
-    const q = classify({ price: x.price, source: x.source, recordedAt: x.recordedAt, meta: x.meta,
+    const q = classify({ price: x.price, source: x.source, recordedAt: x.recordedAt, meta: x.meta, id: x.id,
+      productHistory: withProduct ? withProduct.has(x.id) : null,
       series: rows ? series.get(x.id + '\u0000' + x.source) || [] : null });
     if (NOTES[x.id]) q.note = NOTES[x.id];
     out.set(x.id, q);
@@ -192,4 +245,4 @@ async function annotate(db, items) {
 }
 
 module.exports = { STALE_DAYS, UNSETTLED_RATIO, UNSETTLED_JUMPS, WINDOW_DAYS, THIN_YAHOO_N,
-                   NOTES, listingsBehind, jumps, originOf, isAsk, figureDate, askOf, classify, annotate };
+                   NOTES, listingsBehind, jumps, originOf, isAsk, figureDate, askOf, markOf, classify, annotate };

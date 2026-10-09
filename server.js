@@ -1235,7 +1235,7 @@ function dealTable() {
 async function dealCandidates(n) {
   const r = await db.query(`
     SELECT card_api_id, price_usd FROM (
-      SELECT DISTINCT ON (ph.card_api_id) ph.card_api_id, ph.price_usd, ph.source
+      SELECT DISTINCT ON (ph.card_api_id) ph.card_api_id, ph.price_usd, ph.source, ph.recorded_at, ph.source_meta
       FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
       WHERE ph.grade IS NULL AND ph.card_api_id LIKE 'en-%'
         AND ph.recorded_at > now() - interval '30 days'
@@ -1243,6 +1243,9 @@ async function dealCandidates(n) {
         AND ${digital.visibleSql('c')} AND ${cardid.ourIdSql('c')}
       ORDER BY ph.card_api_id, ph.recorded_at DESC) latest
     WHERE source ILIKE '%tcgplayer%' AND price_usd > 0
+      -- a MARKED headline is no deal's reference (printsql.markedSql; dealRefOf
+      -- refuses it again by its 'marked' flag)
+      AND NOT ${printsql.markedSql('latest')}
     ORDER BY price_usd DESC LIMIT $1`, [n * 5]);
   return r.rows.map(x => x.card_api_id)
     // Held cards (pricehold.js) have no headline, so the query above already

@@ -80,6 +80,35 @@ function basePrintingSql(ph = 'ph', c = 'c') {
      AND ${ph}.source NOT LIKE 'estimate%')`;
 }
 
+// ── A MARKED headline: shown, with its marker, and fed to NOTHING ──
+// (Roy, 2026-10-10.) A price that may be out of date is still worth showing,
+// labelled; it must not move anything. ph is the headline row ALREADY CHOSEN
+// (the latest basePrintingSql row) — never a filter applied before choosing,
+// which would quietly fall back to an older, unmarked price. Marked when:
+//   old      recorded more than MARK_DAYS ago (45; at 30, one Yuyu-tei run
+//            nobody repeated marked 9,516 Japanese cards — a stopped job)
+//   ask      the cheapest listing where there is no market price (basis 'ask',
+//            or a pokemontcg.io `_low` row)
+//   product  a TCGplayer-sourced row with no recorded product: which product
+//            it priced cannot be checked (1,011 English headlines, 2026-10-10)
+//   history  an English card with no measured, unrefused row naming a product
+//            at all (1,191 cards) — the whole history is unverifiable
+// Measured and chosen 2026-10-10 (PROGRESS). Dropped: "most rows unknown"
+// (78% of English — the pre-October search rows dominate every chart) and
+// lowest-listing multiples read from our stored July pokemontcg.io copy.
+// Twin in JS: pricequality.markOf (the reasons, for the page).
+const MARK_DAYS = 45;
+const TCG_SOURCE_SQL = ph => `(${ph}.source LIKE 'tcgplayer!_%' ESCAPE '!' OR ${ph}.source LIKE 'tcgdex!_tcgplayer!_%' ESCAPE '!' OR ${ph}.source = 'TCGPlayer market price')`;
+function markedSql(ph = 'ph') {
+  return `(${ph}.recorded_at < NOW() - make_interval(days => ${MARK_DAYS})
+     OR COALESCE(${ph}.source_meta->>'basis', '') = 'ask' OR ${ph}.source ~ '^tcgplayer_.*_low$'
+     OR (${TCG_SOURCE_SQL(ph)} AND ${ph}.source_meta->>'productId' IS NULL)
+     OR (${ph}.card_api_id LIKE 'en-%' AND NOT EXISTS (
+           SELECT 1 FROM price_history pk WHERE pk.card_api_id = ${ph}.card_api_id AND pk.grade IS NULL
+             AND pk.source NOT LIKE 'estimate%' AND pk.price_usd > 0 AND pk.source_meta->>'productId' IS NOT NULL
+             AND ${pricehold.notRefusedSql('pk')})))`;
+}
+
 // The same rule in JS, for a row already in hand — used ONLY by tests to
 // check the SQL against it on real rows (printsql.test via variants.test).
 function isBasePrintingRow(variant, cardVariants) {
@@ -96,4 +125,5 @@ function editionOfRow(r) {
   return /^1st-edition/.test(String(pr || '')) ? '1st-edition' : null;
 }
 
-module.exports = { basePrintingSql, isBasePrintingRow, editionOfSql, baseEditionSql, editionOfRow, notSecondReadingSql };
+module.exports = { basePrintingSql, isBasePrintingRow, editionOfSql, baseEditionSql, editionOfRow, notSecondReadingSql,
+                   MARK_DAYS, markedSql, TCG_SOURCE_SQL };

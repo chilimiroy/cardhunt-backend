@@ -2726,7 +2726,7 @@ function askOfCard(c) {
 // When the headline was recorded (T2, 2026-10-02). The page never said, so
 // a price no source has re-priced since July read as today's: Rayquaza Gold
 // Star showed $2,500.99 from a 2026-07-27 row while TCGplayer now has no
-// market for it at all — 12 cards of $20+ sat like that. Under 30 days it is
+// market for it at all — 12 cards of $20+ sat like that. Under 45 days (pricequality.STALE_DAYS, 30 until 2026-10-10) it is
 // a date; older, it says the price is old. No date held: nothing is claimed.
 function priceAgeHtml(when) {
   var t = when ? Date.parse(when) : NaN;
@@ -2734,7 +2734,7 @@ function priceAgeHtml(when) {
   var d = new Date(t);
   var label = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   var days = Math.floor((Date.now() - t) / 86400000);
-  if (days > 30) return ' <span style="color:var(--am);font-size:11px;font-weight:600" '
+  if (days > 45) return ' <span style="color:var(--am);font-size:11px;font-weight:600" '
     + 'title="No source has re-priced this card since. The market may have moved.">'
     + '&middot; recorded ' + liveEsc(label) + ' &mdash; ' + days + ' days old, not re-priced since</span>';
   return ' <span style="color:var(--fa);font-size:11px">&middot; ' + liveEsc(label) + '</span>';
@@ -2772,6 +2772,19 @@ function priceMarksHtml(isReal, q, opts) {
   // the mark is its age (Roy, 2026-10-09).
   var WORD = { ask: 'asking price', eu: 'EU', pokemontcg: 'pokemontcg.io', unchecked: (q.ageDays != null ? q.ageDays + ' days old' : 'unchecked'),
                old: 'old', thin: 'thin', unsettled: 'unsettled' };
+  // The marker (Roy, 2026-10-10): one symbol for "this price may be out of
+  // date" — old, an ask, product unknown, no product anywhere in its history —
+  // with the reasons, source and date on hover (or, on the card page, beside
+  // it). It replaces the separate old / N-days-old words, which it covers.
+  var marked = q.marked && q.marked.text ? q.marked : null;
+  if (marked) {
+    out += opts.text
+      ? ' <span class="pqm" style="color:var(--am);font-size:11px;font-weight:600"><span aria-hidden="true">&#9719;</span> '
+        + liveEsc(marked.text) + '</span>'
+      : '<span class="pqm" role="img" aria-label="price may be out of date" style="font-size:12px;color:var(--am);margin-left:4px;font-weight:700;cursor:help"'
+        + ' title="' + liveEsc(marked.text) + '">&#9719;</span>';
+    skip = skip.concat(['old', 'unchecked', 'marked']);
+  }
   var flags = q.flags.filter(function (f) { return WORD[f] && skip.indexOf(f) < 0; });
   if (!flags.length) return out;
   var why = liveEsc(q.title || flags.join(', '));
@@ -8053,6 +8066,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-45cee49-ask &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-9618b28-marker &middot; click to hide</div>
 </body>
 </html>

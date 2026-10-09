@@ -10,9 +10,7 @@ graded by company and grade, with each link landing on the actual listing.
 ## THE BUDGET — read before you add a line
 
 **This file has a 60,000-character budget. `claudesplit.test.js` fails above
-it.** It was split on 2026-10-01 (2,883 lines -> ~1,290) and grew back to 163k
-in three days because every session appended its full findings. CLAUDE.md
-holds what a session needs to work correctly. Nothing else.
+it.** CLAUDE.md holds what a session needs to work correctly. Nothing else.
 
 | belongs here | belongs elsewhere |
 |---|---|
@@ -30,7 +28,8 @@ Where a number is stated it was measured; tables carry their date. Re-measure
 rather than re-derive. `CLAUDE_ARCHIVE.md` is the full history (frozen
 2026-10-01, plus "MOVED FROM CLAUDE.md, 2026-10-05 (T0, the 60k budget)" and
 "MOVED FROM CLAUDE.md, 2026-10-07 (compression)",
-"MOVED FROM CLAUDE.md, 2026-10-07 (budget, second pass)").
+"MOVED FROM CLAUDE.md, 2026-10-07 (budget, second pass)",
+"MOVED FROM CLAUDE.md, 2026-10-09 (budget, third pass)" — with "Windows: replacing ingest.js").
 "PROGRESS 2026-10-05: X" means the block headed X in PROGRESS.md's 2026-10-05
 entry — the verbatim measurements this file carried until then. **A bug's
 history may move to the archive; its lesson may not** — `claudesplit.test.js`
@@ -52,7 +51,7 @@ Render API (server.js v5.6.0)  -- reads Supabase FIRST (45,781 cards)
 | Frontend | `cardhunt_preview.html` | Render at **`/app`**; local file is the fallback |
 | API | `server.js` v5.6.0 | Render |
 | Database | Supabase Postgres | `cards`, `price_history`, `alerts`, `portfolio`, `users`, `listing_photo_verdicts`, `listing_views` |
-| Ingestion | `ingest.js` v5.9.1 | Local only — never deployed; **tracked** in git |
+| Ingestion | `ingest.js` v5.10.1 | Local only — never deployed; **tracked** in git |
 
 ## The module map
 
@@ -92,8 +91,8 @@ Gitignored (need a DB URL or residential IP):
 
 - **Tracked is not deployed.** Render runs `server.js`; nothing requires
   `ingest.js`, and `/ingest.js` 404s (`approute.test.js`). Keys come from env
-  only: a pokemontcg.io key sat in it, `server.js` and the page until
-  2026-10-08 (rotated; `nosecrets.test.js`).
+  only (`nosecrets.test.js`); the pokemontcg.io key once in the code awaits
+  rotation (Roy).
 - **A file the server requires is not local tooling** (`yuyutei.js` ignored =
   `MODULE_NOT_FOUND` on boot). The audit tools are tracked so their findings
   are reproducible.
@@ -103,9 +102,8 @@ Gitignored (need a DB URL or residential IP):
 
 ## Checking the frontend
 
-**https://cardhunt-backend.onrender.com/app** — a URL cannot be stale (41
-copies of the page once sat in Downloads). The build stamp bottom-left names
-the commit. `/app` serves `cardhunt_preview.html` byte for byte; the module
+**https://cardhunt-backend.onrender.com/app** — a URL cannot be stale. The
+build stamp bottom-left names the commit (bump it with every page edit). `/app` serves `cardhunt_preview.html` byte for byte; the module
 `<script>` tags stay **absolute** so the `file://` fallback still loads them.
 Theme: Auto/Light/Dark, `localStorage ch_theme`, set by a head script before
 paint; colours only through the tokens (`theme.test.js`).
@@ -253,19 +251,16 @@ All photo work: eBay CDN photos (0 API calls) except the back (1 shared
 getItem), one worker pool (`STAMP_WORKERS`, default 1), queue, one job per
 item, verdicts in `listing_photo_verdicts` (hashed item + photo, versioned —
 bump `VERDICT_VERSION` when a template, threshold or matcher changes). Checks
-run after the response; `?poll=1` is cache-only. ~0.5 s a photo here, ~1 s on
-Render. A timeout is retryable, never a verdict.
+run after the response; `?poll=1` is cache-only. A timeout is retryable, never
+a verdict.
 - **Queue order (`stampcheck.PRIO`, Roy 2026-10-07):** top-25 colour, then top-25
   comparisons + hidden rows + backs, then other colour. Top 25 = first 25 in
   `compareOrder` (cheapest Buy It Now, then auctions). Comparisons past 25 run
   only when scrolled into view (`POST /api/listings/:id/compare`) or from stored
-  verdicts; hidden rows always. **The old "cheapest rows first" note was WRONG
-  for comparisons** (gathered order: the cheapest 25 resolved at 146 s of 191 s);
-  it stopped anyone looking. Downloads run off the worker (≤12 ahead).
-- **Comparison photos s-l400, stamps s-l500, never smaller:** real stamps are
-  36-88 px at s-l500, the matcher's floor 28 px — a smaller photo drops a ~40 px
-  stamp below it and the check still reports it ran. Identity stays the s-l500
-  URL. eBay serves only listed sizes: s-l350 is an 80x80 placeholder.
+  verdicts; hidden rows always. Downloads run off the worker (≤12 ahead).
+- **Comparison photos s-l400, stamps s-l500, never smaller** (a smaller photo
+  drops a stamp under the matcher's 28 px floor and still reports it ran);
+  identity stays the s-l500 URL; s-l350 is an 80x80 placeholder.
 
 | problem | caught by | on which cards | measured |
 |---|---|---|---|
@@ -287,12 +282,11 @@ Rules of the gate:
   measured raw price (T0, PROGRESS 2026-10-06). A check that could not run is NAMED
   (`stampGate.notRun`), on the page too — never a pass.
 - **A pair is measured both ways before it ships; a pair that cannot be safe
-  both ways is one-way (`oneWay`) or not shipped** — the 228's genuine photos
-  reach 0.195 toward Base Charizard.
+  both ways is one-way (`oneWay`) or not shipped.**
 - **Material (novelty): two of {colour > 0.40 above our scan, outlier flag, metal
   photo} refuse; one flags `counterfeit-likely`; a genuine back never refuses.**
-  **Colour alone never refuses**: genuine gold hyper rares reach 0.491 (our scan
-  reads their foil flat); `material.test.js` pins it (PROGRESS 2026-10-05 (later)).
+  **Colour alone never refuses** (genuine gold hyper rares reach 0.491;
+  `material.test.js`) (PROGRESS 2026-10-05 (later)).
   Unprofiled rows shown (`materialPending`), profiled after the answer, stored
   `check_kind 'material'`. A repeated-photo hash: NOT built (LESSONS 3).
 - **Back: other family refuses, own family labels "matches a genuine card"
@@ -317,11 +311,10 @@ Rules of the gate:
 - **References are stored, never fetched in a request** (`refscans.js`,
   versioned; `refbuild.js [--colour]`, resumable): sibling templates
   (`card_reference_scans`) and our scan's colour (`card_colour_refs`); an
-  unbuilt card uses the old live path, bounded. "Unbuildable" is a MOVING set
-  (78 -> 136 in one backfill): re-count with `--dry`, never quote it.
-- **HARD LIMIT: one sibling worker.** Render gives 0.15 core (cgroup, 2026-10-07);
-  a compare is CPU (142 ms CPU -> ~900 ms wall). More throughput means a paid
-  tier; what code can do is less wasted work (queue order above).
+  unbuilt card uses the old live path, bounded. "Unbuildable" is a MOVING set:
+  re-count with `--dry`, never quote it.
+- **HARD LIMIT: one sibling worker** (Render: 0.15 core; a compare is CPU). More
+  throughput means a paid tier; code can only waste less (queue order above).
 - **The cheap route for a recurring wrong card is a new `LOOKALIKES` pair,
   measured first.**
 
@@ -388,9 +381,8 @@ with named gaps", "On demand — US page 1, the rest when asked (T2, 2026-09-30)
 - Sources: `LISTING_SOURCES` (yahoo local only, yuyutei shop-ask, ebay);
   `UNAVAILABLE` gives a reason for the rest. eBay credentials on Render only;
   every call via `ebaycall.js` -> `ebayquota.js`; cached 15 min, never stored.
-- Remaining: `node ingest.js names ja` (64% of JP cards unaskable on eBay);
-  PriceCharting (JSON); Troll and Toad / Card Kingdom (HTML); auctions from
-  Render (fetch locally -> store -> serve, with fetch age).
+- Remaining: auctions from Render (fetch locally -> store -> serve, with fetch
+  age); the rest is in STATE and the sources table.
 
 ## T3 · Alert engine on real data — BUILT
 The page reads and writes `/api/alerts`; evaluated at the end of each
@@ -558,25 +550,16 @@ Get-ChildItem *.test.js | ForEach-Object { node $_.Name } ; node jptest.js
 
 Never run `node ingest.js scrape` — deleted, refuses, stays deleted.
 
-## Windows: replacing ingest.js
-```powershell
-cd C:\Users\chili\Downloads; move ingest.js C:\Users\chili\cardhunt\ -Force; cd C:\Users\chili\cardhunt; node ingest.js status
-```
-Confirm the version banner before running anything.
-
 ## Deploying
 **No push unless every suite passed on a clean checkout: push ONLY with
 `bash gatedpush.sh`** (full suite on a clean worktree of HEAD; pushes only on
-all-green). Five times something went out or read green without having run
-(PROGRESS 2026-10-09). Render redeploys from `main`; check the build stamp at
+all-green; why: PROGRESS 2026-10-09). Render redeploys from `main`; check the build stamp at
 `/app` and `GET /` for the version.
 
-**ONE session on `main` at a time, or separate branches.** The Claude Code tab
-inside the desktop app is a full session with write access to this repo, not
-just the app; "I closed the terminals" does not mean one session. Two on one
-branch cost interleaved commits, a mutual test break and a near-miss on
-`server.js` (PROGRESS 2026-10-07 (two sessions)). Before committing, check the
-parent is the commit you expect and that `git diff HEAD~1` holds only your work.
+**ONE session on `main` at a time, or separate branches** — the desktop app's
+Claude Code tab is a full session (PROGRESS 2026-10-07 (two sessions)). Before
+committing, check the parent is the commit you expect and that `git diff HEAD~1`
+holds only your work.
 
 ---
 
@@ -663,9 +646,8 @@ never remove**; a price band is evidence only where the card prices apart.
 Only the deals discount is delivered — it is what the buyer pays. (PROGRESS 2026-10-07 (ZIP union))
 
 **A price band cannot separate two cards whose markets overlap at the edges**
-— a top-of-market reprint and a bottom-of-market original look identical to
-it (Blastoise CC rows at $23.99/$25 over a $13.59-$22.99 band). That is what
-a structured field (eBay Set) is worth a call for. (PROGRESS 2026-10-07 (ZIP union))
+— that is what a structured field (eBay Set) is worth a call for. (PROGRESS
+2026-10-07 (ZIP union))
 
 **A median of mostly-fake listings is not a baseline** — judge against the
 stored current raw price when it is higher, never to lower the bar.
@@ -691,11 +673,10 @@ stating another number — its fold and fallback put 53 products on 106 cards;
 wrong rows are refused by id (`pricehold.notRefusedSql`). (PROGRESS 2026-10-09 (night))
 
 **The title's condition beats eBay's dropdown — the worse claim stands**; a range
-("NM/LP") states its lower end (`worstStatedCondition`). It matters for the
-condition filter and the deals bar, NOT the headline: 0 of 9 cheapest changed.
-**A card's name is a word, outside a kit's product name** (`KIT_NAME_PAIRS`):
-"Latias & Latios" named 15 Magnemite under Latias #4. Names fold accents and may be run together
-("Poké" was "pok"; "Masterball"). (PROGRESS 2026-10-07 (gate fixes))
+("NM/LP") states its lower end (`worstStatedCondition`); it matters for the
+condition filter and the deals bar, not the headline. **A card's name is a word,
+outside a kit's product name** (`KIT_NAME_PAIRS`); names fold accents and may be
+run together. (PROGRESS 2026-10-07 (gate fixes))
 
 **A set ingested once is never re-read — compare card by card** (`cardgap`);
 ask a source by ITS id, read off its own listing. (PROGRESS 2026-10-04)
@@ -799,10 +780,8 @@ shown, never stored: OUTSIDE the clause (`ebayterms.test.js`). Uncertain reading
 filled; epid is seller-chosen — a signal not a gate; TCGdex asset host ~2
 images/s). *Archive:* "Cert verification — measured 2026-09-28, NOT built", "eBay's Set and Year: where they live (T4, 2026-10-01, `/api/ebay/setprobe`)", "Images: TCGdex's asset host is throughput-bound (T1, 2026-10-01)", "Trending, measured 2026-09-24 — `/api/trending`, rules in `trending.js`", "Narrowing vs the 75-row cap — measured 2026-09-27 (`/api/ebay/gradecost`)", "The cap is paged now (`ceadfbc`, 2026-09-28)", "Raw M and DMG: back, seller-stated (`08a05d0`, `d60dc0e`, `b96f1e3`)", "Known, deliberately not built"
 
-**The cheapest signal is only cheap if it fires.** A repeated-photo hash
-across cards found no novelty template in 19,054 photos, and at Hamming 4
-merged genuine cards of different sets — measure the hypothesis before
-building on it. (PROGRESS 2026-10-05)
+**The cheapest signal is only cheap if it fires** — measure the hypothesis
+before building on it (repeated-photo hash, PROGRESS 2026-10-05).
 
 **A source label two paths write is not "the same source"** — label the path
 on the row (`source_meta.via`, productId) and pair on it. (PROGRESS 2026-10-04)
@@ -822,9 +801,7 @@ dormant branch rather than zero it. *Archive:* "The listings panel has had two w
 the server accepts it (`nofabricated.test.js`). *Archive:* "The page was still inventing numbers where nobody looked — found 2026-09-24", "Invented data, the fourth sweep (2026-09-28, TASK T7)", "A UI that writes only to itself"
 
 **No price is computed in the page or fetched by the browser from a third
-party** — no server gate can reach either (the set page showed `mockP`
-estimates and pokemontcg.io prices to signed-out visitors; `door.test.js`).
-(PROGRESS 2026-10-07 (later))
+party** — no server gate can reach either (`door.test.js`; PROGRESS 2026-10-07 (later)).
 
 **A price says when it was measured — on every screen**, decided once
 (`pricequality.js`), drawn by one function. (PROGRESS 2026-10-02)
@@ -884,16 +861,13 @@ job. *Archive:* "Search could not find cards we hold by their own name (2026-09-
 request (T0, PROGRESS 2026-10-05).
 
 **Green in your tree is not green: run the full suite on a clean checkout of
-HEAD before calling a commit done** — a test that slices server.js runs only
-the helpers it lists, and a fresh Windows checkout is CRLF while a tool-edited
-tree is LF. **Never link `node_modules` into a worktree: `git worktree remove
+HEAD before calling a commit done** (slicers; CRLF vs LF). **Never link `node_modules` into a worktree: `git worktree remove
 --force` deletes THROUGH a junction** — use `NODE_PATH` (PROGRESS 2026-10-07 (night)).
 
 ## Photo-check lessons (all PROGRESS 2026-10-02 … 10-04)
 - Measure a check's time where it runs; a timeout is not a verdict; a verdict
   that cannot change is stored, not cached (an unchecked row is SHOWN, PHOTO CHECKS).
-- A zero-false threshold is set by the hardest genuine photo, found by widening:
-  0.35 was clean on 378 rows and refused a genuine SIR on 1,990 more (0.40).
+- A zero-false threshold is set by the hardest genuine photo, found by widening.
   One card's sample is not a rate. Where both answers are held, ask which wins.
 - A title can state the right number over a photo of another card — look at the
   cheapest rows' photos, and zoom, before deciding which layer failed.

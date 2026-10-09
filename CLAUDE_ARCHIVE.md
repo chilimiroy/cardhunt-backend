@@ -4396,3 +4396,122 @@ listings**: with `X-EBAY-C-ENDUSERCTX` (ZIP 10001) every row stated shipping and
   refused a genuine SIR on 1,990 more; set it above the hardest one found (0.40).
 - Compare to the card's own scan, never a fixed colour: a gold Mew ex photo is
   gold, and 0 of 118 were touched.
+
+---
+
+## MOVED FROM CLAUDE.md, 2026-10-09 (budget, third pass)
+
+Moved verbatim when CLAUDE.md reached 59,984 of its 60,000 characters (Roy,
+2026-10-09: compress before writing, do not raise the limit). Each rule these
+carried stays in CLAUDE.md in a line; what is here is the story or the
+measurement behind it. One correction on the way out: the "rotated" in the
+fourth item was not true on 2026-10-09 — the old pokemontcg.io key was deleted
+from the tree, its rotation is Roy's and was still open.
+
+THE BUDGET:
+
+> **This file has a 60,000-character budget. `claudesplit.test.js` fails above
+> it.** It was split on 2026-10-01 (2,883 lines -> ~1,290) and grew back to 163k
+> in three days because every session appended its full findings. CLAUDE.md
+> holds what a session needs to work correctly. Nothing else.
+
+Checking the frontend:
+
+> **https://cardhunt-backend.onrender.com/app** — a URL cannot be stale (41
+> copies of the page once sat in Downloads). The build stamp bottom-left names
+> the commit.
+
+What ships:
+
+> - **Tracked is not deployed.** Render runs `server.js`; nothing requires
+>   `ingest.js`, and `/ingest.js` 404s (`approute.test.js`). Keys come from env
+>   only: a pokemontcg.io key sat in it, `server.js` and the page until
+>   2026-10-08 (rotated; `nosecrets.test.js`).
+
+PHOTO CHECKS:
+
+> All photo work: [...] Checks
+> run after the response; `?poll=1` is cache-only. ~0.5 s a photo here, ~1 s on
+> Render. A timeout is retryable, never a verdict.
+
+> verdicts; hidden rows always. **The old "cheapest rows first" note was WRONG
+> for comparisons** (gathered order: the cheapest 25 resolved at 146 s of 191 s);
+> it stopped anyone looking. Downloads run off the worker (≤12 ahead).
+> - **Comparison photos s-l400, stamps s-l500, never smaller:** real stamps are
+>   36-88 px at s-l500, the matcher's floor 28 px — a smaller photo drops a ~40 px
+>   stamp below it and the check still reports it ran. Identity stays the s-l500
+>   URL. eBay serves only listed sizes: s-l350 is an 80x80 placeholder.
+
+> - **A pair is measured both ways before it ships; a pair that cannot be safe
+>   both ways is one-way (`oneWay`) or not shipped** — the 228's genuine photos
+>   reach 0.195 toward Base Charizard.
+
+>   **Colour alone never refuses**: genuine gold hyper rares reach 0.491 (our scan
+>   reads their foil flat); `material.test.js` pins it (PROGRESS 2026-10-05 (later)).
+
+>   unbuilt card uses the old live path, bounded. "Unbuildable" is a MOVING set
+>   (78 -> 136 in one backfill): re-count with `--dry`, never quote it.
+
+> - **HARD LIMIT: one sibling worker.** Render gives 0.15 core (cgroup, 2026-10-07);
+>   a compare is CPU (142 ms CPU -> ~900 ms wall). More throughput means a paid
+>   tier; what code can do is less wasted work (queue order above).
+
+T2 · Listing finder:
+
+> - Remaining: `node ingest.js names ja` (64% of JP cards unaskable on eBay);
+>   PriceCharting (JSON); Troll and Toad / Card Kingdom (HTML); auctions from
+>   Render (fetch locally -> store -> serve, with fetch age).
+
+COMMANDS (the section, whole; ingest.js has been tracked in git since 2026-09-29):
+
+> ## Windows: replacing ingest.js
+> ```powershell
+> cd C:\Users\chili\Downloads; move ingest.js C:\Users\chili\cardhunt\ -Force; cd C:\Users\chili\cardhunt; node ingest.js status
+> ```
+> Confirm the version banner before running anything.
+
+Deploying:
+
+> all-green). Five times something went out or read green without having run
+> (PROGRESS 2026-10-09). Render redeploys from `main`; check the build stamp at
+> `/app` and `GET /` for the version.
+>
+> **ONE session on `main` at a time, or separate branches.** The Claude Code tab
+> inside the desktop app is a full session with write access to this repo, not
+> just the app; "I closed the terminals" does not mean one session. Two on one
+> branch cost interleaved commits, a mutual test break and a near-miss on
+> `server.js` (PROGRESS 2026-10-07 (two sessions)). Before committing, check the
+> parent is the commit you expect and that `git diff HEAD~1` holds only your work.
+
+LESSONS:
+
+> **A price band cannot separate two cards whose markets overlap at the edges**
+> — a top-of-market reprint and a bottom-of-market original look identical to
+> it (Blastoise CC rows at $23.99/$25 over a $13.59-$22.99 band). That is what
+> a structured field (eBay Set) is worth a call for. (PROGRESS 2026-10-07 (ZIP union))
+
+> **The title's condition beats eBay's dropdown — the worse claim stands**; a range
+> ("NM/LP") states its lower end (`worstStatedCondition`). It matters for the
+> condition filter and the deals bar, NOT the headline: 0 of 9 cheapest changed.
+> **A card's name is a word, outside a kit's product name** (`KIT_NAME_PAIRS`):
+> "Latias & Latios" named 15 Magnemite under Latias #4. Names fold accents and may be run together
+> ("Poké" was "pok"; "Masterball"). (PROGRESS 2026-10-07 (gate fixes))
+
+> **No price is computed in the page or fetched by the browser from a third
+> party** — no server gate can reach either (the set page showed `mockP`
+> estimates and pokemontcg.io prices to signed-out visitors; `door.test.js`).
+> (PROGRESS 2026-10-07 (later))
+
+> **The cheapest signal is only cheap if it fires.** A repeated-photo hash
+> across cards found no novelty template in 19,054 photos, and at Hamming 4
+> merged genuine cards of different sets — measure the hypothesis before
+> building on it. (PROGRESS 2026-10-05)
+
+> **Green in your tree is not green: run the full suite on a clean checkout of
+> HEAD before calling a commit done** — a test that slices server.js runs only
+> the helpers it lists, and a fresh Windows checkout is CRLF while a tool-edited
+> tree is LF.
+
+> - A zero-false threshold is set by the hardest genuine photo, found by widening:
+>   0.35 was clean on 378 rows and refused a genuine SIR on 1,990 more (0.40).
+>   One card's sample is not a rate.

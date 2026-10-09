@@ -79,7 +79,7 @@ Shared, never copied — every duplicated implementation here has drifted.
 | `pricequality.js` | is a headline current and measured? est / old (>30 d) / thin / unsettled; drawn by `priceMarksHtml` |
 | `setyield.js` | a refresh that priced nothing for a set or 200+ cards in a row: named, exit 2 |
 | `printsql.js` | `basePrintingSql` — the headline rule every reader uses |
-| `cardnumber.js` · `pricehold.js` | is a product's number OUR card's (whole)? · cards on a shared product held, refused rows out (incl. a stamped product not TCGdex's) |
+| `cardnumber.js` · `pricehold.js` | is a product's number OUR card's (whole)? · cards on a shared product held, refused rows out (incl. a stamped product not TCGdex's), reviewed one-card holds (`REVIEWED`) |
 | `trending.js` · `querygap.js` | movers · every set's query asked once |
 
 ## What ships and what does not
@@ -120,7 +120,7 @@ PROGRESS 2026-10-09 (no estimates)). **No estimate is shown anywhere.**
 
 | | visible | measured price | pokemontcg.io figure | withheld | **no price recorded** |
 |---|---|---|---|---|---|
-| English | 21,256 | 21,162 | 28 | 45 | 21 |
+| English | 21,256 | 21,161 | 28 | 46 | 21 |
 | Japanese | 14,463 | 11,730 | 0 | 0 | 2,733 |
 | Chinese (parked) | 8,313 | 0 | 0 | 0 | 8,313 |
 
@@ -128,6 +128,9 @@ PROGRESS 2026-10-09 (no estimates)). **No estimate is shown anywhere.**
   asks only Yahoo. Re-running or scheduling `node ingest.js yuyutei` is an
   open decision.
 - Alert evaluation still triggers on an unsettled price (open).
+- **Grade picker: no per-grade price for any grade** — no source (the multiplier is
+  deleted; `gradeprices.js` reads a `gradePrice` the listings payload dropped on
+  2026-10-08, §9.5). It filters the listings by grade; "Market value" is the raw price.
 
 - `price_history`: **zero rows carry an eBay source** (terms).
   `listing_photo_verdicts` holds hashed keys only — no title, price, URL, photo.

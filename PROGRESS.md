@@ -1,5 +1,50 @@
 # CardHunt — Progress Log
 
+## 2026-10-09 (checks) — the grade picker, estimates elsewhere, Charizard ☆ δ
+
+0 eBay calls (listings checked with `?dryRun=1`, which sends nothing).
+
+### What the grade selector shows
+- **No price for any grade.** Nothing supplies one: the multiplier is deleted;
+  `price_history` holds 0 graded rows; `gradeprices.js` (gitignored tool) lost
+  its `--write` on 2026-10-08 (§9.5) and reads `d.gradePrice` from
+  `/api/listings`, which stopped carrying it the same day — a run today would
+  spend tooling calls and report "no verified listings" for every card and
+  grade. It stopped on 2026-10-08, not with the multiplier.
+- **Picking a grade** re-renders the listings for that grade and redraws the
+  chart caption; the "Market value" box shows the RAW headline under any grade,
+  labelled only "Market value" (it always did; until today the multiplied
+  "Typical <grade> · estimate" box sat under it).
+- **The listings filter works per grade**: the query changes per grade
+  ("… 074 Champion's Path PSA 10 pokemon"), and the gate keeps PSA 10 under
+  PSA 10, refuses PSA 9 and an ungraded title there, and refuses a slab under
+  Raw NM. `/api/listings?dryRun=1` answered all four grades (200).
+
+### Stored estimate rows: chart, movers, risers
+None read them. `/api/history` (the chart) has `source NOT LIKE 'estimate%'`;
+`trending.js` (movers and risers, both ends) uses `REAL`, which excludes them;
+the chart draws only `/api/history`'s points. Live: H09's chart has no
+estimate series. **Found instead: the chart draws REFUSED rows** — H09 plots 17
+points at $499.99-$509.99, Gengar #10's product, under a card that shows no
+price. `/api/history` does not apply `pricehold.notRefusedSql`. Not changed.
+
+### Charizard ☆ δ (en-ex15-100), $4,000
+Row 99376, `tcgplayer_market`, 2026-08-27 (43 days old), no source_meta — the
+product is not recorded. Its rows: $4,000 tcgplayer_holofoil 07-27
+(pokemontcg.io import), then our search $980 / $990 / $990 / $4,000 / $4,000 /
+$1,000 / $1,000. pokemontcg.io's $4,000 is the same TCGplayer market figure
+(its own block: low $20,000, mid $29,750, high $39,500, market $4,000) — not
+independent. TCGdex: no price, no product id. Cardmarket (EU): trend $838.41,
+30-day $1,483.81, average sell $1,653.33, low $650. Nothing corroborates
+$4,000 -> **held** (`pricehold.REVIEWED`, reason shown). The reviewed refusal
+used pokemontcg.io's $4,000 as its yardstick, so it refused the ~$1,000 rows
+and kept the $4,000 ones; Cardmarket sides with the refused rows. They stay
+refused (product unknown either way). Not a deal pick.
+
+### CLAUDE.md
+Compressed first: 59,056 -> 57,310 (archive "MOVED FROM CLAUDE.md, 2026-10-09
+(budget, fourth pass)").
+
 ## 2026-10-09 (no estimates) — no estimate anywhere; stamped products; the six refused; where prices stand
 
 0 eBay calls; no ingest run (one `refresh en --dry`).

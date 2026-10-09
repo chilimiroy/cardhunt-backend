@@ -20,7 +20,7 @@ const fnOf = (src, name) => { const i = src.indexOf('function ' + name + '('); r
 console.log('  §9.5 — no price modelled from eBay listings reaches a viewer');
 ok('the listings payload carries no gradePrice (the eBay median "what this grade is worth")', !/gradePrice:\s*gp\.aggregate/.test(S));
 ok('the page has no measured-grade box, and reads no gradePrice', !/function applyMeasuredGrade/.test(P) && !/d\.gradePrice/.test(P));
-ok('the typical-grade box is labelled an estimate', /' &middot; <span style="color:var\(--am\);font-weight:700">estimate<\/span>/.test(P) && /not measured from sales/.test(P));
+ok('no typical-grade box either: raw x a multiplier was an estimate, and no estimate is shown (Roy, 2026-10-09)', !/cd-gradeval/.test(P) && !/not measured from sales/.test(P));
 ok('print-run groups show "from $Y" (a listing\'s own price) and no median', /'from ' \+ fmtCurrency\(g\.low\)/.test(fnOf(P, 'livePrintRuns')) && !/g\.median/.test(fnOf(P, 'livePrintRuns')));
 ok('the price-check line names its yardstick and prints no median', !/o\.median/.test(fnOf(P, 'liveOutlierNote')));
 {

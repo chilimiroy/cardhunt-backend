@@ -66,13 +66,8 @@ try { document.documentElement.classList.add('ch-noprice'); } catch (e) {}
      cardQuery() guards on window.CardMatch and falls back, so late (or never)
      is fine; blocking is not. A warm server hides this in testing. -->
 <script async src="https://cardhunt-backend.onrender.com/cardmatch.js"></script>
-<!-- The SAME estimator server.js and ingest.js use. mockP() below guards on
-     window.Estimator and falls back, so async is safe here too — and just as
-     mandatory: a blocking tag would hang the page on a cold start. -->
 <script async src="https://cardhunt-backend.onrender.com/estimator.js"></script>
-<!-- Grade multipliers and the measured-vs-estimated labelling, shared with
-     the API. gradeMult() reads it at call time and falls back to the inline
-     GM table, so async is safe. -->
+<!-- Print runs (1st Edition, Shadowless, Unlimited), shared with the API. -->
 <script async src="https://cardhunt-backend.onrender.com/gradeprice.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-font-smoothing:antialiased}
@@ -1262,7 +1257,6 @@ async function tcgdexFetchSet(setId, lang, printedTotal) {
       // TCGdex set endpoint omits rarity — infer it from card position
       var rar = normRarity(c.rarity);
       if (!c.rarity) rar = inferRarityFromNumber(num, printed, c.name) || rar;
-      var est = mockP(rar, setId + '-' + num, c.name, num, printed);
       return {
         // TCGdex's id space is ours ({lang}-{set}-{number}); this used to
         // drop the language and hand out a foreign-shaped id.
@@ -1275,9 +1269,10 @@ async function tcgdexFetchSet(setId, lang, printedTotal) {
           small: c.image ? (c.image + '/low.png') : '',
           large: c.image ? (c.image + '/high.png') : ''
         },
-        tcgplayer: {prices:{holofoil:{market:est}}},
-        _price: est,
-        _priceSource: 'estimate',
+        // No price: TCGdex's set listing has none, and no estimate is shown.
+        tcgplayer: null,
+        _price: null,
+        _priceSource: null,
         _raritySource: c.rarity ? 'tcgdex' : 'inferred',
         _tcgdex: true,
         _lang: l
@@ -1858,7 +1853,7 @@ async function loadAllSets() {
   // Say so rather than quietly serving ids that half the app cannot resolve.
   console.warn('[sets] /api/sets/lang/en did not respond — showing the embedded '
     + EN_SETS.length + ' sets with pokemontcg.io ids. Some sets will show '
-    + 'estimates and no listing links until the API is reachable.');
+    + 'no prices and no listing links until the API is reachable.');
   const out = document.getElementById('sets-out');
   if (out && !document.getElementById('sets-fallback-note')) {
     const n = document.createElement('div');
@@ -1866,7 +1861,7 @@ async function loadAllSets() {
     n.style.cssText = 'background:var(--warn-soft);border:1px solid var(--warn);border-radius:10px;'
       + 'padding:10px 16px;margin-bottom:16px;font-size:12px;color:var(--warn);line-height:1.6';
     n.textContent = 'Showing a built-in set list because the API did not respond. '
-      + 'Some sets will show estimated prices and no listing links. Reload once it wakes.';
+      + 'Some sets will show no prices and no listing links. Reload once it wakes.';
     out.parentNode.insertBefore(n, out);
   }
 }
@@ -1894,128 +1889,12 @@ function getCacheSet(setId) {
 }
 
 
-// PRICE DATA
-var RP = {
-  // Raw NM market averages, calibrated to real TCGPlayer/eBay data
-  'Hyper Rare': 95,               // gold cards: $40-$500
-  'Special Illustration Rare': 110, // SIR: $35-$450
-  'Illustration Rare': 26,        // IR: $8-$90
-  'Rare Secret': 52,
-  'Rare Rainbow': 38,
-  'Rare Shiny': 30,
-  'Rare Ultra': 21,               // SR / full art
-  'ACE SPEC Rare': 24,
-  'Double Rare': 11,              // ex cards
-  'Rare Holo VMAX': 15,
-  'Rare Holo VSTAR': 12,
-  'Rare Holo V': 7,
-  'Rare Holo GX': 6,
-  'Rare Holo EX': 10,
-  'Rare Holo': 4.5,
-  'Amazing Rare': 15,
-  'Radiant Rare': 8,
-  'Trainer Gallery Rare Holo': 10,
-  'Rare': 2.2,
-  'Uncommon': 0.4,
-  'Common': 0.15,
-  'Promo': 5
-};
-// The multiplier table now lives in gradeprice.js, with the code that
-// labels its output as an estimate. This copy is the cold-start fallback
-// only — gradeMult() prefers the module. Do not edit these numbers here;
-// T2 replaces them per card with medians measured from real listings.
-const GM={'Raw NM':1,'Raw LP':0.75,'Raw MP':0.5,'Raw HP':0.35,'PSA 5':0.8,'PSA 6':1.1,'PSA 7':1.4,'PSA 8':2.0,'PSA 9':3.5,'PSA 10':7.0,'CGC 8':1.8,'CGC 9':3.0,'CGC 9.5':4.5,'CGC 10':6.5,'BGS 8':1.6,'BGS 9':2.8,'BGS 9.5':4.2};
-// Read at call time, never captured: the module arrives asynchronously and
-// a value snapshotted at parse time would be the fallback forever.
-function gradeMult(g){
-  var t = (typeof window !== 'undefined' && window.GradePrice
-           && window.GradePrice.GRADE_MULTIPLIERS) || GM;
-  return t[g] || 1;
-}
-
+// The page's estimator (RP, mockP) and the grade multipliers (GM, gradeMult)
+// are gone (Roy, 2026-10-09): no estimate is shown anywhere. A card with no
+// measured price says "no price recorded" (noPriceHtml).
 const GRADES=['Raw NM','Raw LP','Raw MP','PSA 5','PSA 6','PSA 7','PSA 8','PSA 9','PSA 10','CGC 8','CGC 9','CGC 9.5','CGC 10','BGS 8','BGS 9','BGS 9.5'];
 // const PD (the fixed price-history curve genPD drew) is gone with it.
 
-function mockP(rarity, cardId, cardName, cardNumber, setTotal, setRelease) {
-  if (!pricesOpen()) return 0;   // the door: an estimate is a price too
-  // This function WAS the estimator, and it was the only one with a vintage
-  // multiplier: server.js and ingest.js had none, so the same 1999 card was
-  // priced up to 9x apart depending on which screen asked. estimator.js is
-  // the one implementation now; this delegates to it.
-  //
-  // The body below runs only when the module has not loaded (cold start, or
-  // offline). Like cardQuery's fallback it is deliberately the old, degraded
-  // behaviour — improve estimator.js, never this.
-  if (typeof window !== 'undefined' && window.Estimator && window.Estimator.estimatePrice) {
-    return window.Estimator.estimatePrice({
-      rarity: normRarity(rarity), cardId: cardId, name: cardName,
-      number: cardNumber, setTotal: setTotal, setRelease: setRelease
-    });
-  }
-
-  var r = normRarity(rarity);
-
-  // Only infer from position when rarity is genuinely ABSENT. A card that
-  // really is Common must stay Common — Pokegear 3.0 sits at #186 of 198,
-  // which position inference called Rare Ultra and priced at $46.
-  if (!rarity && cardNumber && setTotal) {
-    var inf = inferRarityFromNumber(cardNumber, setTotal, cardName);
-    if (inf) r = inf;
-  }
-
-  var base = RP[r] || 1.0;
-
-  // ── Vintage multiplier ──
-  // A 1999 Base Set common trades far above a 2024 common. Scarcity and
-  // condition rarity lift the whole floor for older print runs.
-  var year = 0;
-  if (setRelease) {
-    var m = String(setRelease).match(/(\d{4})/);
-    if (m) year = parseInt(m[1]);
-  }
-  var vintage = 1;
-  if (year && year < 2000)      vintage = 9;    // Base / Jungle / Fossil era
-  else if (year && year < 2003) vintage = 5;    // Neo, e-Card
-  else if (year && year < 2007) vintage = 2.5;  // EX / PCG
-  else if (year && year < 2011) vintage = 1.6;  // DP / Platinum / HGSS
-  else if (year && year < 2017) vintage = 1.2;  // BW / XY
-  base = base * vintage;
-
-  // Trainers, Supporters, Stadiums, Tools and Energy carry no chase premium
-  var nm = (cardName || '').toLowerCase();
-  var isTrainerish = /(ball|pad|gear|catcher|switch|potion|rod|stretcher|candy|belt|band|vitality|research|orders|training|spirit|determination|gong|trumpet|tower|garden|mine|scrapper|scale|energy|stadium|machine|communication|nest|revive|retrieval|cape|helmet|charm|cushion|drum|whistle|horn|bell)\b/.test(nm);
-
-  var seed = 0;
-  var str = (cardId || '') + '|' + (cardName || '');
-  for (var i = 0; i < str.length; i++) seed = (seed * 31 + str.charCodeAt(i)) & 0x7FFFFFFF;
-
-  var band;
-  if (r === 'Hyper Rare' || r === 'Special Illustration Rare') band = 0.55 + (seed % 190) / 100;
-  else if (r === 'Illustration Rare' || r === 'Rare Secret' || r === 'Rare Rainbow') band = 0.55 + (seed % 150) / 100;
-  else if (r === 'Rare Ultra' || r === 'ACE SPEC Rare' || r === 'Double Rare') band = 0.5 + (seed % 180) / 100;
-  else band = 0.6 + (seed % 110) / 100;
-
-  if (!isTrainerish) {
-    if (nm.indexOf('charizard') >= 0) band *= 3.4;
-    else if (nm.indexOf('pikachu') >= 0) band *= 1.9;
-    else if (nm.indexOf('mewtwo') >= 0 || nm.indexOf('mew ') >= 0) band *= 1.7;
-    else if (nm.indexOf('umbreon') >= 0 || nm.indexOf('eevee') >= 0) band *= 1.6;
-    else if (nm.indexOf('lugia') >= 0 || nm.indexOf('rayquaza') >= 0) band *= 1.5;
-    else if (nm.indexOf('gengar') >= 0 || nm.indexOf('dragonite') >= 0) band *= 1.35;
-  }
-
-  var price = base * band;
-
-  // Ceiling scales with the same vintage factor, so a 1999 common may reach
-  // ~$18 while a 2024 common stays under $2.
-  var CEIL = { 'Common': 2, 'Uncommon': 3, 'Rare': 8, 'Rare Holo': 25 };
-  if (CEIL[r]) {
-    var ceiling = CEIL[r] * vintage;
-    if (price > ceiling) price = ceiling * (0.5 + (seed % 50) / 100);
-  }
-
-  return parseFloat(price.toFixed(2));
-}
 
 function isRare(r){return r&&(r.includes('Holo')||r.includes('Secret')||r.includes('Special')||r.includes('Ultra')||r.includes('Hyper')||r.includes('Illustration')||r.includes('Rainbow')||r.includes('Radiant')||r.includes('Amazing')||r.includes('ACE'));}
 
@@ -2096,8 +1975,20 @@ function getBase(c, out) {
   if (cm.averageSellPrice > 0) { if (out) out.origin = cFrom('average sell price'); return parseFloat(cm.averageSellPrice.toFixed(2)); }
   if (cm.trendPrice > 0) { if (out) out.origin = cFrom('trend price'); return parseFloat(cm.trendPrice.toFixed(2)); }
   if (cm.avg7 > 0) { if (out) out.origin = cFrom('7-day average'); return parseFloat(cm.avg7.toFixed(2)); }
-  if (out) out.origin = { kind: 'estimate' };
-  return mockP(c.rarity, c.id, c.name, c.number, (c.set && c.set.total), (c.set && (c.set.releaseDate || c.set.release)));
+  // No measured price: no number (Roy, 2026-10-09). This used to return
+  // mockP()'s estimate, which missed the measured price by 4x for the typical
+  // card and 17x for a quarter of them.
+  if (out) out.origin = { kind: 'none' };
+  return 0;
+}
+
+// What stands where a price would: words, never a number or a dash — the same
+// shape for a held card and one with no measured price (Roy, 2026-10-09).
+function noPriceHtml(c) {
+  var held = !!(c && c.priceHeld);
+  return '<span class="np" style="font-size:11px;font-weight:600;color:var(' + (held ? '--warn' : '--mu') + ')"'
+    + (held ? ' title="' + liveEsc(c.priceHeld.reason) + '"' : '') + '>'
+    + (held ? 'price withheld' : 'no price recorded') + '</span>';
 }
 
 // What a pokemontcg.io figure is, said in words: whose market, which figure,
@@ -2553,7 +2444,7 @@ async function openSet(setId, apiSetId){
     }
   } catch(e) { console.warn('Backend set fetch failed:', e.message); }
 
-  // 2. TCGdex direct (multilingual catalog, estimated prices)
+  // 2. TCGdex direct (multilingual catalog, no prices)
   try {
     var td = await tcgdexFetchSet(apiSetId, wantLang, set.t);
     if (td && td.length) { finish(td, 'tcgdex'); return; }
@@ -2589,10 +2480,10 @@ function setSourceNote(source, lang, realCount, total){
          : '. English prices from TCGPlayer market data.');
     bg = 'var(--good-soft)'; bd = 'var(--border)'; fg = 'var(--good)';
   } else if (lang === 'ja') {
-    msg = 'Live from TCGdex — not yet in our database, so prices are estimates.';
+    msg = 'Live from TCGdex — not yet in our database, so no prices are shown.';
     bg = 'var(--warn-soft)'; bd = 'var(--border)'; fg = 'var(--warn)';
   } else if (lang === 'zh-tw' || lang === 'zh-cn') {
-    msg = 'Live from TCGdex — not yet in our database, so prices are estimates.';
+    msg = 'Live from TCGdex — not yet in our database, so no prices are shown.';
     bg = 'var(--warn-soft)'; bd = 'var(--border)'; fg = 'var(--warn)';
   } else if (source === 'tcgdex+pokemontcg') {
     msg = 'Live: images from TCGdex, prices from TCGPlayer via pokemontcg.io.';
@@ -2689,7 +2580,7 @@ function applyFilters(){
     // five, and a "PSA 9"/"PSA 10" label on one in four. None was data.
     // Real movement exists now, measured, on the Pokémon page's Trending
     // sort; an invented one beside it would contradict it card by card.
-    var priceStr = price>0 ? fmtCurrency(price) : '&#8212;';
+    var priceStr = price>0 ? fmtCurrency(price) : noPriceHtml(c);
     var isReal = (c._priceIsReal === true) || (c._priceSource && !/^estimate/.test(c._priceSource));
     var from = {}; getBase(c, from);
     var estMark = priceMarksHtml(isReal, c._priceQuality, { origin: from.origin });
@@ -2741,12 +2632,9 @@ function updatePrices(grade,base){
   var third = !priceIsReal && from.origin && from.origin.kind === 'pokemontcg.io' ? thirdPartyOriginText(from.origin) : '';
   var q = cc && cc._priceQuality;
   var note = q && q.note ? ' <span style="color:var(--warn);font-size:11px;font-weight:600">&middot; ' + liveEsc(q.note) + '</span>' : '';
-  document.getElementById('cd-mkt').innerHTML = '$' + base.toFixed(2)
-    + (priceIsReal ? '' : third ? '<span style="font-size:11px;color:var(--am);margin-left:6px;'
-        + 'font-weight:600" title="' + liveEsc(third) + '">pokemontcg.io</span>'
-      : '<span style="font-size:11px;color:var(--fa);margin-left:6px;'
-        + 'font-weight:600" title="Estimated from rarity and set age — no market '
-        + 'data for this card yet">est</span>');
+  document.getElementById('cd-mkt').innerHTML = !(base > 0) ? noPriceHtml(cc)
+    : '$' + base.toFixed(2) + (third ? '<span style="font-size:11px;color:var(--am);margin-left:6px;'
+        + 'font-weight:600" title="' + liveEsc(third) + '">pokemontcg.io</span>' : '');
   // (The "cheapest trusted listing" box left this row 2026-10-08 — eBay's
   // figure is the eBay panel's own header, API licence §8.1(b)(2).)
   // Last sold: no licensed source (T8). Stated, never a number.
@@ -2772,7 +2660,7 @@ function updatePrices(grade,base){
   }
   // Held (pricehold.js): no number — a dash, and why, as a warning.
   if (cc && cc.priceHeld) {
-    document.getElementById('cd-mkt').innerHTML = '&mdash;';
+    document.getElementById('cd-mkt').innerHTML = noPriceHtml(cc);
     if (badge) badge.innerHTML = '<span style="color:var(--warn)">' + liveEsc(cc.priceHeld.reason) + '</span>';
     return;
   }
@@ -2783,7 +2671,7 @@ function updatePrices(grade,base){
       + priceAgeHtml(cc._priceDate)
       + priceMarksHtml(true, cc._priceQuality, { skip: ['old'], text: true }) + note
     : third ? '<span style="color:var(--am)">&#9679; ' + liveEsc(third) + '</span>' + note
-    : '<span style="color:var(--mu)">no market data held — estimate</span>' + note;
+    : note;
 }
 
 // When the headline was recorded (T2, 2026-10-02). The page never said, so
@@ -2822,8 +2710,6 @@ function priceMarksHtml(isReal, q, opts) {
   var third = !isReal && opts.origin && opts.origin.kind === 'pokemontcg.io';
   if (third) out += '<span style="font-size:9px;color:var(--am);margin-left:4px;font-weight:600"'
     + ' title="' + liveEsc(thirdPartyOriginText(opts.origin)) + '">pokemontcg.io</span>';
-  else if (!isReal && skip.indexOf('estimate') < 0) out += '<span style="font-size:9px;color:var(--fa);margin-left:4px;font-weight:600"'
-    + ' title="Estimated from rarity and set age - no market data held for this card">est</span>';
   if (q && q.note && !opts.text) out += '<span class="pqf" style="font-size:9px;color:var(--warn);margin-left:4px;font-weight:600"'
     + ' title="' + liveEsc(q.note) + '">disputed</span>';
   if (!isReal || !q || !q.flags) return out;
@@ -3744,37 +3630,8 @@ function renderListingFinder(card) {
   // controls for one setting is also two places for them to disagree about
   // what is currently selected.
 
-  // Estimated value at the chosen grade — of the SELECTED PRINTING (T4,
-  // 2026-09-29). It multiplied the base printing's price whatever the
-  // Printing box said, so Alakazam #1 Reverse read as the $233 holo's
-  // estimate, not the $122 reverse's. A reverse/mirror uses its OWN held
-  // price (the lookup the headline uses) and, holding none, says so rather
-  // than borrowing the base's.
-  // T3: the selected EDITION too, through the same helper as the headline.
-  var sh = selectedHeld(card);
-  var sp = sh ? sh.label : null;
-  var base = sh ? (sh.price != null ? sh.price : 0) : getBase(card);
-  var mult = gradeMult(LF.grade);
-  var est = base * mult;
-  var spLabel = sp ? ' &middot; ' + liveEsc(sp) : '';
-  if (base > 0) {
-    html += '<div id="cd-gradeval" style="padding:12px 18px;background:var(--bg);'
-      + 'border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;'
-      + 'align-items:center">';
-    html += '<div><div style="font-size:11px;color:var(--mu)">Typical ' + gradeText(LF.grade) + spLabel
-      + ' &middot; <span style="color:var(--am);font-weight:700">estimate</span></div>'
-      + '<div style="font-size:20px;font-weight:800">' + fmtCurrency(est) + '</div></div>';
-    html += '<div style="font-size:11px;color:var(--fa);text-align:right;max-width:200px">'
-      + (sp ? liveEsc(sp) + ' raw price' : 'Raw price')
-      + ' &times;' + mult + ', not measured from sales. The listings below are real.'
-      + '</div>';
-    html += '</div>';
-  } else if (sp) {
-    html += '<div id="cd-gradeval" style="padding:12px 18px;background:var(--bg);'
-      + 'border-bottom:1px solid var(--bd);font-size:12px;color:var(--mu)">'
-      + 'No typical ' + gradeText(LF.grade) + ' estimate for ' + liveEsc(sp)
-      + ' &mdash; no price held for that printing. The listings below are real.</div>';
-  }
+  // The "Typical <grade> · estimate" box (raw price x a fixed multiplier) is
+  // gone with every other estimate (Roy, 2026-10-09). The listings below are real.
 
   // Real listings from our own API land here, above the search links.
   // eBay's listings in their OWN labelled section, visually apart from our
@@ -6570,7 +6427,7 @@ function cardTile(c, opts) {
   var price = showPrice ? getBase(c, from) : 0;
   var cid = c.id || '';
   var isReal = (c._priceIsReal === true) || (c._priceSource && !/^estimate/.test(c._priceSource));
-  var priceStr = price > 0 ? fmtCurrency(price) : '&#8212;';
+  var priceStr = price > 0 ? fmtCurrency(price) : noPriceHtml(c);
   var setName = (c.set && c.set.name) ? c.set.name : '';
   return '<div class="ct" onclick="openCard(&quot;' + cid + '&quot;)">'
     + '<div class="cti">' + imgOrSk(c) + '</div>'
@@ -6839,7 +6696,8 @@ var LANG_JA = {
   'No measured price has been recorded for this card': 'このカードの実測価格はまだ記録されていません',
   'No price history to draw — nothing measured has been recorded for this card.': '描ける価格推移がありません — このカードの実測値はまだ記録されていません。',
   'no licensed sold source · see eBay sold link': '正規の落札データ源なし · eBayの落札リンクを参照',
-  'no market data held — estimate': '相場データなし — 推定値',
+  'no price recorded': '価格の記録なし',
+  'price withheld': '価格は非表示',
   'These open a search on the marketplace itself.': 'これらは各マーケット自体の検索を開きます。',
   'The results are not checked by us': '検索結果は当サイトでは確認していません',
   '— a search box returns whatever it matches, including merchandise, fan art and other cards with the same name. The listings above are the ones confirmed to be this exact card.': '— 検索ボックスは一致するものを何でも返します。グッズ、ファンアート、同名の別カードも含まれます。上の出品は、このカードそのものと確認できたものです。',
@@ -6934,7 +6792,8 @@ var LANG_ZH_TW = {
   'No measured price has been recorded for this card': '此卡尚無實測價格紀錄',
   'No price history to draw — nothing measured has been recorded for this card.': '沒有可繪製的價格走勢 — 此卡尚無任何實測紀錄。',
   'no licensed sold source · see eBay sold link': '沒有授權的成交資料來源 · 請見 eBay 成交連結',
-  'no market data held — estimate': '沒有市場資料 — 估計值',
+  'no price recorded': '沒有價格紀錄',
+  'price withheld': '價格暫不顯示',
   'These open a search on the marketplace itself.': '這些連結會在市集本身開啟搜尋。',
   'The results are not checked by us': '搜尋結果未經我們檢查',
   '— a search box returns whatever it matches, including merchandise, fan art and other cards with the same name. The listings above are the ones confirmed to be this exact card.': '— 搜尋框會回傳所有相符的結果，包括周邊商品、同人創作與同名的其他卡牌。上方的刊登才是確認為這張卡本身的。',
@@ -7029,7 +6888,8 @@ var LANG_ZH_CN = {
   'No measured price has been recorded for this card': '此卡尚无实测价格记录',
   'No price history to draw — nothing measured has been recorded for this card.': '没有可绘制的价格走势 — 此卡尚无任何实测记录。',
   'no licensed sold source · see eBay sold link': '没有授权的成交数据来源 · 请见 eBay 成交链接',
-  'no market data held — estimate': '没有市场数据 — 估计值',
+  'no price recorded': '没有价格记录',
+  'price withheld': '价格暂不显示',
   'These open a search on the marketplace itself.': '这些链接会在市场本身打开搜索。',
   'The results are not checked by us': '搜索结果未经我们检查',
   '— a search box returns whatever it matches, including merchandise, fan art and other cards with the same name. The listings above are the ones confirmed to be this exact card.': '— 搜索框会返回所有匹配的结果，包括周边商品、同人作品和同名的其他卡牌。上方的在售才是确认为这张卡本身的。',
@@ -8102,6 +7962,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261009-ff0ed97-age &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261009-abfba98-noest &middot; click to hide</div>
 </body>
 </html>

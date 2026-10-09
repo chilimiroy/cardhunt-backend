@@ -65,8 +65,8 @@ function notSecondReadingSql(ph = 'ph') {
 // not an estimate. Here, so every headline reader drops it at once. So is a
 // REFUSED row (pricehold.notRefusedSql): one our search wrote for a product
 // stating another collector number than the card's (TASK-product-matching).
-// And so is the ESTIMATE of a card whose estimate sits 5x or more from its own
-// measured record (pricehold.notEstimateHeldSql; its measured rows stay).
+// And NO estimate row is ever a headline (Roy, 2026-10-09): the estimator missed
+// the measured price by 4x for the typical card and 17x for a quarter of them.
 const pricehold = require('./pricehold');
 function basePrintingSql(ph = 'ph', c = 'c') {
   return `((COALESCE(${ph}.variant, '') NOT LIKE 'reverse%'
@@ -77,7 +77,7 @@ function basePrintingSql(ph = 'ph', c = 'c') {
      AND ${notSecondReadingSql(ph)}
      AND ${pricehold.notHeldSql(ph)}
      AND ${pricehold.notRefusedSql(ph)}
-     AND ${pricehold.notEstimateHeldSql(ph)})`;
+     AND ${ph}.source NOT LIKE 'estimate%')`;
 }
 
 // The same rule in JS, for a row already in hand — used ONLY by tests to

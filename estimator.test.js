@@ -1,4 +1,4 @@
-require('./testcount')(31);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(29);   // assertions in a plain run — fewer fails the file (testcount.js)
 const e = require('./estimator');
 const fs = require('fs');
 let pass=0, fail=0;
@@ -95,10 +95,7 @@ for (const [f, src] of Object.entries(callers)) {
 }
 chk('server.js requires the module',  /require\('\.\/estimator'\)/.test(callers['server.js']));
 if (HAVE_INGEST) chk('ingest.js requires the module',  /require\('\.\/estimator'\)/.test(callers['ingest.js']));
-chk('the frontend delegates to window.Estimator',
-    /window\.Estimator\s*&&\s*window\.Estimator\.estimatePrice/.test(callers['cardhunt_preview.html']));
-chk('the frontend declares RP exactly once',
-    (callers['cardhunt_preview.html'].match(/var RP = \{/g) || []).length === 1);
+// The page's estimator (mockP, RP) went 2026-10-09: no estimate is shown.
 chk('the frontend loads the module async',
     /<script async src="[^"]*\/estimator\.js"><\/script>/.test(callers['cardhunt_preview.html']));
 // The browser export goes through the IIFE wrapper's `root`, because a

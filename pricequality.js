@@ -88,8 +88,9 @@ function classify({ price, source, recordedAt, meta, series, now }) {
   now = now == null ? Date.now() : now;
   const p = price == null ? null : Number(price);
   if (!source || p == null || !(p > 0)) return { kind: 'none', flags: [], label: 'no price held' };
-  if (/^estimate/.test(source)) return { kind: 'estimate', flags: ['estimate'], label: 'estimate',
-    title: 'Estimated from rarity and set age — no market data held for this card' };
+  // An estimate is not a price (Roy, 2026-10-09): printsql keeps estimate rows
+  // out of every headline; should one ever arrive here it is no price, never a kind.
+  if (/^estimate/.test(source)) return { kind: 'none', flags: [], label: 'no price held' };
   const flags = [];
   const t = recordedAt ? Date.parse(recordedAt) : NaN;
   const ageDays = isFinite(t) ? Math.floor((now - t) / DAY) : null;

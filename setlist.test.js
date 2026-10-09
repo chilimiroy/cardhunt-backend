@@ -103,11 +103,12 @@ const fnSrc = name => {
     /^async function openCard\(/.test(fnSrc('openCard')),
     JSON.stringify(fnSrc('openCard').slice(0, 40)));
   // renderMarketData was the long function used here; deleted 2026-09-29.
-  // updatePrices' LAST statement is the estimate badge, and the function
-  // after it is setLowestFromListings: reach the one, never the other.
+  // updatePrices' LAST statement is the badge's final branch (": note;" since
+  // 2026-10-09, when the estimate branch went), and the function after it is
+  // setLowestFromListings: reach the one, never the other.
   ok('fnSrc reaches the END of a function, and stops there',
     /^function updatePrices\(/.test(fnSrc('updatePrices'))
-      && /no market data held/.test(fnSrc('updatePrices'))
+      && /\n    : note;\r?\n\}/.test(fnSrc('updatePrices'))
       && !/function setLowestFromListings/.test(fnSrc('updatePrices')),
     'updatePrices was truncated or over-read');
   ok('fnSrc returns empty for a name that does not exist',

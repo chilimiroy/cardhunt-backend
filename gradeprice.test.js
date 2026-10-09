@@ -1,4 +1,4 @@
-require('./testcount')(27);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(26);   // assertions in a plain run — fewer fails the file (testcount.js)
 const gp = require('./gradeprice');
 let pass=0, fail=0;
 const chk=(l,c)=>{ c?pass++:fail++; console.log('  '+(c?'PASS':'FAIL')+'  '+l); };
@@ -80,30 +80,27 @@ console.log('  ' + one.best.label);
 chk('a median of one is flagged thin', one.best.thin === true && one.best.count === 1);
 chk('and its label says what it is', /not a market price/.test(one.best.label));
 
-console.log('\nMEASURED OR ESTIMATED — NEVER AMBIGUOUS\n');
+console.log('\nMEASURED, OR NOTHING — no multiplier (Roy, 2026-10-09)\n');
 const rawPrice = 120;
 const measured = gp.priceFor(gp.aggregate(
   [L({price:900,shipping:0,live:false}),L({price:950,shipping:0,live:false}),
-   L({price:1000,shipping:0,live:false})], {grade:'PSA 10'}), 'PSA 10', rawPrice, 7);
+   L({price:1000,shipping:0,live:false})], {grade:'PSA 10'}), 'PSA 10', rawPrice);
 console.log('  measured: $' + measured.value + ' — ' + measured.label);
-chk('a real median is not marked estimated', measured.estimated === false);
+chk('a real median is the grade value, marked measured', measured.measured === true && measured.value === 950);
 chk('the measured premium is reported', measured.premium === +(950/120).toFixed(2));
-chk('the multiplier is NOT what was shown', measured.value !== 120 * 7);
 
-const guessed = gp.priceFor(gp.aggregate([], {grade:'PSA 10'}), 'PSA 10', rawPrice, 7);
-console.log('  estimated: $' + guessed.value + ' — ' + guessed.label);
-chk('with no listings it falls back to the multiplier', guessed.value === 840);
-chk('and says it is an estimate', guessed.estimated === true && /estimate/.test(guessed.label));
+const none = gp.priceFor(gp.aggregate([], {grade:'PSA 10'}), 'PSA 10', rawPrice);
+chk('with no listings there is no grade value — the raw x 7 guess is gone', none === null);
+chk('the multiplier table is gone from the module the page loads', !('GRADE_MULTIPLIERS' in gp) && !('fromMultiplier' in gp));
 
-const thin = gp.priceFor(gp.aggregate([L({price:612,shipping:0,live:false})], {grade:'PSA 10'}),
-                         'PSA 10', rawPrice, 7);
-chk('one listing does not become the market price', thin.estimated === true);
-chk('but it is still shown as evidence', thin.observed && thin.observed.median === 612);
+const thin = gp.priceFor(gp.aggregate([L({price:612,shipping:0,live:false})], {grade:'PSA 10'}), 'PSA 10', rawPrice);
+chk('one listing does not become the grade value', thin.value === null && thin.measured === false);
+chk('but it is still there as evidence', thin.observed && thin.observed.median === 612);
 
 console.log('\nNOTHING AT ALL\n');
 const empty = gp.aggregate([], { grade:'PSA 10' });
 chk('no listings is not an error', empty.best === null && empty.groups.length === 0);
-chk('no raw price means no estimate either', gp.fromMultiplier(0, 'PSA 10', 7) === null);
+chk('no listings at all: no grade value, not a guess', gp.priceFor(empty, 'PSA 10', 120) === null);
 chk('a zero-price listing is never usable', !gp.usable(L({ price:0, live:false })));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

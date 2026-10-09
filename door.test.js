@@ -11,7 +11,7 @@
 // Executed here (vm), not only read: the head script, the role mapping,
 // pricesOpen, the note's words, and the tiles both ways.
 
-require('./testcount')(57);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(58);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), vm = require('vm');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };
@@ -96,7 +96,7 @@ ok('whenPrices: check still running -> not now, once it settles', wp('checking',
 
 console.log('\n  the tiles, executed both ways');
 const tileCtx = open => ({ pricesOpen: () => open, getBase: c => c._price || 0, fmtCurrency: v => '$' + v.toFixed(2), imgOrSk: () => '<img>',
-  nameWithEn: n => n, priceMarksHtml: () => '' });
+  nameWithEn: n => n, priceMarksHtml: () => '', noPriceHtml: () => '<span class="np">no price recorded</span>' });
 const ct = (open, c) => vm.runInNewContext(fn('cardTile') + '; cardTile(c)', Object.assign(tileCtx(open), { c }));
 const closed = ct(false, { id: 'en-base1-4', name: 'Charizard', number: '4', set: { name: 'Base' } });
 ok('closed: a tile shows the card (name, set, number) and NO price row — no dash, no $0', /Charizard/.test(closed) && /Base/.test(closed) && /#4/.test(closed)
@@ -105,7 +105,9 @@ const openT = ct(true, { id: 'en-base1-4', name: 'Charizard', number: '4', set: 
 ok('open: the same tile shows its price — ALLOWS', /\$412\.35/.test(openT) && /class="cr"/.test(openT));
 ok('getBase — every renderer\'s price — is 0 while closed (no withheld figure, no estimate, no third-party price)',
    /^function getBase\(c, out\) \{\n  if \(out\) out\.origin = null;\n  if \(!c\) return 0;\n(  \/\/.*\n)*  if \(!pricesOpen\(\)\) return 0;/.test(fn('getBase')));
-ok('mockP — the page\'s own estimator — returns nothing while closed', /^function mockP\([^)]*\) \{\n  if \(!pricesOpen\(\)\) return 0;/.test(fn('mockP')));
+ok('the page has no estimator at all: no mockP, no grade multiplier (Roy, 2026-10-09)', !/function mockP\(|function gradeMult\(|window\.Estimator/.test(H));
+const none = ct(true, { id: 'en-x-1', name: 'Card', number: '1', set: { name: 'Set' } });
+ok('open: a card with no measured price says "no price recorded" — no number, no dash', /no price recorded/.test(none) && !/\$|&#8212;/.test(none), none.replace(/<[^>]+>/g, '|').slice(0, 80));
 ok('set page tiles: no price row without prices', /\+\(pricesOpen\(\) \? '<div class="cr"><span class="cp">'\+priceStr\+estMark/.test(H));
 ok('set page: the "where prices come from" note is not drawn while closed', /if \(!pricesOpen\(\)\) return;/.test(fn('setSourceNote')));
 ok('search candidates: no price slot without prices', /pricesOpen\(\) \? '<span style="font-size:14px;font-weight:800">' \+ price \+ '<\/span>' : '<span><\/span>'/.test(H));

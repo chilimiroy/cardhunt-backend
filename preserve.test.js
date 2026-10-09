@@ -694,11 +694,11 @@ ok('the grader-wide wire format never reaches the screen raw',
   && fnCode('buildMockListings').indexOf('gradeText(') >= 0,
   'the deep-link block rendered "— PSA * ONLY" to the user');
 // The measured grade box (an eBay median) was REMOVED 2026-10-08 (eBay API
-// licence §9.5); the typical (estimate) heading is the one left.
-ok('...including the typical grade heading, and the measured one is gone',
-  fnCode('renderListingFinder').indexOf('gradeText(') >= 0
-  && codeOnly.indexOf('function applyMeasuredGrade') < 0,
-  'the typical heading prints the grade straight above the estimate a buyer reads');
+// licence §9.5); the typical (estimate) box went 2026-10-09 with every other
+// estimate (Roy): raw price x a fixed multiplier is not a grade's worth.
+ok('...and no grade box is left: not the measured one, not the typical estimate',
+  codeOnly.indexOf('function applyMeasuredGrade') < 0 && codeOnly.indexOf('cd-gradeval') < 0 && codeOnly.indexOf('gradeMult(') < 0,
+  'a "Typical <grade> · estimate" box multiplied the raw price by a fixed number');
 
 // ══════════════════════════════════════════════════════════════
 console.log('');

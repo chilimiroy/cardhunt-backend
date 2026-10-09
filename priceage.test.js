@@ -39,7 +39,8 @@ if (priceAgeHtml) {
 // The badge reads the card's own recorded date, and only on a real price.
 const badge = H.slice(H.indexOf('// The badge says where the headline came from'), H.indexOf('function priceAgeHtml('));
 ok(/priceAgeHtml\(cc\._priceDate\)/.test(badge), 'the headline badge shows cc._priceDate');
-ok(badge.indexOf('priceAgeHtml(') < badge.indexOf("no market data held"), 'the date sits in the real-price branch, not on an estimate');
+ok(badge.indexOf('priceAgeHtml(') > 0 && badge.indexOf('priceAgeHtml(') < badge.indexOf(': third ?') && !/no market data held/.test(badge),
+   'the date sits in the real-price branch; there is no estimate branch left (Roy, 2026-10-09)');
 ok((H.match(/priceAgeHtml\(/g) || []).length === 2, 'one definition, one caller', String((H.match(/priceAgeHtml\(/g) || []).length));
 // The server sends the date on the card endpoint the page opens.
 const S = fs.readFileSync(__dirname + '/server.js', 'utf8');

@@ -160,37 +160,14 @@ function aggregate(listings, opts) {
   };
 }
 
-// ── The multiplier, kept honest ───────────────────────────────
-// This table used to live in the frontend as `GM` and nowhere else, which
-// is how the estimator split started. It lives here now, with the code that
-// labels its output, so a caller cannot get the number without the caveat.
-//
-// These are guesses. That is the point of T2: replace each one, per card,
-// with a median measured from real slab listings as the evidence arrives.
-const GRADE_MULTIPLIERS = {
-  'Raw NM': 1, 'Raw LP': 0.75, 'Raw MP': 0.5, 'Raw HP': 0.35,
-  'PSA 5': 0.8, 'PSA 6': 1.1, 'PSA 7': 1.4, 'PSA 8': 2.0, 'PSA 9': 3.5, 'PSA 10': 7.0,
-  'CGC 8': 1.8, 'CGC 9': 3.0, 'CGC 9.5': 4.5, 'CGC 10': 6.5,
-  'BGS 8': 1.6, 'BGS 9': 2.8, 'BGS 9.5': 4.2
-};
-
-// The GM table stays as a fallback: most cards will never have enough slab
-// listings to measure. But a fallback that looks like a measurement is how
-// users act on a guess, so every estimate carries `estimated: true` and the
-// multiplier it came from.
-function fromMultiplier(rawPrice, grade, multiplier) {
-  const m = Number(multiplier);
-  if (!(Number(rawPrice) > 0) || !(m > 0)) return null;
-  return {
-    grade, value: +(rawPrice * m).toFixed(2),
-    estimated: true, multiplier: m, count: 0,
-    label: `estimate — raw price x${m}, not measured from listings`
-  };
-}
-
-// What to show for one grade: the measurement when there is one worth
-// showing, the multiplier otherwise, and never one dressed as the other.
-function priceFor(agg, grade, rawPrice, multiplier, opts) {
+// ── A grade's worth: measured, or nothing ─────────────────────
+// The multiplier table that stood in here (raw x 7 = "PSA 10") was a guess
+// labelled as one, and it went on 2026-10-09 with every other estimate (Roy):
+// the estimator missed by 4x for the typical card and 17x for a quarter of
+// them, and nothing a buyer reads should be a guess. What is left is the
+// measurement: a grade's median from real listings when there are enough of
+// them, a thin one shown only as what it is, and otherwise nothing.
+function priceFor(agg, grade, rawPrice, opts) {
   opts = opts || {};
   const minSample = Number.isFinite(opts.minSample) ? opts.minSample : 3;
   const g = agg && agg.groups
@@ -198,24 +175,18 @@ function priceFor(agg, grade, rawPrice, multiplier, opts) {
                 .sort((a, b) => (a.basis === SOLD ? 0 : 1) - (b.basis === SOLD ? 0 : 1) ||
                                  b.count - a.count)[0]
     : null;
-
-  if (g && g.count >= minSample) {
+  if (!g) return null;
+  if (g.count >= minSample) {
     return {
-      grade: String(grade), value: g.median, estimated: false,
+      grade: String(grade), value: g.median, measured: true,
       count: g.count, basis: g.basis, edition: g.edition,
       landed: g.landed, low: g.low, high: g.high, label: g.label,
-      // The premium we MEASURED, which is the number the GM table was
-      // guessing at. Worth surfacing: it is how the table gets fixed.
       premium: Number(rawPrice) > 0 ? +(g.median / rawPrice).toFixed(2) : null
     };
   }
-
-  const est = fromMultiplier(rawPrice, grade, multiplier);
-  // A thin measurement is not thrown away — it is shown as supporting
-  // evidence beside the estimate, because "one listing at $612" is useful
-  // even when it is not a market price.
-  if (est && g) { est.observed = { median: g.median, count: g.count, basis: g.basis, label: g.label }; }
-  return est;
+  // Too few to be a price: said as evidence, never as the grade's value.
+  return { grade: String(grade), value: null, measured: false,
+           observed: { median: g.median, count: g.count, basis: g.basis, label: g.label } };
 }
 
 // ── Print runs: 1st Edition, Shadowless, Unlimited — only where they exist ──
@@ -278,15 +249,12 @@ function byPrintRun(listings, setId, lang) {
   });
 }
 
-const API = { aggregate, priceFor, fromMultiplier, median, landedOf, usable,
-              GRADE_MULTIPLIERS,
+const API = { aggregate, priceFor, median, landedOf, usable,
               FIRST_EDITION_SETS, SHADOWLESS_SETS, printRunsFor, byPrintRun, RUN_NOT_STATED };
 
 // ── Dual mode: Node require() AND a browser <script> ──────────
-// Same arrangement as cardmatch.js and estimator.js: server.js serves this
-// file at /gradeprice.js and the browser picks it up as window.GradePrice.
-// The multiplier table above is exactly the kind of thing that gets pasted
-// into the HTML "just for now" and then drifts.
+// Same arrangement as cardmatch.js: server.js serves this file at
+// /gradeprice.js and the browser picks it up as window.GradePrice.
 if (typeof module !== 'undefined' && module.exports) module.exports = API;
 if (root) root.GradePrice = API;
 

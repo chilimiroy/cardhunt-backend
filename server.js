@@ -529,12 +529,9 @@ const TTL = 15 * 60 * 1000;
 const cGet = k => { const e = CACHE[k]; return (e && Date.now() - e.ts < TTL) ? e.d : null; };
 const cSet = (k, d) => { CACHE[k] = { d, ts: Date.now() }; };
 
-const GM = {
-  'Raw NM':1,'Raw LP':0.72,'Raw MP':0.48,
-  'PSA 5':0.78,'PSA 6':1.05,'PSA 7':1.35,'PSA 8':1.95,'PSA 9':3.40,'PSA 10':7.20,
-  'CGC 8':1.70,'CGC 9':2.90,'CGC 9.5':4.20,'CGC 10':6.20,
-  'BGS 8':1.55,'BGS 9':2.65,'BGS 9.5':4.00,'SGC 9':2.20,'SGC 10':4.50
-};
+// The grade multipliers (raw x 7.2 = "PSA 10") are gone with every other
+// estimate (Roy, 2026-10-09): a grade's worth is what gradeprice.js measures
+// from real listings, or nothing.
 
 // ── HEALTH ────────────────────────────────────────────────────
 app.get('/', async (req, res) => {
@@ -661,19 +658,6 @@ function normRarity(r) {
   return 'Common';
 }
 
-// Estimates come from estimator.js — the single implementation, shared with
-// ingest.js and (over /estimator.js) the frontend. The table that used to sit
-// here had no vintage multiplier while the frontend's had a 9x one, so the
-// card page and the set page priced the same 1999 card differently depending
-// on which had answered last.
-//
-// setRelease is what makes the difference, so every caller must pass it.
-function estimatePrice(rarity, cardId, cardName, setRelease, number, setTotal) {
-  return estimator.estimatePrice({
-    rarity: normRarity(rarity), cardId, name: cardName,
-    number, setTotal, setRelease
-  });
-}
 
 function extractPrice(card) {
   const t = (card.tcgplayer && card.tcgplayer.prices) || {};
@@ -786,9 +770,10 @@ app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
               // TCGplayer's name: the card endpoint's T10 fix, never made here.
               tcgplayer: r.tcgplayer_data || null,
               cardmarket: r.cardmarket_data || null,
-              _price: price,
-              _priceSource: r.price_source || 'estimate',
-              _priceIsReal: !isEstimate,
+              // No estimate is ever a price (Roy, 2026-10-09): no headline = null.
+              _price: price > 0 && !isEstimate ? price : null,
+              _priceSource: isEstimate ? null : r.price_source,
+              _priceIsReal: price > 0 && !isEstimate,
               _priceDate: r.recorded_at,
               _source: 'cardhunt_db',
               _lang: dbLang
@@ -895,7 +880,7 @@ app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
           ? normRarity(pi.rarity || c.rarity)
           : (inferRarity(num, printed, c.name) || normRarity(pi.rarity || c.rarity));
         const price = (pi.price && pi.price > 0)
-          ? pi.price : estimatePrice(rarity, `${setId}-${num}`, c.name, tdRelease, num, printed);
+          ? pi.price : null;   // no estimate (Roy, 2026-10-09): no price recorded
         return {
           id: `${setId}-${num}`, name: c.name, number: num, rarity,
           supertype: pi.supertype || null,
@@ -909,7 +894,7 @@ app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
           tcgplayer: pi.tcgplayer || null,
           cardmarket: pi.cardmarket || null,
           _price: price,
-          _priceSource: (pi.price && pi.price > 0) ? (pi.source || 'tcgplayer') : 'estimate',
+          _priceSource: (pi.price && pi.price > 0) ? (pi.source || 'tcgplayer') : null,
           _priceIsReal: !!(pi.price && pi.price > 0),
           _source: 'tcgdex+pokemontcg', _lang: tdLang
         };
@@ -928,9 +913,8 @@ app.get('/api/sets/:setId/cards', access.optional, async (req, res) => {
       if (!c.rarity) rarity = inferRarity(c.number, setTotal, c.name) || rarity;
       return Object.assign({}, c, {
         rarity,
-        _price: p ? p.price : estimatePrice(rarity, c.id, c.name,
-                    c.set && c.set.releaseDate, c.number, c.set && c.set.total),
-        _priceSource: p ? p.source : 'estimate',
+        _price: p ? p.price : null,   // no estimate (Roy, 2026-10-09)
+        _priceSource: p ? p.source : null,
         _priceIsReal: !!p
       });
     });
@@ -1041,9 +1025,10 @@ app.get('/api/cards/:cardId', access.optional, async (req, res) => {
           // other reader of this API would have taken it as TCGplayer's.
           tcgplayer: c.tcgplayer_data || null,
           cardmarket: c.cardmarket_data || null,
-          _price: price,
-          _priceSource: c.price_source || 'estimate',
-          _priceIsReal: !isEstimate,
+          // No estimate is ever a price (Roy, 2026-10-09): no headline = null.
+          _price: price > 0 && !isEstimate ? price : null,
+          _priceSource: isEstimate ? null : c.price_source,
+          _priceIsReal: price > 0 && !isEstimate,
           _priceDate: c.recorded_at,
           _priceQuality: pq.get(c.api_card_id) || null,   // old / thin / unsettled (T1)
           _source: 'cardhunt_db'
@@ -1484,13 +1469,9 @@ app.get('/api/price/:cardId', access.priced, async (req, res) => {
             ORDER BY ph.recorded_at DESC LIMIT 60`, [realId]);
 
           const real = hist.rows.filter(h => !/^estimate/.test(h.source || ''));
-          const best = real[0] || hist.rows[0];
+          const best = real[0] || null;
           const rawNm = best ? parseFloat(best.price_usd) : 0;
 
-          const grades = {};
-          Object.entries(GM).forEach(([g, m]) => {
-            grades[g] = parseFloat((rawNm * m).toFixed(2));
-          });
 
           const prices = real.map(h => parseFloat(h.price_usd)).filter(v => v > 0);
           const result = {
@@ -1503,7 +1484,6 @@ app.get('/api/price/:cardId', access.priced, async (req, res) => {
             source: best ? best.source : 'none',
             isReal: !!real.length,
             marketplace: best ? best.marketplace : null,
-            grades,
             observations: real.length,
             low: prices.length ? Math.min(...prices) : null,
             high: prices.length ? Math.max(...prices) : null,
@@ -1555,8 +1535,6 @@ app.get('/api/price/:cardId', access.priced, async (req, res) => {
       if (rawNm) source = 'cardmarket';
     }
 
-    const grades = {};
-    Object.entries(GM).forEach(([g, m]) => { grades[g] = parseFloat((rawNm * m).toFixed(2)); });
 
     // ── DO NOT WRITE THIS INTO price_history ──────────────────
     // A read endpoint must never write. This fired on every view of a card
@@ -1576,7 +1554,7 @@ app.get('/api/price/:cardId', access.priced, async (req, res) => {
 
     const result = {
       cardId, name: c.name, rarity: c.rarity,
-      rawNm: parseFloat(rawNm.toFixed(2)), source, grades,
+      rawNm: parseFloat(rawNm.toFixed(2)), source,
       isReal: rawNm > 0,
       tcgplayer_url: (c.tcgplayer && c.tcgplayer.url) || null,
       cardmarket_url: (c.cardmarket && c.cardmarket.url) || null,
@@ -2208,7 +2186,7 @@ async function numberMatchedPrice(cardId) {
   const price = c.price_usd ? parseFloat(c.price_usd) : 0;
   const isEstimate = !c.price_source || /^estimate/.test(c.price_source);
   return { cardId: c.api_card_id, name: c.name, number: c.number,
-           setName: c.set_name, price, source: c.price_source || 'estimate',
+           setName: c.set_name, price, source: c.price_source || null,
            isReal: !isEstimate && price > 0, recordedAt: c.recorded_at, meta: c.price_meta || null };
 }
 
@@ -5158,11 +5136,6 @@ app.get('/api/diagnostic', access.optional, async (req, res) => {
   out.checks.pricecharting = PC_TOKEN ? 'configured' : 'NOT configured - add PRICECHARTING_TOKEN';
   out.checks.database = db ? 'Supabase connected' : 'no DATABASE_URL';
 
-  out.sample_prices = {
-    'Pikachu ex (SIR)':        estimatePrice('Special illustration rare', 'me2pt5-276', 'Pikachu ex'),
-    'Mega Charizard Y (HR)':   estimatePrice('Mega hyper rare', 'me2pt5-294', 'Mega Charizard Y ex'),
-    'Erika Oddish (Common)':   estimatePrice('Common', 'me2pt5-1', "Erika's Oddish")
-  };
   res.json(out);
 });
 

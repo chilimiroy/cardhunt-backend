@@ -5,7 +5,7 @@
 //   node pricehold.test.js --db    also: the real headline query returns nothing for a held card,
 //                                  and still returns the unheld cards' prices
 'use strict';
-require('./testcount')(26);
+require('./testcount')(23);
 const fs = require('fs'), vm = require('vm');
 const ph = require('./pricehold'), printsql = require('./printsql'), { isOurCardId } = require('./cardid');
 let pass = 0, fail = 0;
@@ -41,18 +41,9 @@ ok('every refused row is out of the headline rule, on the alias it is given', ph
 ok('every hold says why, names the other card(s), and when it comes off', ids.every(id => /price withheld/.test(ph.HELD[id].reason) && ph.HELD[id].with.length && ph.HELD[id].removeWhen));
 ok('every held id is one of ours (safe to quote into SQL)', ids.every(id => isOurCardId(id) && !/['\\]/.test(id)));
 
-console.log('\n  estimates held (an estimate 5x or more from the card\'s own measured record)');
-const ES = require('./pricehold-estimates.json');
-ok('the list is measured at the multiple estimatescan.js holds at (5), and Skyridge Gengar H09 is on it',
-  ES.multiple === 5 && require('./estimatescan').MULTIPLE === 5 && ph.ESTIMATE_HELD['en-ecard3-H09'] && ES.held.every(e => e.ratio >= ES.multiple && e.readings > 0),
-  ES.held.map(e => e.id + ' ' + e.ratio + 'x').join(', '));
-ok('its estimate rows leave the headline rule, its measured rows do not',
-  printsql.basePrintingSql('ph', 'c').includes(ph.notEstimateHeldSql('ph')) && /NOT \(ph\.source LIKE 'estimate%' AND ph\.card_api_id IN \('en-ecard3-H09'/.test(ph.notEstimateHeldSql('ph')));
-const g = ph.apply({ id: 'en-ecard3-H09', _price: 0.3, _priceIsReal: false, _priceSource: 'estimate' });
-ok('made to fire: H09 with only its estimate shows no number, and says the estimate and its own median',
-  g._price === null && g.priceHeld && /\$0\.3\b/.test(g.priceHeld.reason) && /\$192\.97|median of \d+ readings/.test(g.priceHeld.reason), g.priceHeld && g.priceHeld.reason);
-const real = ph.apply({ id: 'en-ecard3-H09', _price: 1300, _priceIsReal: true, _priceSource: 'tcgplayer_market' });
-ok('…and what it ALLOWS: once a measured price is recorded it shows, unheld', real._price === 1300 && !real.priceHeld);
+console.log('\n  no estimate is ever a headline (Roy, 2026-10-09)');
+ok('basePrintingSql leaves out every estimate row, for every card — the 5x hold it replaces is gone',
+  /ph\.source NOT LIKE 'estimate%'\)$/.test(printsql.basePrintingSql('ph', 'c')) && !('notEstimateHeldSql' in ph) && !fs.existsSync(__dirname + '/estimatescan.js'));
 
 console.log('\n  the headline rule');
 const sql = printsql.basePrintingSql('ph', 'c');
@@ -77,9 +68,9 @@ const ctx = { pricesOpen: () => true, mockP: () => 77.7 };
 vm.createContext(ctx); vm.runInContext(gb, ctx);
 ok('getBase: a held card has no number — not the blob, not the estimate',
   ctx.getBase({ priceHeld: { reason: 'x' }, _price: null, tcgplayer: { prices: { holofoil: { market: 1400 } } } }) === 0);
-ok('getBase: an unheld card without a price still falls through as before (unchanged)', ctx.getBase({ _price: null }) === 77.7);
+ok('getBase: a card with no measured price and no price blob has no number — no estimate (Roy, 2026-10-09)', ctx.getBase({ _price: null }) === 0);
 const up = H.slice(H.indexOf('function updatePrices(grade,base){'), H.indexOf('\n}\n', H.indexOf('function updatePrices(grade,base){')));
-ok('the card page draws a dash and the reason, as a warning', /if \(cc && cc\.priceHeld\) \{\s*document\.getElementById\('cd-mkt'\)\.innerHTML = '&mdash;';/.test(up) && /liveEsc\(cc\.priceHeld\.reason\)/.test(up));
+ok('the card page says "price withheld" for a held card, with the reason as a warning', /if \(cc && cc\.priceHeld\) \{\s*document\.getElementById\('cd-mkt'\)\.innerHTML = noPriceHtml\(cc\);/.test(up) && /liveEsc\(cc\.priceHeld\.reason\)/.test(up));
 
 (async () => {
   if (process.argv.includes('--db')) {
@@ -111,9 +102,9 @@ ok('the card page draws a dash and the reason, as a warning', /if \(cc && cc\.pr
       const at = id => rel.find(r => r.api_card_id === id) || {};
       ok('released: Umbreon 32 and Garchomp 247 have a headline; H30 has none (its only rows were Umbreon 32\'s product)',
         at('en-ecard3-32').price_usd > 0 && at('en-sm11-247').price_usd > 0 && at('en-ecard3-H30').price_usd == null, JSON.stringify(rel));
-      const es = await require('./estimatescan').scan(db);
-      ok('pricehold-estimates.json matches the database today (re-run estimatescan.js --write if not)',
-        es.held.map(e => e.id).sort().join() === ES.held.map(e => e.id).sort().join(), es.held.map(e => e.id).join(', ') + ' now vs ' + ES.held.map(e => e.id).join(', '));
+      const est = (await db.query(`SELECT count(*)::int n FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
+        WHERE ph.source LIKE 'estimate%' AND ph.grade IS NULL AND ${printsql.basePrintingSql('ph', 'c')}`)).rows[0].n;
+      ok('no stored estimate row passes the headline rule (they stay stored; append-only)', est === 0, est + ' rows');
       const gh = await q(['en-ecard3-H09']);
       ok('H09: the real headline query returns no estimate', gh.length === 1 && gh[0].price_usd == null, JSON.stringify(gh));
       const u = await q(['en-base1-4', 'en-sv03.5-199', 'en-dpp-DP01']);

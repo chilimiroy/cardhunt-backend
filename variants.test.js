@@ -6,7 +6,7 @@
 // 2026-09-29), not the documented shape — which hid the Poké Ball and Master
 // Ball mirrors behind a bare `reverse: true`.
 'use strict';
-require('./testcount')(81);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(79);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const cm = require('./cardmatch');
 const tdx = require('./tcgdexprice');
@@ -169,10 +169,10 @@ console.log('\n  3b. the page');
   // T4 (2026-09-29): the Typical grade block multiplied the BASE printing's
   // price whatever the Printing box said.
   const rlf = pfn('renderListingFinder');
-  ok('the Typical block reads the selected printing\'s OWN held price',
-    /selectedHeld\(card\)/.test(rlf) && /var base = sh \?/.test(rlf) && /SEL\.printing/.test(pfn('selectedHeld')));
-  ok('...and says none is held rather than borrowing the base price', /no price held for that printing/.test(rlf));
-  ok('...and names the printing in its heading', /Typical ' \+ gradeText\(LF\.grade\) \+ spLabel/.test(rlf));
+  // 2026-10-09 (Roy): the Typical block is gone — raw x a multiplier was an
+  // estimate, and no estimate is shown. The printing's own price is the card
+  // page headline's (selectedHeld, asserted above).
+  ok('the Typical block is gone: no multiplied grade value on the card page', !/Typical ' \+ gradeText/.test(rlf) && !/gradeMult\(/.test(rlf) && /SEL\.printing/.test(pfn('selectedHeld')));
   ok("getBase's fallback never takes a reverseHolofoil as the base", !/'reverseHolofoil'/.test(pfn('getBase')));
 }
 {

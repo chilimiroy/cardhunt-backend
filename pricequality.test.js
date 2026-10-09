@@ -10,7 +10,7 @@
 // current and measured — 113 Yuyu-tei asks from one 28 Aug run, 10 English
 // rows 66-67 days old, 7 alternating (Torchic ☆ 4500/1200/4500/1200/4500).
 'use strict';
-require('./testcount')(51);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(52);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const pq = require('./pricequality');
 const DB = process.argv.includes('--db');
@@ -48,7 +48,7 @@ console.log('\n  the rule — what it FLAGS');
   ok(C({ price: 4500, source: 'tcgplayer_market', recordedAt: ago(1), meta: { matchedBy: 'number', listings: 0 } }).flags.includes('thin'),
      'a TCGplayer "market" on 0 listings is thin');
   const est = C({ price: 0.66, source: 'estimate', recordedAt: ago(1) });
-  ok(est.kind === 'estimate' && est.flags[0] === 'estimate', 'an estimate is an estimate', est);
+  ok(est.kind === 'none' && est.flags.length === 0, 'an estimate is no price (Roy, 2026-10-09)', est);
   ok(C({ price: 0, source: 'tcgplayer_market', recordedAt: ago(1) , meta: { matchedBy: 'number' }}).kind === 'none'
      && C({ price: null, source: null }).kind === 'none', 'no price: none');
   const both = C({ price: 4500, source: 'tcgplayer_market', recordedAt: ago(40), meta: { matchedBy: 'number' }, series: [4500, 1200, 4500] });
@@ -83,7 +83,7 @@ const fnSrc = name => { const i = H.indexOf('function ' + name + '('); return i 
   gb({ id: 'x', cardmarket: { updatedAt: '2026/07/27', prices: { averageSellPrice: 9 } } }, o2);
   gb({ id: 'y' }, o3);
   ok(o1.origin && o1.origin.kind === 'pokemontcg.io' && o1.origin.market === 'TCGplayer (US)' && o1.origin.date === '2026/06/29'
-     && o2.origin.market === 'Cardmarket (EU)' && o3.origin.kind === 'estimate', 'getBase reports a pokemontcg.io figure as one, and an estimate as an estimate', [o1, o2, o3]);
+     && o2.origin.market === 'Cardmarket (EU)' && o3.origin.kind === 'none', 'getBase reports a pokemontcg.io figure as one, and nothing else as no price', [o1, o2, o3]);
 }
 
 console.log('\n  the page draws the server\'s answer — the REAL priceMarksHtml');
@@ -103,7 +103,7 @@ if (marks) {
   ok(/1200\.00/.test(tile), '...with the reason in its title');
   ok(marks(true, C({ price: 78, source: 'tcgdex_tcgplayer_holofoil', recordedAt: ago(1) })) === '', 'a current price draws nothing (KEEP)');
   ok(marks(true, null) === '' && marks(true, undefined) === '', 'no quality held (old cached payload): nothing claimed');
-  ok(/>est</.test(marks(false, null)) && !/unsettled|old/.test(marks(false, qT)), 'an estimate says est, and only est');
+  ok(marks(false, null) === '' && marks(false, qT) === '', 'no price draws no mark at all — never est (Roy, 2026-10-09)');
   const page = marks(true, qT, { skip: ['old'], text: true });
   ok(!/>old</.test(page) && /unsettled: /.test(page), 'card page: old left to the date line, unsettled spelled out', page);
   ok(!/<script/i.test(marks(true, { flags: ['old'], title: '<script>x</script>' })), 'the reason is escaped');
@@ -140,12 +140,9 @@ console.log('\n  every screen that shows a headline is wired');
   ok((T.match(/AS price_meta/g) || []).length === 2, 'trending.js selects source_meta for price and mover sorts');
   // The page: est is drawn in one place; every tile renderer goes through it.
   const code = H.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
-  // Two est markers, and only two: the helper's, and the card page's large
-  // headline one (cd-mkt, 11px). Any third is a tile drawing est on its own.
-  const estAt = []; code.replace(/>est<\/span>/g, (m, off) => { estAt.push(off); return m; });
-  const inFn = (off, name) => { const i = code.lastIndexOf('function ', off); return code.slice(i, i + 9 + name.length + 1) === 'function ' + name + '('; };
-  ok(estAt.length === 2 && estAt.some(o => inFn(o, 'priceMarksHtml')) && estAt.some(o => inFn(o, 'updatePrices')),
-     'est is drawn only by priceMarksHtml and the card page headline', estAt.length);
+  ok(!/>est</.test(code), 'the page draws est nowhere (Roy, 2026-10-09)');
+  const np = (code.match(/noPriceHtml\(/g) || []).length;
+  ok(np === 5 && /no price recorded/.test(code) && /price withheld/.test(code), 'no price says so in words, through one function: definition, set tile, cardTile, card page twice', np);
   const calls = (code.match(/priceMarksHtml\(/g) || []).length;
   ok(calls === 7, 'priceMarksHtml: one definition + set tile, card page, cardTile, cardSummaryTile, latest searches, alerts bar', calls);
   ok(/estMark = priceMarksHtml\(isReal, c\._priceQuality, \{ origin: from\.origin \}\)/.test(code), 'set tile passes the card\'s quality, and where its number came from');

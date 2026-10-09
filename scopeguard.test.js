@@ -61,7 +61,8 @@ console.log('  ' + pageNames.length + ' top-level identifiers, including: '
 // quietly because it is now checking nothing.
 // KEY left the page deliberately on 2026-10-08 (the pokemontcg.io key was a
 // literal; nosecrets.test.js) — H, still a short page global, stands in.
-for (const n of ['API', 'H', 'S', 'RP']) {
+// RP left with the page's estimator on 2026-10-09 (no estimate is shown) — CM stands in.
+for (const n of ['API', 'H', 'S', 'CM']) {
   chk('page still declares ' + n + ' (the hazard is real)', pageNames.includes(n));
 }
 

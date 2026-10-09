@@ -104,7 +104,7 @@ ok('closed: a tile shows the card (name, set, number) and NO price row — no da
 const openT = ct(true, { id: 'en-base1-4', name: 'Charizard', number: '4', set: { name: 'Base' }, _price: 412.35 });
 ok('open: the same tile shows its price — ALLOWS', /\$412\.35/.test(openT) && /class="cr"/.test(openT));
 ok('getBase — every renderer\'s price — is 0 while closed (no withheld figure, no estimate, no third-party price)',
-   /^function getBase\(c\) \{\n  if \(!c\) return 0;\n(  \/\/.*\n)*  if \(!pricesOpen\(\)\) return 0;/.test(fn('getBase')));
+   /^function getBase\(c, out\) \{\n  if \(out\) out\.origin = null;\n  if \(!c\) return 0;\n(  \/\/.*\n)*  if \(!pricesOpen\(\)\) return 0;/.test(fn('getBase')));
 ok('mockP — the page\'s own estimator — returns nothing while closed', /^function mockP\([^)]*\) \{\n  if \(!pricesOpen\(\)\) return 0;/.test(fn('mockP')));
 ok('set page tiles: no price row without prices', /\+\(pricesOpen\(\) \? '<div class="cr"><span class="cp">'\+priceStr\+estMark/.test(H));
 ok('set page: the "where prices come from" note is not drawn while closed', /if \(!pricesOpen\(\)\) return;/.test(fn('setSourceNote')));

@@ -10,7 +10,7 @@
 // current and measured — 113 Yuyu-tei asks from one 28 Aug run, 10 English
 // rows 66-67 days old, 7 alternating (Torchic ☆ 4500/1200/4500/1200/4500).
 'use strict';
-require('./testcount')(37);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(47);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const pq = require('./pricequality');
 const DB = process.argv.includes('--db');
@@ -63,6 +63,29 @@ const H = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8').replace(
   ok(m && Number(m[1]) === pq.STALE_DAYS, 'priceAgeHtml\'s threshold equals STALE_DAYS', m && m[1]);
 }
 
+console.log('\n  whose figure it is (Roy, 2026-10-09)');
+const fnSrc = name => { const i = H.indexOf('function ' + name + '('); return i < 0 ? '' : H.slice(i, H.indexOf('\n}\n', i) + 2); };
+{
+  const eu = C({ price: 257.5, source: 'cardmarket_avg', recordedAt: ago(67) });
+  ok(eu.flags.join() === 'eu,old' && /Cardmarket \(EU\) average sell price, read from pokemontcg\.io, recorded 2026-07-27/.test(eu.title)
+     && /European retail figure/.test(eu.title) && /67 days ago/.test(eu.title), 'a July cardmarket_avg row says Cardmarket (EU), via pokemontcg.io, and its date and age', eu);
+  const us = C({ price: 60.86, source: 'tcgplayer_holofoil', recordedAt: ago(67) });
+  ok(us.flags[0] === 'pokemontcg' && /^TCGplayer \(US\) market price, read from pokemontcg\.io/.test(us.title), 'a July pokemontcg.io TCGplayer row says so', us);
+  ok(C({ price: 9, source: 'tcgdex_cardmarket', recordedAt: ago(1) }).flags.join() === 'eu', 'TCGdex\'s Cardmarket row is EU too');
+  ok(pq.originOf('tcgplayer_market') === null && pq.originOf('tcgdex_tcgplayer_holofoil') === null && pq.originOf('estimate') === null,
+     'KEEP: TCGplayer\'s US market as TCGdex or our search measured it carries no origin mark');
+  const n = pq.NOTES['en-ecard3-H10'];
+  ok(/\$198\.07/.test(n) && /\$1,249\.94/.test(n) && /cannot currently tell which is right/.test(n), 'Skyridge Gyarados H10: what we showed, what pokemontcg.io says, and that we cannot tell', n);
+  // getBase says where its number came from — a pokemontcg.io figure is not an estimate.
+  const gb = new Function('pricesOpen', 'mockP', fnSrc('getBase') + '\nreturn getBase;')(() => true, () => 0.3);
+  const o1 = {}, o2 = {}, o3 = {};
+  gb({ id: 'en-ecard3-H10', tcgplayer: { updatedAt: '2026/06/29', prices: { holofoil: { market: 1249.94 } } } }, o1);
+  gb({ id: 'x', cardmarket: { updatedAt: '2026/07/27', prices: { averageSellPrice: 9 } } }, o2);
+  gb({ id: 'y' }, o3);
+  ok(o1.origin && o1.origin.kind === 'pokemontcg.io' && o1.origin.market === 'TCGplayer (US)' && o1.origin.date === '2026/06/29'
+     && o2.origin.market === 'Cardmarket (EU)' && o3.origin.kind === 'estimate', 'getBase reports a pokemontcg.io figure as one, and an estimate as an estimate', [o1, o2, o3]);
+}
+
 console.log('\n  the page draws the server\'s answer — the REAL priceMarksHtml');
 let marks = null;
 {
@@ -70,7 +93,7 @@ let marks = null;
   ok(i > 0, 'priceMarksHtml is defined in the page');
   try {
     marks = new Function(H.slice(H.indexOf('function liveEsc('), H.indexOf('}); }', H.indexOf('function liveEsc(')) + 5)
-      + '\n' + H.slice(i, j + 2) + '\nreturn priceMarksHtml;')();
+      + '\n' + fnSrc('thirdPartyOriginText') + '\n' + H.slice(i, j + 2) + '\nreturn priceMarksHtml;')();
   } catch (e) { ok(false, 'priceMarksHtml + liveEsc compile', e.message); }
 }
 if (marks) {
@@ -84,6 +107,12 @@ if (marks) {
   const page = marks(true, qT, { skip: ['old'], text: true });
   ok(!/>old</.test(page) && /unsettled: /.test(page), 'card page: old left to the date line, unsettled spelled out', page);
   ok(!/<script/i.test(marks(true, { flags: ['old'], title: '<script>x</script>' })), 'the reason is escaped');
+  const third = marks(false, null, { origin: { kind: 'pokemontcg.io', market: 'TCGplayer (US)', what: 'market price', date: '2026/06/29' } });
+  ok(/>pokemontcg\.io</.test(third) && !/>est</.test(third) && /TCGplayer \(US\) market price, from pokemontcg\.io, dated/.test(third) && /not measured by us/.test(third),
+     'a pokemontcg.io figure is marked pokemontcg.io with its date — never est', third);
+  const euTile = marks(true, C({ price: 257.5, source: 'cardmarket_avg', recordedAt: ago(67) }));
+  ok(/>EU</.test(euTile) && /Cardmarket \(EU\)/.test(euTile), 'a Cardmarket headline is marked EU on a tile', euTile);
+  ok(/>disputed</.test(marks(false, { kind: 'none', flags: [], note: 'We showed $198.07' })), 'a reviewed note is marked on a tile');
 }
 
 console.log('\n  every screen that shows a headline is wired');
@@ -108,7 +137,9 @@ console.log('\n  every screen that shows a headline is wired');
      'est is drawn only by priceMarksHtml and the card page headline', estAt.length);
   const calls = (code.match(/priceMarksHtml\(/g) || []).length;
   ok(calls === 7, 'priceMarksHtml: one definition + set tile, card page, cardTile, cardSummaryTile, latest searches, alerts bar', calls);
-  ok(/estMark = priceMarksHtml\(isReal, c\._priceQuality\)/.test(code), 'set tile passes the card\'s quality');
+  ok(/estMark = priceMarksHtml\(isReal, c\._priceQuality, \{ origin: from\.origin \}\)/.test(code), 'set tile passes the card\'s quality, and where its number came from');
+  ok(/thirdPartyOriginText\(from\.origin\)/.test(code.slice(code.indexOf('function updatePrices('))) && /q\.note/.test(code.slice(code.indexOf('function updatePrices('))),
+     'the card page spells out a pokemontcg.io figure and a reviewed note');
   ok(/priceMarksHtml\(true, cc\._priceQuality, \{ skip: \['old'\], text: true \}\)/.test(code), 'card page badge passes it');
   ok(/out\.quality = d\._priceQuality/.test(code), 'cardSummary keeps it (alerts, latest searches)');
   // The search page's trending is catalogue since T6 (2026-10-08): no price, so no mark to keep.

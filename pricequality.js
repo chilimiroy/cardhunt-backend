@@ -50,6 +50,31 @@ function jumps(series) {
   return n;
 }
 
+// Whose figure a headline is, when it is not TCGplayer's US market as TCGdex
+// or our search measured it (Roy, 2026-10-09). The legacy pokemontcg.io import
+// (ingest extractPrice, rows of 2026-07-27 .. 09-22, no source_meta) wrote
+// cardmarket_avg / cardmarket_trend (Cardmarket's EU retail) and
+// tcgplayer_<printing>[_mid]; TCGdex writes tcgdex_cardmarket. Ten of the
+// cards released from a shared product on 2026-10-09 fell to a July
+// cardmarket_avg row, and the page called it nothing but "old".
+function originOf(source) {
+  const s = String(source || '');
+  if (s === 'cardmarket_avg' || s === 'cardmarket_trend')
+    return { flag: 'eu', market: 'Cardmarket (EU)', what: s === 'cardmarket_avg' ? 'average sell price' : 'trend price', via: 'pokemontcg.io' };
+  if (s === 'tcgdex_cardmarket') return { flag: 'eu', market: 'Cardmarket (EU)', what: 'price', via: 'TCGdex' };
+  if (/^tcgplayer_/.test(s) && s !== 'tcgplayer_market')
+    return { flag: 'pokemontcg', market: 'TCGplayer (US)', what: /_mid$/.test(s) ? 'mid price' : 'market price', via: 'pokemontcg.io' };
+  return null;
+}
+
+// Reviewed statements about one card's price, shown wherever its price is
+// (Roy, 2026-10-09). Each says what we showed, what a source says, and what
+// we cannot tell. A note never changes the number.
+const NOTES = {
+  'en-ecard3-H10': 'We showed $198.07 for this card until 2026-10-09; pokemontcg.io says $1,249.94 (its TCGplayer figure of 2026-06-29). '
+    + 'The $198.07 came from a TCGplayer product named "Gyarados (11)". We cannot currently tell which is right.',
+};
+
 // The classification. `series`: the headline source's own readings for this
 // card inside WINDOW_DAYS, oldest first (may be omitted: no unsettled flag).
 function classify({ price, source, recordedAt, meta, series, now }) {
@@ -70,6 +95,14 @@ function classify({ price, source, recordedAt, meta, series, now }) {
     range = [Math.min.apply(null, series.map(Number)), Math.max.apply(null, series.map(Number))];
   }
   const parts = [];
+  const o = originOf(source);
+  if (o) {
+    flags.unshift(o.flag);
+    const on = isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null;
+    parts.push(`${o.market} ${o.what}, read from ${o.via}` + (on ? `, recorded ${on}` + (ageDays > STALE_DAYS ? '' : ` (${ageDays} days ago)`) : '')
+      + (o.flag === 'eu' ? ' - a European retail figure, not the US market' : '')
+      + (o.via === 'pokemontcg.io' ? "; pokemontcg.io's own date for it was not kept" : ''));
+  }
   if (flags.includes('old')) parts.push(`recorded ${ageDays} days ago; no source has re-priced it since`);
   if (flags.includes('thin')) parts.push(n === 0 ? 'the source had no listings behind this figure'
                                                  : `from ${n} listing${n === 1 ? '' : 's'} only`);
@@ -110,11 +143,13 @@ async function annotate(db, items) {
   }
   for (const x of items) {
     if (!x || !x.id) continue;
-    out.set(x.id, classify({ price: x.price, source: x.source, recordedAt: x.recordedAt, meta: x.meta,
-      series: rows ? series.get(x.id + '\u0000' + x.source) || [] : null }));
+    const q = classify({ price: x.price, source: x.source, recordedAt: x.recordedAt, meta: x.meta,
+      series: rows ? series.get(x.id + '\u0000' + x.source) || [] : null });
+    if (NOTES[x.id]) q.note = NOTES[x.id];
+    out.set(x.id, q);
   }
   return out;
 }
 
 module.exports = { STALE_DAYS, UNSETTLED_RATIO, UNSETTLED_JUMPS, WINDOW_DAYS, THIN_YAHOO_N,
-                   listingsBehind, jumps, classify, annotate };
+                   NOTES, listingsBehind, jumps, originOf, classify, annotate };

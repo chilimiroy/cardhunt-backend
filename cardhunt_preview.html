@@ -2062,7 +2062,13 @@ function normRarity(r){
   return 'Common';
 }
 
-function getBase(c) {
+// out (optional): receives out.origin — where the number came from, so the
+// screen can SAY it (2026-10-09). A figure read from pokemontcg.io's per-card
+// block is not our estimate: until then the page marked it "est" and "no
+// market data held", and Skyridge Gyarados H10's $1,249.94 (pokemontcg.io,
+// 2026-06-29) read as a number we had made up.
+function getBase(c, out) {
+  if (out) out.origin = null;
   if (!c) return 0;
   // The door (T1, 2026-10-07): every price the page draws is read here or in
   // mockP. Closed, there is none — not a figure the server withheld, and not
@@ -2072,23 +2078,39 @@ function getBase(c) {
   // product — no number at all: not the price blob, not an estimate.
   if (c.priceHeld) return 0;
   // Backend serves merged real prices from our own database
-  if (c._price && c._price > 0) return parseFloat(Number(c._price).toFixed(2));
+  if (c._price && c._price > 0) { if (out) out.origin = { kind: 'ours' }; return parseFloat(Number(c._price).toFixed(2)); }
   var t = (c.tcgplayer && c.tcgplayer.prices) ? c.tcgplayer.prices : {};
+  var tFrom = function (what) { return { kind: 'pokemontcg.io', market: 'TCGplayer (US)', what: what, date: (c.tcgplayer && c.tcgplayer.updatedAt) || null }; };
   // reverseHolofoil is NOT a base price (T10): it sat ahead of 'normal'
   // here, the page-side twin of the 241 cards whose headline was a reverse.
   var buckets = ['holofoil','1stEditionHolofoil','1stEdition','unlimited','normal'];
   for (var bi = 0; bi < buckets.length; bi++) {
     var b = t[buckets[bi]];
     if (!b) continue;
-    if (b.market && b.market > 0) return parseFloat(b.market.toFixed(2));
-    if (b.mid && b.mid > 0) return parseFloat(b.mid.toFixed(2));
-    if (b.high && b.low) return parseFloat(((b.high + b.low) / 2).toFixed(2));
+    if (b.market && b.market > 0) { if (out) out.origin = tFrom('market price'); return parseFloat(b.market.toFixed(2)); }
+    if (b.mid && b.mid > 0) { if (out) out.origin = tFrom('mid price'); return parseFloat(b.mid.toFixed(2)); }
+    if (b.high && b.low) { if (out) out.origin = tFrom('low-high midpoint'); return parseFloat(((b.high + b.low) / 2).toFixed(2)); }
   }
   var cm = (c.cardmarket && c.cardmarket.prices) ? c.cardmarket.prices : {};
-  if (cm.averageSellPrice > 0) return parseFloat(cm.averageSellPrice.toFixed(2));
-  if (cm.trendPrice > 0) return parseFloat(cm.trendPrice.toFixed(2));
-  if (cm.avg7 > 0) return parseFloat(cm.avg7.toFixed(2));
+  var cFrom = function (what) { return { kind: 'pokemontcg.io', market: 'Cardmarket (EU)', what: what, date: (c.cardmarket && c.cardmarket.updatedAt) || null }; };
+  if (cm.averageSellPrice > 0) { if (out) out.origin = cFrom('average sell price'); return parseFloat(cm.averageSellPrice.toFixed(2)); }
+  if (cm.trendPrice > 0) { if (out) out.origin = cFrom('trend price'); return parseFloat(cm.trendPrice.toFixed(2)); }
+  if (cm.avg7 > 0) { if (out) out.origin = cFrom('7-day average'); return parseFloat(cm.avg7.toFixed(2)); }
+  if (out) out.origin = { kind: 'estimate' };
   return mockP(c.rarity, c.id, c.name, c.number, (c.set && c.set.total), (c.set && (c.set.releaseDate || c.set.release)));
+}
+
+// What a pokemontcg.io figure is, said in words: whose market, which figure,
+// read from where, and how old (2026-10-09). One sentence for the card page
+// and the tile's title alike.
+function thirdPartyOriginText(o) {
+  if (!o || o.kind !== 'pokemontcg.io') return '';
+  var t = o.date ? Date.parse(String(o.date).replace(/\//g, '-')) : NaN;
+  var age = isFinite(t) ? Math.floor((Date.now() - t) / 86400000) : null;
+  return o.market + ' ' + o.what + ', from pokemontcg.io'
+    + (isFinite(t) ? ', dated ' + new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) + ' (' + age + ' days old)' : ', undated')
+    + (o.market.indexOf('EU') >= 0 ? ' - a European retail figure, not the US market' : '')
+    + ' - not measured by us';
 }
 
 // genPD() - the synthetic price curve - is gone; the card page draws /api/history.
@@ -2669,7 +2691,8 @@ function applyFilters(){
     // sort; an invented one beside it would contradict it card by card.
     var priceStr = price>0 ? fmtCurrency(price) : '&#8212;';
     var isReal = (c._priceIsReal === true) || (c._priceSource && !/^estimate/.test(c._priceSource));
-    var estMark = priceMarksHtml(isReal, c._priceQuality);
+    var from = {}; getBase(c, from);
+    var estMark = priceMarksHtml(isReal, c._priceQuality, { origin: from.origin });
     tiles.push( '<div class="ct" onclick="openCard(\''+c.id+'\')">'
       +'<div class="cti">'+imgOrSk(c)+'</div>'
       +'<div class="ci">'
@@ -2713,8 +2736,15 @@ function updatePrices(grade,base){
   const cc = S.currentCard;
   const priceIsReal = !!(cc && (cc._priceIsReal === true
     || (cc._priceSource && !/^estimate/.test(cc._priceSource))));
+  // Not ours and not an estimate: pokemontcg.io's figure, said as such (2026-10-09).
+  var from = {}; if (cc) getBase(cc, from);
+  var third = !priceIsReal && from.origin && from.origin.kind === 'pokemontcg.io' ? thirdPartyOriginText(from.origin) : '';
+  var q = cc && cc._priceQuality;
+  var note = q && q.note ? ' <span style="color:var(--warn);font-size:11px;font-weight:600">&middot; ' + liveEsc(q.note) + '</span>' : '';
   document.getElementById('cd-mkt').innerHTML = '$' + base.toFixed(2)
-    + (priceIsReal ? '' : '<span style="font-size:11px;color:var(--fa);margin-left:6px;'
+    + (priceIsReal ? '' : third ? '<span style="font-size:11px;color:var(--am);margin-left:6px;'
+        + 'font-weight:600" title="' + liveEsc(third) + '">pokemontcg.io</span>'
+      : '<span style="font-size:11px;color:var(--fa);margin-left:6px;'
         + 'font-weight:600" title="Estimated from rarity and set age — no market '
         + 'data for this card yet">est</span>');
   // (The "cheapest trusted listing" box left this row 2026-10-08 — eBay's
@@ -2751,8 +2781,9 @@ function updatePrices(grade,base){
     ? '<span style="color:var(--gr)">&#9679; matched on collector number</span> '
       + '<span style="color:var(--fa);font-size:11px">' + liveEsc(String(cc._priceSource || 'database')) + '</span>'
       + priceAgeHtml(cc._priceDate)
-      + priceMarksHtml(true, cc._priceQuality, { skip: ['old'], text: true })
-    : '<span style="color:var(--mu)">no market data held — estimate</span>';
+      + priceMarksHtml(true, cc._priceQuality, { skip: ['old'], text: true }) + note
+    : third ? '<span style="color:var(--am)">&#9679; ' + liveEsc(third) + '</span>' + note
+    : '<span style="color:var(--mu)">no market data held — estimate</span>' + note;
 }
 
 // When the headline was recorded (T2, 2026-10-02). The page never said, so
@@ -2780,14 +2811,25 @@ function priceAgeHtml(when) {
 // q missing (an older cached payload): nothing beyond est is claimed.
 // opts.skip: flags already said elsewhere (the card page's date line says old).
 // opts.text: spell the reason out (card page) rather than a one-word mark.
+// opts.origin: getBase's out.origin — a pokemontcg.io figure is marked as
+// one, never as "est" (2026-10-09).
+// q.note: a reviewed statement about this card's price (pricequality NOTES),
+// marked on a tile and spelled out on the card page.
 function priceMarksHtml(isReal, q, opts) {
   opts = opts || {};
   var skip = opts.skip || [];
   var out = '';
-  if (!isReal && skip.indexOf('estimate') < 0) out += '<span style="font-size:9px;color:var(--fa);margin-left:4px;font-weight:600"'
+  var third = !isReal && opts.origin && opts.origin.kind === 'pokemontcg.io';
+  if (third) out += '<span style="font-size:9px;color:var(--am);margin-left:4px;font-weight:600"'
+    + ' title="' + liveEsc(thirdPartyOriginText(opts.origin)) + '">pokemontcg.io</span>';
+  else if (!isReal && skip.indexOf('estimate') < 0) out += '<span style="font-size:9px;color:var(--fa);margin-left:4px;font-weight:600"'
     + ' title="Estimated from rarity and set age - no market data held for this card">est</span>';
+  if (q && q.note && !opts.text) out += '<span class="pqf" style="font-size:9px;color:var(--warn);margin-left:4px;font-weight:600"'
+    + ' title="' + liveEsc(q.note) + '">disputed</span>';
   if (!isReal || !q || !q.flags) return out;
-  var WORD = { old: 'old', thin: 'thin', unsettled: 'unsettled' };
+  // eu / pokemontcg: the headline is not TCGplayer's US market as measured by
+  // TCGdex or our search (pricequality.originOf) — whose figure it is, and when.
+  var WORD = { eu: 'EU', pokemontcg: 'pokemontcg.io', old: 'old', thin: 'thin', unsettled: 'unsettled' };
   var flags = q.flags.filter(function (f) { return WORD[f] && skip.indexOf(f) < 0; });
   if (!flags.length) return out;
   var why = liveEsc(q.title || flags.join(', '));
@@ -6521,7 +6563,8 @@ function cardTile(c, opts) {
   // A catalogue tile (the search page, T6): no price slot for anyone — not
   // getBase(), which would fall back to an estimate for a card with no price.
   var showPrice = pricesOpen() && !opts.noPrice;
-  var price = showPrice ? getBase(c) : 0;
+  var from = {};
+  var price = showPrice ? getBase(c, from) : 0;
   var cid = c.id || '';
   var isReal = (c._priceIsReal === true) || (c._priceSource && !/^estimate/.test(c._priceSource));
   var priceStr = price > 0 ? fmtCurrency(price) : '&#8212;';
@@ -6532,7 +6575,7 @@ function cardTile(c, opts) {
     + '<div class="cn" title="' + (c.nameEn || c.name || '') + '">' + nameWithEn(c.name, c.nameEn) + '</div>'
     + '<div class="cs">' + setName + ' &middot; #' + (c.number || '') + '</div>'
     // The door: no price row at all without prices — not a dash, not "$0".
-    + (showPrice ? '<div class="cr"><span class="cp">' + priceStr + '</span>' + priceMarksHtml(isReal, c._priceQuality) + '</div>' : '')
+    + (showPrice ? '<div class="cr"><span class="cp">' + priceStr + '</span>' + priceMarksHtml(isReal, c._priceQuality, { origin: from.origin }) + '</div>' : '')
     + (opts.note ? '<div class="cs">' + liveEsc(opts.note) + '</div>' : '')
     + '</div></div>';
 }
@@ -8056,6 +8099,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261008-889f7c8-pricehold &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261009-60d3879-origin &middot; click to hide</div>
 </body>
 </html>

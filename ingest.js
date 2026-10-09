@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.9.7';   // bump when this file changes
+const VERSION = '5.9.8';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -741,6 +741,24 @@ async function writeIllustrator(card, illustrator) {
   await db.query(`UPDATE cards SET illustrator = COALESCE($2, illustrator), illustrator_checked_at = NOW() WHERE api_card_id = $1`,
     [card.api_card_id, illustrator ? String(illustrator).slice(0, 200) : null]).catch(e => console.log('  (artist not stored for ' + card.api_card_id + ': ' + e.message + ')'));
 }
+// ── The regulation mark, from the same response (TASK-tcgdex-fields T2, 2026-10-09) ──
+// The printing-era letter. Stored only: no gate, estimator, headline or photo
+// check reads it. Same pattern as the artist: no extra request, a response
+// without it never erases a stored one, regulation_mark_checked_at tells "none
+// known" from "never asked". Needs migration-regulation-mark.sql.
+let _regCol = null, _regWarned = false;
+async function writeRegulationMark(card, mark) {
+  if (_regCol === null) _regCol = (await db.query(
+    `SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='cards' AND column_name='regulation_mark'`)
+    .catch(() => ({ rows: [] }))).rows.length > 0;
+  if (!_regCol) {
+    if (!_regWarned) { _regWarned = true; console.log('\n  cards.regulation_mark is missing — run migration-regulation-mark.sql. Marks are not stored until then.\n'); }
+    return;
+  }
+  const m = typeof mark === 'string' && /^[A-Z]{1,2}$/.test(mark.trim()) ? mark.trim() : null;
+  await db.query(`UPDATE cards SET regulation_mark = COALESCE($2, regulation_mark), regulation_mark_checked_at = NOW() WHERE api_card_id = $1`,
+    [card.api_card_id, m]).catch(e => console.log('  (regulation mark not stored for ' + card.api_card_id + ': ' + e.message + ')'));
+}
 async function tcgdexPriceFor(card) {
   if (!card.set_api_id || !String(card.api_card_id).startsWith('en-')) return { price: null, none: 'not-english' };
   if (!_tdxConflicts) {
@@ -768,6 +786,7 @@ async function tcgdexPriceFor(card) {
   }
   if (!d) return { price: null, none: 'unreachable', detail: String(status) };
   await writeIllustrator(card, d.illustrator);
+  await writeRegulationMark(card, d.regulationMark);
   const p = tdxp.parsePricing(d);
   const b = p.tcgplayerBase;
   // No TCGplayer price: hand back TCGdex's Cardmarket block, which the caller

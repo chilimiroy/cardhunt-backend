@@ -18,7 +18,7 @@
 // "Is it gone?" is asserted against the page with comments stripped, because
 // the comments recording each removal name what was removed.
 'use strict';
-require('./testcount')(68);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(69);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -167,10 +167,13 @@ ok('the TCGdex fallback invents no low/high around its estimate', !/est\*0\.65|e
 console.log('\n  prices made by multiplying a price by a constant (page and server)');
 const PRICE_FIELD = /\b(low|high|mid|market|marketPrice|lowPrice|highPrice|midPrice|directLow|price|avg\d*|trend|value)\s*:\s*[^,}\n]*?[\w)\]]\s*\*\s*(\d*\.\d+|\d+)\b/i;
 const PRICE_VALUE = /\b(price|_price|base|market|est|estimate|headline|landed|cost|value)\b\s*\*\s*(\d*\.\d+|\d+)\b/i;
+// Each entry names why it is exempt and who decided; the test prints both.
 const REVIEWED_MULTIPLIERS = [
-  // The alert form's TARGET default: 85% of the headline, in an input the
-  // user edits — a suggestion for the alert, not a market figure shown.
-  { re: /getElementById\('alert-price'\)\.value=\(base\*0\.85\)/, why: 'alert form default target, editable' },
+  { re: /getElementById\('alert-price'\)\.value=\(base\*0\.85\)/,
+    why: 'the alert form\'s TARGET default — 85% of the headline written into the target-price input the user edits ' +
+         'before saving. It is the user\'s own threshold, a starting value for "tell me when it drops to", never shown ' +
+         'as a market, low or TCGplayer figure, and stored only as the target the user saves',
+    decided: 'Roy, 2026-10-09: kept as the one reviewed exception' },
 ];
 function multiplied(text, file) {
   const out = { fields: [], values: [] };
@@ -188,6 +191,10 @@ const fields = [].concat(...scanned.map(s => s.fields)), values = [].concat(...s
 ok('A: no price-like field is built as a price x a constant (page and server)', fields.length === 0, fields.join(' | '));
 ok('B: no price is multiplied by a constant outside the reviewed sites (' + REVIEWED_MULTIPLIERS.length + ' reviewed)', values.length === 0, values.join(' | '));
 ok('…and every reviewed site still exists (a stale allowance is removed, not kept)', REVIEWED_MULTIPLIERS.every(r => r.re.test(html) || r.re.test(server)));
+ok('…and every reviewed site says why it is exempt and who decided',
+  REVIEWED_MULTIPLIERS.every(r => typeof r.why === 'string' && r.why.length > 60 && /\d{4}-\d{2}-\d{2}/.test(r.decided || '')),
+  'an entry without both');
+for (const r of REVIEWED_MULTIPLIERS) console.log('        exempt: ' + r.why + ' (' + r.decided + ')');
 // Made to fire: the server as committed before this fix, and the shape itself.
 let before = null;
 try { before = multiplied(require('child_process').execSync('git show b0b041a:server.js', { maxBuffer: 1 << 26 }).toString(), 'server.js@b0b041a'); } catch (e) {}

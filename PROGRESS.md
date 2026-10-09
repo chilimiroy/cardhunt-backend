@@ -1,5 +1,80 @@
 # CardHunt — Progress Log
 
+## 2026-10-09 (no estimates) — no estimate anywhere; stamped products; the six refused; where prices stand
+
+0 eBay calls; no ingest run (one `refresh en --dry`).
+
+### Every consumer of estimatePrice, and what each did with it
+
+| consumer | what it did |
+|---|---|
+| page `mockP` <- `getBase` | displayed it for a card with no price |
+| page `tcgdexFetchSet` | displayed it for a set fetched live from TCGdex |
+| `server.js` two fallback set paths (sets not in the DB) | sent it as `_price` |
+| `server.js` status endpoint `sample_prices` | displayed three |
+| `ingest.js` set ingest | wrote an `estimate` row per unpriced card, shown as the headline |
+| `ingest.js estfix` | recomputed those rows |
+| `estimatescan.js` | qualified a card for the 5x hold |
+
+None ranked, scheduled or ordered anything: the nightly orders by measured
+price and tier and never read an estimate; alerts, deals and the listing gate
+(`numberMatchedPrice().isReal`) all require a real price. **Outcome: every
+consumer was a display or a qualification, so estimator.js is deleted.** The
+5x hold went with it (nothing else used it). Also an estimate, also gone: the
+card page's "Typical <grade> · estimate" box (raw price x a fixed multiplier),
+the server's per-grade figures on `/api/price` (same multipliers), and
+`gradeprice.GRADE_MULTIPLIERS` / `fromMultiplier` (only tests called them).
+Stored `estimate` rows stay (append-only) and pass no headline rule
+(`pricehold.test.js --db`: 0).
+
+### Stamped products ([Staff], (Prerelease))
+
+83 search headlines were a stamped product matched by number. Measured before
+refusing: all 22 [Staff] sit on another product than TCGdex's for the card
+(product id + 1; 4-9x pokemontcg.io's figure). Of the 61 (Prerelease), **33 are
+Sun & Moon promos where TCGdex's own id for the card IS the (Prerelease)
+product** and the price agrees with pokemontcg.io within ~1.3x (Lycanroc SM118
+$15.78 / $11.82) — printed only stamped. Roy's call: a stamped product is
+another card unless TCGdex maps ours to it (`cardnumber.stampedNotOurs`); 28
+(Prerelease) with no TCGdex mapping and all 22 [Staff] refused.
+- The matcher drops such a hit (the nightly now carries `variants`).
+- collisionscan refuses the stored rows by id (74 rows on 54 cards) and, where
+  our search named a product, TCGdex's pricing rows for it too: **np-36
+  Tropical Tidal Wave** was $1,400 on TCGdex's product 97703, which our search
+  read as "Tropical Tidal Wave - HGSS18 (Worlds 10) [Staff]" — refused; the
+  97703 collision is gone without releasing a wrong price (np-36 shows its July
+  Cardmarket $153, marked EU).
+- Of 55 cards with a stamped refusal: 39 have another measured headline
+  (Delcatty SM132 $82.98 -> $8.54 TCGdex; Paradise Resort svp-150 $641.76 ->
+  $597.66), **15 lost their headline** (BW28, mep-017/066/076, svp-037/045/089/091,
+  XY60/91/94/128/129/145/147) and HGSS18 had none before.
+
+### The six search headlines >3x from pokemontcg.io
+
+Refused by row id (collisionscan.REVIEWED_OFF, 14 rows). Five fall to their own
+older search rows, which agree with pokemontcg.io: Pikachu RC29 $3.53 ->
+$158.74, Emolga RC23 $2.71 -> $86.06, Charizard ☆ δ $1,000 -> $4,000, Snivy RC1
+$0.40 -> $3.38, Druddigon BW80 -> its July pokemontcg.io $15.97. Hoopa EX XY85
+has none left.
+
+The other 956 pre-2-October search headlines: left; each now says "N days old"
+(pricequality `unchecked`); the nightly asks them first, dearest first, once
+each (`ingest-progress-relabel-<lang>.json`). Dry run: 2,315 due (was 1,333),
+~96 minutes.
+
+### Where we stand — 46,512 cards
+
+| | cards | measured price | pokemontcg.io figure | withheld | **no price recorded** |
+|---|---|---|---|---|---|
+| English | 21,256 | 21,162 | 28 | 45 | 21 |
+| Japanese | 14,463 | 11,730 | 0 | 0 | 2,733 |
+| Chinese (parked) | 8,313 | 0 | 0 | 0 | 8,313 |
+| hidden (TCG Pocket) | 2,480 | — | — | — | — |
+
+**11,067 of 46,512 cards show "no price recorded"** (11,095 if pokemontcg.io's
+labelled figures are not counted as ours). Of the 44,032 visible, 32,892 (74.7%)
+show a price we measured.
+
 ## 2026-10-09 (late) — the fallback's blast radius; estimates held; the sealed list bounded; whose figure a price is
 
 All read from storage; no ingest re-run, no TCGplayer search, 0 eBay calls.

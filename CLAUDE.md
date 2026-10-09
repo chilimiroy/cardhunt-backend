@@ -51,7 +51,7 @@ Render API (server.js v5.6.0)  -- reads Supabase FIRST (45,781 cards)
 | Frontend | `cardhunt_preview.html` | Render at **`/app`**; local file is the fallback |
 | API | `server.js` v5.6.0 | Render |
 | Database | Supabase Postgres | `cards`, `price_history`, `alerts`, `portfolio`, `users`, `listing_photo_verdicts`, `listing_views` |
-| Ingestion | `ingest.js` v5.10.1 | Local only — never deployed; **tracked** in git |
+| Ingestion | `ingest.js` v5.10.4 | Local only — never deployed; **tracked** in git |
 
 ## The module map
 
@@ -63,7 +63,7 @@ Shared, never copied — every duplicated implementation here has drifted.
 | `cardparse.js` · `listingparse.js` | free text -> card identity · a seller's title -> card data |
 | `jpfilter.js` | Yahoo/Yuyu-tei: a single raw copy? lot vocabulary |
 | `outlier.js` | too cheap to be the real card? flags, never rejects |
-| `gradeprice.js` · `estimator.js` | grade worth from real listings · the ONE estimator |
+| `gradeprice.js` | a grade's worth from real listings, or nothing — NO estimator (deleted 2026-10-09) |
 | `sourcerank.js` | which price source may overwrite which |
 | `tcgdexprice.js` · `yuyutei.js` · `fx.js` | TCGdex pricing block · JP shop · currency with the rate recorded |
 | `ebaycall.js` · `ebayquota.js` | the ONLY eBay path · daily, hourly (600), tooling (300) limits by origin |
@@ -78,7 +78,7 @@ Shared, never copied — every duplicated implementation here has drifted.
 | `pricequality.js` | is a headline current and measured? est / old (>30 d) / thin / unsettled; drawn by `priceMarksHtml` |
 | `setyield.js` | a refresh that priced nothing for a set or 200+ cards in a row: named, exit 2 |
 | `printsql.js` | `basePrintingSql` — the headline rule every reader uses |
-| `cardnumber.js` · `pricehold.js` | is a product's number OUR card's (whole)? · cards on a shared product held, refused rows out, an estimate 5x off the card's own record held (`estimatescan.js`) |
+| `cardnumber.js` · `pricehold.js` | is a product's number OUR card's (whole)? · cards on a shared product held, refused rows out (incl. a stamped product not TCGdex's) |
 | `trending.js` · `querygap.js` | movers · every set's query asked once |
 
 ## What ships and what does not
@@ -114,14 +114,14 @@ Serve ONE file by name — **never `express.static(__dirname)`**
 
 # STATE
 
-**Headline quality, 2026-10-02** (`pricequality.js`; PROGRESS 2026-10-05:
-"Is the headline current and measured? — 2026-10-02 (T1)"):
+**What every card shows, 2026-10-09** (46,512 cards; 2,480 TCG Pocket hidden;
+PROGRESS 2026-10-09 (no estimates)). **No estimate is shown anywhere.**
 
-| | cards | current & measured | no price | estimate | not current |
+| | visible | measured price | pokemontcg.io figure | withheld | **no price recorded** |
 |---|---|---|---|---|---|
-| English | 21,152 | 21,076 (99.6%) | 7 | 10 | 59 |
-| Japanese | 14,023 | 2,274 (16%) | 278 | 2,177 | **9,294 old** |
-| Chinese (parked) | 8,313 | 0 | 0 | 8,313 | 0 |
+| English | 21,256 | 21,162 | 28 | 45 | 21 |
+| Japanese | 14,463 | 11,730 | 0 | 0 | 2,733 |
+| Chinese (parked) | 8,313 | 0 | 0 | 0 | 8,313 |
 
 - Japanese "old" = one Yuyu-tei run (2026-08-28) never repeated; the nightly
   asks only Yahoo. Re-running or scheduling `node ingest.js yuyutei` is an
@@ -672,7 +672,9 @@ reprints reusing number and set name). Reprints keyed by SET ID
 TCGplayer search compares numbers whole (`cardnumber.js`) and never takes a hit
 stating another number; wrong rows are refused by id (`pricehold.notRefusedSql`).
 A collision scan cannot see a product of a card we do not hold — count the
-fallback's rows by `matchedBy`; 74k unlabelled rows cannot be judged.
+fallback's rows by `matchedBy`; 74k unlabelled rows cannot be judged (shown with
+their age, re-asked first by value). **A stamped product ([Staff], (Prerelease))
+is another card unless TCGdex maps ours to it** (`stampedNotOurs`).
 (PROGRESS 2026-10-09 (night), (late))
 
 **The title's condition beats eBay's dropdown — the worse claim stands**; a range
@@ -809,9 +811,11 @@ party** — no server gate can reach either (`door.test.js`; PROGRESS 2026-10-07
 **A price says when it was measured — on every screen**, decided once
 (`pricequality.js`), drawn by one function. (PROGRESS 2026-10-02) **And whose
 figure it is**: a Cardmarket price says EU, a pokemontcg.io figure says so with
-its date — never "est" (`originOf`, `getBase(c, out)`). **An estimate 5x or more
-from the card's own measured record shows no number** (`estimatescan.js`).
-(PROGRESS 2026-10-09 (late))
+its date — never "est" (`originOf`, `getBase(c, out)`). (PROGRESS 2026-10-09 (late))
+**No estimate is shown, stored as a headline, or computed** — no measured price
+says "no price recorded" (`noPriceHtml`). The estimator missed 4x for the typical
+card, 17x for a quarter; estimator.js and the grade multipliers are deleted.
+(PROGRESS 2026-10-09 (no estimates))
 
 **Cache keys carry everything the value depends on.** *Archive:* "A number cached per card is wrong when it depends on the grade"
 
@@ -902,7 +906,7 @@ yields at the soft stop, one token exchange in flight). *Archive:* "Guard a mete
 - Card ids `{lang}-{setId}-{number}` (`cardid.js`). Prices in USD.
 - `price_history` is append-only — INSERT, never UPDATE.
 - `name_en` / `set_name_en` English equivalents; `image_lang` artwork's language.
-- `_priceIsReal` real vs estimate (UI `est`); `priceKind: 'shop-ask'` = asking price.
+- `_priceIsReal` a measured headline (no estimate exists); `priceKind: 'shop-ask'` = asking price.
 - Every new source: one function, same normalised shape, through the gate and
   `outlier.js`, reporting kept/rejected/scanned.
 - Every new eBay call site: tooling origin if a tool, a CALL COST row, a

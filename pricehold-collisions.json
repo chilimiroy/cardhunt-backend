@@ -1,0 +1,1343 @@
+{
+ "measuredAt": "2026-10-09T00:00:29.372Z",
+ "collisions": [
+  {
+   "product": "84320",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-bw11-105",
+     "name": "Cinccino",
+     "number": "105",
+     "set": "bw11",
+     "via": [
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-bw11-RC19",
+     "name": "Cinccino",
+     "number": "RC19",
+     "set": "bw11",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "84971",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-ecard2-74a",
+     "name": "Drowzee",
+     "number": "74a",
+     "set": "ecard2",
+     "via": [
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-ecard2-74b",
+     "name": "Drowzee",
+     "number": "74b",
+     "set": "ecard2",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "84972",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-ecard2-74a",
+     "name": "Drowzee",
+     "number": "74a",
+     "set": "ecard2",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-ecard2-74b",
+     "name": "Drowzee",
+     "number": "74b",
+     "set": "ecard2",
+     "via": [
+      "our-search",
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "85669",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-ecard3-10",
+     "name": "Gengar",
+     "number": "10",
+     "set": "ecard3",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-ecard3-H09",
+     "name": "Gengar",
+     "number": "H09",
+     "set": "ecard3",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "85813",
+   "origin": "both",
+   "cards": [
+    {
+     "id": "en-ecard2-50a",
+     "name": "Golduck",
+     "number": "50a",
+     "set": "ecard2",
+     "via": [
+      "our-search",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-ecard2-50b",
+     "name": "Golduck",
+     "number": "50b",
+     "set": "ecard2",
+     "via": [
+      "our-search",
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "85988",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-ecard3-11",
+     "name": "Gyarados",
+     "number": "11",
+     "set": "ecard3",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-ecard3-H10",
+     "name": "Gyarados",
+     "number": "H10",
+     "set": "ecard3",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "86201",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-ecard3-12",
+     "name": "Houndoom",
+     "number": "12",
+     "set": "ecard3",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-ecard3-H11",
+     "name": "Houndoom",
+     "number": "H11",
+     "set": "ecard3",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "86467",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-pop7-8",
+     "name": "Kirlia",
+     "number": "8",
+     "set": "pop7",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-pop7-9",
+     "name": "Stantler",
+     "number": "9",
+     "set": "pop7",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "86471",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-bw11-60",
+     "name": "Kirlia",
+     "number": "60",
+     "set": "bw11",
+     "via": [
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-bw11-RC9",
+     "name": "Kirlia",
+     "number": "RC9",
+     "set": "bw11",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "87303",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-bw11-86",
+     "name": "Meloetta",
+     "number": "86",
+     "set": "bw11",
+     "via": [
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-bw11-RC25",
+     "name": "Meloetta-EX",
+     "number": "RC25",
+     "set": "bw11",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "87478",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-bw11-104",
+     "name": "Minccino",
+     "number": "104",
+     "set": "bw11",
+     "via": [
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-bw11-RC18",
+     "name": "Minccino",
+     "number": "RC18",
+     "set": "bw11",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "87558",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-ecard3-21",
+     "name": "Moltres",
+     "number": "21",
+     "set": "ecard3",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-ecard3-H20",
+     "name": "Moltres",
+     "number": "H20",
+     "set": "ecard3",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "87591",
+   "origin": "both",
+   "cards": [
+    {
+     "id": "en-ecard2-95a",
+     "name": "Mr. Mime",
+     "number": "95a",
+     "set": "ecard2",
+     "via": [
+      "our-search",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-ecard2-95b",
+     "name": "Mr. Mime",
+     "number": "95b",
+     "set": "ecard2",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "87775",
+   "origin": "both",
+   "cards": [
+    {
+     "id": "en-ru1-3",
+     "name": "Ninetales",
+     "number": "3",
+     "set": "ru1",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-ru1-5",
+     "name": "Starmie",
+     "number": "5",
+     "set": "ru1",
+     "via": [
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-ru1-6",
+     "name": "Gyarados",
+     "number": "6",
+     "set": "ru1",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "88153",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-bw11-33",
+     "name": "Piplup",
+     "number": "33",
+     "set": "bw11",
+     "via": [
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-bw11-RC6",
+     "name": "Piplup",
+     "number": "RC6",
+     "set": "bw11",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "88306",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-ecard2-103a",
+     "name": "Porygon",
+     "number": "103a",
+     "set": "ecard2",
+     "via": [
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-ecard2-103b",
+     "name": "Porygon",
+     "number": "103b",
+     "set": "ecard2",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "88307",
+   "origin": "our-search",
+   "cards": [
+    {
+     "id": "en-ecard2-103a",
+     "name": "Porygon",
+     "number": "103a",
+     "set": "ecard2",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-ecard2-103b",
+     "name": "Porygon",
+     "number": "103b",
+     "set": "ecard2",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "88566",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-bw11-59",
+     "name": "Ralts",
+     "number": "59",
+     "set": "bw11",
+     "via": [
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-bw11-RC8",
+     "name": "Ralts",
+     "number": "RC8",
+     "set": "bw11",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "90053",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-np-26",
+     "name": "Tropical Wind",
+     "number": "26",
+     "set": "np",
+     "via": [
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-np-27",
+     "name": "Tropical Tidal Wave",
+     "number": "27",
+     "set": "np",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "90056",
+   "origin": "our-search",
+   "cards": [
+    {
+     "id": "en-dpp-DP05",
+     "name": "Tropical Wind",
+     "number": "DP05",
+     "set": "dpp",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-dpp-DP25",
+     "name": "Tropical Wind",
+     "number": "DP25",
+     "set": "dpp",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-dpp-DP48",
+     "name": "Tropical Wind",
+     "number": "DP48",
+     "set": "dpp",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "90141",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-ecard3-32",
+     "name": "Umbreon",
+     "number": "32",
+     "set": "ecard3",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-ecard3-H30",
+     "name": "Umbreon",
+     "number": "H30",
+     "set": "ecard3",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "92232",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-xy3-55",
+     "name": "M Lucario EX",
+     "number": "55",
+     "set": "xy3",
+     "via": [
+      "our-search",
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-xy3-55a",
+     "name": "M Lucario EX",
+     "number": "55a",
+     "set": "xy3",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "94157",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-xy4-24",
+     "name": "M Manectric EX",
+     "number": "24",
+     "set": "xy4",
+     "via": [
+      "our-search",
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-xy4-24a",
+     "name": "M Manectric EX",
+     "number": "24a",
+     "set": "xy4",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "97703",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-hgssp-HGSS18",
+     "name": "Tropical Tidal Wave",
+     "number": "HGSS18",
+     "set": "hgssp",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-np-36",
+     "name": "Tropical Tidal Wave",
+     "number": "36",
+     "set": "np",
+     "via": [
+      "tcgdex-pricing"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "98113",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-xy6-77",
+     "name": "Shaymin EX",
+     "number": "77",
+     "set": "xy6",
+     "via": [
+      "our-search",
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-xy6-77a",
+     "name": "Shaymin EX",
+     "number": "77a",
+     "set": "xy6",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "113669",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-g1-11",
+     "name": "Charizard EX",
+     "number": "11",
+     "set": "g1",
+     "via": [
+      "our-search",
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-g1-RC5",
+     "name": "Charizard",
+     "number": "RC5",
+     "set": "g1",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "113685",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-g1-27",
+     "name": "Raichu",
+     "number": "27",
+     "set": "g1",
+     "via": [
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-g1-RC9",
+     "name": "Raichu",
+     "number": "RC9",
+     "set": "g1",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "113686",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-g1-28",
+     "name": "Jolteon EX",
+     "number": "28",
+     "set": "g1",
+     "via": [
+      "our-search",
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-g1-28a",
+     "name": "Jolteon-EX",
+     "number": "28a",
+     "set": "g1",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "113695",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-g1-37",
+     "name": "Meowstic EX",
+     "number": "37",
+     "set": "g1",
+     "via": [
+      "our-search",
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-g1-RC15",
+     "name": "Meowstic",
+     "number": "RC15",
+     "set": "g1",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "123438",
+   "origin": "our-search",
+   "cards": [
+    {
+     "id": "en-xyp-XY177",
+     "name": "Karen",
+     "number": "XY177",
+     "set": "xyp",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-xyp-XY177a",
+     "name": "Karen",
+     "number": "XY177a",
+     "set": "xyp",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "125072",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-hgss4-5",
+     "name": "Mamoswine",
+     "number": "5",
+     "set": "hgss4",
+     "via": [
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-hgss4-6",
+     "name": "Nidoking",
+     "number": "6",
+     "set": "hgss4",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "129898",
+   "origin": "our-search",
+   "cards": [
+    {
+     "id": "en-xyp-XY198",
+     "name": "M Camerupt-EX",
+     "number": "XY198",
+     "set": "xyp",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-xyp-XY198a",
+     "name": "M Camerupt-EX",
+     "number": "XY198a",
+     "set": "xyp",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "129901",
+   "origin": "our-search",
+   "cards": [
+    {
+     "id": "en-xyp-XY200",
+     "name": "M Sharpedo-EX",
+     "number": "XY200",
+     "set": "xyp",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-xyp-XY200a",
+     "name": "M Sharpedo-EX",
+     "number": "XY200a",
+     "set": "xyp",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "131043",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-sm2-123",
+     "name": "Energy Recycler",
+     "number": "123",
+     "set": "sm2",
+     "via": [
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-sm2-169",
+     "name": "Fighting Energy",
+     "number": "169",
+     "set": "sm2",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "149086",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-sm4-63",
+     "name": "Guzzlord GX",
+     "number": "63",
+     "set": "sm4",
+     "via": [
+      "our-search",
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-sm4-63a",
+     "name": "Guzzlord-GX",
+     "number": "63a",
+     "set": "sm4",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "152842",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-tk-sm-l-19",
+     "name": "Hau",
+     "number": "19",
+     "set": "tk-sm-l",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-tk-sm-r-19",
+     "name": "Hau",
+     "number": "19",
+     "set": "tk-sm-r",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "152843",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-tk-sm-l-23",
+     "name": "Hau",
+     "number": "23",
+     "set": "tk-sm-l",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-tk-sm-r-23",
+     "name": "Hau",
+     "number": "23",
+     "set": "tk-sm-r",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "152846",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-tk-sm-l-21",
+     "name": "Great Ball",
+     "number": "21",
+     "set": "tk-sm-l",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-tk-sm-r-21",
+     "name": "Great Ball",
+     "number": "21",
+     "set": "tk-sm-r",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "152847",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-tk-sm-l-25",
+     "name": "Great Ball",
+     "number": "25",
+     "set": "tk-sm-l",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-tk-sm-r-25",
+     "name": "Great Ball",
+     "number": "25",
+     "set": "tk-sm-r",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "152852",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-tk-sm-r-2",
+     "name": "Lightning Energy",
+     "number": "2",
+     "set": "tk-sm-r",
+     "via": [
+      "tcgdex-pricing",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-tk-sm-r-3",
+     "name": "Lightning Energy",
+     "number": "3",
+     "set": "tk-sm-r",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "153317",
+   "origin": "both",
+   "cards": [
+    {
+     "id": "en-np-16",
+     "name": "Treecko",
+     "number": "16",
+     "set": "np",
+     "via": [
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-np-17",
+     "name": "Torchic",
+     "number": "17",
+     "set": "np",
+     "via": [
+      "our-search",
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "195068",
+   "origin": "our-search-onto-tcgdex-id",
+   "cards": [
+    {
+     "id": "en-sm11-114",
+     "name": "Garchomp",
+     "number": "114",
+     "set": "sm11",
+     "via": [
+      "tcgdex-pricing"
+     ]
+    },
+    {
+     "id": "en-sm11-146",
+     "name": "Garchomp & Giratina GX",
+     "number": "146",
+     "set": "sm11",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-sm11-228",
+     "name": "Garchomp & Giratina GX",
+     "number": "228",
+     "set": "sm11",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-sm11-247",
+     "name": "Garchomp & Giratina GX",
+     "number": "247",
+     "set": "sm11",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "202379",
+   "origin": "our-search",
+   "cards": [
+    {
+     "id": "en-bwp-BW54",
+     "name": "Pikachu",
+     "number": "BW54",
+     "set": "bwp",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-bwp-BW77",
+     "name": "Pikachu",
+     "number": "BW77",
+     "set": "bwp",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "220667",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-hgss2-21",
+     "name": "Poliwrath",
+     "number": "21",
+     "set": "hgss2",
+     "via": [
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-hgss2-7",
+     "name": "Politoed",
+     "number": "7",
+     "set": "hgss2",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "263778",
+   "origin": "both",
+   "cards": [
+    {
+     "id": "en-swsh9-062",
+     "name": "Dusknoir",
+     "number": "062",
+     "set": "swsh9",
+     "via": [
+      "our-search",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-swsh9tg-TG06",
+     "name": "Dusknoir",
+     "number": "TG06",
+     "set": "swsh9tg",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "263783",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-swsh9-067",
+     "name": "Dedenne",
+     "number": "067",
+     "set": "swsh9",
+     "via": [
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-swsh9tg-TG07",
+     "name": "Dedenne",
+     "number": "TG07",
+     "set": "swsh9tg",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "263784",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-swsh9-068",
+     "name": "Mimikyu V",
+     "number": "068",
+     "set": "swsh9",
+     "via": [
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-swsh9tg-TG16",
+     "name": "Mimikyu V",
+     "number": "TG16",
+     "set": "swsh9tg",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "263785",
+   "origin": "both",
+   "cards": [
+    {
+     "id": "en-swsh9-069",
+     "name": "Mimikyu VMAX",
+     "number": "069",
+     "set": "swsh9",
+     "via": [
+      "our-search",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-swsh9tg-TG17",
+     "name": "Mimikyu VMAX",
+     "number": "TG17",
+     "set": "swsh9tg",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "263787",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-swsh9-071",
+     "name": "Alcremie",
+     "number": "071",
+     "set": "swsh9",
+     "via": [
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-swsh9tg-TG08",
+     "name": "Alcremie",
+     "number": "TG08",
+     "set": "swsh9tg",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "263852",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-swsh9-129",
+     "name": "Acerola's Premonition",
+     "number": "129",
+     "set": "swsh9",
+     "via": [
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-swsh9tg-TG24",
+     "name": "Acerola's Premonition",
+     "number": "TG24",
+     "set": "swsh9tg",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "263863",
+   "origin": "source",
+   "cards": [
+    {
+     "id": "en-swsh9-141",
+     "name": "Gloria",
+     "number": "141",
+     "set": "swsh9",
+     "via": [
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-swsh9tg-TG26",
+     "name": "Gloria",
+     "number": "TG26",
+     "set": "swsh9tg",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "477182",
+   "origin": "both",
+   "cards": [
+    {
+     "id": "en-svp-002",
+     "name": "Fuecoco",
+     "number": "002",
+     "set": "svp",
+     "via": [
+      "our-search",
+      "tcgdex-variants"
+     ]
+    },
+    {
+     "id": "en-svp-044",
+     "name": "Charmander",
+     "number": "044",
+     "set": "svp",
+     "via": [
+      "tcgdex-variants"
+     ]
+    }
+   ]
+  },
+  {
+   "product": "562088",
+   "origin": "our-search",
+   "cards": [
+    {
+     "id": "en-svp-106",
+     "name": "Pikachu ex",
+     "number": "106",
+     "set": "svp",
+     "via": [
+      "our-search"
+     ]
+    },
+    {
+     "id": "en-svp-190",
+     "name": "Pikachu",
+     "number": "190",
+     "set": "svp",
+     "via": [
+      "our-search"
+     ]
+    }
+   ]
+  }
+ ]
+}

@@ -5,7 +5,7 @@
 //   node pricehold.test.js --db    also: the real headline query returns nothing for a held card,
 //                                  and still returns the unheld cards' prices
 'use strict';
-require('./testcount')(14);
+require('./testcount')(15);
 const fs = require('fs'), vm = require('vm');
 const ph = require('./pricehold'), printsql = require('./printsql'), { isOurCardId } = require('./cardid');
 let pass = 0, fail = 0;
@@ -14,9 +14,14 @@ console.log('\n  pricehold.test.js\n');
 
 console.log('  the list');
 const ids = Object.keys(ph.HELD);
-ok('BOTH sides of every collision are held (9 cards, 4 products)', ids.length === 9 && ph.COLLISIONS.length === 4
-  && ph.COLLISIONS.every(c => c.cards.length >= 2 && c.cards.every(id => ph.HELD[id] && ph.HELD[id].product === c.product)), ids.length);
-ok('the four found replaying 08/10: 90056, 97703, 85669, 86201', ph.COLLISIONS.map(c => c.product).sort().join(',') === '85669,86201,90056,97703');
+// The list is the catalogue-wide measurement (pricehold-collisions.json,
+// collisionscan.js --write): 53 products over 106 cards on 2026-10-09.
+const listed = new Set(ph.COLLISIONS.flatMap(c => c.cards.map(x => x.id)));
+ok('EVERY card of EVERY collision is held — both sides, not the first claimant', ids.length === listed.size && [...listed].every(id => ph.HELD[id])
+  && ph.COLLISIONS.every(c => c.cards.length >= 2 && c.cards.every(x => ph.HELD[x.id].products.includes(c.product))), ids.length + ' held of ' + listed.size);
+ok('the catalogue-wide list, not one night\'s: >= 53 products, >= 106 cards, the four 08/10 products among them',
+  ph.COLLISIONS.length >= 53 && ids.length >= 106 && ['85669', '86201', '90056', '97703'].every(p => ph.COLLISIONS.some(c => c.product === p)), ph.COLLISIONS.length + ' / ' + ids.length);
+ok('the Umbreon pair and the Ninetales-Gyarados trio are held', ['en-ecard3-32', 'en-ecard3-H30', 'en-ru1-3', 'en-ru1-5', 'en-ru1-6'].every(id => ph.HELD[id]));
 ok('every hold says why, names the other card(s), and when it comes off', ids.every(id => /price withheld/.test(ph.HELD[id].reason) && ph.HELD[id].with.length && ph.HELD[id].removeWhen));
 ok('every held id is one of ours (safe to quote into SQL)', ids.every(id => isOurCardId(id) && !/['\\]/.test(id)));
 
@@ -59,7 +64,13 @@ ok('the card page draws a dash and the reason, as a warning', /if \(cc && cc\.pr
       const h = await q(ids);
       ok('every held card: in the catalogue, and NO headline row', h.length === ids.length && h.every(r => r.price_usd == null), JSON.stringify(h.filter(r => r.price_usd != null)));
       const raw = (await db.query(`SELECT count(DISTINCT card_api_id)::int n FROM price_history WHERE card_api_id = ANY($1) AND grade IS NULL`, [ids])).rows[0].n;
-      ok('…while their rows are still stored (nothing deleted)', raw >= 7, raw + ' of 9 hold rows');
+      ok('…while their rows are still stored (nothing deleted)', raw >= ids.length * 0.9, raw + ' of ' + ids.length + ' held cards have rows');
+      // The file is the measurement: re-measure and compare (it drifts when
+      // the nightly writes a new mapping, or when a collision is fixed).
+      const now = await require('./collisionscan').scan(db);
+      const key = list => list.map(c => c.product + ':' + c.cards.map(x => x.id).join(',')).sort().join('|');
+      ok('pricehold-collisions.json matches the database today (re-run collisionscan.js --write if not)', key(now.collisions) === key(ph.COLLISIONS),
+        now.collisions.length + ' products now vs ' + ph.COLLISIONS.length + ' in the file');
       const u = await q(['en-base1-4', 'en-sv03.5-199', 'en-dpp-DP01']);
       ok('unheld cards beside them keep their headline', u.filter(r => r.price_usd != null).length >= 2, JSON.stringify(u));
     } finally { await db.end(); }

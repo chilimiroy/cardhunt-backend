@@ -10,7 +10,7 @@
 // current and measured — 113 Yuyu-tei asks from one 28 Aug run, 10 English
 // rows 66-67 days old, 7 alternating (Torchic ☆ 4500/1200/4500/1200/4500).
 'use strict';
-require('./testcount')(69);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(70);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const pq = require('./pricequality'), PQ = pq, vm = require('vm');
 const DB = process.argv.includes('--db');
@@ -211,7 +211,10 @@ console.log('\n  an asking price: listings but no market price (Roy, 2026-10-10)
   ctx.markValueLabel('PSA 10', a);
   ok(els['cd-mkt-lbl'].textContent === 'Raw NM asking price' && /No graded price is recorded/.test(els['cd-mkt-note'].textContent), '...and under a grade, "Raw NM asking price"');
   ok(ctx.askOfCard({ _price: 204.41, _priceQuality: mk }) === null, 'KEEP: a market price is not drawn as an ask');
-  ok(/: ask \? '<span[^']*>Cheapest listed:<\/span> '/.test(H), 'the card page draws "Cheapest listed:" for an ask');
+  ok(/: ask \? '<span[^']*>' \+ liveEsc\(ask\.label\) \+ ':<\/span> '/.test(H), 'the card page draws the ask\'s own label ("Cheapest listed:", "Shop price:")');
+  const yy = PQ.classify({ price: 12.4, source: 'yuyutei_shop', recordedAt: '2026-08-28T05:00:00Z', meta: null, now: Date.parse('2026-10-10T12:00:00Z') });
+  ok(yy.flags[0] === 'ask' && yy.ask.text === 'Shop price: $12.40 · Yuyu-tei, 28 Aug' && /One shop's shelf price, not a sale/.test(yy.ask.why) && yy.marked,
+     'a Yuyu-tei price: "Shop price: $12.40 · Yuyu-tei, 28 Aug", one shop\'s shelf price, marked', yy.ask);
 }
 
 (async () => {

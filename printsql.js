@@ -88,7 +88,8 @@ function basePrintingSql(ph = 'ph', c = 'c') {
 //   old      recorded more than MARK_DAYS ago (45; at 30, one Yuyu-tei run
 //            nobody repeated marked 9,516 Japanese cards — a stopped job)
 //   ask      the cheapest listing where there is no market price (basis 'ask',
-//            or a pokemontcg.io `_low` row)
+//            or a pokemontcg.io `_low` row), or one shop's shelf price
+//            (Yuyu-tei, Roy 2026-10-10: 8,976 Japanese headlines)
 //   product  a TCGplayer-sourced row with no recorded product: which product
 //            it priced cannot be checked (1,011 English headlines, 2026-10-10)
 //   history  an English card with no measured, unrefused row naming a product
@@ -101,7 +102,7 @@ const MARK_DAYS = 45;
 const TCG_SOURCE_SQL = ph => `(${ph}.source LIKE 'tcgplayer!_%' ESCAPE '!' OR ${ph}.source LIKE 'tcgdex!_tcgplayer!_%' ESCAPE '!' OR ${ph}.source = 'TCGPlayer market price')`;
 function markedSql(ph = 'ph') {
   return `(${ph}.recorded_at < NOW() - make_interval(days => ${MARK_DAYS})
-     OR COALESCE(${ph}.source_meta->>'basis', '') = 'ask' OR ${ph}.source ~ '^tcgplayer_.*_low$'
+     OR COALESCE(${ph}.source_meta->>'basis', '') = 'ask' OR ${ph}.source ~ '^tcgplayer_.*_low$' OR ${ph}.source = 'yuyutei_shop'
      OR (${TCG_SOURCE_SQL(ph)} AND ${ph}.source_meta->>'productId' IS NULL)
      OR (${ph}.card_api_id LIKE 'en-%' AND NOT EXISTS (
            SELECT 1 FROM price_history pk WHERE pk.card_api_id = ${ph}.card_api_id AND pk.grade IS NULL

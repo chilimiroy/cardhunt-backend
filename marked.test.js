@@ -1,4 +1,4 @@
-require('./testcount')(18);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(19);   // assertions in a plain run — fewer fails the file (testcount.js)
 // marked.test.js — a MARKED price is shown and feeds nothing (Roy, 2026-10-10).
 //
 // "This price may be out of date" (printsql.markedSql, pricequality.markOf):
@@ -31,8 +31,11 @@ ok(/card_api_id LIKE 'en-%' AND NOT EXISTS/.test(M) && /pk\.id NOT IN \(/.test(M
 const D = Date.parse('2026-10-10T12:00:00Z'), ago = d => new Date(D - d * 864e5).toISOString();
 const K = o => (pq.classify(Object.assign({ now: D, id: 'en-x-1', productHistory: true, meta: { productId: 1, matchedBy: 'number' } }, o)).marked || { reasons: [] }).reasons.join();
 ok(K({ price: 5, source: 'tcgdex_tcgplayer_normal', recordedAt: ago(1) }) === ''
-   && K({ price: 5, source: 'yuyutei_shop', recordedAt: ago(44), id: 'ja-x-1', meta: null, productHistory: null }) === '',
-   'KEEP: a current TCGdex price with its product, and a 44-day-old Yuyu-tei price, are not marked');
+   && K({ price: 5, source: 'yahoojp_4', recordedAt: ago(44), id: 'ja-x-1', meta: null, productHistory: null }) === '',
+   'KEEP: a current TCGdex price with its product, and a 44-day-old Yahoo median, are not marked');
+ok(K({ price: 5, source: 'yuyutei_shop', recordedAt: ago(1), id: 'ja-x-1', meta: null, productHistory: null }) === 'ask'
+   && /'yuyutei_shop'/.test(M),
+   'a Yuyu-tei price is one shop\'s shelf price: an ask, marked, fed to nothing (Roy, 2026-10-10)');
 ok(K({ price: 5, source: 'tcgdex_tcgplayer_normal', recordedAt: ago(46) }) === 'old'
    && K({ price: 18500, source: 'tcgplayer_market', recordedAt: ago(0), meta: { productId: 84198, basis: 'ask', matchedBy: 'number' } }) === 'ask'
    && K({ price: 4000, source: 'tcgplayer_market', recordedAt: ago(44), meta: null }) === 'product'

@@ -84,8 +84,11 @@ function originOf(source, meta) {
 // our search's ask pass; pokemontcg.io's `_low` rows record no source_meta, so
 // their name says it). It is shown as "Cheapest listed: $X · <market>, <date>",
 // never as a market value, and it feeds nothing (printsql.markedSql).
+// Yuyu-tei is one shop's shelf price — an ask, never a market price (Roy,
+// 2026-10-10): ~9,000 Japanese headlines read as market values until then.
 function isAsk(source, meta) {
-  return !!((meta && meta.basis === 'ask') || /^tcgplayer_.*_low$/.test(String(source || '')));
+  const s = String(source || '');
+  return !!((meta && meta.basis === 'ask') || /^tcgplayer_.*_low$/.test(s) || s === 'yuyutei_shop');
 }
 // The source's own date for the figure where it gives one (TCGdex `updated`,
 // pokemontcg.io `updatedAt`), else when we recorded it.
@@ -97,12 +100,15 @@ function figureDate(meta, recordedAt) {
 function askOf(price, source, meta, recordedAt) {
   if (!isAsk(source, meta)) return null;
   const on = figureDate(meta, recordedAt);
-  const market = /cardmarket/.test(String(source)) ? 'Cardmarket' : 'TCGplayer';
+  const shop = String(source) === 'yuyutei_shop';
+  const market = shop ? 'Yuyu-tei' : /cardmarket/.test(String(source)) ? 'Cardmarket' : 'TCGplayer';
+  const label = shop ? 'Shop price' : 'Cheapest listed';
   const fmt = n => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
   const day = on ? new Date(on + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : null;
-  return { price: Number(price), market, date: on,
-           text: 'Cheapest listed: ' + fmt(price) + ' · ' + market + (day ? ', ' + day : ''),
-           why: 'No recent sales, so no market price is available.' };
+  return { price: Number(price), market, label, date: on,
+           text: label + ': ' + fmt(price) + ' · ' + market + (day ? ', ' + day : ''),
+           why: shop ? "One shop's shelf price, not a sale, so no market price is available."
+                     : 'No recent sales, so no market price is available.' };
 }
 
 // Reviewed statements about one card's price, shown wherever its price is
@@ -120,7 +126,8 @@ const NOTES = {
 function markOf({ ageDays, source, meta, productHistory, id }) {
   const s = String(source || ''), reasons = [];
   if (ageDays != null && ageDays > STALE_DAYS) reasons.push({ key: 'old', text: `recorded ${ageDays} days ago (over ${STALE_DAYS}); nothing has re-priced it` });
-  if (isAsk(s, meta)) reasons.push({ key: 'ask', text: 'the cheapest listing, not a sale - there is no market price' });
+  if (isAsk(s, meta)) reasons.push({ key: 'ask', text: s === 'yuyutei_shop' ? "one shop's shelf price, not a sale - there is no market price"
+                                                                           : 'the cheapest listing, not a sale - there is no market price' });
   const tcg = /^tcgplayer_/.test(s) || /^tcgdex_tcgplayer_/.test(s) || s === 'TCGPlayer market price';
   if (tcg && !(meta && meta.productId != null)) reasons.push({ key: 'product', text: 'which TCGplayer product it priced was not recorded, so its collector number cannot be checked' });
   if (/^en-/.test(String(id || '')) && productHistory === false) reasons.push({ key: 'history', text: "none of this card's recorded prices names a TCGplayer product" });

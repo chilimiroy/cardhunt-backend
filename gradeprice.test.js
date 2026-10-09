@@ -1,4 +1,4 @@
-require('./testcount')(33);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(34);   // assertions in a plain run — fewer fails the file (testcount.js)
 const gp = require('./gradeprice');
 let pass=0, fail=0;
 const chk=(l,c)=>{ c?pass++:fail++; console.log('  '+(c?'PASS':'FAIL')+'  '+l); };
@@ -125,6 +125,9 @@ console.log('\nTHE CARD PAGE: a graded selection never reads as a graded price (
   const sg = H.slice(H.indexOf('function selGrade(grade,base){'), H.indexOf('\n}\n', H.indexOf('function selGrade(grade,base){')));
   chk('the badge on the card image names the listings filter in words, not a grade of the price',
     /badge\.textContent = 'Listings: ' \+ gradeText\(grade\);/.test(sg) && !/badge\.textContent = grade;/.test(sg));
+  const gb = (H.match(/\.cview \.grade-badge\{[^}]*\}/) || [''])[0];
+  chk('the badge is one line, pinned over the image (it had no rule, and wrapped beside the image live)',
+    /white-space:nowrap/.test(gb) && /position:absolute/.test(gb) && /text-overflow:ellipsis/.test(gb));
 }
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

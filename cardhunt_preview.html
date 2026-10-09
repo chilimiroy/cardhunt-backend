@@ -507,6 +507,11 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   .cd-vtog-i{font-size:16px}
 }
 .cview{background:linear-gradient(145deg,var(--surface-2),var(--accent-soft));border:1px solid var(--border);border-radius:var(--r);padding:26px;text-align:center;margin-bottom:16px;box-shadow:var(--sh)}
+/* The listings-filter badge (selGrade): one line, over the image's corner — it
+   had no rule at all, so .cview's flex row set it beside the image, wrapped. */
+.cview .grade-badge{position:absolute;top:12px;left:12px;z-index:2;white-space:nowrap;max-width:calc(100% - 24px);
+  overflow:hidden;text-overflow:ellipsis;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;
+  background:var(--accent);color:var(--accent-ink);box-shadow:var(--sh)}
 .cview img{max-width:100%;max-height:520px;object-fit:contain;border-radius:10px;box-shadow:0 10px 32px rgba(0,0,0,.25);margin:0 auto;transition:transform .3s}.cview img:hover{transform:scale(1.02)}
 /* ── The grading selector: a STATUS box and, beside it, a CONDITION box ── */
 /* Status and condition, each FULL WIDTH (Roy, T4), stacked. Both boxes
@@ -8004,6 +8009,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-7f7c878-gradefilter &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-0b97e8a-badge &middot; click to hide</div>
 </body>
 </html>

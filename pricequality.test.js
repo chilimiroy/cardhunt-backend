@@ -10,7 +10,7 @@
 // current and measured — 113 Yuyu-tei asks from one 28 Aug run, 10 English
 // rows 66-67 days old, 7 alternating (Torchic ☆ 4500/1200/4500/1200/4500).
 'use strict';
-require('./testcount')(67);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(69);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const pq = require('./pricequality'), PQ = pq, vm = require('vm');
 const DB = process.argv.includes('--db');
@@ -151,7 +151,18 @@ console.log('\n  every screen that shows a headline is wired');
   ok(/estMark = priceMarksHtml\(isReal, c\._priceQuality, \{ origin: from\.origin, source: c\._priceSource \}\)/.test(code), 'set tile passes the card\'s quality, where its number came from, and its source (a live _low ask)');
   ok(/thirdPartyOriginText\(from\.origin\)/.test(code.slice(code.indexOf('function updatePrices('))) && /q\.note/.test(code.slice(code.indexOf('function updatePrices('))),
      'the card page spells out a pokemontcg.io figure and a reviewed note');
-  ok(/priceMarksHtml\(true, cc\._priceQuality, \{ skip: \['old'\], text: true \}\)/.test(code), 'card page badge passes it');
+  ok(/priceMarksHtml\(true, cc\._priceQuality, \{ skip: ask \? \['old', 'ask'\] : \['old'\], text: true \}\)/.test(code)
+     && /\(ask \? '' : priceAgeHtml\(cc\._priceDate\)\)/.test(code), 'card page badge passes it (an ask: no second date, no repeated ask line)');
+  // An ask has no place among sales (2026-10-10): Charizard ☆ δ's position box said
+  // "Recorded low: $4000.00 … Near its recorded high" beside its $18,500 floor.
+  const vb = code.slice(code.indexOf('function updateValueBar('), code.indexOf('// ── DOM INIT'));
+  ok(/if \(card && askOfCard\(card\) && !card\.priceHeld\) \{/.test(vb) && vb.indexOf('askOfCard(card)') < vb.indexOf('var pts = s ?'),
+     'the price-position box draws no low, high or position for an asking price');
+  const SV = fs.readFileSync(__dirname + '/server.js', 'utf8');
+  const hs = SV.slice(SV.indexOf("app.get('/api/history/:cardId'"), SV.indexOf('// LIVE LISTINGS'));
+  ok(/AS basis,/.test(hs) && /GROUP BY 1, 2, 3, 4, 5/.test(hs) && /basis: r\.basis === 'ask' \? 'ask' : 'market'/.test(hs)
+     && /var wantBasis = askOfCard\(card\) \? 'ask' : 'market';/.test(code),
+     'the chart: an asking price is its own series, never joined to a line of sales; the page picks the series of its headline\'s kind');
   ok(/out\.quality = d\._priceQuality/.test(code), 'cardSummary keeps it (alerts, latest searches)');
   // The search page's trending is catalogue since T6 (2026-10-08): no price, so no mark to keep.
   ok(/quality: c\.priceQuality/.test(code), 'the Pokémon trending grid keeps it');

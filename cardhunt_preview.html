@@ -2688,8 +2688,9 @@ function updatePrices(grade,base){
   if (badge) badge.innerHTML = priceIsReal
     ? '<span style="color:var(--gr)">&#9679; matched on collector number</span> '
       + '<span style="color:var(--fa);font-size:11px">' + liveEsc(String(cc._priceSource || 'database')) + '</span>'
-      + priceAgeHtml(cc._priceDate)
-      + priceMarksHtml(true, cc._priceQuality, { skip: ['old'], text: true }) + note
+      // an ask's box already says whose and when: no second date, no repeat
+      + (ask ? '' : priceAgeHtml(cc._priceDate))
+      + priceMarksHtml(true, cc._priceQuality, { skip: ask ? ['old', 'ask'] : ['old'], text: true }) + note
     : third ? '<span style="color:var(--am)">&#9679; ' + liveEsc(third) + '</span>' + note
     : note;
 }
@@ -5015,8 +5016,11 @@ function loadHistory(card) {
       var all = (d && d.series) || [];
       // The server folds yahoojp_N into one 'yahoojp' series; match that.
       var want = String(card._priceSource || '').replace(/^yahoojp_\d+$/, 'yahoojp');
-      var pick = all.filter(function (s) { return s.source === want && !s.edition && !s.variant; })[0]
-              || all.filter(function (s) { return s.source === want; })[0]
+      // An asking-price headline draws its own (ask) series; a market headline never does.
+      var wantBasis = askOfCard(card) ? 'ask' : 'market';
+      var same = function (s) { return s.source === want && (s.basis || 'market') === wantBasis; };
+      var pick = all.filter(function (s) { return same(s) && !s.edition && !s.variant; })[0]
+              || all.filter(same)[0]
               || all.slice().sort(function (a, b) { return b.points.length - a.points.length; })[0]
               || null;
       HIST.all = all; HIST.series = pick; HIST.err = !!(d && d._err); HIST.done = true;
@@ -6422,6 +6426,15 @@ function updateValueBar() {
   var card = S.currentCard;
   var s = (card && HIST.cardId === card.id) ? HIST.series : null;
   var cut = Date.now() - 365 * 864e5;
+  // An asking price has no position among sales (2026-10-10): say so, and
+  // draw no recorded low or high — those are other figures than this one.
+  if (card && askOfCard(card) && !card.priceHeld) {
+    if (el) el.style.width = '0%';
+    if (lbl) { lbl.textContent = 'An asking price — no market price to place it against'; lbl.style.color = 'var(--mu)'; }
+    if (lo) lo.textContent = '—';
+    if (hi) hi.textContent = '—';
+    return;
+  }
   var pts = s ? s.points.filter(function (p) { return new Date(p.date).getTime() >= cut; }) : [];
   var prices = pts.map(function (p) { return p.price; });
   var min = prices.length ? Math.min.apply(null, prices) : null;
@@ -6779,6 +6792,7 @@ var LANG_JA = {
   'Cheapest listed:': '最安の出品:',
   'asking price': '出品価格',
   'No recent sales, so no market price is available.': '最近の取引がないため、相場はありません。',
+  'An asking price — no market price to place it against': '出品価格です — 比べる相場がありません',
   'Choose which listings are shown below. This does not change the price: no graded price is recorded.': '下に表示する出品を選びます。価格は変わりません。鑑定品の価格は記録されていません。',
   'No graded price is recorded.': '鑑定品の価格は記録されていません。',
   'No price is recorded for this condition.': 'この状態の価格は記録されていません。',
@@ -6885,6 +6899,7 @@ var LANG_ZH_TW = {
   'Cheapest listed:': '最低刊登：',
   'asking price': '刊登價格',
   'No recent sales, so no market price is available.': '近期沒有成交，因此沒有市場價格。',
+  'An asking price — no market price to place it against': '這是刊登價格 — 沒有可比較的市場價格',
   'Choose which listings are shown below. This does not change the price: no graded price is recorded.': '選擇下方顯示的刊登。這不會改變價格：沒有鑑定卡的價格紀錄。',
   'No graded price is recorded.': '沒有鑑定卡的價格紀錄。',
   'No price is recorded for this condition.': '沒有此品相的價格紀錄。',
@@ -6991,6 +7006,7 @@ var LANG_ZH_CN = {
   'Cheapest listed:': '最低在售：',
   'asking price': '在售价格',
   'No recent sales, so no market price is available.': '近期没有成交，因此没有市场价格。',
+  'An asking price — no market price to place it against': '这是在售价格 — 没有可比较的市场价格',
   'Choose which listings are shown below. This does not change the price: no graded price is recorded.': '选择下方显示的在售商品。这不会改变价格：没有评级卡的价格记录。',
   'No graded price is recorded.': '没有评级卡的价格记录。',
   'No price is recorded for this condition.': '没有此品相的价格记录。',
@@ -8066,6 +8082,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-9618b28-marker &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-e7041f4-askfix &middot; click to hide</div>
 </body>
 </html>

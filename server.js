@@ -2034,17 +2034,20 @@ app.get('/api/history/:cardId', access.priced, async (req, res) => {
              -- Yahoo observation became a single-point series of its own.
              CASE WHEN source ~ '^yahoojp_[0-9]+$' THEN 'yahoojp' ELSE source END AS source,
              COALESCE(edition, '') AS edition, COALESCE(variant, '') AS variant,
+             -- an asking price is its own series: a listing floor drawn on a
+             -- line of sales would read as the market moving (2026-10-10)
+             CASE WHEN source_meta->>'basis' = 'ask' OR source ~ '^tcgplayer_.*_low$' THEN 'ask' ELSE '' END AS basis,
              AVG(price_usd)::float AS price, COUNT(*)::int AS n
       FROM price_history
       WHERE card_api_id = $1 AND grade IS NULL
         AND source NOT LIKE 'estimate%' AND price_usd > 0
         AND ${pricehold.notRefusedSql('price_history')}
-      GROUP BY 1, 2, 3, 4 ORDER BY 1`, [req.params.cardId]);
+      GROUP BY 1, 2, 3, 4, 5 ORDER BY 1`, [req.params.cardId]);
     const series = {};
     for (const r of rows.rows) {
-      const key = [r.source, r.edition, r.variant].filter(Boolean).join(' · ');
+      const key = [r.source, r.edition, r.variant, r.basis === 'ask' ? 'asking price' : ''].filter(Boolean).join(' · ');
       (series[key] = series[key] || { key, source: r.source, edition: r.edition || null,
-        variant: r.variant || null, points: [] }).points.push({ date: r.date, price: r.price, n: r.n });
+        variant: r.variant || null, basis: r.basis === 'ask' ? 'ask' : 'market', points: [] }).points.push({ date: r.date, price: r.price, n: r.n });
     }
     res.json({ cardId: req.params.cardId, series: Object.values(series),
       note: 'Measured, ungraded prices only. Estimates and refused rows are never included.' });

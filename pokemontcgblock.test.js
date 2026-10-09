@@ -75,8 +75,10 @@ ok(!/tcgplayer: r\.tcgplayer_data|cardmarket: c\.cardmarket_data|tcgplayer_price
 ok(!/new Date\(\)\.toISOString\(\),?\s*$/m.test(S.slice(S.indexOf("app.get('/api/price/:cardId'"), S.indexOf('// EBAY BROWSE API'))),
    '/api/price never dates a pokemontcg.io figure "now" when the source gave no date');
 const C = fs.readFileSync(__dirname + '/collisionscan.js', 'utf8');
-ok(/require\('\.\/pokemontcgblock'\)\.storedFigure\(row\)/.test(C) && /f && f\.basis === 'market'/.test(C),
-   'collisionscan\'s yardstick is the reader\'s figure, a market price only (an ask judges no sale)');
+const cs = require('./collisionscan');
+ok(!/tcgplayer_data|cardmarket_data|storedFigure/.test(C) && cs.REVIEWED_OFF.cards.every(id => cs.REVIEWED_OFF.live[id])
+   && cs.offLive('en-g1-RC29', 3.53) && !cs.offLive('en-g1-RC29', 140) && cs.offLive('en-ex15-100', 4000) && !cs.offLive('en-ex15-100', 19000),
+   'collisionscan judges the reviewed six against pokemontcg.io\'s LIVE answers, recorded and dated — never our stored copy; an ask refuses only rows over 3x BELOW the floor');
 
 console.log(`\n  ${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

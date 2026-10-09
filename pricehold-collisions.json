@@ -1,5 +1,5 @@
 {
- "measuredAt": "2026-10-09T17:12:56.389Z",
+ "measuredAt": "2026-10-09T23:50:36.166Z",
  "collisions": [
   {
    "product": "84971",
@@ -559,9 +559,10 @@
    "row": "194202",
    "card": "en-bw11-RC1",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x from TCGplayer's market price, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 3.08,
+   "pokemontcg": 3.11,
+   "basis": "market",
    "price": 0.4
   },
   {
@@ -676,9 +677,10 @@
    "row": "193628",
    "card": "en-bw11-RC23",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x from TCGplayer's market price, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 83.65,
+   "pokemontcg": 86.77,
+   "basis": "market",
    "price": 2.71
   },
   {
@@ -1621,27 +1623,30 @@
    "row": "59200",
    "card": "en-bwp-BW80",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x from TCGplayer's market price, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 15.97,
+   "pokemontcg": 17.25,
+   "basis": "market",
    "price": 3.91
   },
   {
    "row": "129341",
    "card": "en-bwp-BW80",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x from TCGplayer's market price, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 15.97,
+   "pokemontcg": 17.25,
+   "basis": "market",
    "price": 1.42
   },
   {
    "row": "194654",
    "card": "en-bwp-BW80",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x from TCGplayer's market price, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 15.97,
+   "pokemontcg": 17.25,
+   "basis": "market",
    "price": 1.49
   },
   {
@@ -2782,45 +2787,70 @@
    "row": "54904",
    "card": "en-ex15-100",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x below the cheapest TCGplayer listing, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 4000,
+   "pokemontcg": 18500,
+   "basis": "ask",
    "price": 980
   },
   {
    "row": "81552",
    "card": "en-ex15-100",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x below the cheapest TCGplayer listing, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 4000,
+   "pokemontcg": 18500,
+   "basis": "ask",
    "price": 990
   },
   {
    "row": "87905",
    "card": "en-ex15-100",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x below the cheapest TCGplayer listing, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 4000,
+   "pokemontcg": 18500,
+   "basis": "ask",
    "price": 990
+  },
+  {
+   "row": "94792",
+   "card": "en-ex15-100",
+   "product": null,
+   "why": "unlabelled search row more than 3x below the cheapest TCGplayer listing, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
+   "matched": null,
+   "pokemontcg": 18500,
+   "basis": "ask",
+   "price": 4000
+  },
+  {
+   "row": "99376",
+   "card": "en-ex15-100",
+   "product": null,
+   "why": "unlabelled search row more than 3x below the cheapest TCGplayer listing, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
+   "matched": null,
+   "pokemontcg": 18500,
+   "basis": "ask",
+   "price": 4000
   },
   {
    "row": "118672",
    "card": "en-ex15-100",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x below the cheapest TCGplayer listing, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 4000,
+   "pokemontcg": 18500,
+   "basis": "ask",
    "price": 1000
   },
   {
    "row": "121955",
    "card": "en-ex15-100",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x below the cheapest TCGplayer listing, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 4000,
+   "pokemontcg": 18500,
+   "basis": "ask",
    "price": 1000
   },
   {
@@ -2971,9 +3001,10 @@
    "row": "157685",
    "card": "en-g1-RC29",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x from TCGplayer's market price, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 165.93,
+   "pokemontcg": 155.61,
+   "basis": "market",
    "price": 3.53
   },
   {
@@ -7192,27 +7223,30 @@
    "row": "78446",
    "card": "en-xyp-XY85",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x from TCGplayer's market price, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 18.4,
+   "pokemontcg": 22.33,
+   "basis": "market",
    "price": 3.44
   },
   {
    "row": "129894",
    "card": "en-xyp-XY85",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x from TCGplayer's market price, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 18.4,
+   "pokemontcg": 22.33,
+   "basis": "market",
    "price": 4.76
   },
   {
    "row": "194005",
    "card": "en-xyp-XY85",
    "product": null,
-   "why": "unlabelled search row more than 3x from pokemontcg.io (reviewed, Roy, 2026-10-09)",
+   "why": "unlabelled search row more than 3x from TCGplayer's market price, pokemontcg.io live (reviewed, Roy, 2026-10-09; re-measured live 2026-10-10)",
    "matched": null,
-   "pokemontcg": 18.4,
+   "pokemontcg": 22.33,
+   "basis": "market",
    "price": 5.17
   },
   {

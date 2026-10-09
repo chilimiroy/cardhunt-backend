@@ -48,13 +48,32 @@ function statedNumber(meta) {
 // Their unlabelled search rows that far off are refused. The other ~952 such
 // headlines are left (6 bad of 311 checkable, ~2%), shown with their age and
 // re-asked first by value (refresh). Measured: PROGRESS 2026-10-09 (late).
-const REVIEWED_OFF = { ratio: 3, decided: 'Roy, 2026-10-09', cards: ['en-g1-RC29', 'en-bw11-RC23', 'en-bwp-BW80', 'en-bw11-RC1', 'en-xyp-XY85', 'en-ex15-100'] };
-// The stored copy's figure, by the one reader (pokemontcgblock.js): a market
-// price only — an ask is no yardstick for a sale (2026-10-10). Until then this
-// took whichever printing's market OR MID was closest to the row.
-function pokemontcgFigure(row) {
-  const f = require('./pokemontcgblock').storedFigure(row);
-  return f && f.basis === 'market' ? f.price : null;
+//
+// RE-MEASURED against pokemontcg.io's LIVE answer (Roy, 2026-10-10): the
+// yardstick was our stored copy of 2026-07-27 — Charizard ☆ δ's "$4,000" was
+// that copy; live, TCGplayer has no market price for it, only listings from
+// $18,500. The figures below are pokemontcg.io's answers as fetched (read by
+// pokemontcgblock.liveFigure), with their date. A market price: a row more than
+// 3x from it either way is refused. An ask (listings, no market price): a row
+// more than 3x BELOW the cheapest copy for sale is refused — a sale at under a
+// third of the floor is not this product's; a row above the floor is kept.
+// Lifting a refusal needs a new measurement here, never a quiet edit.
+const REVIEWED_OFF = { ratio: 3, decided: 'Roy, 2026-10-09; re-measured live 2026-10-10',
+  cards: ['en-g1-RC29', 'en-bw11-RC23', 'en-bwp-BW80', 'en-bw11-RC1', 'en-xyp-XY85', 'en-ex15-100'],
+  measured: '2026-10-09T23:48Z (finished), pokemontcg.io /v2/cards/<id>, its tcgplayer.updatedAt 2026/10/09',
+  live: {
+    'en-g1-RC29':   { basis: 'market', price: 155.61 },   // stored copy said 165.93
+    'en-bw11-RC23': { basis: 'market', price: 86.77 },    // 83.65
+    'en-bwp-BW80':  { basis: 'market', price: 17.25 },    // 15.97
+    'en-bw11-RC1':  { basis: 'market', price: 3.11 },     // 3.08
+    'en-xyp-XY85':  { basis: 'market', price: 22.33 },    // 18.40
+    'en-ex15-100':  { basis: 'ask', price: 18500 },       // 4,000 (market); live: market null, low 18,500, mid 27,500
+  } };
+function offLive(cardId, p) {
+  const f = REVIEWED_OFF.live[cardId];
+  if (!f || !(p > 0)) return null;
+  const far = f.basis === 'ask' ? f.price / p > REVIEWED_OFF.ratio : Math.max(f.price / p, p / f.price) > REVIEWED_OFF.ratio;
+  return far ? f : null;
 }
 function refusedRow(card, meta) {
   const stated = statedNumber(meta), asked = numberKey(askedNumber(card));
@@ -117,15 +136,15 @@ async function scan(db) {
     if (m.numberRule === RULE) continue;
     if (statedNumber(m) === null) refuse(r, 'states no number, on a card the old matcher mismatched', { asked: numberKey(askedNumber(cards.get(r.card_api_id))), stated: null });
   }
-  // The reviewed six (REVIEWED_OFF): unlabelled rows more than 3x from pokemontcg.io's figure.
-  const rev = (await db.query(`SELECT ph.id, ph.card_api_id, ph.price_usd::float AS p, ph.source_meta, c.tcgplayer_data, c.cardmarket_data
-      FROM price_history ph JOIN cards c ON c.api_card_id = ph.card_api_id
+  // The reviewed six (REVIEWED_OFF): unlabelled rows more than 3x from pokemontcg.io's LIVE figure.
+  const rev = (await db.query(`SELECT ph.id, ph.card_api_id, ph.price_usd::float AS p, ph.source_meta
+      FROM price_history ph
       WHERE ph.source = 'tcgplayer_market' AND ph.card_api_id = ANY($1) AND NOT COALESCE(ph.source_meta ? 'matchedBy', false)`, [REVIEWED_OFF.cards])).rows;
   for (const r of rev) {
     if (refusedIds.has(String(r.id))) continue;
-    const f = pokemontcgFigure(r);
-    if (f && Math.max(f / r.p, r.p / f) > REVIEWED_OFF.ratio)
-      refuse(r, 'unlabelled search row more than 3x from pokemontcg.io (reviewed, ' + REVIEWED_OFF.decided + ')', { pokemontcg: f, price: r.p });
+    const f = offLive(r.card_api_id, r.p);
+    if (f) refuse(r, 'unlabelled search row more than 3x ' + (f.basis === 'ask' ? 'below the cheapest TCGplayer listing' : 'from TCGplayer\'s market price')
+      + ', pokemontcg.io live (reviewed, ' + REVIEWED_OFF.decided + ')', { pokemontcg: f.price, basis: f.basis, price: r.p });
   }
   // TCGdex's pricing mapping: its latest row per card and printing, refused rows left out.
   for (const r of (await db.query(`SELECT DISTINCT ON (card_api_id, source) card_api_id, source_meta->>'productId' AS pid
@@ -178,5 +197,5 @@ async function main() {
     }
   } finally { await db.end(); }
 }
-module.exports = { scan, OUT, refusedRow, askedNumber, statedNumber, REVIEWED_OFF };
+module.exports = { scan, OUT, refusedRow, askedNumber, statedNumber, REVIEWED_OFF, offLive };
 if (require.main === module) main().catch(e => { console.error('collisionscan failed: ' + e.message); process.exit(1); });

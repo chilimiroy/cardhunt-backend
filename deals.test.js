@@ -6,7 +6,7 @@
 //
 //   node deals.test.js
 'use strict';
-require('./testcount')(76);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(102);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const deals = require('./deals.js');
 let pass = 0, fail = 0;
@@ -70,6 +70,66 @@ console.log('\n  on (Roy, 2026-10-08), with its own supply');
 ok(deals.ENABLED === true, 'deals.ENABLED is ON — on the vouching bar, approved accounts');
 ok(/switched off/.test(deals.OFF_REASON), 'the off state still carries its reason, should it be switched off again');
 ok(/genuine card/.test(deals.describeRule()) && /at most 2/.test(deals.describeRule()), 'the rule states the back and what it costs');
+
+console.log('\n  the auction bars (T5b, 2026-10-10): what each keeps, and why it skips');
+{
+  const NOW = Date.parse('2026-10-10T00:00:00Z');
+  const inH = h => new Date(NOW + h * 3600e3).toISOString();
+  const auc = (bid, h, o) => row(bid, Object.assign({ saleType: 'auction', priceKind: 'current-bid', price: bid, shippingKnown: false,
+    endsAt: inH(h), sellerStated: true, sellerCondition: 'NM', conditionSource: 'title', title: 'Umbreon VMAX 215/203 NM',
+    sellerFeedback: { score: 500, percent: 99.5 }, stamp: undefined }, o || {}));
+  const pay = rows => ({ cardId: 'en-x-1', listings: rows, stampGate: { applied: false }, materialCheck: { applied: true } });
+  const fA = (l, bar) => deals.auctionFree(l, pay([l]), ref, bar, NOW);
+  ok(!fA(auc(70, 30), 'auctions').skip, 'KEPT (best): a vouched auction, bid 30% below, 30 h left — shipping unstated does not matter for a bid');
+  ok(!fA(auc(120, 10), 'ending').skip, 'KEPT (ending): 10 h left, whatever the bid');
+  ok(!fA(auc(70, 100), 'auctions').skip && /more than 48/.test(fA(auc(70, 100), 'ending').skip || ''), '100 h left: a best auction, not an ending one');
+  ok(/within 3 h/.test(fA(auc(70, 2), 'ending').skip || '') && /within 3 h/.test(fA(auc(70, 2), 'auctions').skip || ''),
+     'under 3 h left: on neither bar — it could end before it is shown (route 1)');
+  ok(/not an auction/.test(fA(row(70), 'ending').skip || ''), 'a Buy It Now is never an auction pick');
+  ok(/not 15-60%/.test(fA(auc(95, 30), 'auctions').skip || '') && /not 15-60%/.test(fA(auc(20, 30), 'auctions').skip || ''),
+     'best: a bid 5% below, or 80% below, is not a best auction');
+  ok(/flagged/.test(fA(auc(70, 30, { suspect: 'implausible' }), 'ending').skip || ''), 'a flagged auction is on neither bar');
+  ok(/below near mint/.test(fA(auc(70, 30, { sellerCondition: 'MP' }), 'ending').skip || ''), 'stated MP: refused by the shared row check');
+  ok(/seller feedback/.test(fA(auc(70, 30, { sellerFeedback: { score: 3, percent: 100 } }), 'auctions').skip || ''), 'a seller without a record: refused by the shared evidence');
+  ok(/no end time/.test(fA(auc(70, 30, { endsAt: null }), 'ending').skip || ''), 'no end time: claims nothing');
+  ok(/no current measured price/.test(deals.auctionFree(auc(70, 30), pay([]), Object.assign({}, ref, { current: false }), 'ending', NOW).skip || ''),
+     'a marked or old price is nothing to stand beside');
+  const two = pay([auc(70, 40), auc(60, 20), auc(80, 5)]);
+  const pe = deals.pickAuction(two, ref, 'ending', NOW), pb = deals.pickAuction(two, ref, 'auctions', NOW);
+  ok(pe.pick && pe.pick.listing.price === 80 && pe.pick.band === '3-12h', 'ending picks the soonest end, and stores only its band');
+  ok(pb.pick && pb.pick.listing.price === 60 && pb.pick.band === null, 'best picks the largest gap (internal); no band');
+  ok(deals.endBand(3.5) === '3-12h' && deals.endBand(12) === '12-24h' && deals.endBand(47) === '24-48h', 'the three bands');
+  const live = (o) => Object.assign({ buyingOptions: ['AUCTION'], endsAt: inH(5), currentBid: 70, currentBidCurrency: 'USD' }, o || {});
+  const good = { state: 'genuine-back', photos: 3 };
+  ok(deals.auctionClickRefusal(live(), good, ref, 'auctions', NOW) === null, 'click KEEPS: live, bid still 30% below, a genuine back in 3 photos');
+  ok(/ended/.test(deals.auctionClickRefusal(live({ endsAt: inH(-1) }), good, ref, 'ending', NOW)), 'click: ended -> deleted, says so');
+  ok(/bidding has moved/.test(deals.auctionClickRefusal(live({ currentBid: 95 }), good, ref, 'auctions', NOW))
+     && deals.auctionClickRefusal(live({ currentBid: 95 }), good, ref, 'ending', NOW) === null, 'click: a bid that rose out of the band leaves best, not ending');
+  ok(/vouch/.test(deals.auctionClickRefusal(live(), { state: 'no-claim', photos: 3 }, ref, 'ending', NOW))
+     && /vouch/.test(deals.auctionClickRefusal(live(), { state: 'genuine-back', photos: 1 }, ref, 'ending', NOW)),
+     'click: no genuine back, or one photo -> not shown (the bar vouches at the click)');
+}
+
+{
+  const s0 = fs.readFileSync(__dirname + '/server.js', 'utf8').split('\r\n').join('\n');
+  ok(/CREATE TABLE IF NOT EXISTS bar_picks \(bar text NOT NULL, card_id text NOT NULL, item_id text NOT NULL,\s*band text, found_at timestamptz NOT NULL DEFAULT now\(\), run_id text, PRIMARY KEY \(bar, card_id\)\)/.test(s0)
+     && /ALTER TABLE bar_picks ENABLE ROW LEVEL SECURITY/.test(s0), 'bar_picks: card, item id, our band, found_at, run — no title, price, photo, seller or end time; RLS on');
+  const job = s0.slice(s0.indexOf('async function runDealRefresh('), s0.indexOf("app.post('/api/deals/refresh'"));
+  const barsAt = job.indexOf('for (const bar of deals_.AUCTION_BARS)');
+  ok(barsAt > 0 && /deals_\.pickAuction\(payload, ref, bar, Date\.now\(\)\)/.test(job)
+     && !/(listingsFor|gatherListings|fetchEbay|ebayItemOnDemand)\(/.test(job.slice(barsAt)), 'the job fills both auction bars from the payload it already has — no call after');
+  const shelf = s0.slice(s0.indexOf("app.get('/api/bars/:bar', access.priced"), s0.indexOf("app.get('/api/bars/:bar/:cardId/live'"));
+  ok(shelf.length > 500 && !/(gatherListings|listingsFor|sourceEbay|fetchEbay|ebayItemOnDemand|backCheckItem)\(/.test(shelf) && /ebayCalls: 0/.test(shelf),
+     'the bars\' shelf never asks eBay — 0 calls, and says so');
+  ok(!/item_id|title|landed|url|endsAt/.test(shelf.replace(/\/\/.*$/gm, '').replace(/SELECT p\.card_id[^`]*`/, '')), 'the bars\' shelf sends OUR data only');
+  ok(/if \(bar === 'graded'\) return res\.json\(Object\.assign\(base, \{ enabled: true, count: 0, picks: \[\], empty: BAR_EMPTY\.graded \}\)\)/.test(shelf)
+     && /graded: 'No graded prices are recorded\.'/.test(s0), 'graded slabs: built and silent — "No graded prices are recorded.", nothing asked');
+  ok(/found_at > now\(\) - interval '\$\{deals_\.AUCTION_END_H\.min\} hours'/.test(shelf), 'an auction pick is shown no longer than its 3-hour floor (route 1)');
+  const click = s0.slice(s0.indexOf("app.get('/api/bars/:bar/:cardId/live'"), s0.indexOf('// ── SEARCH'));
+  ok(/ebayItemOnDemand\(p\.item_id, cardId, 'bar-click'\)/.test(click) && /backCheckItem\(card, p\.item_id, \{ needPhotos: true \}\)/.test(click)
+     && /deals_\.auctionClickRefusal\(live, back, ref, bar, Date\.now\(\)\)/.test(click), 'the click: one getItem, read for the live auction and its back');
+  ok(/live: readLive\(item\)/.test(fs.readFileSync(__dirname + '/certcheck.js', 'utf8')), 'certcheck keeps the live facts in the same 15-minute memory cache');
+}
 
 console.log('\n  rotation (T5a, 2026-10-10): a pool of 400 walked 80 at a time');
 {
@@ -135,7 +195,7 @@ ok(/app\.post\('\/api\/deals\/refresh', toolingKey\.require/.test(sup) && /app\.
   ok(/if \(!deals_\.ENABLED\) return res\.json\(\{ enabled: false, reason: deals_\.OFF_REASON/.test(shelf), 'switched off, it answers enabled:false with the reason');
 }
 {
-  const click = sup.slice(sup.indexOf("app.get('/api/deals/:cardId/live'"));
+  const click = sup.slice(sup.indexOf("app.get('/api/deals/:cardId/live'"), sup.indexOf('// ── THE OTHER BARS'));
   ok(/drop\('This one has sold\.'\)/.test(click) && /DELETE FROM deal_picks WHERE card_id = \$1/.test(click), 'a sold listing deletes the pick and says "This one has sold."');
   ok(/q < deals_\.MIN_DISCOUNT \|\| q > deals_\.MAX_DISCOUNT/.test(click) && !/discount:|q,|percent/.test(click.slice(click.indexOf('res.json({ cardId, gone: false'))),
      'the live price is re-judged INTERNALLY; no comparison number is sent');

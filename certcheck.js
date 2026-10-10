@@ -167,7 +167,22 @@ function readImages(item) {
 
 // Everything the cache keeps from one getItem response.
 function fromItem(item) {
-  return { read: readCert(item), images: readImages(item) };
+  return { read: readCert(item), images: readImages(item), live: readLive(item) };
+}
+// The listing's own live facts (T5b, 2026-10-10), so the auction bars' click
+// reads the SAME getItem the back check reads — one call, not two. In this
+// memory cache only, 15 minutes, like the rest of the answer; never stored.
+function readLive(item) {
+  const d = item || {};
+  const num = x => (x && x.value != null && Number.isFinite(Number(x.value)) ? Number(x.value) : null);
+  const ship = (d.shippingOptions || [])[0];
+  const avail = d.estimatedAvailabilities || [];
+  return { title: d.title || '', url: d.itemWebUrl || null, image: (d.image || {}).imageUrl || null,
+    buyingOptions: d.buyingOptions || [], price: num(d.price), currency: d.price ? d.price.currency || null : null,
+    currentBid: num(d.currentBidPrice), currentBidCurrency: d.currentBidPrice ? d.currentBidPrice.currency || null : null,
+    bids: Number.isFinite(d.bidCount) ? d.bidCount : null, endsAt: d.itemEndDate || null,
+    shipping: ship && ship.shippingCost ? num(ship.shippingCost) : null,
+    outOfStock: avail.length > 0 && avail.every(a => a.estimatedAvailabilityStatus === 'OUT_OF_STOCK') };
 }
 
 // ── PSA: grader + number -> record. PERMANENT once built. NOT BUILT. ──
@@ -182,5 +197,5 @@ function psaLookup(/* cert */) {
 // before a call is spent — the id is caller-supplied.
 const ITEM_ID = /^v1\|\d{6,20}\|\d{1,20}$/;
 
-module.exports = { readCert, readImages, fromItem, graderCode, stateFromEbay, psaCertUrl, psaLookup,
+module.exports = { readCert, readImages, readLive, fromItem, graderCode, stateFromEbay, psaCertUrl, psaLookup,
                    ebayCacheGet, ebayCacheSet, EBAY_ITEM_TTL_MS, ITEM_ID, CERT_SHAPE };

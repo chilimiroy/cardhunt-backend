@@ -98,6 +98,11 @@ function notADeal(l, base) {
   if (!l || !l.live) return 'ended';
   if (l.saleType === 'auction' || !outlier.trustworthy(l)) return l.suspect ? 'flagged: ' + l.suspect : 'a current bid';
   if (!l.shippingKnown || !(Number(l.landed) > 0)) return 'shipping not stated';
+  return rowMarked(l, base);
+}
+// What any bar refuses on the row itself, whatever its sale type — one
+// definition for the deals bar and the auction bars (T5b).
+function rowMarked(l, base) {
   if (l.materialPending) return 'novelty check not run yet';
   if (l.stamp && l.stamp.state === 'pending') return 'photo not checked yet';
   if (l.back && (l.back.state === 'other-back' || l.back.metal)) return 'back check marked it';
@@ -136,6 +141,13 @@ function vouchFree(l, payload, ref) {
   if (!refUsable(ref) || discountOf(l, ref) < MIN_DISCOUNT) return { skip: 'not ' + Math.round(MIN_DISCOUNT * 100) + '% below the ' + refLabel(ref) };
   if (discountOf(l, ref) > MAX_DISCOUNT) return { skip: 'more than ' + Math.round(MAX_DISCOUNT * 100) + '% below the ' + refLabel(ref) + ' — a discount that large is itself evidence something is wrong' };
   cleared.push(Math.round(discountOf(l, ref) * 100) + '% below the ' + refLabel(ref));
+  return vouchEvidence(l, payload, cleared);
+}
+// The evidence every vouching bar needs on a row, after its own price rule:
+// every photo check that applies ran and passed, the novelty check ran, a
+// stated condition, no ambiguous "HP", a seller with a record. Shared by the
+// deals bar and the auction bars (T5b) — one definition.
+function vouchEvidence(l, payload, cleared) {
   const sg = (payload && payload.stampGate) || {};
   if (sg.notRun && sg.notRun.length) return { skip: 'a photo check could not run on this card (' + sg.notRun.map(r => r.label).join(', ') + ')' };
   if (sg.applied) {
@@ -217,6 +229,81 @@ function rotate(pool, walked, n) {
   return pool.slice().sort((a, b) => at(a) - at(b) || rank.get(a) - rank.get(b)).slice(0, n);
 }
 
+// ── THE AUCTION BARS (TASK-account-and-bars T5b, 2026-10-10) ──
+// Built from the SAME search the deals job already makes: one Browse search
+// returns Buy It Now and auction rows together (buyingOptions FIXED_PRICE|
+// AUCTION, server.js since T0) — confirmed 2026-10-10 on Umbreon VMAX 215:
+// 42 Buy It Now + 2 auctions in one response, each auction carrying its
+// current bid, bid count and eBay's end time. 0 extra calls to find them.
+//   best    a live auction, its CURRENT BID (the item price — a threshold
+//           judges the item price) MIN..MAX_DISCOUNT below our current
+//           measured price, at least AUCTION_END_H.min hours left
+//   ending  a live auction AUCTION_END_H.min..max hours from its end WHEN
+//           FOUND (route 1: shown no longer than the 3-hour floor, so
+//           nothing on the bar can have ended — it never lies)
+// Both: every row check the deals bar makes (rowMarked, vouchEvidence).
+// The back is NOT asked at supply (that would be a call): the click asks
+// it, in the same getItem as the live listing, and refuses without a
+// genuine back — the bar still vouches before anything of eBay's is shown.
+// The discount and the end time CHOOSE; neither is stored or shown — the
+// pick keeps a coarse band (endBand) for the ending bar's order and label.
+const AUCTION_END_H = { min: 3, max: 48 };
+const AUCTION_BARS = ['auctions', 'ending'];
+function endHoursOf(l, now) {
+  const t = Date.parse(l && l.endsAt);
+  return Number.isFinite(t) ? (t - now) / 3600e3 : null;
+}
+const endBand = h => (h < 12 ? '3-12h' : h < 24 ? '12-24h' : '24-48h');
+const bidOf = l => Number(l && l.price);
+function auctionFree(l, payload, ref, bar, now) {
+  if (!l || !l.live) return { skip: 'ended' };
+  if (l.saleType !== 'auction') return { skip: 'not an auction' };
+  if (l.suspect) return { skip: 'flagged: ' + l.suspect };
+  const h = endHoursOf(l, now);
+  if (h == null) return { skip: 'no end time' };
+  if (h < AUCTION_END_H.min) return { skip: 'ends within ' + AUCTION_END_H.min + ' h — could end before it is shown' };
+  if (bar === 'ending' && h > AUCTION_END_H.max) return { skip: 'ends more than ' + AUCTION_END_H.max + ' h out' };
+  const marked = rowMarked(l, basePrintingOf(payload));
+  if (marked) return { skip: marked };
+  if (!refUsable(ref)) return { skip: 'no current measured price to stand beside' };
+  if (!(bidOf(l) > 0)) return { skip: 'no current bid' };
+  const q = 1 - bidOf(l) / ref.price;
+  const cleared = ['live auction, ' + Math.round(h) + ' h left, unflagged, no other printing or edition stated'];
+  if (bar === 'auctions') {
+    if (q < MIN_DISCOUNT || q > MAX_DISCOUNT) return { skip: 'current bid not ' + Math.round(MIN_DISCOUNT * 100) + '-' + Math.round(MAX_DISCOUNT * 100) + '% below the ' + refLabel(ref) };
+    cleared.push('current bid ' + Math.round(q * 100) + '% below the ' + refLabel(ref));
+  }
+  const ev = vouchEvidence(l, payload, cleared);
+  return ev.skip ? ev : Object.assign(ev, { hours: h, q });
+}
+// One pick a card a bar: best = the largest gap (internal); ending = the soonest end.
+function pickAuction(payload, ref, bar, now) {
+  const skipped = {};
+  let best = null;
+  for (const l of (payload && payload.listings) || []) {
+    const f = auctionFree(l, payload, ref, bar, now);
+    if (f.skip) { const k = f.skip.replace(/-?\d+(\.\d+)?/g, 'N'); skipped[k] = (skipped[k] || 0) + 1; continue; }
+    if (!best || (bar === 'ending' ? f.hours < best.hours : f.q > best.q)) best = { listing: l, hours: f.hours, q: f.q, cleared: f.cleared };
+  }
+  if (EXCLUDED[payload && payload.cardId]) return { pick: null, skipped: { 'card excluded from deals': 1 } };
+  return { pick: best && { listing: best.listing, band: bar === 'ending' ? endBand(best.hours) : null, cleared: best.cleared }, skipped };
+}
+// The click (T5b): the auction live, from the one getItem the back check
+// also reads. Why it is no longer shown, or null. live: certcheck.readLive.
+function auctionClickRefusal(live, back, ref, bar, now) {
+  if (!live) return 'This auction has ended.';
+  const end = Date.parse(live.endsAt);
+  if (!(live.buyingOptions || []).includes('AUCTION') || !Number.isFinite(end) || end <= now) return 'This auction has ended.';
+  if (live.currentBid == null || live.currentBidCurrency !== 'USD') return 'This listing has changed.';
+  if (bar === 'auctions') {
+    const q = ref && ref.price > 0 ? 1 - live.currentBid / ref.price : null;
+    if (q == null || q < MIN_DISCOUNT || q > MAX_DISCOUNT) return 'The bidding has moved — it is no longer below the market price.';
+  }
+  const p = vouchPhotos(back);
+  if (p.skip) return 'We could not vouch for this listing\'s photos.';
+  return null;
+}
+
 function rankDeals(deals) {
   return deals.slice().sort((a, b) => b.discount - a.discount || a.listing.landed - b.listing.landed);
 }
@@ -231,5 +318,6 @@ function describeRule() {
 }
 
 module.exports = { ENABLED, OFF_REASON, MIN_DISCOUNT, MAX_DISCOUNT, EXCLUDED, DEAL_BACK_MAX, BELOW_NM, basePrintingOf, notADeal,
-  VOUCH, vouchFree, vouchPhotos, discountOf, refLabel, hpAmbiguous, pickVouched, rotate,
+  VOUCH, vouchFree, vouchPhotos, discountOf, refLabel, hpAmbiguous, pickVouched, rotate, rowMarked, vouchEvidence,
+  AUCTION_END_H, AUCTION_BARS, endHoursOf, endBand, auctionFree, pickAuction, auctionClickRefusal,
                    rankDeals, describeRule };

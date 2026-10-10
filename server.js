@@ -1232,6 +1232,11 @@ function dealTable() {
     // When the job last walked each card (rotation, T5a): our own record, no eBay data.
     .then(() => db.query('CREATE TABLE IF NOT EXISTS deal_walks (card_id text PRIMARY KEY, walked_at timestamptz NOT NULL DEFAULT now())'))
     .then(() => db.query('ALTER TABLE deal_walks ENABLE ROW LEVEL SECURITY'))
+    // The auction bars' picks (T5b): the same shape as deal_picks plus our
+    // band (deals.endBand) — no eBay title, price, photo, seller or end time.
+    .then(() => db.query(`CREATE TABLE IF NOT EXISTS bar_picks (bar text NOT NULL, card_id text NOT NULL, item_id text NOT NULL,
+      band text, found_at timestamptz NOT NULL DEFAULT now(), run_id text, PRIMARY KEY (bar, card_id))`))
+    .then(() => db.query('ALTER TABLE bar_picks ENABLE ROW LEVEL SECURITY'))
     .catch(e => { dealTableReady = null; throw e; });
   return dealTableReady;
 }
@@ -1275,14 +1280,15 @@ async function dealCandidates(n) {
 }
 
 const dealJob = { running: false, runId: null, startedAt: null, finishedAt: null, total: 0, done: 0, picks: 0,
-                  backCalls: 0, errors: [], stoppedFor: null, last: null };
+                  barPicks: {}, backCalls: 0, errors: [], stoppedFor: null, last: null };
 const dealPending = p => ((p && p.stampGate && p.stampGate.pendingQueued) || 0) + ((p && p.materialCheck && p.materialCheck.pending) || 0);
 async function runDealRefresh(runId) {
   Object.assign(dealJob, { running: true, runId, startedAt: new Date().toISOString(), finishedAt: null,
-    total: 0, done: 0, picks: 0, backCalls: 0, errors: [], stoppedFor: null });
+    total: 0, done: 0, picks: 0, barPicks: { auctions: 0, ending: 0 }, backCalls: 0, errors: [], stoppedFor: null });
   try {
     await dealTable();
     await db.query(`DELETE FROM deal_picks WHERE found_at < now() - interval '${DEALS_SUPPLY.showHours} hours'`);
+    await db.query(`DELETE FROM bar_picks WHERE found_at < now() - interval '${deals_.AUCTION_END_H.min} hours'`);
     const ids = await dealCandidates(DEALS_SUPPLY.cards);
     dealJob.total = ids.length;
     for (const id of ids) {
@@ -1312,6 +1318,16 @@ async function runDealRefresh(runId) {
         } else {
           await db.query('DELETE FROM deal_picks WHERE card_id = $1', [id]);   // no deal any more: not left over from a run before
         }
+        // The auction bars, from THIS payload (T5b): 0 more calls.
+        for (const bar of deals_.AUCTION_BARS) {
+          const a = deals_.pickAuction(payload, ref, bar, Date.now());
+          if (a.pick && a.pick.listing.itemId) {
+            await db.query(`INSERT INTO bar_picks (bar, card_id, item_id, band, found_at, run_id) VALUES ($1, $2, $3, $4, now(), $5)
+              ON CONFLICT (bar, card_id) DO UPDATE SET item_id = EXCLUDED.item_id, band = EXCLUDED.band, found_at = EXCLUDED.found_at, run_id = EXCLUDED.run_id`,
+              [bar, id, a.pick.listing.itemId, a.pick.band, runId]);
+            dealJob.barPicks[bar]++;
+          } else await db.query('DELETE FROM bar_picks WHERE bar = $1 AND card_id = $2', [bar, id]);
+        }
       } catch (e) {
         const msg = String(e.message || e);
         // The quota said stop (background yields at the soft stop): stop, say so.
@@ -1326,7 +1342,7 @@ async function runDealRefresh(runId) {
     dealJob.running = false;
     dealJob.finishedAt = new Date().toISOString();
     dealJob.last = { runId, startedAt: dealJob.startedAt, finishedAt: dealJob.finishedAt, total: dealJob.total,
-      done: dealJob.done, picks: dealJob.picks, backCalls: dealJob.backCalls, errors: dealJob.errors.length, stoppedFor: dealJob.stoppedFor };
+      done: dealJob.done, picks: dealJob.picks, barPicks: dealJob.barPicks, backCalls: dealJob.backCalls, errors: dealJob.errors.length, stoppedFor: dealJob.stoppedFor };
     console.log('[deals] refresh ' + JSON.stringify(dealJob.last));
   }
 }
@@ -1437,6 +1453,83 @@ app.get('/api/deals/:cardId/live', access.priced, async (req, res) => {
     res.json({ cardId, gone: false, ebay: { price: it.price, shipping: it.shipping, delivered, currency: 'USD',
       title: it.title, url: it.url, image: it.image, checkedAt: new Date().toISOString(), calls: got.calls },
       attribution: EBAY_ATTRIBUTION });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── THE OTHER BARS (TASK-account-and-bars T5b, 2026-10-10) ──────
+// One switch on the home shelf: Best deals (/api/deals, above), Best
+// auctions, Auctions ending soon, Graded slabs. The two auction bars are
+// filled by the deals job from the searches it already makes (deals.js
+// pickAuction) — 0 more calls a run. Shown for AUCTION_END_H.min (3) hours
+// only: every pick had at least 3 h left when found, so nothing shown can
+// have ended (route 1). A tile is OUR data: the card, our price, when found,
+// and for the ending bar our band. The click is the check, as for deals.
+//
+// Graded slabs: built and SILENT. There is no graded price to stand a slab
+// beside (gradeprices parked, no graded source), so it never asks eBay and
+// says only that no graded prices are recorded. Its supply would be its own
+// search per card per grade (1 call each: 80 cards x PSA 10 + PSA 9 = 160 a
+// run, ~1,280 a day at 8 runs) — not built.
+const BAR_NAMES = { auctions: 'Best auctions', ending: 'Auctions ending soon', graded: 'Graded slabs' };
+const BAR_EMPTY = { auctions: 'No auctions below the market price right now — checking again shortly.',
+  ending: 'No auctions ending soon right now — checking again shortly.', graded: 'No graded prices are recorded.' };
+const BAND_LABEL = { '3-12h': 'Ending 3–12 h after it was found', '12-24h': 'Ending 12–24 h after it was found',
+  '24-48h': 'Ending 24–48 h after it was found' };
+app.get('/api/bars/:bar', access.priced, async (req, res) => {
+  const bar = String(req.params.bar);
+  if (!BAR_NAMES[bar]) return res.status(404).json({ error: 'no such bar', bars: Object.keys(BAR_NAMES) });
+  const base = { bar, name: BAR_NAMES[bar], ebayCalls: 0 };
+  if (bar === 'graded') return res.json(Object.assign(base, { enabled: true, count: 0, picks: [], empty: BAR_EMPTY.graded }));
+  if (!deals_.ENABLED) return res.json(Object.assign(base, { enabled: false, reason: deals_.OFF_REASON, count: 0, picks: [] }));
+  const limit = Math.min(24, Math.max(1, parseInt(req.query.limit, 10) || 8));
+  try {
+    await dealTable();
+    const rows = (await db.query(`SELECT p.card_id, p.band, p.found_at, c.name, c.number, c.set_name, c.set_name_en, c.image_small
+      FROM bar_picks p JOIN cards c ON c.api_card_id = p.card_id
+      WHERE p.bar = $1 AND p.found_at > now() - interval '${deals_.AUCTION_END_H.min} hours' AND ${digital.visibleSql('c')}
+      ORDER BY p.found_at DESC LIMIT 60`, [bar])).rows;
+    const out = [];
+    for (const p of rows) {
+      const ref = await dealRefOf(p.card_id);
+      if (!ref || !ref.isReal || !ref.current) continue;     // our price must be current to stand beside
+      out.push({ cardId: p.card_id, name: p.name, number: p.number, set: p.set_name_en || p.set_name, image: p.image_small,
+        price: ref.price, priceLabel: deals_.refLabel(ref), priceDate: ref.recordedAt, band: p.band, bandLabel: BAND_LABEL[p.band] || null,
+        foundAt: p.found_at, foundAgoMin: Math.max(0, Math.round((Date.now() - new Date(p.found_at).getTime()) / 60000)) });
+    }
+    // Ending: the earliest band first. Otherwise OUR price, dearest first — never the internal gap.
+    const order = { '3-12h': 0, '12-24h': 1, '24-48h': 2 };
+    const shown = out.slice(0, limit).sort(bar === 'ending'
+      ? (a, b) => (order[a.band] - order[b.band]) || b.price - a.price : (a, b) => b.price - a.price);
+    res.json(Object.assign(base, { enabled: true, count: shown.length, picks: shown, empty: BAR_EMPTY[bar],
+      refreshedAt: dealJob.last ? dealJob.last.finishedAt : null,
+      freshness: { maxAgeHours: deals_.AUCTION_END_H.min, note: 'found by the deals scan; each had at least '
+        + deals_.AUCTION_END_H.min + ' h left when found and is shown no longer than that' } }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+// The click: ONE getItem (0 within 15 minutes) read twice — the live auction
+// (certcheck.readLive) and the back check's photos. Ended, moved out of its
+// band, or no genuine back: the pick is deleted and the tile says so.
+app.get('/api/bars/:bar/:cardId/live', access.priced, async (req, res) => {
+  const bar = String(req.params.bar), cardId = req.params.cardId;
+  if (!deals_.AUCTION_BARS.includes(bar)) return res.status(404).json({ error: 'no such bar' });
+  try {
+    await dealTable();
+    const p = (await db.query(`SELECT item_id FROM bar_picks WHERE bar = $1 AND card_id = $2
+      AND found_at > now() - interval '${deals_.AUCTION_END_H.min} hours'`, [bar, cardId])).rows[0];
+    if (!p) return res.status(404).json({ cardId, gone: true, says: 'This one has expired.' });
+    const card = await resolveListingCard(cardId);
+    if (!card) return res.status(404).json({ cardId, gone: true, says: 'This card is not in the catalogue.' });
+    const drop = async says => { await db.query('DELETE FROM bar_picks WHERE bar = $1 AND card_id = $2', [bar, cardId]); return res.json({ cardId, gone: true, says }); };
+    const got = await ebayItemOnDemand(p.item_id, cardId, 'bar-click');
+    if (!got.hit) return res.status(got.status || 502).json({ cardId, error: got.body && got.body.error, says: 'eBay could not be asked right now — try again shortly.' });
+    const back = await backCheckItem(card, p.item_id, { needPhotos: true }).catch(e => ({ error: e.message }));
+    const ref = await dealRefOf(cardId);
+    const live = got.hit.live;
+    const why = deals_.auctionClickRefusal(live, back, ref, bar, Date.now());
+    if (why) return drop(why);
+    res.json({ cardId, gone: false, ebay: { currentBid: live.currentBid, currency: 'USD', bids: live.bids, endsAt: live.endsAt,
+      shipping: live.shipping, title: live.title, url: live.url, image: live.image, checkedAt: new Date().toISOString(),
+      calls: got.calls + ((back && back.calls) || 0) }, attribution: EBAY_ATTRIBUTION });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

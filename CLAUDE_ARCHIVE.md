@@ -4736,3 +4736,22 @@ Not built, and why:
 >   "no licensed sold source" (*Archive:* "Sold data — NO SOURCE, and the page says so").
 > - **Checkout, login**: disabled, preserved outside the page (`nofabricated.test.js`; *Archive:*
 >   "Checkout and login — DISABLED, preserved outside the page").
+
+## MOVED FROM CLAUDE.md, 2026-10-10 (budget, eleventh pass)
+
+Moved verbatim when CLAUDE.md stood at 59,653 of its 60,000 characters, before the lesson "a guard is not working until something has been seen to fail against it" was written. It keeps a line in CLAUDE.md.
+
+> ## Photo-check lessons (all PROGRESS 2026-10-02 … 10-04)
+> - Measure a check's time where it runs; a timeout is not a verdict; a verdict
+>   that cannot change is stored, not cached (an unchecked row is SHOWN, PHOTO CHECKS).
+> - A zero-false threshold is set by the hardest genuine photo, found by widening.
+>   One card's sample is not a rate. Where both answers are held, ask which wins.
+> - A title can state the right number over a photo of another card — look at the
+>   cheapest rows' photos, and zoom, before deciding which layer failed.
+> - Know what a matcher cannot see (NCC reads structure, not colour); pin it in a
+>   test. Compare to the card's own scan, never a fixed colour.
+> - Split a mixed denominator by kind; label samples by eye, not by the gate; fold
+>   only padding (a fold can merge two cards).
+> - A smaller input can make a check stop finding things while still reporting it
+>   ran — check the feature's size against the matcher's floor first (stamps,
+>   PHOTO CHECKS). A size the CDN does not serve answers a placeholder, not an error.

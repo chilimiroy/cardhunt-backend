@@ -30,7 +30,7 @@ rather than re-derive. `CLAUDE_ARCHIVE.md` is the full history (frozen
 "MOVED FROM CLAUDE.md, 2026-10-07 (compression)",
 "MOVED FROM CLAUDE.md, 2026-10-07 (budget, second pass)",
 "MOVED FROM CLAUDE.md, 2026-10-09 (budget, third pass)" — with "Windows: replacing ingest.js",
-"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, eighth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, ninth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, tenth pass)").
+"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, eighth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, ninth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, tenth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, eleventh pass)").
 "PROGRESS 2026-10-05: X" means the block headed X in PROGRESS.md's 2026-10-05
 entry — the verbatim measurements this file carried until then. **A bug's
 history may move to the archive; its lesson may not** — `claudesplit.test.js`
@@ -863,20 +863,8 @@ request (T0, PROGRESS 2026-10-05).
 HEAD before calling a commit done** (slicers; CRLF vs LF). **Never link `node_modules` into a worktree: `git worktree remove
 --force` deletes THROUGH a junction** — use `NODE_PATH` (PROGRESS 2026-10-07 (night)).
 
-## Photo-check lessons (all PROGRESS 2026-10-02 … 10-04)
-- Measure a check's time where it runs; a timeout is not a verdict; a verdict
-  that cannot change is stored, not cached (an unchecked row is SHOWN, PHOTO CHECKS).
-- A zero-false threshold is set by the hardest genuine photo, found by widening.
-  One card's sample is not a rate. Where both answers are held, ask which wins.
-- A title can state the right number over a photo of another card — look at the
-  cheapest rows' photos, and zoom, before deciding which layer failed.
-- Know what a matcher cannot see (NCC reads structure, not colour); pin it in a
-  test. Compare to the card's own scan, never a fixed colour.
-- Split a mixed denominator by kind; label samples by eye, not by the gate; fold
-  only padding (a fold can merge two cards).
-- A smaller input can make a check stop finding things while still reporting it
-  ran — check the feature's size against the matcher's floor first (stamps,
-  PHOTO CHECKS). A size the CDN does not serve answers a placeholder, not an error.
+## Photo-check lessons
+Six rules (a timeout is not a verdict; the hardest genuine photo sets the threshold; a smaller input can silently stop a check ...): *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, eleventh pass)".
 
 ## 6 · Metered APIs (eBay)
 

@@ -728,6 +728,10 @@ title; `Language:{English}` drops genuine rows) — production asks with none
 listings** (`X-EBAY-C-ENDUSERCTX`; `marketprobe ?zip=`). Production sends none —
 open, Roy's (PROGRESS 2026-10-07 (buyer location)).
 
+**The Japanese gates are correct; the Japanese query is wrong** (Roy, 2026-10-10): Yahoo
+drops the collector number from the search, so 3,629 of 9,832 results were a different
+card and 2,885 titles state no number at all. Fix the query, not the gates.
+
 **Measure the question across the catalogue, not the instance**
 (`querygap.js`); one symbol (`δ`) can empty a search. (PROGRESS 2026-10-04)
 

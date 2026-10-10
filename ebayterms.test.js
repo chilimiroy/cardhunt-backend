@@ -9,7 +9,7 @@
 //   §8.1(d) derived statistics need written permission -> the per-view
 //           outlier medians stay inside the server, never in a payload
 'use strict';
-require('./testcount')(17);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(18);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), path = require('path');
 let pass = 0, fail = 0;
 const ok = (what, cond, got) => { if (cond) { pass++; console.log('  ok    ' + what); } else { fail++; console.log('  FAIL  ' + what + (got ? '   ' + got : '')); } };
@@ -37,6 +37,10 @@ console.log('\n  §8.1(d) — per-card medians stay inside the server');
   ok('the payload\'s outliers go through publicOutliers', /outliers: publicOutliers\(j\.outliers\)/.test(S) && po.length > 100);
   ok('...which passes no median, low, high, spread or band', !/median|\.low\b|\.high\b|spread|band/.test(po.replace(/\/\/.*$/gm, '')));
   ok('...and a basis price only when it is OUR catalogue price', /basisPrice: o\.basis === 'catalogue' \? o\.basisPrice : null/.test(po));
+  // Re-verified 2026-10-10 (Roy): the tooling endpoints returned outlier.js's raw stats.
+  const sp = S.slice(S.indexOf("app.get('/api/ebay/setprobe/:cardId'"), S.indexOf("app.get('/api/ebay/setprobe/:cardId'") + 9000);
+  ok('/api/ebay/setprobe keeps its counts, kept and titles per epid — and no median, low or high of eBay\'s prices',
+     /epids\[k\] = \{ count: 0, kept: 0, titles: \[\] \}/.test(sp) && !/e\.median|e\.low|e\.high|e\.prices/.test(sp));
 }
 {
   const outlier = require('./outlier.js');

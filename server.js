@@ -6007,15 +6007,12 @@ app.get('/api/ebay/setprobe/:cardId', toolingKey.require, async (req, res) => {
     const epids = {};
     for (const r of rows) {
       const k = r.epid || '(none)';
-      const e = epids[k] || (epids[k] = { count: 0, kept: 0, prices: [], titles: [] });
+      // Our analysis only: how many, how many the gate kept, sample titles.
+      // No median, low or high of eBay's listing prices (Roy, 2026-10-10): a
+      // statistic derived from eBay Content does not leave the server (§8.1(d)).
+      const e = epids[k] || (epids[k] = { count: 0, kept: 0, titles: [] });
       e.count++; if (r.kept) e.kept++;
-      if (r.price) e.prices.push(r.price);
       if (e.titles.length < 3) e.titles.push(r.title.slice(0, 80));
-    }
-    for (const e of Object.values(epids)) {
-      e.prices.sort((a, b) => a - b);
-      e.median = e.prices.length ? e.prices[Math.floor(e.prices.length / 2)] : null;
-      e.low = e.prices[0] || null; e.high = e.prices[e.prices.length - 1] || null; delete e.prices;
     }
 
     // 3. getItem — kept rows first, they are the ones a gate would act on

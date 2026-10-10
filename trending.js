@@ -97,7 +97,25 @@ const DEFAULT_WINDOW = '7d';
 const LANGS = ['en', 'ja', 'zh-tw', 'zh-cn'];
 
 const MAX_AGE_DAYS = 4;       // the current price must be this fresh to be a mover
-const PCT_MIN_PREV = 1.00;    // % sorts: earlier price floor, USD
+// % sorts: earlier price floor, USD. $1 until 2026-10-10; $10 since
+// (TASK-account-and-bars T3), chosen from counts of the 7-day English % lists
+// that day (4,297 pairs; a snapshot taken while the nightly wrote):
+//   floor   gainers  fallers
+//    $5       858      932    (barely narrower than $1: the $0.25 rule and
+//   $10       713      729     the marks already drop most bulk)
+//   $25       461      419
+//   $50       269      246    (chase cards: the most closely watched prices)
+// $10 drops near-bulk swings ($5.99 -> $2, -66%) and keeps ~700 a side;
+// $25 changed only two of the top 8 gainers and none of the top 8 fallers,
+// and $50 would halve the table into the cards whose moves say least.
+const PCT_MIN_PREV = 10.00;
+// Every mover sort: the card's readings on the current end's source and
+// printing (real, unrefused, not an ask, any date). Two readings make a pair
+// out of one bad row. 3 removed 240 gainers / 253 fallers at $10 that day;
+// 4 would remove 489 / 559 — more than half, while most cards have been
+// priced through TCGdex only since late September. A row with no count is
+// refused: the guard fails closed.
+const MIN_READINGS = 3;
 const MIN_ABS_MOVE = 0.25;    // every mover: minimum absolute change, USD
 const SUSPECT_RATIO = 5;      // flagged, sorted last, never removed
 
@@ -190,7 +208,12 @@ function moverSql(p) {
       SELECT ${CARD_COLS},
              cur.price_usd AS price, cur.source AS price_source,
              cur.recorded_at AS price_date, cur.source_meta AS price_meta,
-             prev.price_usd AS prev_price, prev.recorded_at AS prev_date
+             prev.price_usd AS prev_price, prev.recorded_at AS prev_date,
+             (SELECT COUNT(*)::int FROM price_history rd
+               WHERE rd.card_api_id = cur.card_api_id AND rd.source = cur.source
+                 AND COALESCE(rd.edition, '') = COALESCE(cur.edition, '') AND COALESCE(rd.variant, '') = COALESCE(cur.variant, '')
+                 AND rd.grade IS NULL AND rd.price_usd > 0 AND ${pricehold.notRefusedSql('rd')}
+                 AND COALESCE(rd.source_meta->>'basis', '') <> 'ask') AS readings
       FROM curu cur JOIN prev USING (card_api_id)
       JOIN cards c ON c.api_card_id = cur.card_api_id
       WHERE ${digital.visibleSql('c')}`,
@@ -219,11 +242,12 @@ function round2(n) { return Math.round(n * 100) / 100; }
 function rankMovers(rows, sort, quality) {
   const pct = sort === 'gain-pct' || sort === 'fall-pct';
   const gain = sort === 'gain-pct' || sort === 'gain-usd';
-  const excluded = { floor: 0, direction: 0, small: 0, flagged: 0 };
+  const excluded = { floor: 0, direction: 0, small: 0, flagged: 0, readings: 0 };
   const out = [];
   for (const r of rows) {
     const q = quality && quality.get(r.id);
     if (q && q.flags && q.flags.length) { excluded.flagged++; continue; }
+    if (!(Number(r.readings) >= MIN_READINGS)) { excluded.readings++; continue; }
     const now = Number(r.price), was = Number(r.prev_price);
     if (!(now > 0) || !(was > 0)) continue;
     const change = now - was;
@@ -256,6 +280,7 @@ function describeRule(p) {
     + w.label + ' apart (earlier price ' + w.days + '–' + (w.days + w.tolDays) + ' days before the latest), '
     + 'the latest within ' + MAX_AGE_DAYS + ' days. Estimates never count. '
     + (p.sort.endsWith('pct') ? 'Cards under $' + PCT_MIN_PREV.toFixed(2) + ' are left out of % sorts. ' : '')
+    + 'A card needs ' + MIN_READINGS + ' or more readings. '
     + 'Moves under $' + MIN_ABS_MOVE.toFixed(2) + ' are ignored; a move over ' + SUSPECT_RATIO
     + 'x is flagged and sorted last. Prices marked old, thin or unsettled are left out.';
 }
@@ -276,6 +301,6 @@ function coverage(p, eligible, current) {
 
 module.exports = {
   SORTS, WINDOWS, LANGS, DEFAULT_SORT, DEFAULT_WINDOW,
-  MAX_AGE_DAYS, PCT_MIN_PREV, MIN_ABS_MOVE, SUSPECT_RATIO, THIN_COVERAGE, TCGDEX_PATH,
+  MAX_AGE_DAYS, PCT_MIN_PREV, MIN_READINGS, MIN_ABS_MOVE, SUSPECT_RATIO, THIN_COVERAGE, TCGDEX_PATH,
   parseParams, priceSql, moverSql, currentSql, rankMovers, describeRule, coverage,
 };

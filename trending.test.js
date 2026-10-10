@@ -4,7 +4,7 @@
 // Tests what the mover rules ALLOW as well as what they block: a filter
 // tested only on refusals passes by refusing everything.
 
-require('./testcount')(39);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(47);   // assertions in a plain run — fewer fails the file (testcount.js)
 const T = require('./trending');
 const fs = require('fs');
 const { execSync } = require('child_process');
@@ -47,7 +47,7 @@ ok('a 24h mover cannot rest on points a month apart', w24[2] === 1 && w24[3] <= 
 ok('zh-tw and zh-cn are separate patterns', T.priceSql(T.parseParams({ lang: 'zh-tw' })).values[0] === 'zh-tw-%');
 
 console.log('\n3. RANKING — what is KEPT');
-const row = (id, was, now) => ({ id, prev_price: was, price: now });
+const row = (id, was, now, readings) => ({ id, prev_price: was, price: now, readings: readings == null ? 5 : readings });
 const rows = [
   row('gain-big', 100, 180),      // +80%, +$80
   row('gain-small-pct', 1000, 1100), // +10%, +$100
@@ -76,6 +76,23 @@ ok('a >5x move is FLAGGED, not removed', sus && sus.suspect === true);
 ok('...and sorted after every unflagged card although its % is the largest',
   r.cards[r.cards.length - 1].id === 'suspect');
 ok('zero or missing prices never rank', T.rankMovers([row('z', 0, 5), row('n', null, 5)], 'gain-usd').cards.length === 0);
+
+console.log('\n4b. THE % FLOOR AND THE READINGS GUARD (TASK-account-and-bars T3, 2026-10-10)');
+ok('the % floor is $10 and the readings minimum 3', T.PCT_MIN_PREV === 10 && T.MIN_READINGS === 3);
+r = T.rankMovers([row('at10', 10, 14), row('under10', 9.99, 14), row('dollar', 2, 6)], 'gain-pct');
+ok('% sorts KEEP a card at $10 and leave out one at $9.99 or $2', r.cards.map(c => c.id).join() === 'at10' && r.excluded.floor === 2, r.cards.map(c => c.id).join());
+ok('value sorts are not floored: the $2 -> $6 card ranks by dollars', T.rankMovers([row('dollar', 2, 6)], 'gain-usd').cards.length === 1);
+r = T.rankMovers([row('three', 100, 300, 3), row('two', 100, 300, 2), row('none', 100, 300, undefined)].map(x => x.id === 'none' ? Object.assign(x, { readings: undefined }) : x), 'gain-pct');
+ok('3 readings are KEPT; 2 are one bad row away from a fake move, and leave', r.cards.map(c => c.id).join() === 'three', r.cards.map(c => c.id).join());
+ok('a row with no readings count is refused — the guard fails closed', r.excluded.readings === 2);
+ok('the guard binds the value sorts too', T.rankMovers([row('two', 100, 300, 2)], 'gain-usd').cards.length === 0);
+{
+  const t = T.moverSql(T.parseParams({ sort: 'gain-pct' })).text;
+  ok('moverSql counts the readings on the current end\'s source and printing, unrefused, no asks',
+    /AS readings/.test(t) && /rd\.source = cur\.source/.test(t) && /COALESCE\(rd\.edition, ''\) = COALESCE\(cur\.edition, ''\)/.test(t)
+    && t.includes(require('./pricehold').notRefusedSql('rd')) &&/COALESCE\(rd\.source_meta->>'basis', ''\) <> 'ask'/.test(t));
+  ok('the rule a reader sees names both', /Cards under \$10\.00/.test(T.describeRule(T.parseParams({ sort: 'gain-pct' }))) && /3 or more readings/.test(T.describeRule(T.parseParams({ sort: 'gain-pct' }))));
+}
 
 console.log('\n5. WIRING');
 const server = fs.readFileSync(__dirname + '/server.js', 'utf8');

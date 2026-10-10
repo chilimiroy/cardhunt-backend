@@ -54,7 +54,7 @@ ok(mSql.includes('curu AS (SELECT * FROM cur WHERE NOT ' + flat(ps.markedSql('cu
    && /JOIN curu cur ON cur\.card_api_id = ph\.card_api_id/.test(mSql) && /FROM curu cur JOIN prev USING/.test(mSql) && !/FROM cur JOIN prev/.test(mSql),
    'biggest movers and trending risers: a marked current price moves nothing (both joins read the unmarked set)');
 ok(/prev AS \(.*COALESCE\(ph\.source_meta->>'basis', ''\) <> 'ask'/.test(mSql), '...and an ask is never the earlier end of a move');
-const rank = T.rankMovers([{ id: 'a', prev_price: 10, price: 20 }, { id: 'b', prev_price: 10, price: 20 }], 'gain-pct', new Map([['a', q]]));
+const rank = T.rankMovers([{ id: 'a', prev_price: 10, price: 20, readings: 3 }, { id: 'b', prev_price: 10, price: 20, readings: 3 }], 'gain-pct', new Map([['a', q]]));
 ok(rank.cards.length === 1 && rank.cards[0].id === 'b' && rank.excluded.flagged === 1, 'rankMovers drops a marked card by its flag, keeps the other', rank);
 const S = flat(fs.readFileSync(__dirname + '/server.js', 'utf8'));
 const dc = S.slice(S.indexOf('async function dealCandidates('), S.indexOf('const dealJob'));

@@ -29,10 +29,10 @@ ok(/productId/.test(prev), 'both ends share the TCGplayer product where both row
 ok(/visibleSql|set_series/.test(cur), 'digital-only cards are left out of the current set');
 
 const rows = [
-  { id: 'a', price: 20, prev_price: 10 },   // +100%
-  { id: 'b', price: 15, prev_price: 10 },   // +50%
-  { id: 'c', price: 90, prev_price: 18 },   // +400%, unsettled
-  { id: 'd', price: 5, prev_price: 10 },    // -50%
+  { id: 'a', price: 20, prev_price: 10, readings: 3 },   // +100%
+  { id: 'b', price: 15, prev_price: 10, readings: 3 },   // +50%
+  { id: 'c', price: 90, prev_price: 18, readings: 3 },   // +400%, unsettled
+  { id: 'd', price: 5, prev_price: 10, readings: 3 },    // -50%
 ];
 const q = new Map([['c', { flags: ['unsettled'] }], ['a', { flags: [] }]]);
 const g = tr.rankMovers(rows, 'gain-pct', q);

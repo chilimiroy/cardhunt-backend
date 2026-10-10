@@ -5,23 +5,31 @@
 Verifying the page on `PORT=3001 node server.js` with the real `DATABASE_URL` and an
 HS256 test token (the access.test.js pattern), the memory approval store given by
 `-r` preload was REPLACED by the server's own `roles.setStore(pgStore)` (server.js
-line 134). `/api/me` then touched the real table: one row, user
-`44444444-4444-4444-8444-444444444444`, `master@example.com`, state pending, created
+line 134). `/api/me` then touched the real table: one row, the test user id
+4444…4444, `master@example.com`, state pending, created
 01:42 UTC. In production that is a pending account in Roy's Waiting list. Found
 reading the account page's dates (they were the table's, not the stub's), six
 minutes after. Checked: no alerts, portfolio, reports or deletion request for any
 test id. Deleted exactly that row (id + email + pending + created after 01:40).
 `user_access` rows with an `@example.com` email afterwards: 0.
 
-The harness after: a static preload that (1) makes every pooled INSERT / UPDATE /
-DELETE / DDL a logged no-op and (2) pins the memory store (`setStore` replaced
-before the server calls it). The first attempt at (1) was generated through a JS
-template literal, which ate the regex's backslashes (`^s*` for `^\s*`) — the
-escape lesson again; the static file was written with the editor.
+The harness after: a static preload meant to (1) make every pooled INSERT /
+UPDATE / DELETE / DDL a logged no-op and (2) pin the memory store (`setStore`
+replaced before the server calls it). (2) worked. **(1) never applied**, and this
+entry first said it had: the preload patched `C:\Users\chili\node_modules\pg-pool`
+while server.js loads `cardhunt\node_modules\pg-pool` — another copy. Found later
+the same morning: 10 `listing_views` rows from the harness (origin local, caller
+user, en-swsh7-215, 0 eBay calls, 01:51-01:58 UTC, ids 3828-3837) — they would
+have counted as real users' opens. Deleted exactly those; local-origin rows since
+00:00 afterwards: 0. Checked for the same window: no photo verdicts, alerts,
+reports, deal picks, search_log rows; `ebay_quota_hour` 01:00 holds the 2 user
+calls of the Umbreon check on Render (intended). A patch on a module the target
+may load from elsewhere is not a guard — what makes a local run unable to write is
+the database refusing it (localdb.js, migration-local-readonly.sql).
 
-Also created on the real database, by the local server's first use, before the
-pool was read-only: `bar_picks`, `deal_walks`, `account_deletion_requests` — empty,
-RLS on; the deployed server creates the same on first use.
+Also created on the real database by the local server's first use:
+`bar_picks`, `deal_walks`, `account_deletion_requests` — empty, RLS on; the
+deployed server creates the same on first use.
 
 ## 2026-10-10 (bars) — TASK-account-and-bars: measurements behind the commits
 

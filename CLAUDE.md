@@ -30,7 +30,7 @@ rather than re-derive. `CLAUDE_ARCHIVE.md` is the full history (frozen
 "MOVED FROM CLAUDE.md, 2026-10-07 (compression)",
 "MOVED FROM CLAUDE.md, 2026-10-07 (budget, second pass)",
 "MOVED FROM CLAUDE.md, 2026-10-09 (budget, third pass)" — with "Windows: replacing ingest.js",
-"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, eighth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, ninth pass)").
+"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, eighth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, ninth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, tenth pass)").
 "PROGRESS 2026-10-05: X" means the block headed X in PROGRESS.md's 2026-10-05
 entry — the verbatim measurements this file carried until then. **A bug's
 history may move to the archive; its lesson may not** — `claudesplit.test.js`
@@ -358,14 +358,7 @@ here, an entry in `gateaudit.test.js`'s allow-list.
 # TASKS
 
 ## T1 · Verify English and Japanese — standing check, not a one-off
-```powershell
-node ingest.js status
-node ingest.js audit en --bad ; node ingest.js audit ja --bad
-node ingest.js setcover en
-node ingest.js pricecheck en me02.5 ; node ingest.js pricecheck en sv03.5
-```
-`pricecheck` flags >40% from live. Read a source's own rarity label before
-calling a vintage price wrong (known values: archive, third pass).
+`ingest.js status`, `audit <lang> --bad`, `setcover`, `pricecheck` (flags >40% from live): *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, tenth pass)".
 
 ## T2 · Listing finder — SHIPPED, with named gaps
 Full spec, envelope and row fields: *Archive:* "T2 · Listing finder — SHIPPED,
@@ -430,15 +423,8 @@ each protected route; `access.test.js` fails on an unclassified route (*Archive:
 - **Live suites run SIGNED OUT** (Roy, 2026-10-07); **never** a service_role key or test
   account on a dev machine. (PROGRESS 2026-10-06 (night).)
 
-## Not built, and why (each section in full: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)")
-- **Near you**: an honest empty state; never filled with anything a source did not return
-  (*Archive:* "Near you (local card shops) — PLANNED, needs a real data source").
-- **PSA certs**: PSA answers 429 before reading the key (the free bucket is others'); an
-  allocation is Roy's email to PSA. certcheck steps 2-4 NOT BUILT.
-- **Sold data — NO SOURCE**: the eBay sold scrape never returns in any form; the page says
-  "no licensed sold source" (*Archive:* "Sold data — NO SOURCE, and the page says so").
-- **Checkout, login**: disabled, preserved outside the page (`nofabricated.test.js`; *Archive:*
-  "Checkout and login — DISABLED, preserved outside the page").
+## Not built, and why
+Near you, PSA certs (429 before the key), sold data (no licensed source), checkout and login: each in *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)" and "MOVED FROM CLAUDE.md, 2026-10-10 (budget, tenth pass)" — "Near you (local card shops) — PLANNED, needs a real data source", "Sold data — NO SOURCE, and the page says so", "Checkout and login — DISABLED, preserved outside the page".
 
 ## T5 · Chinese — parked
 Do not spend time here.

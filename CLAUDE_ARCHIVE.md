@@ -4707,3 +4707,32 @@ Accounts:
 > - **master** = `CARDZON_MASTER_EMAILS`; approved / pending / rejected in `user_access`.
 > - **ONE gate, `access.js`**, on each protected route's line (401 / 403 / 503 fail-closed);
 >   `access.test.js` fails on an unclassified route — add every new route there.
+
+## MOVED FROM CLAUDE.md, 2026-10-10 (budget, tenth pass)
+
+Moved verbatim when CLAUDE.md stood at 59,422 of its 60,000 characters, before the
+TASK-account-and-bars lines were written. Each keeps a line in CLAUDE.md.
+
+T1, the standing check:
+
+> ## T1 · Verify English and Japanese — standing check, not a one-off
+> ```powershell
+> node ingest.js status
+> node ingest.js audit en --bad ; node ingest.js audit ja --bad
+> node ingest.js setcover en
+> node ingest.js pricecheck en me02.5 ; node ingest.js pricecheck en sv03.5
+> ```
+> `pricecheck` flags >40% from live. Read a source's own rarity label before
+> calling a vintage price wrong (known values: archive, third pass).
+
+Not built, and why:
+
+> ## Not built, and why (each section in full: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)")
+> - **Near you**: an honest empty state; never filled with anything a source did not return
+>   (*Archive:* "Near you (local card shops) — PLANNED, needs a real data source").
+> - **PSA certs**: PSA answers 429 before reading the key (the free bucket is others'); an
+>   allocation is Roy's email to PSA. certcheck steps 2-4 NOT BUILT.
+> - **Sold data — NO SOURCE**: the eBay sold scrape never returns in any form; the page says
+>   "no licensed sold source" (*Archive:* "Sold data — NO SOURCE, and the page says so").
+> - **Checkout, login**: disabled, preserved outside the page (`nofabricated.test.js`; *Archive:*
+>   "Checkout and login — DISABLED, preserved outside the page").

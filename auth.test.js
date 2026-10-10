@@ -6,7 +6,7 @@
 // token) and what it refuses. Offline: keys are generated here and the
 // JWKS fetch is stubbed.
 
-require('./testcount')(29);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(36);   // assertions in a plain run — fewer fails the file (testcount.js)
 const crypto = require('crypto');
 const fs = require('fs');
 let pass = 0, fail = 0;
@@ -88,6 +88,21 @@ function hs256(payload, secret) {
   ok('ONE writer of the signed-in user: authCheck, from /api/me', writers === 1 && /AUTH\.user = user;/.test(fn('authCheck'))
      && /\/api\/me', \{ headers: \{ Authorization: 'Bearer ' \+ session\.access_token/.test(fn('authCheck')) && /j\.signedIn\) user = j\.user/.test(fn('authCheck')));
   ok('no password field: the emailed link is the credential', !/type=["']?password/i.test(H));
+  // The account page (TASK-account-and-bars T2, 2026-10-10)
+  {
+    const ap = ['acctOpen', 'acctLoad', 'acctRender', 'acctAskDeletion', 'acctSignOutAll'].map(fn).join('\n');
+    ok('account page: no password control of any kind (T2b deferred)', ap.length > 1500 && !/password/i.test(ap.replace(/\/\/.*$/gm, '')));
+    ok('account page: it asks /api/account and sends no account id', /fetch\(BACKEND \+ '\/api\/account', \{ headers: \{ Authorization/.test(fn('acctLoad')) && !/userId|user_id|\?id=/.test(ap));
+    ok('account page: deletion is a two-step REQUEST, said as one — no browser confirm()', /Ask for my data to be deleted/.test(ap) && /Send the request/.test(ap)
+       && /\/api\/account\/deletion-request', \{ method: 'POST'/.test(fn('acctAskDeletion')) && !/confirm\(/.test(ap));
+    ok('account page: sign out everywhere is Supabase\'s global sign-out', /AUTH\.sb\.auth\.signOut\(\{ scope: 'global' \}\)/.test(fn('acctSignOutAll')));
+    ok('account page: alerts and portfolio links only when prices are open', /if \(pricesOpen\(\)\) h \+= '<div class="acct-sec">Yours<\/div>/.test(fn('acctRender')));
+    ok('the masters\' list shows a deletion request on the account\'s row', /deletion requested ' \+ liveEsc\(when\(u\.deletionRequestedAt\)\)/.test(H)
+       && /deletionRequestedAt: asked\.get\(r\.user_id\) \|\| null/.test(S));
+    ok('the request table: RLS on and every API role revoked, in the server and its migration record', /REVOKE ALL ON account_deletion_requests FROM anon, authenticated/.test(S)
+       && /ALTER TABLE account_deletion_requests ENABLE ROW LEVEL SECURITY/.test(S)
+       && /REVOKE ALL ON account_deletion_requests FROM anon, authenticated/.test(fs.readFileSync(__dirname + '/migration-deletion-requests.sql', 'utf8')));
+  }
   ok('"link sent" is said only after Supabase accepts the request', /if \(r\.error\) authSay\(r\.error\.message, true\);\n\s*else authSay\('Supabase accepted/.test(fn('authEmail')));
   ok('the sign-in library is pinned by version and integrity hash', /supabase-js@2\.\d+\.\d+\/dist\/umd\/supabase\.js/.test(H) && /integrity: 'sha384-[A-Za-z0-9+/=]{64}'/.test(H)
      && /s\.integrity = SUPABASE_JS\.integrity/.test(fn('authLoadLib')));

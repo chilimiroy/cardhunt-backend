@@ -33,12 +33,16 @@ async function resolve(req) {
   let r;
   try { r = await roles.roleFor(v.user); }
   catch (e) { return { ok: false, status: 503, body: { error: 'approval state unavailable', reason: e.message } }; }
-  return { ok: true, account: { userId: v.user.id, email: v.user.email, role: r.role } };
+  return { ok: true, account: { userId: v.user.id, email: v.user.email, provider: v.user.provider || null, role: r.role } };
 }
 
 const isApproved = role => role === 'master' || role === 'approved';
 
 function refusalFor(account, need) {
+  // 'self' (TASK-account-and-bars T2, 2026-10-10): any signed-in account,
+  // whatever its state — the account page shows a pending or rejected
+  // account its own state. Such a route acts on req.account.userId only.
+  if (need === 'self') return null;
   if (!isApproved(account.role)) {
     return { status: 403, body: { error: 'approval pending', state: account.role,
       message: account.role === 'rejected' ? 'This account was not approved.'
@@ -106,4 +110,4 @@ async function optional(req, res, next) {
 }
 
 module.exports = { resolve, refusalFor, isApproved, optional, priced,
-                   approved: gate('approved'), master: gate('master') };
+                   approved: gate('approved'), master: gate('master'), self: gate('self') };

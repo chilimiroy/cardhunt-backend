@@ -686,6 +686,12 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .npick-h{padding:8px 10px 4px;font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.06em}
 .npick-who{padding:8px 10px;font-size:12px;font-weight:700;color:var(--tx);overflow-wrap:anywhere;border-bottom:1px solid var(--bd);margin-bottom:4px}
 .npick-sep{height:1px;background:var(--bd);margin:6px 4px}
+/* The account page (T2). */
+.acct-dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;margin:0 0 14px}
+.acct-dl dt{color:var(--mu);font-weight:600}
+.acct-dl dd{margin:0;overflow-wrap:anywhere}
+.acct-sec{font-size:11px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;margin:16px 0 8px}
+.acct-row{display:flex;flex-wrap:wrap;gap:8px}
 @media(max-width:640px){.acct-m{position:fixed;top:60px;right:8px;left:auto;max-width:calc(100vw - 16px)}}
 .npick-n{font-size:11px;color:var(--fa);font-variant-numeric:tabular-nums}
 /* ══ THE DOOR (T1, 2026-10-07) ══ the catalogue is public; prices, listings
@@ -7319,11 +7325,11 @@ function pickRender(){
   if (AUTH.user) {
     // The person's own address, as the server returned it.
     h += '<div class="npick-who">' + liveEsc(AUTH.user.email || 'Signed in') + '</div>'
-      + acctItem('Account', 'authOpen()')
+      + acctItem('Account', 'acctOpen()')
       + (AUTH.role === 'master' ? acctItem('Approve accounts', 'adminOpen()') + acctItem('Listing reports', 'reportsOpen()') : '');
   } else if (door) {
     h += '<div class="npick-who">' + liveEsc(DOOR.email || DOOR_TEXT[DOOR.kind][0]) + '</div>'
-      + acctItem(DOOR.kind === 'unconfirmed' ? 'Why no prices?' : 'Account', 'authOpen()');
+      + acctItem(DOOR.kind === 'unconfirmed' ? 'Why no prices?' : 'Account', DOOR.kind === 'unconfirmed' ? 'authOpen()' : 'acctOpen()');
   } else if (AUTH.sb) {
     h += acctItem('Sign in', 'authOpen()');
   }
@@ -7720,7 +7726,10 @@ function adminRender(){
   var row = function (u, buttons, note) {
     return '<div style="display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--bd)">'
       + '<div style="min-width:0;overflow-wrap:anywhere"><div style="font-weight:700;font-size:13px">' + who(u) + '</div>'
-      + '<div style="font-size:11px;color:var(--mu)">' + note + '</div></div>'
+      + '<div style="font-size:11px;color:var(--mu)">' + note + '</div>'
+      // A deletion REQUEST from the account page (T2): shown here, acted on by a master; nothing deleted by it.
+      + (u.deletionRequestedAt ? '<div style="font-size:11px;font-weight:700;color:var(--warn)">deletion requested ' + liveEsc(when(u.deletionRequestedAt)) + '</div>' : '')
+      + '</div>'
       + '<div style="flex-shrink:0">' + recBtn(u) + buttons + '</div></div>';
   };
   // Every row, masters included: the read-only record (T2).
@@ -7748,6 +7757,81 @@ function adminRender(){
     h += d.approved.map(function (u) { return row(u, btn(u, 'reject', 'Reject account'), 'approved ' + when(u.decidedAt) + (u.decidedBy ? ' by ' + liveEsc(u.decidedBy) : '')); }).join('');
   }
   el.innerHTML = h;
+}
+// ── YOUR ACCOUNT (TASK-account-and-bars T2, 2026-10-10) ─────────────
+// The signed-in person's own account, from /api/account — the server takes
+// the account from the verified token (access.self); the page sends no id.
+// Shows what is true: email, how they sign in, state and its date, first
+// signed in, last seen. NO password control of any kind — there are no
+// passwords (Google, or an emailed link). Sign out; sign out everywhere
+// (Supabase signOut scope 'global': every session's refresh token is revoked;
+// a page already holding an access token keeps it until it expires, up to an
+// hour). A deletion REQUEST: recorded for the site's masters, nothing deleted.
+var ACCT = { data: null, error: null, asking: false, msg: null };
+var SIGN_IN_NAME = { google: 'Google', email: 'An emailed sign-in link' };
+function acctOpen(){ openM('acct-overlay'); acctLoad(); }
+async function acctLoad(){
+  ACCT.error = null; ACCT.data = null; acctRender();
+  try {
+    var token = await authToken();
+    var r = await fetch(BACKEND + '/api/account', { headers: { Authorization: 'Bearer ' + token } });
+    var j = await r.json();
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    ACCT.data = j;
+  } catch (e) { ACCT.error = e.message || 'the server did not answer'; }
+  acctRender();
+}
+function acctRender(){
+  var el = document.getElementById('acct-body'); if (!el) return;
+  if (ACCT.error) { el.innerHTML = '<div class="msg-warn" role="alert" style="font-size:12px">' + liveEsc(ACCT.error) + '</div>'; return; }
+  var d = ACCT.data;
+  if (!d) { el.innerHTML = '<div style="font-size:13px;color:var(--mu)">Loading…</div>'; return; }
+  var when = function (t) { return t ? new Date(t).toLocaleString() : '—'; };
+  var st = d.state || {}, stateLine = st.state === 'master' ? 'Master (by the site settings)'
+    : st.state === 'approved' ? 'Approved ' + when(st.since)
+    : st.state === 'rejected' ? 'Not approved ' + when(st.since)
+    : 'Awaiting approval since ' + when(st.since);
+  var h = '<dl class="acct-dl">'
+    + '<dt>Email</dt><dd>' + liveEsc(d.email || '—') + '</dd>'
+    + '<dt>Signs in with</dt><dd>' + liveEsc(SIGN_IN_NAME[d.signIn] || d.signIn || 'not stated by the sign-in') + '</dd>'
+    + '<dt>Account</dt><dd>' + liveEsc(stateLine) + '</dd>'
+    + '<dt>First signed in</dt><dd>' + liveEsc(when(d.firstSignedInAt)) + '</dd>'
+    + '<dt>Last seen</dt><dd>' + liveEsc(when(d.lastSeenAt)) + ' <span style="font-size:11px;color:var(--fa)">(this visit)</span></dd>'
+    + '</dl>';
+  if (pricesOpen()) h += '<div class="acct-sec">Yours</div><div class="acct-row">'
+    + '<button class="btn" onclick="closeM(\'acct-overlay\');SS(\'alerts\')">Your alerts →</button>'
+    + '<button class="btn" onclick="closeM(\'acct-overlay\');SS(\'portfolio\')">Your portfolio →</button></div>';
+  h += '<div class="acct-sec">Sign out</div><div class="acct-row">'
+    + '<button class="btn" onclick="' + (AUTH.user ? 'authSignOut()' : 'doorSignOut()') + '">Sign out</button>'
+    + '<button class="btn" onclick="acctSignOutAll()" title="Ends your sign-in on every device and browser">Sign out everywhere</button></div>';
+  h += '<div class="acct-sec">Your data</div>';
+  if (d.deletionRequestedAt) h += '<div style="font-size:13px">You asked for your data to be deleted on ' + liveEsc(when(d.deletionRequestedAt))
+    + '. Nothing has been deleted yet; the site&rsquo;s administrators have the request.</div>';
+  else if (ACCT.asking) h += '<div style="font-size:12px;color:var(--mu);margin-bottom:8px">This records a request for the site&rsquo;s administrators. '
+    + 'It does not delete anything by itself, and your account keeps working until they act on it.</div>'
+    + '<div class="acct-row"><button class="btn btn-destroy" onclick="acctAskDeletion()">Send the request</button>'
+    + '<button class="btn" onclick="ACCT.asking=false;acctRender()">Cancel</button></div>';
+  else h += '<button class="btn" onclick="ACCT.asking=true;acctRender()">Ask for my data to be deleted</button>';
+  if (ACCT.msg) h += '<div style="font-size:12px;margin-top:10px" ' + (ACCT.msg.bad ? 'role="alert" class="msg-warn"' : 'role="status"') + '>' + liveEsc(ACCT.msg.text) + '</div>';
+  el.innerHTML = h;
+}
+async function acctAskDeletion(){
+  ACCT.msg = null;
+  try {
+    var token = await authToken();
+    var r = await fetch(BACKEND + '/api/account/deletion-request', { method: 'POST', headers: { Authorization: 'Bearer ' + token } });
+    var j = await r.json();
+    if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    ACCT.asking = false; ACCT.msg = { text: j.says };
+    if (ACCT.data) ACCT.data.deletionRequestedAt = j.requestedAt;   // the server's own time, as it answered
+  } catch (e) { ACCT.msg = { text: 'Not recorded: ' + (e.message || 'no answer'), bad: true }; }
+  acctRender();
+}
+async function acctSignOutAll(){
+  if (!AUTH.sb) return;
+  var r = await AUTH.sb.auth.signOut({ scope: 'global' });
+  if (r.error) { ACCT.msg = { text: r.error.message, bad: true }; return acctRender(); }
+  closeM('acct-overlay'); AUTH.notice = null; authCheck(null);
 }
 function authSay(text, bad){ AUTH.notice = text ? { text: text, bad: !!bad } : null; authRender(); }
 // The only writer of AUTH.user: the server's verdict on the session's token.
@@ -8109,6 +8193,15 @@ function cleanSeries(name) {
     <div id="auth-body"></div>
   </div>
 </div>
+<!-- ══ YOUR ACCOUNT (TASK-account-and-bars T2) — the signed-in person's own, from
+     /api/account; the server reads the account from the token, never from the page. ══ -->
+<div id="acct-overlay" class="overlay">
+  <div class="modal" style="max-width:460px;max-height:90vh;overflow:auto">
+    <button class="modal-x" onclick="closeM('acct-overlay')" aria-label="Close">&#10005;</button>
+    <div style="font-size:18px;font-weight:800;margin-bottom:10px">Your account</div>
+    <div id="acct-body"></div>
+  </div>
+</div>
 <!-- ══ APPROVE ACCOUNTS (T6 step 2) — masters only; the server refuses anyone else ══ -->
 <!-- ══ REPORT A LISTING (T3) ══ filled by reportOpen(); everything but the
      reason and the details is captured from the row, not typed. -->
@@ -8287,6 +8380,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-212ea23-menu &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-b4ca735-account &middot; click to hide</div>
 </body>
 </html>

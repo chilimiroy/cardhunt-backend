@@ -18,7 +18,7 @@
 // preloaded with -r (the costmeter.js pattern) — nothing in server.js
 // knows about tests. Tokens are HS256, minted with a test secret.
 
-require('./testcount')(332);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(350);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), os = require('os'), path = require('path'), crypto = require('crypto');
 const { spawn } = require('child_process');
 let pass = 0, fail = 0;
@@ -45,6 +45,9 @@ const ROUTES = [
   ['get', '/api/trending', 'priced', null],
   ['get', '/api/deals', 'priced', null],
   ['get', '/api/deals/:cardId/live', 'priced', null],
+  // self (TASK-account-and-bars T2): any signed-in account, any state, its OWN row only (req.account.userId).
+  ['get', '/api/account', 'self', null],
+  ['post', '/api/account/deletion-request', 'self', null],
   ['get', '/api/bars/:bar', 'priced', null],
   ['get', '/api/bars/:bar/:cardId/live', 'priced', null],
   ['post', '/api/deals/refresh', 'tooling', null],
@@ -275,6 +278,28 @@ async function ask(method, p, tok, body) {
       ok(`${k}  tooling key -> past the gate`, r !== 401 && r !== 403, String(r));
       r = await fetch(BASE + p, { method: f.method.toUpperCase(), headers: { 'X-CardHunt-Key': TKEY + 'x', 'X-CardHunt-Origin': 'tooling', 'Content-Type': 'application/json' }, body: f.method === 'get' ? undefined : '{}' }).then(x => x.status);
       ok(`${k}  wrong tooling key with the origin claim -> 401`, r === 401, String(r));
+    }
+    // The account page's routes (TASK-account-and-bars T2): every signed-in state reaches them,
+    // nobody else; no route of theirs takes a user id, so none can name another account.
+    const selfR = found.filter(f => f.level === 'self');
+    ok('two self routes, neither with a parameter', selfR.length === 2 && selfR.every(f => !/:/.test(f.path)));
+    {
+      const S0 = fs.readFileSync(path.join(__dirname, 'server.js'), 'utf8').replace(/\r/g, '');
+      const blk = S0.slice(S0.indexOf("app.get('/api/account', access.self"), S0.indexOf('\n});', S0.indexOf("app.post('/api/account/deletion-request'")));
+      ok('...and neither reads an id from the request — only req.account.userId', blk.length > 500 && !/req\.(params|query|body)/.test(blk) && /req\.account/.test(blk));
+    }
+    for (const f of selfR) {
+      const k = f.method.toUpperCase() + ' ' + f.path;
+      let r = await ask(f.method, f.path, null);
+      ok(`${k}  no token -> 401`, r.status === 401 && r.body.error === 'sign-in required', r.status + ' ' + r.text.slice(0, 60));
+      r = await ask(f.method, f.path, TOK.wrongKey);
+      ok(`${k}  bad signature -> 401`, r.status === 401, String(r.status));
+      for (const who of ['pending', 'rejected', 'approved', 'master']) {
+        r = await ask(f.method, f.path, TOK[who]);
+        ok(`${k}  ${who} -> past the gate (its own record; 503: no database here)`, r.status !== 401 && r.status !== 403, r.status + ' ' + r.text.slice(0, 60));
+      }
+      r = await fetch(BASE + f.path, { method: f.method.toUpperCase(), headers: { 'X-CardHunt-Key': TKEY } }).then(x => x.status);
+      ok(`${k}  the tooling key is not a person -> 401`, r === 401, String(r));
     }
     // The reports' two pages (TASK-account-and-bars T4): masters only, each view.
     for (const v of ['open', 'closed']) {

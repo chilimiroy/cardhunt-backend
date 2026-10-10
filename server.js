@@ -1974,13 +1974,18 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 app.get('/api/admin/users', access.master, async (req, res) => {
   try {
     const rows = await roles.store().list();
+    // Deletion requests (T2): shown on the account's row; a table not there yet is no request.
+    let asked = new Map();
+    try { await deletionTable(); asked = new Map((await db.query('SELECT user_id, requested_at FROM account_deletion_requests')).rows.map(x => [x.user_id, x.requested_at])); }
+    catch (e) { /* no database or no table: nobody has asked */ }
     const out = { pending: [], approved: [], rejected: [], masters: [] };
     for (const r of rows) {
       // The derived role wins: a listed email is master whatever the row's
       // state column says — never in a queue, never shown as pending.
       const role = roles.displayRole(r);
       const u = { userId: r.user_id, email: r.email || null, role, firstSignedInAt: r.first_signed_in_at,
-                  lastSeenAt: r.last_seen_at, decidedAt: r.decided_at || null, decidedBy: r.decided_by_email || r.decided_by || null };
+                  lastSeenAt: r.last_seen_at, decidedAt: r.decided_at || null, decidedBy: r.decided_by_email || r.decided_by || null,
+                  deletionRequestedAt: asked.get(r.user_id) || null };
       (role === 'master' ? out.masters : out[role]).push(u);
     }
     res.json(out);
@@ -2052,6 +2057,67 @@ async function userRecord(req, res) {
   } catch (err) { res.status(503).json({ error: 'could not read the record: ' + err.message }); }
 }
 app.get('/api/admin/users/:userId/record', access.master, userRecord);
+
+// ── THE ACCOUNT PAGE (TASK-account-and-bars T2, 2026-10-10) ──────
+// The signed-in person's OWN account, whatever its state: no route here
+// takes a user id — every one reads req.account.userId, which comes from the
+// verified token (access.self). Nobody can ask for someone else's.
+// What it shows: email, how they sign in (the token's provider), state and
+// its date, first signed in, last seen. No password control of any kind:
+// there are no passwords (Google or an emailed link; T2b is deferred).
+//
+// A deletion REQUEST, not a deletion: POST records (user id, email, when)
+// in account_deletion_requests, once per account — nothing else changes,
+// nothing is deleted. Masters see it on the account's row under Approve
+// accounts ("deletion requested <date>") and in its Record. The deletion
+// itself is not built (the per-user record task scoped the tables).
+// Created on first use with RLS on and every API role's access revoked;
+// migration-deletion-requests.sql is the record of the same statements.
+const DELETION_SQL = `CREATE TABLE IF NOT EXISTS account_deletion_requests (
+  user_id uuid PRIMARY KEY, email text, requested_at timestamptz NOT NULL DEFAULT now())`;
+let deletionReady = null;
+function deletionTable() {
+  if (!db) return Promise.reject(new Error('no database'));
+  if (!deletionReady) deletionReady = db.query(DELETION_SQL)
+    .then(() => db.query('ALTER TABLE account_deletion_requests ENABLE ROW LEVEL SECURITY'))
+    .then(() => db.query('REVOKE ALL ON account_deletion_requests FROM anon, authenticated'))
+    .catch(e => { deletionReady = null; throw e; });
+  return deletionReady;
+}
+async function deletionRequestOf(userId) {
+  await deletionTable();
+  const r = await db.query('SELECT requested_at FROM account_deletion_requests WHERE user_id = $1', [userId]);
+  return r.rows[0] ? r.rows[0].requested_at : null;
+}
+app.get('/api/account', access.self, async (req, res) => {
+  const me = req.account;
+  try {
+    const st = roles.store();
+    const a = st && st.account ? await st.account(me.userId) : null;
+    if (!a) return res.status(503).json({ error: 'your account record could not be read' });
+    const role = roles.displayRole(a);
+    let deletionRequestedAt = null, deletionNote = null;
+    try { deletionRequestedAt = await deletionRequestOf(me.userId); } catch (e) { deletionNote = 'could not be read: ' + e.message; }
+    res.json({ email: a.email || me.email || null, signIn: me.provider || null, role,
+      state: role === 'master' ? { state: 'master', since: null, note: 'master by the site settings, not by approval' }
+        : { state: role, since: a.decided_at || a.first_signed_in_at, sinceIs: a.decided_at ? 'decided' : 'first sign-in' },
+      firstSignedInAt: a.first_signed_in_at, lastSeenAt: a.last_seen_at,
+      lastSeenNote: 'updated each time the page checks your sign-in, so it reads as this visit',
+      deletionRequestedAt, deletionNote, passwords: false });
+  } catch (e) { res.status(503).json({ error: 'your account record could not be read: ' + e.message }); }
+});
+app.post('/api/account/deletion-request', access.self, async (req, res) => {
+  const me = req.account;
+  if (!db) return res.status(503).json({ error: 'database not configured' });
+  try {
+    await deletionTable();
+    await db.query(`INSERT INTO account_deletion_requests (user_id, email) VALUES ($1, $2) ON CONFLICT (user_id) DO NOTHING`,
+      [me.userId, me.email || null]);
+    const at = await deletionRequestOf(me.userId);
+    res.json({ ok: true, requestedAt: at, deleted: false,
+      says: 'Your request is recorded. Nothing has been deleted yet; the site\'s administrators see the request and act on it.' });
+  } catch (e) { res.status(503).json({ error: 'the request was not recorded: ' + e.message }); }
+});
 
 // ── LISTING REPORTS (Roy, 2026-10-08, TASK-reports-and-pages T3) ──
 // reports.js says what a report holds, its caps and its rate limit; the

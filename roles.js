@@ -110,6 +110,14 @@ function pgStore(db, opts) {
         WHERE user_id = $1 RETURNING user_id, state, decided_by, decided_at`, [userId, state, byUserId]);
       return r.rows[0] || null;
     },
+    // The account page (TASK-account-and-bars T2): ONE row, the caller's own —
+    // the route passes req.account.userId, never an id from the request.
+    async account(userId) {
+      await table();
+      const r = await db.query(`SELECT user_id, email, state, first_signed_in_at, last_seen_at, decided_at
+        FROM user_access WHERE user_id = $1`, [userId]);
+      return r.rows[0] || null;
+    },
     // For the masters' view — our own table only. email null = captured
     // at that user's next sign-in.
     async list() {

@@ -24,6 +24,11 @@
 'use strict';
 const fs = require('fs'), path = require('path');
 const LANGS = ['en', 'ja', 'zh-tw', 'zh-cn'];
+// What `refresh all` runs (Roy, 2026-10-10): the languages pricing may be written
+// for (tcgdexprice.pricingAllowedFor — en, ja). Chinese priced nothing every night
+// and only logged its gaps; it is out of the nightly. `refresh zh-tw` by name still
+// runs it, on purpose.
+const NIGHTLY_LANGS = ['en', 'ja'];
 const EXIT_INCOMPLETE = 3, EXIT_INTERRUPTED = 130;
 const MARKER = path.join(__dirname, 'refresh-run.json');
 
@@ -85,4 +90,4 @@ function previousUnfinished(file) {
       + v.lines[0].replace(/^\s*REFRESH INCOMPLETE — /, '') };
   } catch (e) { return null; }
 }
-module.exports = { LANGS, EXIT_INCOMPLETE, EXIT_INTERRUPTED, MARKER, createRun, start, progress, finish, verdict, close, previousUnfinished };
+module.exports = { LANGS, NIGHTLY_LANGS, EXIT_INCOMPLETE, EXIT_INTERRUPTED, MARKER, createRun, start, progress, finish, verdict, close, previousUnfinished };

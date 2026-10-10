@@ -5185,7 +5185,8 @@ function refreshTierFor(price, rarity) {
 async function refreshDue(lang, ...flags) {
   if (!db) { console.log('  DATABASE_URL required'); process.exitCode = refreshrun.EXIT_INCOMPLETE; return; }
   const dry = flags.includes('--dry');
-  const requested = lang === 'all' ? refreshrun.LANGS.slice() : [lang || 'en'];
+  // `all` = the languages pricing may be written for (refreshrun.NIGHTLY_LANGS: en, ja).
+  const requested = lang === 'all' ? refreshrun.NIGHTLY_LANGS.slice() : [lang || 'en'];
   if (!dry) { const prev = refreshrun.previousUnfinished(); if (prev) console.log('\n' + prev.line + '\n'); }
   const run = refreshrun.createRun(requested, { marker: dry ? false : undefined });
   // ONE budget for the whole run (Roy, 2026-10-10). It was set per language, so

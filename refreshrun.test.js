@@ -3,7 +3,7 @@
 //
 //   node refreshrun.test.js
 'use strict';
-require('./testcount')(26);
+require('./testcount')(27);
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const rr = require('./refreshrun');
 let pass = 0, fail = 0;
@@ -56,7 +56,14 @@ console.log('\n  ingest.js uses it');
 const I = fs.readFileSync(path.join(__dirname, 'ingest.js'), 'utf8').replace(/\r/g, '');
 const body = I.slice(I.indexOf('async function refreshDue('), I.indexOf('async function refreshOne('));
 const one = I.slice(I.indexOf('async function refreshOne('), I.indexOf('\n}\n', I.indexOf('async function refreshOne(')));
-ok('refresh all asks refreshrun for the four languages', /lang === 'all' \? refreshrun\.LANGS\.slice\(\)/.test(body));
+// Roy, 2026-10-10: Chinese is out of the nightly — it priced nothing and only logged gaps.
+ok('refresh all runs the nightly languages, not the four catalogue languages', /lang === 'all' \? refreshrun\.NIGHTLY_LANGS\.slice\(\)/.test(body));
+{
+  const T = require('./tcgdexprice');
+  ok('the nightly languages are exactly those pricing may be written for — en, ja; no Chinese',
+    rr.NIGHTLY_LANGS.join() === 'en,ja' && rr.NIGHTLY_LANGS.every(l => T.pricingAllowedFor(l).ok)
+    && rr.LANGS.filter(l => T.pricingAllowedFor(l).ok).join() === rr.NIGHTLY_LANGS.join() && !rr.NIGHTLY_LANGS.some(l => /^zh/.test(l)));
+}
 ok('each language is started and finished in the run record', /refreshrun\.start\(run, L\)/.test(body) && /refreshrun\.finish\(run, L, o\)/.test(body));
 ok('a language that throws is recorded as an error and the run goes on', /catch \(e\) \{ o = \{ state: 'error'/.test(body));
 ok('the verdict sets a non-zero exit code when incomplete (the worse code wins)', /if \(!v\.ok\) process\.exitCode = Math\.max\(process\.exitCode \|\| 0, v\.exitCode\)/.test(body));

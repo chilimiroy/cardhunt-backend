@@ -302,10 +302,6 @@ const REVIEWED_ARITHMETIC = [
   { file: 'ingest.js', re: /const medianYen = use\[Math\.floor\(use\.length \/ 2\)\];/, why: 'the same Yahoo median, for a reverse printing\'s own row', decided: PROPOSED },
 ];
 const OPEN_ARITHMETIC = [
-  { file: 'jpfilter.js', re: /\(yen \/ JPY_PER_USD\)|\(shipYen \/ JPY_PER_USD\)/,
-    found: '2026-10-10: every Yahoo Auctions listing and the Yahoo medians the nightly stores are converted at JPY_PER_USD = 157, a constant, with no rate recorded (live: 158.23) — Roy decides' },
-  { file: 'ingest.js', re: /\(pick\.yen \/ JPY_PER_USD\)/,
-    found: '2026-10-10: jpcheck (tooling, nothing stored) compares Yuyu-tei at the same 157 — Roy decides' },
   { file: 'server.js', re: /e\.median = e\.prices\.length \? e\.prices\[Math\.floor\(e\.prices\.length \/ 2\)\]/,
     found: '2026-10-10: /api/ebay/setprobe (tooling, key-protected) returns a median of eBay listing prices per epid — §9.5 says no eBay price median is shown. Listed, not fixed (Roy decides)' },
 ];

@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.12.0';   // bump when this file changes
+const VERSION = '5.13.0';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -996,7 +996,7 @@ const srank = require('./sourcerank');
 // A refresh that prices nothing for a whole set says so (TASK T2, 2026-10-02).
 const setyield = require('./setyield');
 const {
-  JPY_PER_USD, YAHOO_MAX_SPREAD,
+  usdOfYen, YAHOO_MAX_SPREAD,
   JP_LOT_WORDS, JP_GRADED_WORDS, JP_CARD_CATEGORY, JP_SEALED_CATEGORIES,
   jpTitleIsSingleRaw, jpItemIsCardCategory, jpTitleMentionsCard,
   jpTitleMatchesNumber, jpItemIsSingleCard, yahooItemToListing
@@ -1024,7 +1024,23 @@ function yahooMedianYen(yenIn) {
   return { medianYen: use[Math.floor(use.length / 2)], lo, hi, use };
 }
 
+// The yen rate for Yahoo, LIVE and recorded on every row (Roy, 2026-10-10;
+// it was a constant 157). Without a live rate nothing is priced — the run says
+// so once — so no row is ever written at fx.js's pinned fallback.
+let _yahooRateWarned = false;
+async function yahooRate() {
+  const jpy = await fx.usdPer('JPY');
+  if (jpy.stale) {
+    if (!_yahooRateWarned) { _yahooRateWarned = true; console.log('\n  Yahoo NOT priced: no live yen rate (fx.js answered its pinned fallback). Nothing written.\n'); }
+    return null;
+  }
+  return jpy;
+}
+const fxMetaOf = jpy => ({ currency: 'JPY', fxRate: jpy.rate, fxDate: jpy.date, fxSource: jpy.source });
+
 async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
+  const jpy = await yahooRate();
+  if (!jpy) { yahooSaw('no live yen rate'); return null; }
   await hostDelay('yahoo', 3000);
   const cardCtx = { name: cardName, number: cardNumber,
                     setTotal: opts.setTotal, setId: opts.setId,
@@ -1111,7 +1127,7 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
       const yen = priced.map(x => x.yen);
       const variantPrices = Object.entries(otherGroups).map(([variant, ys]) => {
         const m = yahooMedianYen(ys);
-        return m ? { variant, price: +(m.medianYen / JPY_PER_USD).toFixed(2), priceYen: m.medianYen,
+        return m ? { variant, price: usdOfYen(m.medianYen, jpy), priceYen: m.medianYen, fx: fxMetaOf(jpy),
                      count: m.use.length, source: `yahoojp_${m.use.length}` } : null;
       }).filter(Boolean);
 
@@ -1144,8 +1160,10 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
         }
 
         const out = {
-          price: +(medianYen / JPY_PER_USD).toFixed(2),
+          price: usdOfYen(medianYen, jpy),
           priceYen: medianYen,
+          // written to source_meta by the writers: the yen, the count and the rate
+          meta: Object.assign({ priceYen: medianYen, count: use.length }, fxMetaOf(jpy)),
           count: use.length,
           rejected: rejected,
           source: `yahoojp_${use.length}`,
@@ -1160,7 +1178,7 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
           out.items = priced
             .filter(x => x.yen >= lo && x.yen <= hi)
             .sort((a, b) => a.yen - b.yen)
-            .map(x => yahooItemToListing(x.it, x.yen));
+            .map(x => yahooItemToListing(x.it, x.yen, jpy));
         }
         return out;
       }
@@ -1181,8 +1199,9 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
       const avail = listing.totalResultsAvailable || 0;
       if (stats && stats.avgPrice >= 300 && avail >= 8 && items.length === 0) {
         return {
-          price: +(stats.avgPrice / JPY_PER_USD).toFixed(2),
+          price: usdOfYen(stats.avgPrice, jpy),
           priceYen: stats.avgPrice,
+          meta: Object.assign({ priceYen: stats.avgPrice, count: avail }, fxMetaOf(jpy)),
           count: avail,
           source: `yahoojp_avg_${avail}`,
           currency: 'JPY->USD'
@@ -1389,7 +1408,7 @@ async function jpCheck(lang, ...flags) {
         const cands = entries.filter(e =>
           (String(e.number).replace(/^0+/, '') || '0') === k && yt.matchesOurCard(e, c));
         const pick = yt.pickVariant(cands, c.name);
-        if (pick) rechecked = +(pick.yen / JPY_PER_USD).toFixed(2);
+        if (pick) { const jpy = await yahooRate(); rechecked = jpy ? usdOfYen(pick.yen, jpy) : null; }
         else verdict = 'no longer listed by Yuyu-tei (sold out or delisted)';
       }
     } else {
@@ -1491,7 +1510,7 @@ async function jpCheckBoth(lang, ...flags) {
       const k = String(c.number).replace(/^0+/, '') || '0';
       const pick = yt.pickVariant(entries.filter(e =>
         (String(e.number).replace(/^0+/, '') || '0') === k && yt.matchesOurCard(e, c)), c.name);
-      if (pick) tNow = +(pick.yen / JPY_PER_USD).toFixed(2);
+      if (pick) { const jpy = await yahooRate(); tNow = jpy ? usdOfYen(pick.yen, jpy) : null; }
     }
     const near = (a, b) => a && b && a / b > 0.6 && a / b < 1.67;
     let cls;
@@ -2086,7 +2105,7 @@ async function writeVariantPrices(card, res) {
       `INSERT INTO price_history (card_api_id, price_usd, source, marketplace, condition, variant, source_meta)
        VALUES ($1,$2,$3,'yahoojp','raw_nm',$4,$5)`,
       [card.api_card_id, v.price, v.source, v.variant,
-       JSON.stringify({ priceYen: v.priceYen, count: v.count, fx: 'JPY_PER_USD ' + JPY_PER_USD })])
+       JSON.stringify(Object.assign({ priceYen: v.priceYen, count: v.count }, v.fx))])
       .catch(e => { console.log(`  variant write failed ${card.api_card_id} ${v.variant}: ${e.message}`); return null; });
     if (r) { n++; console.log(`      + ${v.variant} $${v.price} (${v.count} sales) — its own row, never the base`); }
   }

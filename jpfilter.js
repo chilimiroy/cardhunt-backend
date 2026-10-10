@@ -11,7 +11,11 @@
  * ══════════════════════════════════════════════════════════════
  */
 
-const JPY_PER_USD = 157;
+// No yen rate lives here (Roy, 2026-10-10). This was `const JPY_PER_USD = 157`,
+// a constant from August that converted every Yahoo listing and every Yahoo
+// median the nightly stored, with no rate on the row. The caller passes the
+// rate fx.js gave it (fx.usdPer('JPY'): the ECB reference, with its date);
+// usdOfYen refuses to convert without one.
 
 // Widest ratio between the cheapest and dearest surviving comparable that
 // still plausibly describes one product. Beyond this we decline to price.
@@ -373,13 +377,18 @@ function decodeHtmlEntities(s) {
 // Yahoo item -> the shape /api/listings returns. Shipping is frequently
 // absent on Yahoo; null means unknown, which the caller must not silently
 // read as free — hence shippingKnown.
-function yahooItemToListing(item, yen) {
+// jpy: { rate (USD per 1 JPY), date, source } from fx.usdPer('JPY').
+function usdOfYen(yen, jpy) {
+  if (!jpy || !(jpy.rate > 0)) throw new Error('jpfilter: no yen rate given — pass fx.usdPer(\'JPY\')');
+  return +(yen * jpy.rate).toFixed(2);
+}
+function yahooItemToListing(item, yen, jpy) {
   const shipYen = (item.buyNowPriceShippingFee != null)
     ? Number(item.buyNowPriceShippingFee)
     : (item.currentPriceShippingFee != null ? Number(item.currentPriceShippingFee) : null);
   const shipping = item.isFreeShipping ? 0
-    : (Number.isFinite(shipYen) && shipYen !== null ? +(shipYen / JPY_PER_USD).toFixed(2) : null);
-  const price = +(yen / JPY_PER_USD).toFixed(2);
+    : (Number.isFinite(shipYen) && shipYen !== null ? usdOfYen(shipYen, jpy) : null);
+  const price = usdOfYen(yen, jpy);
   return {
     source: 'yahoo',
     title: item.title || '',
@@ -387,6 +396,7 @@ function yahooItemToListing(item, yen) {
     currency: 'USD',
     priceOriginal: yen,
     currencyOriginal: 'JPY',
+    fxRate: jpy.rate, fxDate: jpy.date || null, fxSource: jpy.source || null,
     shipping,
     landed: +(price + (shipping || 0)).toFixed(2),
     shippingKnown: shipping !== null,
@@ -400,7 +410,7 @@ function yahooItemToListing(item, yen) {
 }
 
 module.exports = {
-  JPY_PER_USD, YAHOO_MAX_SPREAD,
+  usdOfYen, YAHOO_MAX_SPREAD,
   JP_LOT_WORDS, JP_GRADED_WORDS, JP_CARD_CATEGORY, JP_SEALED_CATEGORIES,
   jpTitleIsSingleRaw, jpItemIsCardCategory, jpTitleMentionsCard,
   jpTitleMatchesNumber, jpItemIsSingleCard, yahooItemToListing, escapeRe,

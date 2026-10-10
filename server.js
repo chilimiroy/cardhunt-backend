@@ -2072,9 +2072,9 @@ const jpf = require('./jpfilter');
 // no database and no credential — so "local tooling" no longer describes it,
 // and .gitignore says why it is now tracked.
 const yt = require('./yuyutei');
-// Rates with their provenance attached. jpfilter still converts Yahoo yen at
-// a hardcoded JPY_PER_USD = 157; the live ECB rate is 157.98 today, so the
-// two differ by ~0.6% — small now, frozen forever if nothing prints it.
+// Rates with their provenance attached. Yahoo yen converts at fx.js's rate,
+// carried on each listing (jpfilter.yahooItemToListing; it was a constant 157
+// until 2026-10-10).
 const fx = require('./fx');
 
 const LISTING_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
@@ -2670,6 +2670,7 @@ async function sourceYuyutei(card, grade, limit, opts = {}) {
 
 async function sourceYahoo(card, grade, limit, opts = {}) {
   const fc = filterCard(card);
+  let jpyRate = null;   // fx.usdPer('JPY'), fetched once per view (it caches)
   const q = `ポケモンカード ${card.name} ${card.number || ''}`.trim();
 
   // LIVE first — these are the ones a buyer can actually act on. Yahoo's
@@ -2752,7 +2753,7 @@ async function sourceYahoo(card, grade, limit, opts = {}) {
         dropped.push({ title: it.title, reason: 'price outside ¥100-¥2,000,000: ' + yen });
         continue;
       }
-      const base = jpf.yahooItemToListing(it, yen);
+      const base = jpf.yahooItemToListing(it, yen, jpyRate || (jpyRate = await fx.usdPer('JPY')));
       if (feed.live) liveCount++; else endedCount++;
       out.push(normaliseListing({
         ...base,

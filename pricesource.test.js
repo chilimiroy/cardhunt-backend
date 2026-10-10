@@ -10,7 +10,7 @@
 //     claimed by two cards is trusted for neither (tcgdexprice.productConflicts).
 // Each half asserts what it KEEPS as well as what it refuses.
 'use strict';
-require('./testcount')(59);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(62);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const S = require('./tcgsetname.js');
 const T = require('./tcgdexprice.js');
@@ -131,6 +131,20 @@ if (fs.existsSync(__dirname + '/ingest.js')) {
   ok('...records the rate, its date and source, and the yen, on every row it writes',
      /fxRate: jpy\.rate, fxDate: jpy\.date, fxSource: jpy\.source/.test(yi) && /'yuyutei_shop','yuyutei','raw_nm',\$3\)`,\s*\[card\.api_card_id, toUsd\(pick\.yen\), JSON\.stringify\(fxMeta\(pick\.yen\)\)\]/.test(yi));
   ok('...and writes nothing when only the pinned fallback rate is to hand', /if \(jpy\.stale && !dry && !flags\.includes\('--compare'\)\) \{[\s\S]{0,160}Nothing written/.test(yi));
+  // Yahoo's yen (Roy, 2026-10-10): jpfilter's JPY_PER_USD = 157 converted every listing and every stored median.
+  const J = fs.readFileSync(__dirname + '/jpfilter.js', 'utf8').split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n');
+  const jf = require('./jpfilter');
+  let threw = false; try { jf.usdOfYen(1000); } catch (e) { threw = true; }
+  ok('jpfilter holds no yen rate and converts none without one (it was JPY_PER_USD = 157)',
+     !/JPY_PER_USD\s*=/.test(J) && !('JPY_PER_USD' in jf) && threw && jf.usdOfYen(1000, { rate: 0.00632 }) === 6.32
+     && jf.yahooItemToListing({ title: 't' }, 1000, { rate: 0.00632, date: '2026-10-09', source: 'ecb' }).fxRate === 0.00632);
+  const ys = I.slice(I.indexOf('async function yahooJapanSearch('), I.indexOf('// What Yahoo actually answered this run'));
+  ok('Yahoo prices at the live rate, or not at all: yahooRate() first, nothing priced on the pinned fallback',
+     /const jpy = await yahooRate\(\);\s*if \(!jpy\) \{ yahooSaw\('no live yen rate'\); return null; \}/.test(ys)
+     && /if \(jpy\.stale\) \{/.test(I.slice(I.indexOf('async function yahooRate('))) && !/JPY_PER_USD/.test(I));
+  ok('every Yahoo row records the yen, the count, the rate and its date (base, avg and mirror rows)',
+     (ys.match(/fxMetaOf\(jpy\)/g) || []).length === 3 && /meta: Object\.assign\(\{ priceYen: medianYen, count: use\.length \}, fxMetaOf\(jpy\)\)/.test(ys)
+     && /JSON\.stringify\(Object\.assign\(\{ priceYen: v\.priceYen, count: v\.count \}, v\.fx\)\)/.test(I));
 } else console.log('  SKIP  ingest.js wiring — not in this checkout');
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');

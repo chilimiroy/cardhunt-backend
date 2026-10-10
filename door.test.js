@@ -11,7 +11,7 @@
 // Executed here (vm), not only read: the head script, the role mapping,
 // pricesOpen, the note's words, and the tiles both ways.
 
-require('./testcount')(58);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(59);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), vm = require('vm');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };
@@ -67,7 +67,13 @@ ok('card page: Set Alert and Watch are .price-only (Compare is parked: compare-d
 const home = H.slice(H.indexOf('<div id="screen-home"'), H.indexOf('<div id="screen-pokemon"'));
 // TASK-ui T8: search, best deals, browse by game, movers, alerts last.
 ok('home: best deals is its own .price-only section, hidden until /api/deals says enabled',
-   /<section id="home-deals-sec" class="price-only" hidden>\s*<div class="sec-h"[^>]*><div><div class="sec-t">💎 Best deals/.test(home) && /<div class="cg" id="home-deals"><\/div>/.test(home));
+   /<section id="home-deals-sec" class="price-only" hidden>\s*<div class="sec-h"[^>]*><div><div class="sec-t" id="bar-t">💎 Best deals/.test(home) && /<div class="cg" id="home-deals"><\/div>/.test(home));
+// T5b (2026-10-10): the shelf's four-bar switch lives INSIDE that section — absent with it for anyone not approved.
+{
+  const sec = home.slice(home.indexOf('<section id="home-deals-sec"'), home.indexOf('</section>', home.indexOf('<section id="home-deals-sec"')));
+  ok('home: the shelf switch (deals, auctions, ending, graded) is inside the .price-only shelf section',
+     ['deals', 'auctions', 'ending', 'graded'].every(b => sec.includes('data-bar="' + b + '"')) && (home.match(/class="bar-sw"/g) || []).length === 1);
+}
 ok('home: movers then alerts inside one .price-only, a note before it',
    /<div class="price-door"[^>]*><\/div>\s*<div class="price-only">\s*<div class="sec-h"><div><div class="sec-t">📊 Biggest movers/.test(home)
    && home.indexOf('id="alerts-bar-items"') > home.indexOf('id="mv-gain-pct"')

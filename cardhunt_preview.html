@@ -381,6 +381,11 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .movers{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .mwin{margin-left:auto;font-size:11px;font-weight:600;color:var(--mu)}.mnote{font-size:12px;color:var(--mu);line-height:1.6;margin:10px 2px 0}
 .tdeal{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;color:var(--t)}
+/* The shelf's switch (T5b): four bars, one pressed. */
+.bar-sw{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.bar-b{padding:6px 12px;border:1px solid var(--bd);border-radius:999px;background:var(--w);color:var(--mu);font-size:12px;font-weight:700;cursor:pointer}
+.bar-b:hover{border-color:var(--t);color:var(--t)}
+.bar-b[aria-pressed="true"]{border-color:var(--t);color:var(--t);background:var(--tl)}
 .mempty{padding:16px 18px;font-size:12px;color:var(--mu);line-height:1.6}
 @media(max-width:640px){.movers{grid-template-columns:1fr}}
 .mbox{background:var(--w);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
@@ -769,7 +774,15 @@ html:not(.ch-noprice) .price-door { display: none !important; }
          Prices: approved accounts only (the door) — every price section is
          .price-only; one note stands where movers would be. -->
     <section id="home-deals-sec" class="price-only" hidden>
-    <div class="sec-h" style="margin-top:28px"><div><div class="sec-t">💎 Best deals right now</div><div class="sec-s" id="deals-sub">Cheapest trusted Buy It Now below the measured price — cards opened in the last 15 minutes</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
+    <div class="sec-h" style="margin-top:28px"><div><div class="sec-t" id="bar-t">💎 Best deals right now</div><div class="sec-s" id="deals-sub">Cheapest trusted Buy It Now below the measured price</div></div></div>
+    <!-- ONE switch, four bars (TASK-account-and-bars T5b, 2026-10-10): one
+         supply (the deals scan), the shelf below redrawn by setHomeBar. -->
+    <div class="bar-sw" role="group" aria-label="Which shelf">
+      <button class="bar-b" data-bar="deals" aria-pressed="true" onclick="setHomeBar('deals')">Best deals</button>
+      <button class="bar-b" data-bar="auctions" aria-pressed="false" onclick="setHomeBar('auctions')">Best auctions</button>
+      <button class="bar-b" data-bar="ending" aria-pressed="false" onclick="setHomeBar('ending')">Ending soon</button>
+      <button class="bar-b" data-bar="graded" aria-pressed="false" onclick="setHomeBar('graded')">Graded slabs</button>
+    </div>
     <div class="cg" id="home-deals"></div>
     </section>
 
@@ -2093,7 +2106,7 @@ async function loadHome() {
   // put in it from the home page outlives the visit — and what used to be
   // put in it was invented.
 
-  loadHomeDeals();
+  setHomeBar(HOME_BAR);
   loadHomeMovers();
 
   renderLatestSearches();
@@ -5810,6 +5823,7 @@ async function loadHomeDeals() {
     sec.hidden = false;   // a failure is shown, never mistaken for "switched off"
     return;
   }
+  if (HOME_BAR !== 'deals') return;   // switched to another bar while this was loading
   // Switched off (T8): the section stays hidden — no gap, no placeholder in
   // second place on the home page. The reason is stated where we read it;
   // the shelf appears in its slot, unchanged, the day /api/deals says enabled.
@@ -5870,6 +5884,99 @@ async function openDeal(cardId) {
     + '<div style="font-size:14px;font-weight:800;color:var(--tx)">' + fmtCurrency(e.delivered) + ' delivered</div>'
     + '<div style="font-size:10px;color:var(--fa)">' + fmtCurrency(e.price)
     + (e.shipping ? ' + ' + fmtCurrency(e.shipping) + ' shipping' : ' &middot; free shipping') + ' &middot; checked just now</div>'
+    + (e.url ? '<a class="tdeal" href="' + liveEsc(e.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">View on eBay ↗</a>' : '')
+    + '</div>';
+}
+
+// ── THE SHELF'S SWITCH (TASK-account-and-bars T5b, 2026-10-10) ──
+// Best deals (loadHomeDeals), Best auctions, Auctions ending soon, Graded
+// slabs — one switch, one shelf. The bars come from /api/bars/:bar: OUR data
+// only (the card, our price, when it was found, the ending band); nothing of
+// eBay's until a tile is opened, which fetches the auction live
+// (openBarPick). Graded slabs is silent: "No graded prices are recorded."
+// The pressed bar is a per-viewer convenience (localStorage ch_bar).
+var HOME_BARS = {
+  deals: { title: '💎 Best deals right now', sub: 'Cheapest trusted Buy It Now below the measured price' },
+  auctions: { title: '🔨 Best auctions', sub: 'Live auctions whose current bid is well below the measured price' },
+  ending: { title: '⏳ Auctions ending soon', sub: 'Live auctions that had 3 to 48 hours left when found' },
+  graded: { title: '🏅 Graded slabs', sub: 'Graded copies against a graded price' }
+};
+var HOME_BAR = 'deals';
+try { var _hb = localStorage.getItem('ch_bar'); if (HOME_BARS[_hb]) HOME_BAR = _hb; } catch (e) {}
+function setHomeBar(bar) {
+  if (!HOME_BARS[bar]) return;
+  HOME_BAR = bar;
+  try { localStorage.setItem('ch_bar', bar); } catch (e) {}
+  var t = document.getElementById('bar-t'), sub = document.getElementById('deals-sub');
+  if (t) t.textContent = HOME_BARS[bar].title;
+  if (sub) sub.textContent = HOME_BARS[bar].sub;
+  document.querySelectorAll('.bar-b').forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-bar') === bar ? 'true' : 'false'); });
+  if (bar === 'deals') loadHomeDeals(); else loadHomeBar(bar);
+}
+async function loadHomeBar(bar) {
+  var _a = arguments; if (!whenPrices(function () { loadHomeBar.apply(null, _a); })) return;   // the door: prices only
+  var host = document.getElementById('home-deals');
+  if (!host) return;
+  var d;
+  try {
+    var r = await fetch(BACKEND + '/api/bars/' + encodeURIComponent(bar) + '?limit=8');
+    d = await r.json();
+    if (!r.ok) throw new Error(d && d.error ? d.error : 'HTTP ' + r.status);
+  } catch (e) {
+    host.innerHTML = '<div class="trend-empty">This shelf could not be loaded &mdash; ' + liveEsc(e.message) + '</div>';
+    var s0 = document.getElementById('home-deals-sec'); if (s0) s0.hidden = false;   // a failure is shown
+    return;
+  }
+  if (HOME_BAR !== bar) return;   // switched again while this was loading
+  // The bars are switched on and off with deals (deals.ENABLED): off, the section stays hidden.
+  var sec = document.getElementById('home-deals-sec');
+  if (sec) sec.hidden = d.enabled === false;
+  if (d.enabled === false) return;
+  if (!d.picks || !d.picks.length) {
+    host.innerHTML = '<div class="trend-empty">' + liveEsc(d.empty || 'Nothing here right now.') + '</div>';
+    return;
+  }
+  host.innerHTML = d.picks.map(function (x) {
+    var ago = x.foundAgoMin >= 60 ? Math.round(x.foundAgoMin / 60) + ' h ago' : Math.max(1, x.foundAgoMin) + ' min ago';
+    var extra = '<div class="deal-ours" style="font-size:10px;color:var(--mu);margin-top:2px">'
+      + liveEsc(x.priceLabel === 'TCGplayer market price' ? 'TCGplayer market' : (x.priceLabel || 'TCGplayer market'))
+      + ' &middot; Auction found ' + ago + '</div>'
+      + (x.bandLabel ? '<div class="deal-band" style="font-size:10px;color:var(--fa)">' + liveEsc(x.bandLabel) + '</div>' : '')
+      + '<div class="deal-ebay" id="deal-eb-' + liveEsc(x.cardId) + '" style="margin-top:6px">'
+      + '<button class="tdeal" onclick="event.stopPropagation();openBarPick(\'' + liveEsc(bar) + '\',\'' + liveEsc(x.cardId) + '\')">See the auction on eBay</button></div>';
+    return cardSummaryTile({ cardId: x.cardId, name: x.name,
+      setName: (x.set || '') + (x.number ? ' · #' + x.number : ''), img: x.image, market: x.price, marketIsReal: true },
+      { extra: extra });
+  }).join('');
+}
+// Opening an auction tile: fetched LIVE, with its back checked in the same
+// eBay lookup. Ended, no longer in its band, or not vouched for: the server
+// has deleted the pick and the tile says why. Otherwise eBay's own zone:
+// the current bid in USD, the bid count, the time left, a link.
+async function openBarPick(bar, cardId) {
+  var zone = document.getElementById('deal-eb-' + cardId);
+  if (!zone) return;
+  zone.innerHTML = '<div style="font-size:10px;color:var(--mu)">Checking the auction on eBay&hellip;</div>';
+  var d;
+  try {
+    var r = await fetch(BACKEND + '/api/bars/' + encodeURIComponent(bar) + '/' + encodeURIComponent(cardId) + '/live');
+    d = await r.json();
+    if (!r.ok && !d.gone) throw new Error(d && (d.says || d.error) ? (d.says || d.error) : 'HTTP ' + r.status);
+  } catch (e) {
+    zone.innerHTML = '<div style="font-size:10px;color:var(--mu)">' + liveEsc(e.message) + '</div>';
+    return;
+  }
+  if (d.gone) {
+    zone.innerHTML = '<div class="deal-gone" style="font-size:11px;color:var(--mu);font-weight:600">' + liveEsc(d.says || 'This auction has gone.') + '</div>';
+    return;
+  }
+  var e = d.ebay, left = e.endsAt ? (new Date(e.endsAt).getTime() - Date.now()) / 3600e3 : null;
+  var leftTxt = left == null ? '' : left >= 24 ? Math.floor(left / 24) + 'd ' + Math.round(left % 24) + 'h left' : left >= 1 ? Math.round(left) + 'h left' : Math.max(1, Math.round(left * 60)) + ' min left';
+  zone.innerHTML = '<div class="deal-ebay-zone" style="border-top:1px dashed var(--bd);padding-top:6px">'
+    + '<div style="font-size:9px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.06em">From eBay</div>'
+    + '<div style="font-size:14px;font-weight:800;color:var(--tx)">' + fmtCurrency(e.currentBid) + ' current bid</div>'
+    + '<div style="font-size:10px;color:var(--fa)">' + (e.bids == null ? '' : e.bids + ' bid' + (e.bids === 1 ? '' : 's') + ' &middot; ')
+    + liveEsc(leftTxt) + ' &middot; checked just now</div>'
     + (e.url ? '<a class="tdeal" href="' + liveEsc(e.url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">View on eBay ↗</a>' : '')
     + '</div>';
 }
@@ -8095,6 +8202,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-89765c5-bidcur &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-7de1ade-bars &middot; click to hide</div>
 </body>
 </html>

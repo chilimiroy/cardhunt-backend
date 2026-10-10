@@ -9,7 +9,7 @@
 //   node roles.test.js --db     also: user_access exists in Supabase with
 //                               the shape roles.js expects
 
-require('./testcount')(36);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(40);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };
@@ -73,7 +73,7 @@ function memoryStore(seed) {
      && /email text\)$/.test(roles.USER_ACCESS_SQL) && /ADD COLUMN IF NOT EXISTS email text$/.test(roles.USER_ACCESS_EMAIL_SQL));
   const mig = fs.readFileSync(__dirname + '/migration-user-access.sql', 'utf8').replace(/\r/g, '');
   const norm = s => s.replace(/--.*$/gm, '').replace(/\s+/g, ' ').replace(/;\s*$/, '').trim();
-  ok('migration-user-access.sql records the same statements roles.js runs', norm(mig) === norm(roles.USER_ACCESS_SQL + '; ' + roles.USER_ACCESS_EMAIL_SQL + '; ' + roles.USER_ACCESS_PREV_SQL), norm(mig).slice(-80));
+  ok('migration-user-access.sql records the same statements roles.js runs', norm(mig) === norm(roles.USER_ACCESS_SQL + '; ' + roles.USER_ACCESS_EMAIL_SQL), norm(mig).slice(-80));
   const R = fs.readFileSync(__dirname + '/roles.js', 'utf8').replace(/\r/g, '');
   const touch = R.slice(R.indexOf('async touch('), R.indexOf('async decide('));
   ok('a sign-in touch never changes a stored state; it writes the visit times and the email only',
@@ -82,7 +82,34 @@ function memoryStore(seed) {
   // The previous visit (2026-10-10): the last moment of the visit before this one; a visit ends after 30 minutes idle.
   ok('previous_visit_at moves only when the last page load was more than 30 minutes ago, to that load\'s time',
      /previous_visit_at = CASE WHEN user_access\.last_seen_at < now\(\) - interval '\$\{VISIT_GAP_MINUTES\} minutes'\s*THEN user_access\.last_seen_at ELSE user_access\.previous_visit_at END/.test(touch)
-     && roles.VISIT_GAP_MINUTES === 30 && /ADD COLUMN IF NOT EXISTS previous_visit_at timestamptz$/.test(roles.USER_ACCESS_PREV_SQL));
+     && roles.VISIT_GAP_MINUTES === 30);
+  // Roy runs the migration (2026-10-10): the code never creates the column, and uses it only once the file's COMMENT is on it.
+  {
+    const PV = fs.readFileSync(__dirname + '/migration-previous-visit.sql', 'utf8');
+    ok('previous_visit_at comes from migration-previous-visit.sql — not the first-use chain, not a required column',
+       /ADD COLUMN IF NOT EXISTS previous_visit_at timestamptz;/.test(PV) && /COMMENT ON COLUMN user_access\.previous_visit_at IS 'migration-previous-visit\.sql';/.test(PV)
+       && roles.PREV_VISIT_MARKER === 'migration-previous-visit.sql' && !/previous_visit_at/.test(R.slice(R.indexOf('const table = ()'), R.indexOf('return {', R.indexOf('const table = ()'))))
+       && !roles.USER_ACCESS_COLUMNS.includes('previous_visit_at') && !/previous_visit_at/.test(mig));
+    // Executed on a fake database: before the COMMENT, nothing reads or writes the column; after it, both do.
+    const run = async note => {
+      const seen = [];
+      const fake = { query: async (sql) => {
+        seen.push(sql);
+        if (/information_schema\.columns/.test(sql)) return { rows: roles.USER_ACCESS_COLUMNS.map(column_name => ({ column_name })) };
+        if (/col_description/.test(sql)) return { rows: note === undefined ? [] : [{ note }] };
+        if (/SELECT user_id, email, state/.test(sql)) return { rows: [{ user_id: 'u', state: 'approved' }] };
+        return { rows: [] };
+      } };
+      const s = roles.pgStore(fake);
+      await s.touch('00000000-0000-4000-8000-000000000001', 'x@example.com');
+      await s.account('00000000-0000-4000-8000-000000000001');
+      return seen.filter(q => /user_access/.test(q) && !/information_schema|col_description/.test(q)).join('\n');
+    };
+    const before = await run(null), absent = await run(undefined), after = await run('migration-previous-visit.sql');
+    ok('before Roy\'s migration (no COMMENT, or no column): touch and account never name previous_visit_at as a column',
+       !/previous_visit_at =|, previous_visit_at,/.test(before) && /NULL::timestamptz AS previous_visit_at/.test(before) && !/previous_visit_at =/.test(absent));
+    ok('after it: touch keeps the previous visit and account reads it', /previous_visit_at = CASE WHEN/.test(after) && /last_seen_at, previous_visit_at, decided_at/.test(after));
+  }
   ok('touch stores the user id and the email only — no other token field reaches the table',
      /INSERT INTO user_access \(user_id, email\) VALUES \(\$1, \$2\)/.test(touch) && /\[userId, emailOf\(email\)\]/.test(touch));
   ok('nothing in roles.js reads the auth schema (no cross-schema read)', !/\bauth\.\w+/.test(R.replace(/\/\/.*$/gm, '')));

@@ -18,6 +18,3 @@ CREATE TABLE IF NOT EXISTS user_access (
 -- written at each sign-in (roles.js touch). Email and user id only; the
 -- masters' list reads this, never the auth schema.
 ALTER TABLE user_access ADD COLUMN IF NOT EXISTS email text;
--- 2026-10-10: the account page's previous visit — last_seen_at of the visit before
--- this one (a visit ends after 30 minutes with no page load; roles.js touch).
-ALTER TABLE user_access ADD COLUMN IF NOT EXISTS previous_visit_at timestamptz;

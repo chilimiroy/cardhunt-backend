@@ -54,9 +54,16 @@ const USER_ACCESS_EMAIL_SQL = 'ALTER TABLE user_access ADD COLUMN IF NOT EXISTS 
 // The account page's "previous visit" (2026-10-10): last_seen_at moves on every
 // page load, so on the page it always read as this visit. previous_visit_at keeps
 // the last moment of the visit BEFORE this one; a visit ends after
-// VISIT_GAP_MINUTES with no page load.
-const USER_ACCESS_PREV_SQL = 'ALTER TABLE user_access ADD COLUMN IF NOT EXISTS previous_visit_at timestamptz';
+// VISIT_GAP_MINUTES with no page load. The column comes from
+// migration-previous-visit.sql, which Roy runs — NOT from this file's first-use
+// migration (Roy, 2026-10-10). The code uses it only once that file's COMMENT is
+// on the column (prevVisitReady); until then touch() writes last_seen_at only and
+// the page says "none recorded before this one".
 const VISIT_GAP_MINUTES = 30;
+const PREV_VISIT_MARKER = 'migration-previous-visit.sql';
+const PREV_VISIT_READY_SQL = `SELECT col_description(a.attrelid, a.attnum) AS note FROM pg_attribute a
+  WHERE a.attrelid = 'public.user_access'::regclass AND a.attname = 'previous_visit_at' AND NOT a.attisdropped`;
+const PREV_RECHECK_MS = 10 * 60 * 1000;
 // The email as stored: trimmed, lower-case (how isMasterEmail compares).
 // Not an email-looking string -> null, never a guess.
 function emailOf(v) {
@@ -74,7 +81,7 @@ function store() { return _store; }
 // server passes it (on an unguarded pool — schemaguard.js). Anyone else
 // gets a store that CHECKS the table has the shape this code needs and
 // refuses to run on one that does not; it never creates or alters it.
-const USER_ACCESS_COLUMNS = ['user_id', 'state', 'first_signed_in_at', 'last_seen_at', 'decided_by', 'decided_at', 'email', 'previous_visit_at'];
+const USER_ACCESS_COLUMNS = ['user_id', 'state', 'first_signed_in_at', 'last_seen_at', 'decided_by', 'decided_at', 'email'];
 function pgStore(db, opts) {
   const migrate = !!(opts && opts.migrate) && !require('./schemaguard').isGuarded(db);
   let ready = null;
@@ -86,9 +93,20 @@ function pgStore(db, opts) {
       + ' — the server\'s first-use migration or migration-user-access.sql adds it; this store does not');
   });
   const table = () => ready || (ready = (migrate
-    ? db.query(USER_ACCESS_SQL).then(() => db.query(USER_ACCESS_EMAIL_SQL)).then(() => db.query(USER_ACCESS_PREV_SQL))
+    ? db.query(USER_ACCESS_SQL).then(() => db.query(USER_ACCESS_EMAIL_SQL))
     : verify()).catch(e => { ready = null; throw e; }));
+  // Has Roy's migration run? Yes is kept; no is asked again every 10 minutes,
+  // so running the file switches the feature on without a redeploy.
+  let prevReady = false, prevAskedAt = 0;
+  const prevVisitReady = async () => {
+    if (prevReady || Date.now() - prevAskedAt < PREV_RECHECK_MS) return prevReady;
+    prevAskedAt = Date.now();
+    try { const r = await db.query(PREV_VISIT_READY_SQL); prevReady = !!(r.rows[0] && r.rows[0].note === PREV_VISIT_MARKER); }
+    catch (e) { prevReady = false; }
+    return prevReady;
+  };
   return {
+    prevVisitReady,
     async get(userId) {
       await table();
       const r = await db.query('SELECT state FROM user_access WHERE user_id = $1', [userId]);
@@ -106,11 +124,17 @@ function pgStore(db, opts) {
     // verified token's; a token without one leaves the stored one alone.
     async touch(userId, email) {
       await table();
+      if (await prevVisitReady()) {
+        await db.query(`INSERT INTO user_access (user_id, email) VALUES ($1, $2)
+          ON CONFLICT (user_id) DO UPDATE SET
+            previous_visit_at = CASE WHEN user_access.last_seen_at < now() - interval '${VISIT_GAP_MINUTES} minutes'
+              THEN user_access.last_seen_at ELSE user_access.previous_visit_at END,
+            last_seen_at = now(),
+            email = COALESCE(EXCLUDED.email, user_access.email)`, [userId, emailOf(email)]);
+        return;
+      }
       await db.query(`INSERT INTO user_access (user_id, email) VALUES ($1, $2)
-        ON CONFLICT (user_id) DO UPDATE SET
-          previous_visit_at = CASE WHEN user_access.last_seen_at < now() - interval '${VISIT_GAP_MINUTES} minutes'
-            THEN user_access.last_seen_at ELSE user_access.previous_visit_at END,
-          last_seen_at = now(),
+        ON CONFLICT (user_id) DO UPDATE SET last_seen_at = now(),
           email = COALESCE(EXCLUDED.email, user_access.email)`, [userId, emailOf(email)]);
     },
     async decide(userId, state, byUserId) {
@@ -123,7 +147,8 @@ function pgStore(db, opts) {
     // the route passes req.account.userId, never an id from the request.
     async account(userId) {
       await table();
-      const r = await db.query(`SELECT user_id, email, state, first_signed_in_at, last_seen_at, previous_visit_at, decided_at
+      const prev = await prevVisitReady() ? 'previous_visit_at' : 'NULL::timestamptz AS previous_visit_at';
+      const r = await db.query(`SELECT user_id, email, state, first_signed_in_at, last_seen_at, ${prev}, decided_at
         FROM user_access WHERE user_id = $1`, [userId]);
       return r.rows[0] || null;
     },
@@ -163,4 +188,4 @@ async function roleFor(user) {
 }
 
 module.exports = { masterEmails, isMasterEmail, roleFor, displayRole, setStore, store, pgStore, emailOf, USER_ACCESS_COLUMNS,
-                   USER_ACCESS_SQL, USER_ACCESS_EMAIL_SQL, USER_ACCESS_PREV_SQL, VISIT_GAP_MINUTES, STORED_STATES };
+                   USER_ACCESS_SQL, USER_ACCESS_EMAIL_SQL, VISIT_GAP_MINUTES, PREV_VISIT_MARKER, PREV_VISIT_READY_SQL, STORED_STATES };

@@ -18,7 +18,7 @@
 // "Is it gone?" is asserted against the page with comments stripped, because
 // the comments recording each removal name what was removed.
 'use strict';
-require('./testcount')(83);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(84);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -292,21 +292,23 @@ function arithmetic(text, file) {
   });
   return out;
 }
-const PROPOSED = 'proposed 2026-10-10 (Claude) — not yet confirmed by Roy';
+// Every exemption below was reviewed and approved by Roy (2026-10-10): all fourteen
+// settled. A NEW hit fails until Roy has seen it — propose it with PROPOSED.
+const PROPOSED = 'proposed — not yet confirmed by Roy';
 const REVIEWED_ARITHMETIC = [
   { file: 'cardhunt_preview.html', re: /alert-price'\)\.value=\(base\*0\.85\)/, why: 'the alert form\'s target default (REVIEWED_MULTIPLIERS above)', decided: 'Roy, 2026-10-09' },
-  { file: 'gradeprice.js', re: /\(\(s\[mid - 1\] \+ s\[mid\]\) \/ 2\)/, why: 'gradeprice.js\'s median helper. Its browser caller is gone (byPrintRun computed a per-group median in visitors\' browsers that nothing read — removed 2026-10-10, Roy); its only caller now is aggregate, reached only from the parked gradeprices-disabled.js. Nothing in the page or the server calls it', decided: PROPOSED },
+  { file: 'gradeprice.js', re: /\(\(s\[mid - 1\] \+ s\[mid\]\) \/ 2\)/, why: 'gradeprice.js\'s median helper. Its browser caller is gone (byPrintRun computed a per-group median in visitors\' browsers that nothing read — removed 2026-10-10, Roy); its only caller now is aggregate, reached only from the parked gradeprices-disabled.js. Nothing in the page or the server calls it', decided: 'Roy, 2026-10-10 (approved)' },
   { file: 'gradeprice.js', re: /^b\.median - a\.median\);$/, why: 'the second line of a sort comparator', decided: 'Roy, 2026-10-10 (approved)' },
   { file: 'outlier.js', re: /\(s\[m - 1\] \+ s\[m\]\) \/ 2/, why: 'outlier.js\'s median: per card, per view, never shown or stored (§8.1(d), ebayterms.test.js)', decided: 'Roy, 2026-10-10 (approved; the §8.1(d) ruling of 2026-10-08)' },
   { file: 'outlier.js', re: /stats\.spread = stats\.high && stats\.low/, why: 'a ratio inside the outlier check (how spread a view is), never a price', decided: 'Roy, 2026-10-10 (approved)' },
   { file: 'server.js', re: /\(a\.landed - b\.landed\) \|\| \(a\.price - b\.price\)\);$/, why: 'the last line of a sort comparator', decided: 'Roy, 2026-10-10 (approved)' },
   { file: 'server.js', re: /const hideBelow = mref && mref\.current && jpf\.isRawGrade\(grade\) \? mref\.price \* stampcheck\.SIBLING_HIDE_FRACTION/, why: 'the line below which an unchecked sibling row is hidden — a threshold inside the server, never shown as a price (T0)', decided: 'Roy, 2026-10-10 (approved)' },
   { file: 'gradeprice.js', re: /premium: Number\(rawPrice\) > 0 \? \+\(g\.median \/ rawPrice\)/, why: 'gradeprice.priceFor\'s grade premium — priceFor is called only by the parked gradeprices-disabled.js, which refuses to run; nothing in the server calls it', decided: 'Roy, 2026-10-10 (approved)' },
-  { file: 'server.js', re: /\? parseFloat\(it\.currentBidPrice\.value\) \* \(price \/ priceNative\) : null,/, why: 'eBay\'s own current bid on an auction row, converted to USD at the ratio eBay itself applied to that row\'s price; drawn only inside eBay\'s section, as eBay\'s own figure in its own currency with the USD figure called converted (3b05ba9) — never as a price', decided: PROPOSED },
+  { file: 'server.js', re: /\? parseFloat\(it\.currentBidPrice\.value\) \* \(price \/ priceNative\) : null,/, why: 'eBay\'s own current bid on an auction row, converted to USD at the ratio eBay itself applied to that row\'s price; drawn only inside eBay\'s section, as eBay\'s own figure in its own currency with the USD figure called converted (3b05ba9) — never as a price', decided: 'Roy, 2026-10-10 (approved)' },
   { file: 'tcgdexharvest.js', re: /const r = obs\.price \/ c\.held_price;|if \(\(r < 0\.6 \|\| r > 1\.667\) && Math\.abs\(obs\.price - c\.held_price\) >= 0\.25\)/, why: 'the harvest\'s cross-check of TCGdex against what we hold — a ratio and a difference printed to its log, never stored or shown', decided: 'Roy, 2026-10-10 (approved)' },
   { file: 'ingest.js', re: /const delta = card\.price \? \(\(res\.price - card\.price\) \/ card\.price\) \* 100/, why: 'a percentage change printed to the refresh log, never stored or shown', decided: 'Roy, 2026-10-10 (approved)' },
-  { file: 'ingest.js', re: /medianYen: use\[Math\.floor\(use\.length \/ 2\)\]/, why: 'yahooMedianYen, the Yahoo median for a mirror or reverse printing\'s own row: a median of N real results, stored as yahoojp_N (N in its name), with the yen and the rate in source_meta', decided: PROPOSED },
-  { file: 'ingest.js', re: /const medianYen = use\[Math\.floor\(use\.length \/ 2\)\];/, why: 'the Yahoo median for the card\'s base price: a median of N real results, stored as yahoojp_N (N in its name, the thin mark reads it), with the yen and the rate in source_meta — a measured statistic, labelled', decided: PROPOSED },
+  { file: 'ingest.js', re: /medianYen: use\[Math\.floor\(use\.length \/ 2\)\]/, why: 'yahooMedianYen, the Yahoo median for a mirror or reverse printing\'s own row: a median of N real results, stored as yahoojp_N (N in its name), with the yen and the rate in source_meta', decided: 'Roy, 2026-10-10 (approved)' },
+  { file: 'ingest.js', re: /const medianYen = use\[Math\.floor\(use\.length \/ 2\)\];/, why: 'the Yahoo median for the card\'s base price: a median of N real results, stored as yahoojp_N (N in its name, the thin mark reads it), with the yen and the rate in source_meta — a measured statistic, labelled', decided: 'Roy, 2026-10-10 (approved)' },
 ];
 const OPEN_ARITHMETIC = [
 ];
@@ -320,6 +322,9 @@ ok('…every reviewed and open entry still matches a line (a stale entry is remo
   REVIEWED_ARITHMETIC.concat(OPEN_ARITHMETIC).every(r => hits.some(h => h.at.startsWith(r.file + ':') && r.re.test(h.line))),
   REVIEWED_ARITHMETIC.concat(OPEN_ARITHMETIC).filter(r => !hits.some(h => h.at.startsWith(r.file + ':') && r.re.test(h.line))).map(r => r.file + ' ' + r.re).join(' | '));
 for (const r of OPEN_ARITHMETIC) console.log('        OPEN: ' + r.file + ' — ' + r.found);
+ok('…every exemption is Roy\'s decision — none waits as a proposal (all fourteen settled, 2026-10-10)',
+  REVIEWED_ARITHMETIC.every(r => /^Roy, \d{4}-\d{2}-\d{2}/.test(r.decided)) && OPEN_ARITHMETIC.length === 0,
+  REVIEWED_ARITHMETIC.filter(r => !/^Roy, /.test(r.decided)).map(r => r.file).join(', '));
 let oldPage = null;
 try { oldPage = arithmetic(execSync('git show 0aaff72:cardhunt_preview.html', { maxBuffer: 1 << 26 }).toString(), 'page@0aaff72'); } catch (e) {}
 ok('C catches the low-high midpoint in the page as committed before (0aaff72)',

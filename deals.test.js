@@ -6,7 +6,7 @@
 //
 //   node deals.test.js
 'use strict';
-require('./testcount')(102);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(104);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const deals = require('./deals.js');
 let pass = 0, fail = 0;
@@ -166,8 +166,9 @@ ok(blockAt > 0 && sup.length > 2000, 'the supply block exists');
   const job = sup.slice(sup.indexOf('async function runDealRefresh('), sup.indexOf("app.post('/api/deals/refresh'"));
   ok(/deals_\.pickVouched\(payload, ref, paid\.backOf\)/.test(job) && /dealBackOf\(card, \{ paid: true, budget: deals_\.DEAL_BACK_MAX \}\)/.test(job),
      'the job runs the shelf\'s own bar (pickVouched), the back within DEAL_BACK_MAX a card');
-  ok(/INSERT INTO deal_picks \(card_id, item_id, found_at, run_id\)/.test(job), 'it stores card, item id, found_at, run — nothing else');
-  ok(/DELETE FROM deal_picks WHERE card_id = \$1/.test(job), 'a card with no deal now loses its old pick');
+  ok(/INSERT INTO bar_picks \(bar, card_id, item_id, band, found_at, run_id\) VALUES \('deals', \$1, \$2, \$3, now\(\), \$4\)/.test(job)
+     && /deals_\.discountBand\(r\.pick\.discount\)/.test(job), 'it stores card, item id, OUR band, found_at, run — nothing else (bar_picks, bar deals, 2026-10-10)');
+  ok(/DELETE FROM bar_picks WHERE bar = 'deals' AND card_id = \$1/.test(job), 'a card with no deal now loses its old pick');
   ok(/stoppedFor/.test(job) && /break;/.test(job), 'when the quota says stop, it stops and says so');
 }
 ok(/CREATE TABLE IF NOT EXISTS deal_picks \(\s*card_id text PRIMARY KEY, item_id text NOT NULL, found_at timestamptz NOT NULL DEFAULT now\(\), run_id text\)/.test(sup)
@@ -189,14 +190,20 @@ ok(/app\.post\('\/api\/deals\/refresh', toolingKey\.require/.test(sup) && /app\.
      'depth (T5a): picks are shown for 10 h — longer than the Action\'s longest measured gap (9.5 h)');
   ok(/const shown = out\.slice\(0, limit\)\.sort\(\(a, b\) => b\.price - a\.price\);/.test(shelf) && /reserve: out\.length - shown\.length/.test(shelf),
      'the freshest `limit` are shown, ordered by OUR price — never by the internal discount; the rest are the reserve, counted');
-  ok(/DELETE FROM deal_picks WHERE found_at < now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(src)
-     && /SELECT item_id FROM deal_picks WHERE card_id = \$1 AND found_at > now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(src),
+  ok(/DELETE FROM bar_picks WHERE bar = 'deals' AND found_at < now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(src)
+     && /SELECT item_id FROM bar_picks WHERE bar = 'deals' AND card_id = \$1 AND found_at > now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(src)
+     && /DELETE FROM bar_picks WHERE bar <> 'deals' AND found_at < now\(\) - interval '\$\{deals_\.AUCTION_END_H\.min\} hours'/.test(src),
      'the run and the click expire picks on the same clock as the shelf');
   ok(/if \(!deals_\.ENABLED\) return res\.json\(\{ enabled: false, reason: deals_\.OFF_REASON/.test(shelf), 'switched off, it answers enabled:false with the reason');
 }
 {
   const click = sup.slice(sup.indexOf("app.get('/api/deals/:cardId/live'"), sup.indexOf('// ── THE OTHER BARS'));
-  ok(/drop\('This one has sold\.'\)/.test(click) && /DELETE FROM deal_picks WHERE card_id = \$1/.test(click), 'a sold listing deletes the pick and says "This one has sold."');
+  ok(/drop\('This one has sold\.'\)/.test(click) && /DELETE FROM bar_picks WHERE bar = 'deals' AND card_id = \$1/.test(click), 'a sold listing deletes the pick and says "This one has sold."');
+  ok(/INSERT INTO bar_picks \(bar, card_id, item_id, band, found_at, run_id\)\s*SELECT 'deals', card_id, item_id, NULL, found_at, run_id FROM deal_picks ON CONFLICT \(bar, card_id\) DO NOTHING/.test(src)
+     && /\.then\(\(\) => db\.query\('DELETE FROM deal_picks'\)\)/.test(src), 'picks still in deal_picks move to bar_picks once, and deal_picks is emptied (no pick returns from it)');
+  ok(deals.discountBand(0.15) === '15-30' && deals.discountBand(0.2999) === '15-30' && deals.discountBand(0.30) === '30-45' && deals.discountBand(0.45) === '45-60'
+     && deals.discountBand(0.60) === '45-60' && deals.discountBand(0.61) === null && deals.discountBand(0.1) === null && deals.DEAL_BANDS.join() === '45-60,30-45,15-30',
+     'the band: three over the 15-60% window, best first; outside the window, none');
   ok(/q < deals_\.MIN_DISCOUNT \|\| q > deals_\.MAX_DISCOUNT/.test(click) && !/discount:|q,|percent/.test(click.slice(click.indexOf('res.json({ cardId, gone: false'))),
      'the live price is re-judged INTERNALLY; no comparison number is sent');
 }

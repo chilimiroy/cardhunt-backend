@@ -1241,6 +1241,13 @@ function dealTable() {
     .then(() => db.query(`CREATE TABLE IF NOT EXISTS bar_picks (bar text NOT NULL, card_id text NOT NULL, item_id text NOT NULL,
       band text, found_at timestamptz NOT NULL DEFAULT now(), run_id text, PRIMARY KEY (bar, card_id))`))
     .then(() => db.query('ALTER TABLE bar_picks ENABLE ROW LEVEL SECURITY'))
+    // Deals picks live in bar_picks too, as bar 'deals' with our discount band
+    // (2026-10-10: the shelf orders by it; deal_picks had no band). Picks still in
+    // deal_picks move over once, unbanded, and deal_picks is emptied so a deleted
+    // pick never comes back from it.
+    .then(() => db.query(`INSERT INTO bar_picks (bar, card_id, item_id, band, found_at, run_id)
+      SELECT 'deals', card_id, item_id, NULL, found_at, run_id FROM deal_picks ON CONFLICT (bar, card_id) DO NOTHING`))
+    .then(() => db.query('DELETE FROM deal_picks'))
     .catch(e => { dealTableReady = null; throw e; });
   return dealTableReady;
 }
@@ -1291,8 +1298,8 @@ async function runDealRefresh(runId) {
     total: 0, done: 0, picks: 0, barPicks: { auctions: 0, ending: 0 }, backCalls: 0, errors: [], stoppedFor: null });
   try {
     await dealTable();
-    await db.query(`DELETE FROM deal_picks WHERE found_at < now() - interval '${DEALS_SUPPLY.showHours} hours'`);
-    await db.query(`DELETE FROM bar_picks WHERE found_at < now() - interval '${deals_.AUCTION_END_H.min} hours'`);
+    await db.query(`DELETE FROM bar_picks WHERE bar = 'deals' AND found_at < now() - interval '${DEALS_SUPPLY.showHours} hours'`);
+    await db.query(`DELETE FROM bar_picks WHERE bar <> 'deals' AND found_at < now() - interval '${deals_.AUCTION_END_H.min} hours'`);
     const ids = await dealCandidates(DEALS_SUPPLY.cards);
     dealJob.total = ids.length;
     for (const id of ids) {
@@ -1315,12 +1322,12 @@ async function runDealRefresh(runId) {
         const r = await deals_.pickVouched(payload, ref, paid.backOf);
         dealJob.backCalls += paid.calls();
         if (r.pick && r.pick.listing.itemId) {
-          await db.query(`INSERT INTO deal_picks (card_id, item_id, found_at, run_id) VALUES ($1, $2, now(), $3)
-            ON CONFLICT (card_id) DO UPDATE SET item_id = EXCLUDED.item_id, found_at = EXCLUDED.found_at, run_id = EXCLUDED.run_id`,
-            [id, r.pick.listing.itemId, runId]);
+          await db.query(`INSERT INTO bar_picks (bar, card_id, item_id, band, found_at, run_id) VALUES ('deals', $1, $2, $3, now(), $4)
+            ON CONFLICT (bar, card_id) DO UPDATE SET item_id = EXCLUDED.item_id, band = EXCLUDED.band, found_at = EXCLUDED.found_at, run_id = EXCLUDED.run_id`,
+            [id, r.pick.listing.itemId, deals_.discountBand(r.pick.discount), runId]);
           dealJob.picks++;
         } else {
-          await db.query('DELETE FROM deal_picks WHERE card_id = $1', [id]);   // no deal any more: not left over from a run before
+          await db.query("DELETE FROM bar_picks WHERE bar = 'deals' AND card_id = $1", [id]);   // no deal any more: not left over from a run before
         }
         // The auction bars, from THIS payload (T5b): 0 more calls.
         for (const bar of deals_.AUCTION_BARS) {
@@ -1388,8 +1395,8 @@ app.get('/api/deals', access.priced, async (req, res) => {
   try {
     await dealTable();
     const picks = (await db.query(`SELECT p.card_id, p.found_at, c.name, c.number, c.set_name, c.set_name_en, c.image_small
-      FROM deal_picks p JOIN cards c ON c.api_card_id = p.card_id
-      WHERE p.found_at > now() - interval '${DEALS_SUPPLY.showHours} hours' AND ${digital.visibleSql('c')} ORDER BY p.found_at DESC LIMIT 60`)).rows;
+      FROM bar_picks p JOIN cards c ON c.api_card_id = p.card_id
+      WHERE p.bar = 'deals' AND p.found_at > now() - interval '${DEALS_SUPPLY.showHours} hours' AND ${digital.visibleSql('c')} ORDER BY p.found_at DESC LIMIT 60`)).rows;
     const out = [];
     for (const p of picks) {
       const ref = await dealRefOf(p.card_id);
@@ -1440,11 +1447,11 @@ app.get('/api/deals/:cardId/live', access.priced, async (req, res) => {
   const cardId = req.params.cardId;
   try {
     await dealTable();
-    const p = (await db.query(`SELECT item_id FROM deal_picks WHERE card_id = $1 AND found_at > now() - interval '${DEALS_SUPPLY.showHours} hours'`, [cardId])).rows[0];
+    const p = (await db.query(`SELECT item_id FROM bar_picks WHERE bar = 'deals' AND card_id = $1 AND found_at > now() - interval '${DEALS_SUPPLY.showHours} hours'`, [cardId])).rows[0];
     if (!p) return res.status(404).json({ cardId, gone: true, says: 'This deal has expired.' });
     const got = await dealItemLive(p.item_id, cardId);
     if (got.error) return res.status(got.status || 502).json({ cardId, error: got.error, says: 'eBay could not be asked right now — try again shortly.' });
-    const drop = async says => { await db.query('DELETE FROM deal_picks WHERE card_id = $1', [cardId]); return res.json({ cardId, gone: true, says }); };
+    const drop = async says => { await db.query("DELETE FROM bar_picks WHERE bar = 'deals' AND card_id = $1", [cardId]); return res.json({ cardId, gone: true, says }); };
     if (got.gone) return drop('This one has sold.');
     const it = got.item;
     if (it.ended || it.outOfStock) return drop('This one has sold.');

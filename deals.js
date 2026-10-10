@@ -304,6 +304,15 @@ function auctionClickRefusal(live, back, ref, bar, now) {
   return null;
 }
 
+// A deal's band (TASK-account-and-bars, Roy 2026-10-10): the shelf orders the
+// best discount first, and a pick may store OUR band, never the number (the
+// discount stays internal — 2026-10-08). Three bands over the 15-60% window.
+const DEAL_BANDS = ['45-60', '30-45', '15-30'];          // best first
+function discountBand(q) {
+  if (!(q >= MIN_DISCOUNT && q <= MAX_DISCOUNT)) return null;
+  return q >= 0.45 ? '45-60' : q >= 0.30 ? '30-45' : '15-30';
+}
+
 function rankDeals(deals) {
   return deals.slice().sort((a, b) => b.discount - a.discount || a.listing.landed - b.listing.landed);
 }
@@ -319,5 +328,5 @@ function describeRule() {
 
 module.exports = { ENABLED, OFF_REASON, MIN_DISCOUNT, MAX_DISCOUNT, EXCLUDED, DEAL_BACK_MAX, BELOW_NM, basePrintingOf, notADeal,
   VOUCH, vouchFree, vouchPhotos, discountOf, refLabel, hpAmbiguous, pickVouched, rotate, rowMarked, vouchEvidence,
-  AUCTION_END_H, AUCTION_BARS, endHoursOf, endBand, auctionFree, pickAuction, auctionClickRefusal,
+  AUCTION_END_H, AUCTION_BARS, DEAL_BANDS, discountBand, endHoursOf, endBand, auctionFree, pickAuction, auctionClickRefusal,
                    rankDeals, describeRule };

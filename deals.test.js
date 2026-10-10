@@ -6,7 +6,7 @@
 //
 //   node deals.test.js
 'use strict';
-require('./testcount')(68);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(75);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const deals = require('./deals.js');
 let pass = 0, fail = 0;
@@ -71,8 +71,34 @@ ok(deals.ENABLED === true, 'deals.ENABLED is ON — on the vouching bar, approve
 ok(/switched off/.test(deals.OFF_REASON), 'the off state still carries its reason, should it be switched off again');
 ok(/genuine card/.test(deals.describeRule()) && /at most 2/.test(deals.describeRule()), 'the rule states the back and what it costs');
 
+console.log('\n  rotation (T5a, 2026-10-10): a pool of 400 walked 80 at a time');
+{
+  const pool = Array.from({ length: 400 }, (_, i) => 'c' + i);
+  const walked = new Map(), seen = new Set(), runs = [];
+  let t = 1;
+  for (let run = 0; run < 5; run++) {
+    const ids = deals.rotate(pool, walked, 80);
+    runs.push(ids);
+    for (const id of ids) { seen.add(id); walked.set(id, t++); }
+  }
+  ok(runs[0].join() === pool.slice(0, 80).join(), 'nothing walked yet: the 80 dearest, in price order');
+  ok(runs.every(r => r.length === 80) && seen.size === 400, 'five runs walk all 400 — no card twice');
+  ok(runs[1].every(id => !runs[0].includes(id)), 'consecutive runs share no card (they shared 78-80 of 80 before)');
+  ok(deals.rotate(pool, walked, 80).join() === runs[0].join(), 'the sixth run starts the cycle again: the longest-walked first');
+  ok(deals.rotate(['c5', 'c9', 'c1'], new Map([['c5', 100]]), 2).join() === 'c9,c1', 'a card never walked goes before one walked; ties keep pool order');
+}
+{
+  const s0 = fs.readFileSync(__dirname + '/server.js', 'utf8').split('\r\n').join('\n');
+  const dc = s0.slice(s0.indexOf('async function dealCandidates('), s0.indexOf('const dealJob'));
+  ok(/deals_\.rotate\(pool, walked, n\)/.test(dc) && /DEALS_SUPPLY\.pool/.test(dc) && /cards: 80, pool: 400,/.test(s0),
+     'dealCandidates walks the rotation of a 400-card pool, 80 a run');
+  ok(/INSERT INTO deal_walks \(card_id, walked_at\)/.test(s0)
+     && /CREATE TABLE IF NOT EXISTS deal_walks \(card_id text PRIMARY KEY, walked_at timestamptz NOT NULL DEFAULT now\(\)\)/.test(s0)
+     && /ALTER TABLE deal_walks ENABLE ROW LEVEL SECURITY/.test(s0), 'deal_walks: the card and when, nothing of eBay\'s, RLS on');
+}
+
 console.log('\n  wiring: the refresh job, the shelf, the click');
-const src = fs.readFileSync(__dirname + '/server.js', 'utf8').split('\r\n').join('\n');
+const src =fs.readFileSync(__dirname + '/server.js', 'utf8').split('\r\n').join('\n');
 const blockAt = src.indexOf('// BEST DEALS — its own supply');
 const sup = src.slice(blockAt, src.indexOf('// ── SEARCH', blockAt));
 ok(blockAt > 0 && sup.length > 2000, 'the supply block exists');

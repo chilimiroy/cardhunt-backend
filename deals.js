@@ -208,6 +208,15 @@ async function pickVouched(payload, ref, backOf) {
   return { pick, skipped, reached, backsAsked, examined: rows.length };
 }
 
+// ROTATION (T5a, 2026-10-10): which n of the pool a run walks. Never walked
+// first, then the longest ago; ties keep the pool's order (dearest first).
+// walked: Map(cardId -> ms of the job's last walk). One definition, tested.
+function rotate(pool, walked, n) {
+  const rank = new Map(pool.map((id, i) => [id, i]));
+  const at = id => (walked && walked.get(id)) || 0;
+  return pool.slice().sort((a, b) => at(a) - at(b) || rank.get(a) - rank.get(b)).slice(0, n);
+}
+
 function rankDeals(deals) {
   return deals.slice().sort((a, b) => b.discount - a.discount || a.listing.landed - b.listing.landed);
 }
@@ -222,5 +231,5 @@ function describeRule() {
 }
 
 module.exports = { ENABLED, OFF_REASON, MIN_DISCOUNT, MAX_DISCOUNT, EXCLUDED, DEAL_BACK_MAX, BELOW_NM, basePrintingOf, notADeal,
-  VOUCH, vouchFree, vouchPhotos, discountOf, refLabel, hpAmbiguous, pickVouched,
+  VOUCH, vouchFree, vouchPhotos, discountOf, refLabel, hpAmbiguous, pickVouched, rotate,
                    rankDeals, describeRule };

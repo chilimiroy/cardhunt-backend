@@ -1212,7 +1212,7 @@ async function dealRefOf(cardId) {
 // ~1.3 calls a card measured = ~104 a run, ~830 a day, BACKGROUND origin (it
 // yields at the 92% soft stop). A click: 1 getItem (0 within 15 minutes).
 // ══════════════════════════════════════════════════════════════
-const DEALS_SUPPLY = { cards: 80, maxAgeMs: 3 * 3600 * 1000, waitMs: 90 * 1000, grade: 'Raw NM' };
+const DEALS_SUPPLY = { cards: 80, pool: 400, maxAgeMs: 3 * 3600 * 1000, waitMs: 90 * 1000, grade: 'Raw NM' };
 let dealTableReady = null;
 // Created by the server on first use, RLS on in the same step: API roles
 // read nothing of it (every read and write goes through this server).
@@ -1221,6 +1221,9 @@ function dealTable() {
   if (!dealTableReady) dealTableReady = db.query(`CREATE TABLE IF NOT EXISTS deal_picks (
       card_id text PRIMARY KEY, item_id text NOT NULL, found_at timestamptz NOT NULL DEFAULT now(), run_id text)`)
     .then(() => db.query('ALTER TABLE deal_picks ENABLE ROW LEVEL SECURITY'))
+    // When the job last walked each card (rotation, T5a): our own record, no eBay data.
+    .then(() => db.query('CREATE TABLE IF NOT EXISTS deal_walks (card_id text PRIMARY KEY, walked_at timestamptz NOT NULL DEFAULT now())'))
+    .then(() => db.query('ALTER TABLE deal_walks ENABLE ROW LEVEL SECURITY'))
     .catch(e => { dealTableReady = null; throw e; });
   return dealTableReady;
 }
@@ -1228,7 +1231,16 @@ function dealTable() {
 // Which cards the job walks: English, a current TCGplayer-sourced base price
 // (the 30-day window pricequality calls current), highest first; then only
 // cards the back check covers (the bar needs a genuine back) and none on
-// deals.EXCLUDED. Over-asks 5x so the filters still leave `n`.
+// deals.EXCLUDED. That is the POOL (DEALS_SUPPLY.pool cards). A run walks
+// DEALS_SUPPLY.cards of it, the ones walked longest ago first (deal_walks).
+//
+// ROTATION (TASK-account-and-bars T5a, 2026-10-10). Until then a run walked
+// the top 80 by price, so every run walked the same 80: measured over the
+// first 7 runs (10-08 01:37 -> 10-09 22:50 UTC, listing_views caller
+// 'background'), consecutive runs shared 78-80 of 80 cards. The repetition
+// was by construction. Now 400 walked 80 at a time: the same 80 searches a
+// run, five times the cards; each card is re-checked every fifth run instead
+// of every run, which the click's live check covers.
 async function dealCandidates(n) {
   const r = await db.query(`
     SELECT card_api_id, price_usd FROM (
@@ -1243,11 +1255,15 @@ async function dealCandidates(n) {
       -- a MARKED headline is no deal's reference (printsql.markedSql; dealRefOf
       -- refuses it again by its 'marked' flag)
       AND NOT ${printsql.markedSql('latest')}
-    ORDER BY price_usd DESC LIMIT $1`, [n * 5]);
-  return r.rows.map(x => x.card_api_id)
+    ORDER BY price_usd DESC LIMIT $1`, [DEALS_SUPPLY.pool + 100]);
+  const pool = r.rows.map(x => x.card_api_id)
     // Held cards (pricehold.js) have no headline, so the query above already
     // drops them; said again here so the pool cannot pick one by another route.
-    .filter(id => backcheck.familyOf(id) && !deals_.EXCLUDED[id] && !pricehold.heldFor(id)).slice(0, n);
+    .filter(id => backcheck.familyOf(id) && !deals_.EXCLUDED[id] && !pricehold.heldFor(id)).slice(0, DEALS_SUPPLY.pool);
+  // Never walked first, then the longest ago; ties keep the pool's price order.
+  const walked = new Map((await db.query('SELECT card_id, walked_at FROM deal_walks WHERE card_id = ANY($1)', [pool])).rows
+    .map(x => [x.card_id, new Date(x.walked_at).getTime()]));
+  return deals_.rotate(pool, walked, n);
 }
 
 const dealJob = { running: false, runId: null, startedAt: null, finishedAt: null, total: 0, done: 0, picks: 0,
@@ -1265,6 +1281,9 @@ async function runDealRefresh(runId) {
       try {
         const card = await resolveListingCard(id);
         if (!card) { dealJob.done++; continue; }
+        // Walked = asked eBay, whatever the outcome: it goes to the back of the rotation.
+        await db.query(`INSERT INTO deal_walks (card_id, walked_at) VALUES ($1, now())
+          ON CONFLICT (card_id) DO UPDATE SET walked_at = EXCLUDED.walked_at`, [id]);
         const t0 = Date.now();
         let payload = await listingsFor(card, id, DEALS_SUPPLY.grade, null, {});
         // The photo checks run after the answer; wait for them, as the probe does.

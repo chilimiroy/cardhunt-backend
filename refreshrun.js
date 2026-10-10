@@ -32,8 +32,31 @@ const NIGHTLY_LANGS = ['en', 'ja'];
 const EXIT_INCOMPLETE = 3, EXIT_INTERRUPTED = 130;
 const MARKER = path.join(__dirname, 'refresh-run.json');
 
+// ASLEEP (Roy, 2026-10-10). The budget stays wall-clock (the PC's sleep setting
+// is being changed instead), but the log says LOUDLY when the run was asleep and
+// for how long, so a short run is never mistaken for a fast one. The refresh calls
+// tick() before every card; a card takes seconds, so a gap of PAUSE_MS or more
+// between two ticks means the process was not running — the PC slept or the
+// process was suspended (2026-10-10: 05:41 -> 13:14, 7 h 33 m, said nowhere).
+const PAUSE_MS = 5 * 60 * 1000;
+const hm = min => (min >= 60 ? Math.floor(min / 60) + ' h ' + (min % 60) + ' m' : min + ' m');
+function tick(run, now) {
+  if (!run) return null;
+  const t = now || Date.now(), last = run.lastTick;
+  run.lastTick = t;
+  if (!last || t - last < PAUSE_MS) return null;
+  const p = { from: new Date(last).toISOString(), to: new Date(t).toISOString(), minutes: Math.round((t - last) / 60000), lang: run.current };
+  run.pauses.push(p); save(run);
+  return p;
+}
+function pauseLine(p) {
+  return '  !!! RUN ASLEEP for ' + hm(p.minutes) + ' (' + p.from.slice(11, 16) + ' -> ' + p.to.slice(11, 16) + ' UTC'
+    + (p.lang ? ', during ' + p.lang : '') + '): no card was priced — the PC slept or the process was suspended. '
+    + 'The budget is wall-clock and counted it.';
+}
+
 function createRun(requested, opts) {
-  const run = { startedAt: new Date().toISOString(), requested: requested.slice(), outcomes: {}, current: null, finished: false };
+  const run = { startedAt: new Date().toISOString(), requested: requested.slice(), outcomes: {}, current: null, finished: false, pauses: [], lastTick: null };
   for (const l of requested) run.outcomes[l] = { state: 'not-run' };
   run.marker = opts && opts.marker === false ? null : (opts && opts.marker) || MARKER;
   save(run);
@@ -41,7 +64,7 @@ function createRun(requested, opts) {
 }
 function save(run) {
   if (!run.marker) return;
-  try { fs.writeFileSync(run.marker, JSON.stringify({ startedAt: run.startedAt, requested: run.requested, outcomes: run.outcomes, current: run.current, finished: run.finished }, null, 1)); }
+  try { fs.writeFileSync(run.marker, JSON.stringify({ startedAt: run.startedAt, requested: run.requested, outcomes: run.outcomes, current: run.current, finished: run.finished, pauses: run.pauses || [] }, null, 1)); }
   catch (e) { /* a marker that cannot be written must not stop the refresh */ }
 }
 function start(run, lang) { run.current = lang; run.outcomes[lang] = { state: 'running', startedAt: new Date().toISOString() }; save(run); }
@@ -73,7 +96,16 @@ function verdict(run) {
         + [partial.length ? 'did not finish: ' + partial.map(l => describe(l, run.outcomes[l])).join(', ') : null,
            notRun.length ? 'did not run: ' + notRun.join(', ') : null].filter(Boolean).join('; ')
         + '. Their prices were not refreshed this run.'];
-  return { ok, exitCode: ok ? 0 : EXIT_INCOMPLETE, lines, notRun, partial };
+  // Asleep: said with the verdict, every time — the run's length is not its work.
+  const pauses = run.pauses || [];
+  if (pauses.length) {
+    const asleep = pauses.reduce((a, p) => a + p.minutes, 0);
+    const total = run.startedAt ? Math.round(((run.finishedAtMs || Date.now()) - Date.parse(run.startedAt)) / 60000) : null;
+    lines.push('  !!! THIS RUN WAS ASLEEP ' + hm(asleep) + (total != null ? ' of its ' + hm(total) : '') + ', in ' + pauses.length
+      + ' pause' + (pauses.length === 1 ? '' : 's') + ': it worked ' + (total != null ? hm(Math.max(0, total - asleep)) : '?')
+      + '. A short run is not a fast one.');
+  }
+  return { ok, exitCode: ok ? 0 : EXIT_INCOMPLETE, lines, notRun, partial, asleepMinutes: pauses.reduce((a, p) => a + p.minutes, 0) };
 }
 function close(run) {
   const v = verdict(run);
@@ -90,4 +122,4 @@ function previousUnfinished(file) {
       + v.lines[0].replace(/^\s*REFRESH INCOMPLETE — /, '') };
   } catch (e) { return null; }
 }
-module.exports = { LANGS, NIGHTLY_LANGS, EXIT_INCOMPLETE, EXIT_INTERRUPTED, MARKER, createRun, start, progress, finish, verdict, close, previousUnfinished };
+module.exports = { LANGS, NIGHTLY_LANGS, EXIT_INCOMPLETE, EXIT_INTERRUPTED, MARKER, PAUSE_MS, createRun, start, progress, finish, verdict, close, previousUnfinished, tick, pauseLine };

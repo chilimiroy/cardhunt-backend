@@ -5380,6 +5380,10 @@ async function refreshOne(lang, flags, run, budget) {
   let ranOut = false, stoppedAt = batch.length;
   for (let i = 0; i < batch.length; i++) {
     refreshrun.progress(run, lang, i, batch.length);
+    // Asleep between two cards? Said loudly, at once (refreshrun.tick).
+    const slept = refreshrun.tick(run);
+    if (slept) console.log('');
+    if (slept) console.log(refreshrun.pauseLine(slept));
     if (Date.now() > deadline) {
       ranOut = true; stoppedAt = i;
       console.log(`

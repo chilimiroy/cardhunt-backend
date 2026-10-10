@@ -3,7 +3,7 @@
 //
 //   node refreshrun.test.js
 'use strict';
-require('./testcount')(27);
+require('./testcount')(34);
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const rr = require('./refreshrun');
 let pass = 0, fail = 0;
@@ -52,6 +52,28 @@ ok('a run that closes leaves nothing for the next to report', rr.previousUnfinis
 ok('no marker file at all: nothing to report', rr.previousUnfinished(tmp('absent')) === null);
 fs.unlinkSync(f); try { fs.unlinkSync(marker); } catch (e) {}
 
+console.log('\n  asleep: said loudly, never mistaken for fast (Roy, 2026-10-10)');
+{
+  const run = rr.createRun(['en', 'ja'], { marker: false });
+  run.startedAt = '2026-10-10T00:00:03.000Z';
+  const t = iso => Date.parse(iso);
+  rr.start(run, 'ja');
+  ok('a card a few seconds after the last: no pause', rr.tick(run, t('2026-10-10T02:41:00Z')) === null && rr.tick(run, t('2026-10-10T02:41:08Z')) === null);
+  ok('four minutes between cards (a slow source): still no pause — the floor is 5', rr.tick(run, t('2026-10-10T02:45:08Z')) === null && rr.PAUSE_MS === 300000);
+  const p = rr.tick(run, t('2026-10-10T10:18:08Z'));
+  ok('the night of 2026-10-10 (asleep 7 h 33 m between two cards) is a pause, named with its language',
+     p && p.minutes === 453 && p.lang === 'ja' && run.pauses.length === 1, JSON.stringify(p));
+  ok('...said at once, loudly: "!!! RUN ASLEEP for 7 h 33 m (02:45 -> 10:18 UTC, during ja)"',
+     /^  !!! RUN ASLEEP for 7 h 33 m \(02:45 -> 10:18 UTC, during ja\): no card was priced/.test(rr.pauseLine(p)), rr.pauseLine(p));
+  rr.finish(run, 'ja', { state: 'stopped', done: 2131, of: 4000, why: "the run's 4h budget ran out" });
+  run.finishedAtMs = t('2026-10-10T10:18:10Z');
+  const v = rr.verdict(run);
+  ok('the verdict says it too: asleep, of the run\'s length, and what it worked', v.lines.some(l => /^  !!! THIS RUN WAS ASLEEP 7 h 33 m of its 10 h 18 m, in 1 pause: it worked 2 h 45 m\. A short run is not a fast one\./.test(l))
+     && v.asleepMinutes === 453, v.lines.join(' | '));
+  const run2 = rr.createRun(['en'], { marker: false }); rr.start(run2, 'en'); rr.finish(run2, 'en', {});
+  ok('a run that never slept says nothing of it', !rr.verdict(run2).lines.some(l => /ASLEEP/.test(l)));
+}
+
 console.log('\n  ingest.js uses it');
 const I = fs.readFileSync(path.join(__dirname, 'ingest.js'), 'utf8').replace(/\r/g, '');
 const body = I.slice(I.indexOf('async function refreshDue('), I.indexOf('async function refreshOne('));
@@ -71,6 +93,8 @@ ok('interrupts (Ctrl+C, the console closing, terminate) print the line and exit 
   /\['SIGINT', 'SIGTERM', 'SIGBREAK', 'SIGHUP'\]/.test(body) && /process\.exit\(refreshrun\.EXIT_INTERRUPTED\)/.test(body));
 ok('the previous run\'s unfinished marker is reported at the start', /refreshrun\.previousUnfinished\(\)/.test(body));
 ok('the budget stop returns "stopped" with where it stopped', /ranOut \? \{ state: 'stopped', done: stoppedAt, of: batch\.length/.test(one));
+ok('the refresh ticks before every card and prints a pause at once, before the deadline check',
+  /const slept = refreshrun\.tick\(run\);\s*if \(slept\) console\.log\(''\);\s*if \(slept\) console\.log\(refreshrun\.pauseLine\(slept\)\);\s*if \(Date\.now\(\) > deadline\)/.test(one));
 ok('progress is recorded inside the card loop', /refreshrun\.progress\(run, lang, i, batch\.length\)/.test(one));
 // ONE budget for the whole run (Roy, 2026-10-10): it was per language — refresh all = up to 4 x --hours awake.
 ok('refreshDue makes the budget ONCE, before the language loop, and hands it to every language',

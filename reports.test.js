@@ -12,7 +12,7 @@
 //   node reports.test.js
 //   (the stored path, in Postgres: node reportprobe.js — rolled back)
 'use strict';
-require('./testcount')(79);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(86);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), vm = require('vm');
 const R = require('./reports');
 let pass = 0, fail = 0;
@@ -95,6 +95,16 @@ const post = S.slice(S.indexOf("app.post('/api/reports'"), S.indexOf('\n});', S.
 ok('the report is stored as validate() returns it, the user id from the token', /reports\.validate\(req\.body\)/.test(post) && /req\.account\.userId/.test(post) && !/req\.body\.user/.test(post));
 ok('the rate limit is checked before the insert, 429 when over', post.indexOf('rateRefusal') < post.indexOf('INSERT INTO listing_reports') && /status\(429\)/.test(post));
 ok('nothing deletes a report or edits a listing', !/DELETE FROM listing_reports/.test(S));
+// Open and Closed (TASK-account-and-bars T4, 2026-10-10)
+ok('Open = new + reviewed, Closed = dismissed + actioned', R.VIEWS.open.join() === 'new,reviewed' && R.VIEWS.closed.join() === 'dismissed,actioned');
+ok('every state is on exactly one page', R.STATES.every(s => R.VIEWS.open.concat(R.VIEWS.closed).filter(x => x === s).length === 1)
+   && R.VIEWS.open.length + R.VIEWS.closed.length === R.STATES.length);
+ok('Open is the default; an unknown view is Open, never "all"', R.viewOf('') === 'open' && R.viewOf('all') === 'open' && R.viewOf('__proto__') === 'open' && R.viewOf('closed') === 'closed');
+{
+  const lr = sliceRoute("app.get('/api/admin/reports'");
+  ok('the route reads only the asked page\'s states', /reports\.viewOf\(String\(req\.query\.view/.test(lr) && /WHERE r\.state = ANY\(\$1\)/.test(lr) && /\[reports\.VIEWS\[view\]\]/.test(lr));
+  ok('...and says how many each page holds', /counts: \{ open: count\('open'\), closed: count\('closed'\) \}/.test(lr));
+}
 ok('the server never creates the table', !/CREATE TABLE[^;]*listing_reports/.test(S));
 
 console.log('\n  the migration');
@@ -121,6 +131,9 @@ ok('the masters\' view labels the price as what WE showed at report time, not eB
   /Price we showed at report time: /.test(fn('reportItem')) && /not eBay\\u2019s current price/.test(fn('reportItem')));
 ok('a cleared eBay price says it is no longer kept, never blank', /no longer kept \(cleared when actioned or dismissed, or after 30 days\)/.test(fn('reportItem')));
 ok('the masters\' view never uses innerHTML / insertAdjacentHTML / outerHTML', !/innerHTML|insertAdjacentHTML|outerHTML|document\.write/.test(view));
+ok('Open / Closed: the page asks the server for one page (?view=), Open first', /\/api\/admin\/reports\?view=' \+ encodeURIComponent\(REPORTS\.view\)/.test(fn('reportsLoad'))
+   && /REPORTS\.view = 'open'; reportsLoad\(\);/.test(fn('reportsOpen')));
+ok('Closed rows: dismissed and actioned are drawn apart (their own state chip styles)', /\.rep-state\.actioned\{[^}]+\}/.test(H) && /\.rep-state\.dismissed\{border-style:dashed/.test(H));
 
 // ── a hostile report, through validate() and the page's own renderer ──
 console.log('\n  a hostile report, rendered');

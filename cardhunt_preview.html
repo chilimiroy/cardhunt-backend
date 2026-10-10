@@ -565,6 +565,12 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .rep-details{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:12px}
 .rep-state{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:999px;border:1px solid var(--bd);color:var(--mu)}
 .rep-state.new{border-color:var(--accent);color:var(--accent)}
+/* Closed reports (T4): dismissed and actioned read apart at a glance. */
+.rep-state.actioned{border-color:var(--t);color:var(--t);background:var(--tl)}
+.rep-state.dismissed{border-style:dashed;color:var(--fa)}
+.rep-tabs{display:flex;gap:6px;margin:4px 0 10px}
+.rep-tab{padding:6px 14px;border:1px solid var(--bd);border-radius:999px;background:var(--w);color:var(--mu);font-size:12px;font-weight:700;cursor:pointer}
+.rep-tab[aria-pressed="true"]{border-color:var(--t);color:var(--t);background:var(--tl)}
 .lrow2:hover .lrow2-t{color:var(--accent)}
 /* Cert check (T2): a sibling of the row's link, never inside it. Each state
    looks different — above all, a MISMATCH must never read as "not checked". */
@@ -7521,13 +7527,17 @@ async function reportSend(){
 // Newest first. Read-only but for the state. Every value from a report is
 // set with textContent: the details are text a person typed (and the email,
 // card and URL are data too). Nothing here is assembled as an HTML string.
-var REPORTS = { data: null, error: null };
-function reportsOpen(){ closeM('auth-overlay'); openM('reports-overlay'); reportsLoad(); }
+// Two pages (TASK-account-and-bars T4, 2026-10-10): Open (new, reviewed —
+// the default) and Closed (dismissed, actioned). The server chooses the rows
+// (?view=); a report moves between the pages when its state changes.
+var REPORTS = { data: null, error: null, view: 'open' };
+function reportsOpen(){ closeM('auth-overlay'); openM('reports-overlay'); REPORTS.view = 'open'; reportsLoad(); }
+function reportsView(v){ REPORTS.view = v === 'closed' ? 'closed' : 'open'; REPORTS.data = null; reportsLoad(); }
 async function reportsLoad(){
   REPORTS.error = null; reportsRender();
   try {
     var token = await authToken();
-    var r = await fetch(BACKEND + '/api/admin/reports', { headers: { Authorization: 'Bearer ' + token } });
+    var r = await fetch(BACKEND + '/api/admin/reports?view=' + encodeURIComponent(REPORTS.view), { headers: { Authorization: 'Bearer ' + token } });
     var j = await r.json();
     if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
     REPORTS.data = j;
@@ -7540,9 +7550,19 @@ function reportsRender(){
   host.replaceChildren();
   if (REPORTS.error) { var w = reportsEl('div', 'msg-warn', REPORTS.error); w.setAttribute('role', 'alert'); host.appendChild(w); return; }
   var d = REPORTS.data;
+  var tabs = reportsEl('div', 'rep-tabs'); tabs.setAttribute('role', 'group'); tabs.setAttribute('aria-label', 'Open or closed reports');
+  [['open', 'Open'], ['closed', 'Closed']].forEach(function (t) {
+    var b = reportsEl('button', 'rep-tab', t[1] + (d && d.counts ? ' (' + d.counts[t[0]] + ')' : ''));
+    b.setAttribute('aria-pressed', REPORTS.view === t[0] ? 'true' : 'false');
+    b.addEventListener('click', function () { reportsView(t[0]); });
+    tabs.appendChild(b);
+  });
+  host.appendChild(tabs);
   if (!d) { host.appendChild(reportsEl('div', null, 'Loading\u2026')); return; }
-  if (!d.reports.length) { host.appendChild(reportsEl('div', null, 'No reports yet.')); return; }
-  host.appendChild(reportsEl('div', null, d.reports.length + ' report' + (d.reports.length === 1 ? '' : 's') + ', newest first.'));
+  var closed = REPORTS.view === 'closed';
+  if (!d.reports.length) { host.appendChild(reportsEl('div', null, closed ? 'No closed reports.' : 'No open reports.')); return; }
+  host.appendChild(reportsEl('div', null, d.reports.length + (closed ? ' closed' : ' open') + ' report' + (d.reports.length === 1 ? '' : 's') + ', newest first.'
+    + (closed ? ' Dismissed: the report was wrong. Actioned: it was dealt with.' : ' New, or reviewed and not dealt with yet.')));
   d.reports.forEach(function (x) { host.appendChild(reportItem(x, d)); });
 }
 function reportItem(x, d){
@@ -8241,6 +8261,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-6dec1cb-movers &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-ef1c4a0-reports &middot; click to hide</div>
 </body>
 </html>

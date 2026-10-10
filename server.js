@@ -2086,13 +2086,19 @@ app.get('/api/admin/reports', access.master, async (req, res) => {
   try {
     // Clear what may no longer be kept BEFORE reading: the list never shows it.
     await reports.clearPrices(db);
+    // Open (new, reviewed — the default) or Closed (dismissed, actioned): T4.
+    const view = reports.viewOf(String(req.query.view || ''));
     const r = await db.query(`SELECT r.id, r.created_at, r.user_id, r.reporter_email, r.card_id, c.name AS card_name, c.number AS card_number,
         c.set_name, r.listing_id, r.listing_url, r.source, r.price_shown, r.price_currency, r.reason, r.details, r.photo_checks,
         r.state, r.state_changed_by_email, r.state_changed_at
       /* digital:unfiltered — a report names its card whatever the card is */
       FROM listing_reports r LEFT JOIN cards c ON c.api_card_id = r.card_id
-      ORDER BY r.created_at DESC, r.id DESC LIMIT 300`);
-    res.json({ reasons: reports.REASONS, states: reports.STATES, reports: r.rows });
+      WHERE r.state = ANY($1)
+      ORDER BY r.created_at DESC, r.id DESC LIMIT 300`, [reports.VIEWS[view]]);
+    const n = (await db.query(`SELECT state, COUNT(*)::int AS n FROM listing_reports GROUP BY state`)).rows;
+    const count = v => n.filter(x => reports.VIEWS[v].includes(x.state)).reduce((a, x) => a + x.n, 0);
+    res.json({ view, views: reports.VIEWS, counts: { open: count('open'), closed: count('closed') },
+      reasons: reports.REASONS, states: reports.STATES, reports: r.rows });
   } catch (e) {
     if (e.code === '42P01') return res.status(503).json(REPORTS_MISSING);
     res.status(500).json({ error: e.message });

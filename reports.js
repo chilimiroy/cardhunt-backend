@@ -22,6 +22,13 @@ const REASONS = {
   other:           'Other',
 };
 const STATES = ['new', 'reviewed', 'actioned', 'dismissed'];
+// The masters' two pages (TASK-account-and-bars T4, 2026-10-10). A report
+// moves between them by its state; nothing is deleted. Open — not dealt with
+// yet (the default); Closed — dismissed (the report was wrong) or actioned
+// (it was dealt with). Every state is on exactly one page.
+const VIEWS = { open: ['new', 'reviewed'], closed: ['dismissed', 'actioned'] };
+const DEFAULT_VIEW = 'open';
+function viewOf(q) { return Object.prototype.hasOwnProperty.call(VIEWS, q) ? q : DEFAULT_VIEW; }
 
 const DETAILS_MAX = 1000;        // characters; the form says so and stops at it
 const PHOTO_CHECKS_MAX = 8000;   // bytes of JSON: the row's verdicts, never a photo
@@ -126,5 +133,5 @@ function rateRefusal(row) {
   return null;
 }
 
-module.exports = { REASONS, STATES, DETAILS_MAX, PHOTO_CHECKS_MAX, RATE, validate, photoChecksOf, rateSql, rateRefusal,
+module.exports = { REASONS, STATES, VIEWS, DEFAULT_VIEW, viewOf, DETAILS_MAX, PHOTO_CHECKS_MAX, RATE, validate, photoChecksOf, rateSql, rateRefusal,
                    REPORT_SHOWN_KEEP_DAYS, PRICE_CLEAR_STATES, shouldClearPrice, clearPricesSql, clearPrices };

@@ -18,7 +18,7 @@
 // preloaded with -r (the costmeter.js pattern) — nothing in server.js
 // knows about tests. Tokens are HS256, minted with a test secret.
 
-require('./testcount')(328);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(332);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), os = require('os'), path = require('path'), crypto = require('crypto');
 const { spawn } = require('child_process');
 let pass = 0, fail = 0;
@@ -275,6 +275,14 @@ async function ask(method, p, tok, body) {
       ok(`${k}  tooling key -> past the gate`, r !== 401 && r !== 403, String(r));
       r = await fetch(BASE + p, { method: f.method.toUpperCase(), headers: { 'X-CardHunt-Key': TKEY + 'x', 'X-CardHunt-Origin': 'tooling', 'Content-Type': 'application/json' }, body: f.method === 'get' ? undefined : '{}' }).then(x => x.status);
       ok(`${k}  wrong tooling key with the origin claim -> 401`, r === 401, String(r));
+    }
+    // The reports' two pages (TASK-account-and-bars T4): masters only, each view.
+    for (const v of ['open', 'closed']) {
+      const rr = await ask('get', '/api/admin/reports?view=' + v, TOK.approved);
+      console.log('        approved non-master, ?view=' + v + ' -> ' + rr.status + ' ' + rr.text);
+      ok(`GET /api/admin/reports?view=${v}  approved non-master -> 403 masters only`, rr.status === 403 && rr.body.error === 'masters only', rr.status + ' ' + rr.text.slice(0, 80));
+      const rm = await ask('get', '/api/admin/reports?view=' + v, TOK.master);
+      ok(`GET /api/admin/reports?view=${v}  master -> past the gate`, rm.status !== 401 && rm.status !== 403, rm.status + ' ' + rm.text.slice(0, 80));
     }
     let tr = await fetch(BASE + '/api/alerts', { headers: { 'X-CardHunt-Key': TKEY } });
     ok('the tooling key is NOT a user: /api/alerts with it -> 401', tr.status === 401, String(tr.status));

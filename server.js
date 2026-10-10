@@ -1461,13 +1461,16 @@ async function dealLiveVerdict(cardId, itemId, purpose) {
   const ref = await dealRefOf(cardId);
   const q = ref && ref.price > 0 ? 1 - delivered / ref.price : null;
   if (q == null || q < deals_.MIN_DISCOUNT || q > deals_.MAX_DISCOUNT) return { gone: true, says: 'Its price has changed — it is no longer a deal.', calls: got.calls };
-  return { gone: false, item: it, delivered, calls: got.calls };
+  return { gone: false, item: it, delivered, q, calls: got.calls };   // q: INTERNAL — the re-check bands it, nothing sends it
 }
 // The run's re-check: the picks confirmed longest ago, asked live; the dead deleted,
-// the living stamped with this run (so the next run asks the next ones).
+// the living stamped with this run (so the next run asks the next ones) AND given
+// their CURRENT band (Roy, 2026-10-10): a pick lives indefinitely, so a band
+// recorded at 45-60% can be 20% today and still pass 15-60% — the shelf would order
+// by a stale band. The live price is already in hand: 0 more calls.
 async function recheckDealPicks(runId) {
-  const out = { asked: 0, kept: 0, deleted: 0, calls: 0, notAsked: 0, why: {} };
-  const rows = (await db.query(`SELECT card_id, item_id FROM bar_picks WHERE bar = 'deals'
+  const out = { asked: 0, kept: 0, deleted: 0, calls: 0, notAsked: 0, bandChanged: 0, bandFirstSet: 0, why: {} };
+  const rows = (await db.query(`SELECT card_id, item_id, band FROM bar_picks WHERE bar = 'deals'
     ORDER BY run_id ASC NULLS FIRST, found_at ASC LIMIT $1`, [DEALS_SUPPLY.recheck])).rows;
   for (const p of rows) {
     const v = await dealLiveVerdict(p.card_id, p.item_id, 'deal-recheck');
@@ -1478,8 +1481,10 @@ async function recheckDealPicks(runId) {
       await db.query("DELETE FROM bar_picks WHERE bar = 'deals' AND card_id = $1 AND item_id = $2", [p.card_id, p.item_id]);
       out.deleted++; out.why[v.says] = (out.why[v.says] || 0) + 1;
     } else {
-      await db.query("UPDATE bar_picks SET run_id = $3 WHERE bar = 'deals' AND card_id = $1 AND item_id = $2", [p.card_id, p.item_id, runId]);
+      const band = deals_.discountBand(v.q);
+      await db.query("UPDATE bar_picks SET run_id = $3, band = $4 WHERE bar = 'deals' AND card_id = $1 AND item_id = $2", [p.card_id, p.item_id, runId, band]);
       out.kept++;
+      if (p.band == null) out.bandFirstSet++; else if (p.band !== band) out.bandChanged++;
     }
   }
   return out;

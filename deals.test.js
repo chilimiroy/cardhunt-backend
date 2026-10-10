@@ -6,7 +6,7 @@
 //
 //   node deals.test.js
 'use strict';
-require('./testcount')(113);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(115);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const deals = require('./deals.js');
 let pass = 0, fail = 0;
@@ -220,25 +220,32 @@ ok(/app\.post\('\/api\/deals\/refresh', toolingKey\.require/.test(sup) && /app\.
   // Executed: the real dealLiveVerdict + recheckDealPicks, on a fake database and fake eBay answers.
   const recheckSrc = src.slice(src.indexOf('async function recheckDealPicks('), src.indexOf("app.get('/api/deals/:cardId/live'"));
   const queries = [];
-  const picks = [{ card_id: 'en-a', item_id: 'v1|1|0' }, { card_id: 'en-b', item_id: 'v1|2|0' }, { card_id: 'en-c', item_id: 'v1|3|0' }, { card_id: 'en-d', item_id: 'v1|4|0' }];
+  const picks = [{ card_id: 'en-a', item_id: 'v1|1|0', band: '30-45' }, { card_id: 'en-b', item_id: 'v1|2|0', band: '45-60' },
+                 { card_id: 'en-c', item_id: 'v1|3|0', band: '15-30' }, { card_id: 'en-d', item_id: 'v1|4|0', band: '30-45' },
+                 { card_id: 'en-e', item_id: 'v1|5|0', band: null }];
   const live = { 'v1|1|0': { gone: true, calls: 1 },                                                                     // sold (404)
                  'v1|2|0': { item: { price: 70, shipping: 0, currency: 'USD', buyItNow: true }, calls: 1 },             // 30% below: alive
                  'v1|3|0': { item: { price: 97, shipping: 0, currency: 'USD', buyItNow: true }, calls: 0 },             // 3% below: no longer a deal
-                 'v1|4|0': { error: 'eBay token unavailable', status: 503 } };                                           // not asked
+                 'v1|4|0': { error: 'eBay token unavailable', status: 503 },
+                 'v1|5|0': { item: { price: 50, shipping: 0, currency: 'USD', buyItNow: true }, calls: 1 } };            // 50% below, unbanded (carried over)                                           // not asked
   const sandbox = new Function('db', 'dealItemLive', 'dealRefOf', 'deals_', 'DEALS_SUPPLY',
     verdictSrc + recheckSrc + '; return recheckDealPicks;')(
-    { query: async (sql, args) => { queries.push([sql.replace(/\s+/g, ' ').trim(), args]); return { rows: /SELECT card_id, item_id FROM bar_picks/.test(sql) ? picks : [] }; } },
+    { query: async (sql, args) => { queries.push([sql.replace(/\s+/g, ' ').trim(), args]); return { rows: /SELECT card_id, item_id, band FROM bar_picks/.test(sql) ? picks : [] }; } },
     async (itemId) => Object.assign({}, live[itemId]),
     async () => ({ price: 100 }), deals, { recheck: 20 });
   pendingTests.push((async () => {
   const rc = await sandbox('20261010120000');
   const sel = queries[0];
   ok(/WHERE bar = 'deals' ORDER BY run_id ASC NULLS FIRST, found_at ASC LIMIT \$1/.test(sel[0]) && sel[1][0] === 20, 'the re-check asks the 20 picks confirmed longest ago');
-  ok(rc.asked === 3 && rc.deleted === 2 && rc.kept === 1 && rc.notAsked === 1 && rc.calls === 2,
+  ok(rc.asked === 4 && rc.deleted === 2 && rc.kept === 2 && rc.notAsked === 1 && rc.calls === 3,
      'KEPT the live one in band; DELETED the sold one and the one now 3% below; a pick eBay could not be asked about is left alone', JSON.stringify(rc));
   const dels = queries.filter(q => /^DELETE/.test(q[0])).map(q => q[1][0]).join(), ups = queries.filter(q => /^UPDATE/.test(q[0]));
-  ok(dels === 'en-a,en-c' && ups.length === 1 && ups[0][1][0] === 'en-b' && ups[0][1][2] === '20261010120000',
-     'the dead are deleted by card AND item; the living one is stamped with this run, so the next run asks the next 20');
+  ok(dels === 'en-a,en-c' && ups.length === 2 && ups[0][1][0] === 'en-b' && ups[0][1][2] === '20261010120000',
+     'the dead are deleted by card AND item; the living are stamped with this run, so the next run asks the next 20');
+  // Roy, 2026-10-10: a confirmed pick gets its CURRENT band — no shelf order by a stale one.
+  ok(/SET run_id = \$3, band = \$4/.test(ups[0][0]) && ups[0][1][3] === '30-45' && ups[1][1][0] === 'en-e' && ups[1][1][3] === '45-60',
+     'a confirmed pick is re-banded from the live price: 45-60 recorded, 30% today -> 30-45; unbanded, 50% -> 45-60');
+  ok(rc.bandChanged === 1 && rc.bandFirstSet === 1, 'the run counts band changes and first bands (bandChanged, bandFirstSet)', JSON.stringify(rc));
   })());
   ok(/dealJob\.recheck = await recheckDealPicks\(runId\);/.test(src) && src.indexOf('dealJob.recheck = await recheckDealPicks(runId);') < src.indexOf('const ids = await dealCandidates(DEALS_SUPPLY.cards);'),
      'each scheduled run re-checks first, before walking its 80 cards');

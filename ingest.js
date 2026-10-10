@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.13.1';   // bump when this file changes
+const VERSION = '5.13.2';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -1058,11 +1058,20 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
   // Without it, リザードン alone returns 39,269 results across T-shirts,
   // figures and snack-food stickers.
   const q = `ポケモンカード ${cardName} ${cardNumber || ''}`.trim();
+  // The LIVE search is PARKED (Roy, 2026-10-10): kept, unreachable. Its page
+  // has carried no usable data (no __NEXT_DATA__) on every check — 2026-08-26,
+  // 2026-10-02, 2026-10-10 — yet it was asked whenever the closed search gave
+  // fewer than 3 usable results: 636 times on the night of 2026-10-10 (plus some
+  // of that night's 569 HTTP 404s), ~1.2 s each measured, ~13 minutes of the
+  // nightly's 4-hour budget for nothing. Were it ever to answer, its median
+  // would be of ACTIVE listings — an asking price (feed 'live', basis 'ask').
+  // Turning it back on needs the page to carry data again: probe it first.
+  const YAHOO_LIVE_PRICES = false;
   const urls = [
     // sold/closed auctions = real transaction prices
     'https://auctions.yahoo.co.jp/closedsearch/closedsearch?p=' + encodeURIComponent(q) + '&n=50',
-    // live listings as fallback
-    'https://auctions.yahoo.co.jp/search/search?p=' + encodeURIComponent(q) + '&n=50'
+    // live listings — parked (above)
+    ...(YAHOO_LIVE_PRICES ? ['https://auctions.yahoo.co.jp/search/search?p=' + encodeURIComponent(q) + '&n=50'] : [])
   ];
 
   // Which feed a median is of, on every row (Roy, 2026-10-10): CLOSED = ended

@@ -10,7 +10,7 @@
 //     claimed by two cards is trusted for neither (tcgdexprice.productConflicts).
 // Each half asserts what it KEEPS as well as what it refuses.
 'use strict';
-require('./testcount')(63);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(64);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const S = require('./tcgsetname.js');
 const T = require('./tcgdexprice.js');
@@ -150,6 +150,8 @@ if (fs.existsSync(__dirname + '/ingest.js')) {
      /const feed = \/closedsearch\/\.test\(url\) \? \{ feed: 'closed' \} : \{ feed: 'live', basis: 'ask' \};/.test(ys)
      && /fxMetaOf\(jpy\), feed\),/.test(ys) && /fx: Object\.assign\(fxMetaOf\(jpy\), feed\)/.test(ys)
      && ys.indexOf("closedsearch/closedsearch") < ys.indexOf("search/search?p="));
+  ok('the live search is parked: kept, unreachable (no usable data on 08-26, 10-02, 10-10; 636 wasted requests a night)',
+     /const YAHOO_LIVE_PRICES = false;/.test(ys) && /\.\.\.\(YAHOO_LIVE_PRICES \? \['https:\/\/auctions\.yahoo\.co\.jp\/search\/search\?p=/.test(ys));
 } else console.log('  SKIP  ingest.js wiring — not in this checkout');
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');

@@ -29,4 +29,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT SELECT ON TABL
 --          has_schema_privilege(current_user, 'public', 'CREATE'),
 --          current_setting('default_transaction_read_only');
 --   -> cardhunt_local_ro | f | f | on
--- and a write must fail:  INSERT INTO search_log (query) VALUES ('x');  -> ERROR
+-- 4. Then, in a NEW terminal with DATABASE_URL set to this role:  node localdb.js --prove
+--    It must print "REFUSED: 25006 ..." and "PROVEN" and exit 0. Not proven = not set up.

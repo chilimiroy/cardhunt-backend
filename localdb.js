@@ -69,3 +69,48 @@ async function bootCheck(db, env) {
 }
 
 module.exports = { CAPABILITY_SQL, writable, canWrite, EXIT_READ_ONLY, exemptReason, bootCheck, SETUP };
+
+// ── node localdb.js --prove [--txn-read-only] ────────────────────────────
+// A guard is not working until something has been seen to fail against it
+// (CLAUDE.md, LESSONS 5). Run after migration-local-readonly.sql: it tries a
+// real INSERT through THIS machine's DATABASE_URL, inside BEGIN ... ROLLBACK,
+// and passes (exit 0) only if Postgres REFUSES it and no row exists after.
+// A write that goes through is rolled back, printed, and exits 1.
+// --txn-read-only proves the mechanism on any connection (SET TRANSACTION READ
+// ONLY first) — what the role's default_transaction_read_only does for every
+// transaction. Startup options (?options=-c ...) are dropped by Supabase's pooler
+// on both ports (measured 2026-10-10), so the role setting is the only way.
+async function prove(url, opts) {
+  const { Pool } = require('pg');
+  const db = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false }, max: 1 });
+  const tag = 'localdb-prove-' + Date.now();
+  const out = { tag };
+  try {
+    out.capability = (await db.query(CAPABILITY_SQL)).rows[0];
+    out.wouldBoot = (await bootCheck(db, {})).ok;
+    const c = await db.connect();
+    try {
+      await c.query('BEGIN');
+      if (opts && opts.txnReadOnly) await c.query('SET TRANSACTION READ ONLY');
+      await c.query('INSERT INTO search_log (query) VALUES ($1)', [tag]);
+      out.refused = null;
+    } catch (e) { out.refused = { code: e.code, message: e.message }; }
+    finally { await c.query('ROLLBACK').catch(() => {}); c.release(); }
+    out.rowsAfter = (await db.query('SELECT count(*)::int AS n FROM search_log WHERE query = $1', [tag])).rows[0].n;
+  } finally { await db.end().catch(() => {}); }
+  out.ok = !!out.refused && out.rowsAfter === 0;
+  return out;
+}
+if (require.main === module && process.argv.includes('--prove')) {
+  const txn = process.argv.includes('--txn-read-only');
+  prove(process.env.DATABASE_URL, { txnReadOnly: txn }).then(o => {
+    const c = o.capability || {};
+    console.log('  connection: ' + c.who + ' — insert ' + c.can_insert + ', create ' + c.can_create + ', read_only ' + c.read_only
+      + (txn ? ' (this transaction set READ ONLY)' : '') + '; a local server would ' + (o.wouldBoot ? 'start' : 'refuse to start'));
+    if (o.refused) console.log('  REFUSED: ' + o.refused.code + ' ' + o.refused.message);
+    else console.log('  NOT REFUSED: the INSERT went through (rolled back) — this connection can write');
+    console.log('  rows with the probe tag afterwards: ' + o.rowsAfter);
+    console.log(o.ok ? '  PROVEN: a write through this connection is refused by Postgres.' : '  NOT PROVEN.');
+    process.exit(o.ok ? 0 : 1);
+  }).catch(e => { console.log('  could not run: ' + e.message); process.exit(2); });
+}

@@ -4,7 +4,7 @@
 //
 //   node localdb.test.js
 'use strict';
-require('./testcount')(19);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(20);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const L = require('./localdb');
 let pass = 0, fail = 0;
@@ -48,6 +48,13 @@ const RW = { who: 'postgres', can_insert: true, can_create: true, read_only: 'of
          && /database: DATABASE_URL - CARDHUNT_WRITE_DATABASE_URL is not set/.test(c)
          && c.indexOf('CARDHUNT_WRITE_DATABASE_URL') < c.indexOf('node ingest.js'));
     }
+  }
+
+  {
+    const src = fs.readFileSync(__dirname + '/localdb.js', 'utf8').replace(/\r/g, '');
+    ok('--prove passes only on a REFUSED insert with no row after, inside BEGIN ... ROLLBACK; never runs under the server',
+       /out\.ok = !!out\.refused && out\.rowsAfter === 0;/.test(src) && /await c\.query\('ROLLBACK'\)/.test(src)
+       && /if \(require\.main === module && process\.argv\.includes\('--prove'\)\)/.test(src) && /process\.exit\(o\.ok \? 0 : 1\)/.test(src));
   }
 
   console.log('\n  wiring');

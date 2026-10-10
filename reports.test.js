@@ -51,7 +51,7 @@ ok('5 in 10 minutes: refused', R.rateRefusal({ w0: 5, w1: 5 }) && /10 minutes/.t
 ok('30 in a day: refused even when the last 10 minutes are quiet', R.rateRefusal({ w0: 0, w1: 30 }) && /24 hours/.test(R.rateRefusal({ w0: 0, w1: 30 }).limit));
 ok('counted in the table, per account', /FROM listing_reports WHERE user_id = \$1/.test(R.rateSql()));
 
-console.log('\n  the stored eBay price: cleared when actioned or dismissed, or after ' + R.PRICE_KEEP_DAYS + ' days');
+console.log('\n  the stored eBay price: cleared when actioned or dismissed, or after ' + R.REPORT_SHOWN_KEEP_DAYS + ' days');
 const NOW = Date.parse('2026-10-08T12:00:00Z'), DAY = 86400000;
 const rep = (o) => Object.assign({ source: 'ebay', price_shown: 412.5, state: 'new', created_at: new Date(NOW - DAY).toISOString() }, o);
 ok('KEPT: a new eBay report, a day old', !R.shouldClearPrice(rep({}), NOW));
@@ -64,7 +64,7 @@ ok('CLEARED: reviewed, 31 days old', R.shouldClearPrice(rep({ state: 'reviewed',
 ok('nothing to clear: an eBay report with no price', !R.shouldClearPrice(rep({ price_shown: null, state: 'dismissed' }), NOW));
 const CS = R.clearPricesSql();
 ok('the SQL clears the price and its currency, eBay rows only', /SET price_shown = NULL, price_currency = NULL/.test(CS) && /WHERE source = 'ebay' AND price_shown IS NOT NULL/.test(CS));
-ok('the SQL uses the same states and days as the rule', /state IN \('actioned', 'dismissed'\)/.test(CS) && new RegExp("interval '" + R.PRICE_KEEP_DAYS + " days'").test(CS));
+ok('the SQL uses the same states and days as the rule', /state IN \('actioned', 'dismissed'\)/.test(CS) && new RegExp("interval '" + R.REPORT_SHOWN_KEEP_DAYS + " days'").test(CS));
 ok('it never touches listing_id or listing_url, and deletes nothing', !/listing_id|listing_url|DELETE/.test(CS));
 // Awaited before the summary (an unawaited assertion never runs: the file exits first).
 const clearCheck = (async () => { let sql = null; const fake = { query: async (q) => { sql = q; return { rowCount: 3 }; } };

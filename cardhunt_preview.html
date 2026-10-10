@@ -758,7 +758,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
   <button class="nl on" data-nav="home" onclick="SS('home')">Home</button>
   <button class="nl" data-nav="search" onclick="SS('search')">Search</button>
   <button class="nl" data-nav="sets" onclick="SS('sets')">Sets</button>
-  <button class="nl" data-nav="portfolio" onclick="SS('portfolio')">Portfolio</button>
   <div class="nav-r">
     <button class="btn price-only" onclick="addAlertFromCard()" data-on="card" hidden>🔔 Set Alert</button>
     <button class="btn price-only" id="watch-btn" data-on="card" hidden onclick="toggleWatch()">🤍 Watch</button>
@@ -1177,9 +1176,18 @@ html:not(.ch-noprice) .price-door { display: none !important; }
   </div>
 </div>
 
-<!-- ══ PORTFOLIO ══ -->
-<div id="screen-portfolio" class="screen">
+<!-- ══ YOUR ACCOUNT — a screen (Roy, 2026-10-10) ══ two pages: Account (/api/account,
+     the signed-in person's own) and Portfolio, which was a top-level screen. SS('portfolio')
+     still works: it opens this screen on the Portfolio page. -->
+<div id="screen-account" class="screen">
   <div class="content" style="padding-top:28px">
+    <div style="font-size:22px;font-weight:800;letter-spacing:-.4px;margin-bottom:12px">Your account</div>
+    <div class="rep-tabs" role="group" aria-label="Account pages">
+      <button class="rep-tab" id="acct-tab-account" aria-pressed="true" onclick="acctTab('account')">Account</button>
+      <button class="rep-tab price-only" id="acct-tab-portfolio" aria-pressed="false" onclick="acctTab('portfolio')">Portfolio</button>
+    </div>
+    <div id="acct-panel-account"><div id="acct-body" style="max-width:520px"></div></div>
+    <div id="acct-panel-portfolio" class="price-only" hidden>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <div>
         <div style="font-size:22px;font-weight:800;letter-spacing:-.4px">My Portfolio</div>
@@ -1198,6 +1206,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
         <span>Card</span><span>Grade</span><span>Paid</span><span>Value</span><span>P/L</span><span></span>
       </div>
       <div id="portfolio-rows"></div>
+    </div>
     </div>
   </div>
 </div>
@@ -2097,7 +2106,7 @@ var TOPBAR = {
   sets:      { nav: 'sets',      back: false, search: false },
   setdetail: { nav: 'sets',      back: true,  search: true  },
   card:      { nav: null,        back: true,  search: true  },
-  portfolio: { nav: 'portfolio', back: false, search: true  },
+  account:   { nav: null,        back: true,  search: true  },   // Portfolio is a page of it (Roy, 2026-10-10)
   alerts:    { nav: null,        back: false, search: true, bell: true }
 };
 function topbarFor(id){
@@ -2116,6 +2125,8 @@ function topbarFor(id){
 }
 // SCREEN NAVIGATION
 function SS(id,skipHistory){
+  // Portfolio is a page of the account screen (Roy, 2026-10-10); the old route still lands there.
+  if(id==='portfolio'){ ACCT.tab='portfolio'; id='account'; }
   const cur=document.querySelector('.screen.on')?.id?.replace('screen-','');
   if(!skipHistory&&cur&&cur!==id) S.history.push(cur);
   // T4: remember where this screen was scrolled (and a card's whole view)
@@ -2128,7 +2139,7 @@ function SS(id,skipHistory){
   if(id==='home'&&!S.homeLoaded) loadHome();
   if(id==='sets'){if(!S.enSets.length) loadAllSets(); else renderSets();}
   if(id==='pokemon'){renderHomeSetRow();updateHeroStats();loadTrending();}
-  if(id==='portfolio') renderPortfolio();
+  if(id==='account') acctTab(ACCT.tab);
   if(id==='search') loadSearchSections();
   if(id==='alerts'){renderAlertsList();updateAlertStats();updateAlertsBar();}
   if(id==='card'&&S.currentCard) setTimeout(()=>initChart(S.activeGradeBase,S.activeRange||'3M'),80);
@@ -7359,6 +7370,7 @@ function pickRender(){
     // The person's own address, as the server returned it.
     h += '<div class="npick-who">' + liveEsc(AUTH.user.email || 'Signed in') + '</div>'
       + acctItem('Account', 'acctOpen()')
+      + (pricesOpen() ? acctItem('Portfolio', "SS(&quot;portfolio&quot;)") : '')
       + (AUTH.role === 'master' ? acctItem('Approve accounts', 'adminOpen()') + acctItem('Listing reports', 'reportsOpen()') : '');
   } else if (door) {
     h += '<div class="npick-who">' + liveEsc(DOOR.email || DOOR_TEXT[DOOR.kind][0]) + '</div>'
@@ -7800,9 +7812,20 @@ function adminRender(){
 // (Supabase signOut scope 'global': every session's refresh token is revoked;
 // a page already holding an access token keeps it until it expires, up to an
 // hour). A deletion REQUEST: recorded for the site's masters, nothing deleted.
-var ACCT = { data: null, error: null, asking: false, msg: null };
+var ACCT = { data: null, error: null, asking: false, msg: null, tab: 'account' };
 var SIGN_IN_NAME = { google: 'Google', email: 'An emailed sign-in link' };
-function acctOpen(){ openM('acct-overlay'); acctLoad(); }
+function acctOpen(){ ACCT.tab = 'account'; SS('account'); }
+// Which page of the account screen: Account, or Portfolio (approved accounts only —
+// /api/portfolio is theirs; anyone else lands on Account).
+function acctTab(t){
+  ACCT.tab = t === 'portfolio' && pricesOpen() ? 'portfolio' : 'account';
+  var pf = ACCT.tab === 'portfolio';
+  var pa = document.getElementById('acct-panel-account'), pp = document.getElementById('acct-panel-portfolio');
+  if (pa) pa.hidden = pf;
+  if (pp) pp.hidden = !pf;
+  [['acct-tab-account', !pf], ['acct-tab-portfolio', pf]].forEach(function (x) { var b = document.getElementById(x[0]); if (b) b.setAttribute('aria-pressed', x[1] ? 'true' : 'false'); });
+  if (pf) renderPortfolio(); else acctLoad();
+}
 async function acctLoad(){
   ACCT.error = null; ACCT.data = null; acctRender();
   try {
@@ -7834,8 +7857,8 @@ function acctRender(){
       : '<span style="color:var(--mu)">none recorded before this one</span>') + '</dd>'
     + '</dl>';
   if (pricesOpen()) h += '<div class="acct-sec">Yours</div><div class="acct-row">'
-    + '<button class="btn" onclick="closeM(\'acct-overlay\');SS(\'alerts\')">Your alerts →</button>'
-    + '<button class="btn" onclick="closeM(\'acct-overlay\');SS(\'portfolio\')">Your portfolio →</button></div>';
+    + '<button class="btn" onclick="SS(\'alerts\')">Your alerts →</button>'
+    + '<button class="btn" onclick="acctTab(\'portfolio\')">Your portfolio →</button></div>';
   h += '<div class="acct-sec">Sign out</div><div class="acct-row">'
     + '<button class="btn" onclick="' + (AUTH.user ? 'authSignOut()' : 'doorSignOut()') + '">Sign out</button>'
     + '<button class="btn" onclick="acctSignOutAll()" title="Ends your sign-in on every device and browser">Sign out everywhere</button></div>';
@@ -7866,7 +7889,7 @@ async function acctSignOutAll(){
   if (!AUTH.sb) return;
   var r = await AUTH.sb.auth.signOut({ scope: 'global' });
   if (r.error) { ACCT.msg = { text: r.error.message, bad: true }; return acctRender(); }
-  closeM('acct-overlay'); AUTH.notice = null; authCheck(null);
+  AUTH.notice = null; authCheck(null); SS('home');
 }
 function authSay(text, bad){ AUTH.notice = text ? { text: text, bad: !!bad } : null; authRender(); }
 // The only writer of AUTH.user: the server's verdict on the session's token.
@@ -8228,15 +8251,6 @@ function cleanSeries(name) {
     <div id="auth-body"></div>
   </div>
 </div>
-<!-- ══ YOUR ACCOUNT (TASK-account-and-bars T2) — the signed-in person's own, from
-     /api/account; the server reads the account from the token, never from the page. ══ -->
-<div id="acct-overlay" class="overlay">
-  <div class="modal" style="max-width:460px;max-height:90vh;overflow:auto">
-    <button class="modal-x" onclick="closeM('acct-overlay')" aria-label="Close">&#10005;</button>
-    <div style="font-size:18px;font-weight:800;margin-bottom:10px">Your account</div>
-    <div id="acct-body"></div>
-  </div>
-</div>
 <!-- ══ APPROVE ACCOUNTS (T6 step 2) — masters only; the server refuses anyone else ══ -->
 <!-- ══ REPORT A LISTING (T3) ══ filled by reportOpen(); everything but the
      reason and the details is captured from the row, not typed. -->
@@ -8415,6 +8429,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-9c60796-filterbar &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-6ab635c-accountscreen &middot; click to hide</div>
 </body>
 </html>

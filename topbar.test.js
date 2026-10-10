@@ -8,7 +8,7 @@
 //
 //   node topbar.test.js
 'use strict';
-require('./testcount')(35);   // 36 -> 35 2026-10-10: theme / currency / language 'once' checks became one menu check (T1). Assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(37);   // 36 -> 35 2026-10-10: theme / currency / language 'once' checks became one menu check (T1). Assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), vm = require('vm');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };
@@ -34,8 +34,14 @@ once(/class="btn notif-bell"/g, 'alerts bell');
 ok('theme, currency and language are no longer bar controls of their own', !/id="(theme-btn|cur-pick|lang-pick|currency-btn|lang-btn)"/.test(markup));
 ok('currency is written into the menu only when prices are open — not .price-only CSS, not in the markup at all',
    /if \(pricesOpen\(\)\) h \+= '<div class="npick-h">Currency<\/div>' \+ pickItems\('cur'\);/.test(H) && !/Currency<\/div>/.test(markup.replace(/<script[\s\S]*?<\/script>/g, '')));
-ok('nav items in order: Home, Search, Sets, Portfolio — Search between Home and Sets',
-  /data-nav="home"[^]*?data-nav="search"[^]*?data-nav="sets"[^]*?data-nav="portfolio"/.test(bar));
+ok('nav items in order: Home, Search, Sets — Search between Home and Sets',
+  /data-nav="home"[^]*?data-nav="search"[^]*?data-nav="sets"/.test(bar));
+// Roy, 2026-10-10: Portfolio is a page of the account screen, not a top-level screen.
+ok('Portfolio has no top-bar item; the account menu carries it for accounts with prices',
+  !/data-nav="portfolio"/.test(bar) && /\(pricesOpen\(\) \? acctItem\('Portfolio', "SS\(&quot;portfolio&quot;\)"\) : ''\)/.test(H));
+ok('the portfolio route still works: SS(\'portfolio\') opens the account screen on its Portfolio page',
+  /if\(id==='portfolio'\)\{ ACCT\.tab='portfolio'; id='account'; \}/.test(H) && /if\(id==='account'\) acctTab\(ACCT\.tab\);/.test(H)
+  && !/id="screen-portfolio"/.test(H) && /<div id="acct-panel-portfolio" class="price-only" hidden>[\s\S]*?id="portfolio-rows"/.test(H));
 ok('no second copy of any control (…2 ids)', !/id="(cur-pick2|lang-pick2|currency-btn2|lang-btn2|auth-btn2)"/.test(markup));
 
 console.log('\n  per screen: data, applied by topbarFor');

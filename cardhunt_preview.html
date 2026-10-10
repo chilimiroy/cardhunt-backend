@@ -3037,10 +3037,19 @@ function renderSelector() {
   h += '</div>';
   if (SEL.status === 'Other') {
     h += '<div class="selopts selother">';
-    otherGraders().forEach(function (g) {
+    // The common graders stay in view; everything after ACE sits behind More
+    // (TASK-account-and-bars T6b). Open while the chosen grader is in the tail,
+    // so a selection is never hidden.
+    var og = otherGraders(), cut = og.indexOf('ACE') + 1;
+    var tailOn = SEL.moreGraders || og.indexOf(otherG) >= cut;
+    og.forEach(function (g, i) {
+      if (i >= cut && !tailOn) return;
       h += '<button class="selchip sm' + (otherG === g ? ' on' : '') + '" '
         + 'onclick="setOtherGrader(&quot;' + g + '&quot;)">' + g + '</button>';
     });
+    if (cut > 0 && cut < og.length && !tailOn)
+      h += '<button class="selchip sm selmore" aria-expanded="false" onclick="SEL.moreGraders=true;renderSelector()" title="'
+        + (og.length - cut) + ' more graders">More &#9662;</button>';
     h += '</div>';
   }
   h += '</div>';
@@ -8380,6 +8389,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-b4ca735-account &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-a6f1df8-more &middot; click to hide</div>
 </body>
 </html>

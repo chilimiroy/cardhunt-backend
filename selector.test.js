@@ -15,7 +15,7 @@
 // they can produce into the REAL cardmatch. A grade the box can offer but the
 // gate cannot parse would return an empty list and look like "no listings".
 
-require('./testcount')(531);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(533);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const path = require('path');
 const cm = require('./cardmatch.js');
@@ -93,6 +93,15 @@ ok('SGC and TAG lead Other, in that order',
 // T4: ACE was in cardmatch all along (GRADERS_AMBIGUOUS) and missing only
 // from the UI, which read GRADERS_UNAMBIGUOUS alone.
 ok('ACE is offered under Other', box.otherGraders().indexOf('ACE') >= 0, box.otherGraders().join(', '));
+// T6b (TASK-account-and-bars, 2026-10-10): everything after ACE behind More.
+{
+  const rs = sliceFn('renderSelector');
+  ok('Other shows SGC, TAG, ACE; the rest sit behind a More button', box.otherGraders().slice(0, 3).join() === 'SGC,TAG,ACE'
+     && /cut = og\.indexOf\('ACE'\) \+ 1/.test(rs) && /if \(i >= cut && !tailOn\) return;/.test(rs) && /More &#9662;/.test(rs),
+     box.otherGraders().length - 3 + ' behind More');
+  ok('More opens the tail, and the tail stays open while the chosen grader is in it',
+     /SEL\.moreGraders=true;renderSelector\(\)/.test(rs) && /var tailOn = SEL\.moreGraders \|\| og\.indexOf\(otherG\) >= cut;/.test(rs));
+}
 ok('...and cardmatch still counts bare ACE as ambiguous (ACE SPEC stays raw)',
   cm.GRADERS_AMBIGUOUS.indexOf('ACE') >= 0 && cm.GRADERS_UNAMBIGUOUS.indexOf('ACE') < 0);
 ok('the verified graders are exactly SGC, TAG, ACE, AGS, ISA',

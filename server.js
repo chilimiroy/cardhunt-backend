@@ -1212,15 +1212,19 @@ async function dealRefOf(cardId) {
 // ~1.3 calls a card measured = ~104 a run, ~830 a day, BACKGROUND origin (it
 // yields at the 92% soft stop). A click: 1 getItem (0 within 15 minutes).
 // ══════════════════════════════════════════════════════════════
-// DEPTH (T5a, 2026-10-10): a pick is shown for showHours, 6 — two runs'
-// picks at once. With rotation a run no longer re-walks the last run's cards,
-// so the older picks are a RESERVE of other cards: a click that finds one
-// sold deletes it and the next freshest takes its tile. 6 h is the licence's
-// ceiling for keeping eBay data to display it, with its age shown (§8.1,
-// read 2026-10-08) — a pick stores no eBay data, and its tile says "found N h
-// ago". Measured before: 7 picks a run for an 8-tile shelf, and picks shown
-// 3 h while the Action fired every 4.4-9.5 h (7 runs in 45 h, not 15).
-const DEALS_SUPPLY = { cards: 80, pool: 400, showHours: 6, maxAgeMs: 6 * 3600 * 1000, waitMs: 90 * 1000, grade: 'Raw NM' };
+// DEPTH (T5a, 2026-10-10): a pick is shown for showHours. With rotation a run
+// no longer re-walks the last run's cards, so older picks are a RESERVE of
+// other cards: a click that finds one sold deletes it and the next freshest
+// takes its tile. 10 h since 2026-10-10 (Roy; it was 6 for one night, 3 before):
+// the schedule is the real cause of an empty shelf — GitHub fired the 3-hourly
+// Action 7 times in 45 h, 4.4-9.5 h apart — so a window shorter than the
+// longest gap empties the shelf by construction. What a pick stores is ours
+// (card, item id, found_at, run); its tile shows no eBay data and says
+// "found N h ago"; eBay's listing is fetched live on the click, and deleted
+// there if sold or no longer a deal. (The 6 h figure read in the licence on
+// 2026-10-08 is for stored eBay listing data shown as such — Roy's reading
+// that a pick is not that is what this rests on.)
+const DEALS_SUPPLY = { cards: 80, pool: 400, showHours: 10, maxAgeMs: 10 * 3600 * 1000, waitMs: 90 * 1000, grade: 'Raw NM' };
 let dealTableReady = null;
 // Created by the server on first use, RLS on in the same step: API roles
 // read nothing of it (every read and write goes through this server).

@@ -185,8 +185,8 @@ ok(/app\.post\('\/api\/deals\/refresh', toolingKey\.require/.test(sup) && /app\.
   ok(shelf.length > 500, '/api/deals exists');
   ok(!/(gatherListings|listingsFor|sourceEbay|fetchEbay|ebayItemOnDemand|dealItemLive)\(/.test(shelf) && /ebayCalls: 0/.test(shelf), 'the shelf never asks eBay — 0 calls, and says so');
   ok(!/item_id|title|discount|landed|url/.test(shelf.replace(/\/\/.*$/gm, '')), 'the shelf sends OUR data only — no item id, title, link, price of eBay\'s, or discount');
-  ok(/found_at > now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(shelf) && /showHours: 6, maxAgeMs: 6 \* 3600 \* 1000,/.test(src),
-     'depth (T5a): picks are shown for 6 h — the licence ceiling — two runs of different cards');
+  ok(/found_at > now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(shelf) && /showHours: 10, maxAgeMs: 10 \* 3600 \* 1000,/.test(src),
+     'depth (T5a): picks are shown for 10 h — longer than the Action\'s longest measured gap (9.5 h)');
   ok(/const shown = out\.slice\(0, limit\)\.sort\(\(a, b\) => b\.price - a\.price\);/.test(shelf) && /reserve: out\.length - shown\.length/.test(shelf),
      'the freshest `limit` are shown, ordered by OUR price — never by the internal discount; the rest are the reserve, counted');
   ok(/DELETE FROM deal_picks WHERE found_at < now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(src)

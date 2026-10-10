@@ -7822,7 +7822,9 @@ function acctRender(){
     + '<dt>Signs in with</dt><dd>' + liveEsc(SIGN_IN_NAME[d.signIn] || d.signIn || 'not stated by the sign-in') + '</dd>'
     + '<dt>Account</dt><dd>' + liveEsc(stateLine) + '</dd>'
     + '<dt>First signed in</dt><dd>' + liveEsc(when(d.firstSignedInAt)) + '</dd>'
-    + '<dt>Last seen</dt><dd>' + liveEsc(when(d.lastSeenAt)) + ' <span style="font-size:11px;color:var(--fa)">(this visit)</span></dd>'
+    // The visit before this one — this visit's own time tells nobody anything.
+    + '<dt>Previous visit</dt><dd>' + (d.previousVisitAt ? liveEsc(when(d.previousVisitAt))
+      : '<span style="color:var(--mu)">none recorded before this one</span>') + '</dd>'
     + '</dl>';
   if (pricesOpen()) h += '<div class="acct-sec">Yours</div><div class="acct-row">'
     + '<button class="btn" onclick="closeM(\'acct-overlay\');SS(\'alerts\')">Your alerts →</button>'
@@ -8406,6 +8408,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-bc820bb-cardpage &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-a0cda56-lastvisit &middot; click to hide</div>
 </body>
 </html>

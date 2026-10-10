@@ -2105,8 +2105,10 @@ app.get('/api/account', access.self, async (req, res) => {
     res.json({ email: a.email || me.email || null, signIn: me.provider || null, role,
       state: role === 'master' ? { state: 'master', since: null, note: 'master by the site settings, not by approval' }
         : { state: role, since: a.decided_at || a.first_signed_in_at, sinceIs: a.decided_at ? 'decided' : 'first sign-in' },
-      firstSignedInAt: a.first_signed_in_at, lastSeenAt: a.last_seen_at,
-      lastSeenNote: 'updated each time the page checks your sign-in, so it reads as this visit',
+      // The visit BEFORE this one (roles.js previous_visit_at): last_seen_at is
+      // this visit's, so showing it told nobody anything. null = no earlier visit recorded.
+      firstSignedInAt: a.first_signed_in_at, previousVisitAt: a.previous_visit_at || null,
+      visitGapMinutes: roles.VISIT_GAP_MINUTES,
       deletionRequestedAt, deletionNote, passwords: false });
   } catch (e) { res.status(503).json({ error: 'your account record could not be read: ' + e.message }); }
 });

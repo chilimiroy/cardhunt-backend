@@ -73,12 +73,16 @@ function memoryStore(seed) {
      && /email text\)$/.test(roles.USER_ACCESS_SQL) && /ADD COLUMN IF NOT EXISTS email text$/.test(roles.USER_ACCESS_EMAIL_SQL));
   const mig = fs.readFileSync(__dirname + '/migration-user-access.sql', 'utf8').replace(/\r/g, '');
   const norm = s => s.replace(/--.*$/gm, '').replace(/\s+/g, ' ').replace(/;\s*$/, '').trim();
-  ok('migration-user-access.sql records the same statements roles.js runs', norm(mig) === norm(roles.USER_ACCESS_SQL + '; ' + roles.USER_ACCESS_EMAIL_SQL), norm(mig).slice(-80));
+  ok('migration-user-access.sql records the same statements roles.js runs', norm(mig) === norm(roles.USER_ACCESS_SQL + '; ' + roles.USER_ACCESS_EMAIL_SQL + '; ' + roles.USER_ACCESS_PREV_SQL), norm(mig).slice(-80));
   const R = fs.readFileSync(__dirname + '/roles.js', 'utf8').replace(/\r/g, '');
   const touch = R.slice(R.indexOf('async touch('), R.indexOf('async decide('));
-  ok('a sign-in touch never changes a stored state; it writes last_seen_at and the email only',
-     /ON CONFLICT \(user_id\) DO UPDATE SET last_seen_at = now\(\),\s*email = COALESCE\(EXCLUDED\.email, user_access\.email\)`/.test(touch)
+  ok('a sign-in touch never changes a stored state; it writes the visit times and the email only',
+     /ON CONFLICT \(user_id\) DO UPDATE SET\s*previous_visit_at = [^,]+,\s*last_seen_at = now\(\),\s*email = COALESCE\(EXCLUDED\.email, user_access\.email\)`/.test(touch)
      && !/state/.test(touch.split('ON CONFLICT')[1] || 'state'));
+  // The previous visit (2026-10-10): the last moment of the visit before this one; a visit ends after 30 minutes idle.
+  ok('previous_visit_at moves only when the last page load was more than 30 minutes ago, to that load\'s time',
+     /previous_visit_at = CASE WHEN user_access\.last_seen_at < now\(\) - interval '\$\{VISIT_GAP_MINUTES\} minutes'\s*THEN user_access\.last_seen_at ELSE user_access\.previous_visit_at END/.test(touch)
+     && roles.VISIT_GAP_MINUTES === 30 && /ADD COLUMN IF NOT EXISTS previous_visit_at timestamptz$/.test(roles.USER_ACCESS_PREV_SQL));
   ok('touch stores the user id and the email only — no other token field reaches the table',
      /INSERT INTO user_access \(user_id, email\) VALUES \(\$1, \$2\)/.test(touch) && /\[userId, emailOf\(email\)\]/.test(touch));
   ok('nothing in roles.js reads the auth schema (no cross-schema read)', !/\bauth\.\w+/.test(R.replace(/\/\/.*$/gm, '')));
@@ -101,7 +105,7 @@ function memoryStore(seed) {
       const c = await db.query(`SELECT column_name, data_type FROM information_schema.columns
         WHERE table_schema='public' AND table_name='user_access' ORDER BY ordinal_position`);
       const cols = c.rows.map(x => x.column_name + ':' + x.data_type).join(',');
-      ok('user_access exists with the expected columns', cols === 'user_id:uuid,state:text,first_signed_in_at:timestamp with time zone,last_seen_at:timestamp with time zone,decided_by:uuid,decided_at:timestamp with time zone,email:text', cols);
+      ok('user_access exists with the expected columns', cols === 'user_id:uuid,state:text,first_signed_in_at:timestamp with time zone,last_seen_at:timestamp with time zone,decided_by:uuid,decided_at:timestamp with time zone,email:text,previous_visit_at:timestamp with time zone', cols);
       let refused = null;
       try { await db.query("BEGIN"); await db.query("INSERT INTO user_access (user_id, state) VALUES (gen_random_uuid(), 'master')"); }
       catch (e) { refused = e.code + ' ' + e.message; } finally { await db.query('ROLLBACK'); }

@@ -138,7 +138,10 @@ PROGRESS 2026-10-09 (no estimates)). **No estimate is shown anywhere.**
 
 - `price_history`: **zero rows carry an eBay source** (terms).
   `listing_photo_verdicts` holds hashed keys only — no title, price, URL, photo.
-- **Chinese is parked**: no rarity source, TCGdex's Chinese pricing is the
+- **Japanese is NOT parked**: the nightly prices it from Yahoo (7,558 rows since 08-20) and
+  runs out of its 4 h budget in it (10-10: 1,608 of 4,000). The "parked" note was in a task brief.
+- **Chinese is parked**: nothing priced — but the nightly still walks zh-tw/zh-cn (4,877
+  cards, 0 network) and logs them as gaps. No rarity source, TCGdex's Chinese pricing is the
   Japanese card's under a translated name. `pricingAllowedFor()` = en, ja.
 
 - **5,475 Japanese cards (39%) are not on TCGdex** (Limitless-ingested);
@@ -166,9 +169,9 @@ From Render 2026-09-22 (`/api/probe/sources`) and home (`node sourceprobe.js`).
 |---|---|---|---|
 | Yuyu-tei | 200 | 200 | **LIVE** — listings + prices |
 | eBay Browse | 200 | 200 | **LIVE** — US/GB/DE/AU/CA/FR/IT/ES (`EBAY_SITES`); JP 409 |
-| PriceCharting | 403 (10-02, Cloudflare) | 200 JSON (09-22) | viable, not built |
+| PriceCharting | 403 (10-02, Cloudflare) | 200 JSON (09-22) | **built, dormant**: `/api/graded` (no token set; name-only, the page never calls it) |
 | Troll and Toad · Card Kingdom | 200 | 200 | viable, need HTML parsers |
-| Yahoo Auctions JP | 200 | **403** | local only; live-search `__NEXT_DATA__` gone (fallback silently empty, not rebuilt) |
+| Yahoo Auctions JP | 200 | **403** | local only; **prices Japanese every night** (completed sales). Live search has no `__NEXT_DATA__` yet is still asked (636 times 10-10) |
 | Yahoo Shopping V3 / V1-V2 | key refused / withdrawn | same | not usable |
 | COMC · Cardrush · Cardmarket | 403 (Cardrush 200 from home 10-02) | 403 | closed to automation |
 | Mercari JP · Facebook | — | — | deep link only |
@@ -803,6 +806,11 @@ fetch the source before calling a figure its current answer: the $4,000 / $20,00
 $29,750 "pokemontcg.io" figures were `cards.tcgplayer_data` of 2026-07-27; live it said
 market null, low $18,500 (PROGRESS 2026-10-10 (stored as live)). Every read of a stored
 block goes through `pokemontcgblock.js` (`pokemontcgblock.test.js` scans every file).
+
+**"Off", "parked", "not built" is a claim about what RUNS — check the scheduler, the nightly
+log and the routes, not the document**: Japanese "parked" while the nightly priced it; a
+PriceCharting route "not built"; a dead Yahoo fallback asked 636 times a night (PROGRESS
+2026-10-10 (what runs)).
 
 **Cache keys carry everything the value depends on.** *Archive:* "A number cached per card is wrong when it depends on the grade"
 

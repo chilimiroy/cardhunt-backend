@@ -1,5 +1,50 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 (what runs) — the Yahoo median, the browser median, the bid, docs vs code
+
+0 eBay calls. Yahoo probed from home (2 requests).
+
+### The Yahoo median is of completed sales
+Code: yahooJapanSearch asks /closedsearch/closedsearch first and falls through
+to the live /search/search only when the closed search gives < 3 usable results.
+Probed today: closed returns 50 items, all ended, all with >= 1 bid (completed
+sales, final prices); live returns no __NEXT_DATA__ (as on 08-26 and 10-02), so
+it prices nothing. 5,487 rows since 08-26 written while live carried no data;
+2,071 rows of 08-20 .. 08-24 predate that measurement (the code of that week is
+not kept; the week's records say closed). No yahoojp_avg row. The 2,433
+Japanese headlines on Yahoo rows are completed-sale medians: unmarked. Each row
+now records feed 'closed', or 'live' with basis 'ask'.
+
+### Exemption #3: gradeprice's browser median
+gradeprice.js is the module the page loads. byPrintRun computed a median per
+print-run group in visitors' browsers; the only reader, livePrintRuns, draws
+run, count, low, rows, unstated — never median. Deleted. The helper remains for
+aggregate (parked caller only).
+
+### Exemption #9: the current bid
+Drawn only in #cd-live, inside the bordered "Listings from eBay" section, from
+rows filtered to source 'ebay' — inside eBay's zone. It showed only the USD
+conversion, unlabelled; now "auction bid £10.00 ≈ $12.70 converted".
+
+### Approvals and the rename
+Roy approved #1 #2 #4 #5 #6 #7 #8 #10 #11 #12. #10's constant is now
+REPORT_SHOWN_KEEP_DAYS (no longer trips check C; entry removed). Proposals left:
+#3, #9, #13, #14.
+
+### Documented as off or parked, but running (the class)
+- "Japanese is parked until Yahoo is sorted" — TASK-query-language.md (not
+  CLAUDE.md). The nightly prices Japanese every night (7,558 rows) and runs out
+  of its 4 h budget there (10-10: ja stopped at 1,608 of 4,000).
+- TASK-deals-check.md: "it is off" — deals ON since 2026-10-08.
+- CLAUDE.md "PriceCharting — viable, not built": /api/graded is built (name-
+  only, gated, dormant: no PRICECHARTING_TOKEN; the page never calls it).
+- CLAUDE.md "live-search fallback silently empty, not rebuilt": not off — asked
+  636 times on 10-10 (each answered with no data) inside the nightly's budget.
+- CLAUDE.md "Chinese is parked": nothing priced (true), but the nightly walks
+  4,877 zh cards each night (0 network) and logs them as gaps.
+Checked and true: certcheck's PSA half not built; no repeated-photo hash; no
+sold source; checkout/login disabled; gradeprices parked; task watch running.
+
 ## 2026-10-10 (yen) — Yahoo's rate, eBay statistics out of tooling, the exemptions, weekly Yuyu-tei
 
 0 eBay calls.

@@ -18,7 +18,7 @@
 // "Is it gone?" is asserted against the page with comments stripped, because
 // the comments recording each removal name what was removed.
 'use strict';
-require('./testcount')(84);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(88);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
@@ -98,6 +98,27 @@ ok('nothing in the page links to the compare overlay', !/compare-overlay|compare
   const routes = (server.match(/app\.(?:get|post|put|patch|delete)\('[^']*compare[^']*'/gi) || []);
   ok('the server has no card-compare endpoint (only the photo compare)',
     routes.length === 1 && /\/api\/listings\/:cardId\/compare'/.test(routes[0]), routes.join(', '));
+}
+
+// PriceCharting's /api/graded (Roy, 2026-10-10): parked — name-only matching,
+// and PriceCharting licenses its API data for internal use only.
+console.log('\n  /api/graded (PriceCharting) — parked, refuses, reads no token, fetches nothing');
+{
+  const f = 'pricecharting-disabled.js';
+  const src = fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : '';
+  ok(f + ' holds the route\'s code, and says why it is parked (name-only; internal-use licence)',
+    /pricecharting\.com\/api\/product/.test(src) && /NOT LOADED BY ANY PAGE\. NOT SERVED\. NOT RUN/.test(src)
+    && /NAME only/.test(src) && /internal use only/.test(src));
+  let threw = ''; try { require('./' + f); } catch (e) { threw = e.message; }
+  ok('requiring it throws before anything runs', /is parked: nothing may require it/.test(threw));
+  let tracked = false;
+  try { execSync('git ls-files --error-unmatch ' + f, { stdio: 'ignore' }); tracked = true; } catch (e) {}
+  ok(f + ' is tracked in git', tracked, 'git add ' + f);
+  const sv = fs.readFileSync('server.js', 'utf8');
+  const rt = sv.slice(sv.indexOf("app.get('/api/graded/:cardName'"), sv.indexOf('\n});\n', sv.indexOf("app.get('/api/graded/:cardName'")));
+  ok('the route answers 410 with the reason, reads no token and fetches nothing; server.js never names the parked file',
+    /res\.status\(410\)\.json\(\{ parked: true, reason: PRICECHARTING_PARKED \}\)/.test(rt) && !/fetch\(|await/.test(rt)
+    && !/PC_TOKEN|PRICECHARTING_TOKEN|pricecharting-disabled/.test(sv));
 }
 
 // gradeprices (Roy, 2026-10-10): parked like compare. Graded prices cannot be

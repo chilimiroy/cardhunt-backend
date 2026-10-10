@@ -5072,42 +5072,17 @@ app.get('/api/listings/:cardName', (req, res) => {
   });
 });
 
-// ══════════════════════════════════════════════════════════════
-// PRICECHARTING — graded PSA / CGC / BGS prices
-// Set PRICECHARTING_TOKEN in Render env vars.
-// Free token at https://www.pricecharting.com/api-documentation
-// ══════════════════════════════════════════════════════════════
-const PC_TOKEN = process.env.PRICECHARTING_TOKEN || '';
-
-app.get('/api/graded/:cardName', access.priced, async (req, res) => {
-  const { cardName } = req.params;
-  const setName = req.query.set || '';
-  if (!PC_TOKEN) {
-    return res.json({
-      configured: false,
-      message: 'PriceCharting not configured. Add PRICECHARTING_TOKEN to enable graded prices.'
-    });
-  }
-  try {
-    const q = encodeURIComponent(`${cardName} ${setName}`.trim());
-    const r = await fetch(`https://www.pricecharting.com/api/product?t=${PC_TOKEN}&q=${q}`);
-    if (!r.ok) return res.json({ configured: true, error: 'PriceCharting ' + r.status });
-    const d = await r.json();
-    const cents = v => v ? parseFloat((v/100).toFixed(2)) : null;
-    res.json({
-      configured: true,
-      name: d['product-name'],
-      console: d['console-name'],
-      prices: {
-        'Raw NM':  cents(d['loose-price']),
-        'PSA 9':   cents(d['graded-price']),
-        'PSA 10':  cents(d['manual-only-price']),
-        'CGC 9.5': cents(d['bgs-10-price']),
-        'BGS 9.5': cents(d['box-only-price'])
-      },
-      raw: d
-    });
-  } catch (err) { res.json({ configured: true, error: err.message }); }
+// ════════════════════════════════════════════════════════════
+// PRICECHARTING graded prices — PARKED (Roy, 2026-10-10). The code is in
+// a parked file (CLAUDE.md), unreachable: it matched by name only, and
+// PriceCharting's API terms license the data for internal use only, so it
+// could not be displayed even matched correctly. The route answers 410 and
+// says why; no token is read and nothing is fetched.
+// ════════════════════════════════════════════════════════════
+const PRICECHARTING_PARKED = 'PriceCharting graded prices are parked (2026-10-10): the route matched by card name only, '
+  + 'and PriceCharting licenses its API data for internal use only, so it cannot be displayed. Nothing was fetched.';
+app.get('/api/graded/:cardName', access.priced, (req, res) => {
+  res.status(410).json({ parked: true, reason: PRICECHARTING_PARKED });
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -5141,7 +5116,7 @@ app.get('/api/diagnostic', access.optional, async (req, res) => {
   } catch (e) { out.checks.tcgdex_japanese = 'FAIL ' + e.message; }
 
   out.checks.ebay = ebayConfigured() ? 'configured' : 'NOT configured - add EBAY_CLIENT_ID + EBAY_CLIENT_SECRET';
-  out.checks.pricecharting = PC_TOKEN ? 'configured' : 'NOT configured - add PRICECHARTING_TOKEN';
+  out.checks.pricecharting = 'PARKED (2026-10-10): name-only, and licensed for internal use only — see /api/graded';
   out.checks.database = db ? 'Supabase connected' : 'no DATABASE_URL';
 
   res.json(out);
@@ -5171,7 +5146,7 @@ app.get('/api/diagnostic', access.optional, async (req, res) => {
 //       It also matched on NAME + SET only — the Mega Hawlucha $230.48.
 //   priceChartingGraded() PriceCharting HTML scrape        deleted 2026-09-29
 //       Dead: "OK - 0 grade prices" on every probe. The token API route
-//       /api/graded/:cardName is separate and untouched.
+//       /api/graded/:cardName was separate; parked 2026-10-10.
 //
 // What is left needs no network: the number-matched price we store (the
 // same LATERAL join /api/cards uses) and the sold status. Kept as an
@@ -5208,7 +5183,7 @@ const MARKET_WITHDRAWN = Object.freeze({
   ebaySold:        'eBay sold-page scrape — see sold.reason',
   ebayActive:      'ungated eBay name search — lowest live listing comes from /api/listings/:cardId (gated)',
   tcgplayerSearch: "TCGplayer's internal search API — their prices are held via TCGdex and pokemontcg.io",
-  pricecharting:   'PriceCharting HTML scrape (returned nothing) — /api/graded/:cardName uses their token API'
+  pricecharting:   'PriceCharting HTML scrape (returned nothing); their token API route /api/graded is parked too (internal-use licence, name-only)'
 });
 
 // GET /api/market/:cardName?cardId=en-base1-4

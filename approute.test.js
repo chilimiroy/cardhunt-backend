@@ -17,7 +17,7 @@
 // .bak files; express.static(__dirname) would publish every one, so the
 // exposure check requests them rather than reading the route table.
 
-require('./testcount')(83);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(84);   // assertions in a plain run — fewer fails the file (testcount.js)
 const { spawn } = require('child_process');
 const path = require('path');
 const vm = require('vm');
@@ -157,7 +157,7 @@ async function waitForBoot(server, ms = 20000) {
       // estimator.js was served here until 2026-10-09; deleted with every estimate.
       '/estimator.js',
       // parked 2026-10-10: refuses to run; never served either.
-      '/gradeprices-disabled.js',
+      '/gradeprices-disabled.js', '/pricecharting-disabled.js',
       // T3 (2026-09-29): tracked, and still never served — a design mockup
       // full of sample prices, and a script that writes prices.
       '/cardhunt-redesign.html', '/tcgdexharvest.js', '/tcgsetname.js',

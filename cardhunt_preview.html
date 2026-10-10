@@ -232,6 +232,27 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   .nav-r .nsearch input,.nav-r .nsearch input:focus{width:100%}
   .nav-r .tbq{width:auto!important;flex:1 1 150px;min-width:0}
 }
+/* Laptop widths (Roy, 2026-10-10): between the phone rule and ~1180 px the one-row
+   bar was wider than the window on the card screen — 1,108 px at 641-900, 1,125 at
+   1000-1100 (measured with a 20-character email) — and the page scrolled sideways.
+   921-1180: one compact row — the search box shrinks, the account label is capped
+   with an ellipsis, paddings tighten. 641-920: two rows, as on a phone. */
+@media(min-width:641px) and (max-width:1180px){
+  .nav{padding:0 14px}
+  .logo{margin-right:10px}
+  .nl{padding:7px 9px}
+  .nav-r{gap:6px;min-width:0}
+  .nav .btn{padding:7px 10px}
+  .nav-r .nsearch{flex:0 1 150px;min-width:90px}
+  .nav-r .nsearch input,.nav-r .nsearch input:focus{width:100%}
+  .auth-btn .npick-v{display:inline-block;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+}
+@media(min-width:641px) and (max-width:920px){
+  .nav{height:auto;min-height:52px;flex-wrap:wrap;padding:8px 16px;row-gap:6px}
+  .nav-r{margin-left:0;width:100%;flex-wrap:wrap}
+  .nav-r .nsearch{flex:1 1 150px}
+  .auth-btn .npick-v{max-width:200px}
+}
 /* T4 (2026-09-28): the CONTENT under the nav, measured in a 390px iframe
    (375px of content). Home was 354px too wide (four hero stats in one row,
    five game tiles in five columns), Pokémon and Sets 19px (four language
@@ -8429,6 +8450,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-6ab635c-accountscreen &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-4da32eb-barfit &middot; click to hide</div>
 </body>
 </html>

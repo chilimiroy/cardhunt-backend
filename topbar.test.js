@@ -8,7 +8,7 @@
 //
 //   node topbar.test.js
 'use strict';
-require('./testcount')(37);   // 36 -> 35 2026-10-10: theme / currency / language 'once' checks became one menu check (T1). Assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(39);   // 36 -> 35 2026-10-10: theme / currency / language 'once' checks became one menu check (T1). Assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), vm = require('vm');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };
@@ -34,6 +34,12 @@ once(/class="btn notif-bell"/g, 'alerts bell');
 ok('theme, currency and language are no longer bar controls of their own', !/id="(theme-btn|cur-pick|lang-pick|currency-btn|lang-btn)"/.test(markup));
 ok('currency is written into the menu only when prices are open — not .price-only CSS, not in the markup at all',
    /if \(pricesOpen\(\)\) h \+= '<div class="npick-h">Currency<\/div>' \+ pickItems\('cur'\);/.test(H) && !/Currency<\/div>/.test(markup.replace(/<script[\s\S]*?<\/script>/g, '')));
+// Laptop widths (Roy, 2026-10-10): measured on the card screen with a 20-character email, the bar was
+// 1,108-1,125 px wide at 641-1100 px. After: never wider than the window (641-1366), one row from 921.
+ok('641-1180 px: a compact row — the search box shrinks, the account label is capped with an ellipsis',
+  /@media\(min-width:641px\) and \(max-width:1180px\)\{[^]*?\.nav-r \.nsearch\{flex:0 1 150px;min-width:90px\}[^]*?\.auth-btn \.npick-v\{display:inline-block;max-width:120px;overflow:hidden;text-overflow:ellipsis/.test(H));
+ok('641-920 px: the bar wraps into two rows, as on a phone',
+  /@media\(min-width:641px\) and \(max-width:920px\)\{\s*\.nav\{height:auto;min-height:52px;flex-wrap:wrap;/.test(H));
 ok('nav items in order: Home, Search, Sets — Search between Home and Sets',
   /data-nav="home"[^]*?data-nav="search"[^]*?data-nav="sets"/.test(bar));
 // Roy, 2026-10-10: Portfolio is a page of the account screen, not a top-level screen.

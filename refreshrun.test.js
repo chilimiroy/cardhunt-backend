@@ -3,7 +3,7 @@
 //
 //   node refreshrun.test.js
 'use strict';
-require('./testcount')(23);
+require('./testcount')(26);
 const fs = require('fs'), path = require('path'), os = require('os'), cp = require('child_process');
 const rr = require('./refreshrun');
 let pass = 0, fail = 0;
@@ -65,6 +65,19 @@ ok('interrupts (Ctrl+C, the console closing, terminate) print the line and exit 
 ok('the previous run\'s unfinished marker is reported at the start', /refreshrun\.previousUnfinished\(\)/.test(body));
 ok('the budget stop returns "stopped" with where it stopped', /ranOut \? \{ state: 'stopped', done: stoppedAt, of: batch\.length/.test(one));
 ok('progress is recorded inside the card loop', /refreshrun\.progress\(run, lang, i, batch\.length\)/.test(one));
+// ONE budget for the whole run (Roy, 2026-10-10): it was per language — refresh all = up to 4 x --hours awake.
+ok('refreshDue makes the budget ONCE, before the language loop, and hands it to every language',
+  (body.match(/refreshBudget\(flags\)/g) || []).length === 1 && body.indexOf('const budget = refreshBudget(flags);') < body.indexOf('for (const L of requested)')
+  && /await refreshOne\(L, flags, run, budget\)/.test(body));
+ok('refreshOne reads the run\'s deadline and makes none of its own (only a direct call, with no budget, gets one)',
+  /const \{ hours: budgetHours, deadline \} = budget \|\| refreshBudget\(flags\);/.test(one) && !/Date\.now\(\) \+ budgetHours/.test(one));
+{
+  const fnSrc = I.slice(I.indexOf('function refreshBudget('), I.indexOf('\n}\n', I.indexOf('function refreshBudget(')) + 2);
+  const refreshBudget = new Function(fnSrc + '; return refreshBudget;')();
+  const t0 = Date.UTC(2026, 9, 10, 0, 0, 3), b = refreshBudget(['--hours=4'], t0);
+  ok('the deadline is the run start + --hours (4 h default; wall-clock, so sleep counts)', b.hours === 4 && b.deadline === t0 + 4 * 3600e3
+    && refreshBudget([], t0).hours === 4 && refreshBudget(['--hours=0.5'], t0).deadline === t0 + 1800e3);
+}
 ok('a failed preflight is an error, never a silent return', /return \{ state: 'error', why: 'the listing filter failed its preflight' \}/.test(one) && !/\n  if \(!dry && !preflightFilter\(\)\) return;\n/.test(one));
 ok('the marker is local state, not committed', (() => { try { cp.execSync('git check-ignore -q refresh-run.json', { cwd: __dirname }); return true; } catch (e) { return false; } })());
 

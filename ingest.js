@@ -5186,6 +5186,13 @@ async function refreshDue(lang, ...flags) {
   const requested = lang === 'all' ? refreshrun.LANGS.slice() : [lang || 'en'];
   if (!dry) { const prev = refreshrun.previousUnfinished(); if (prev) console.log('\n' + prev.line + '\n'); }
   const run = refreshrun.createRun(requested, { marker: dry ? false : undefined });
+  // ONE budget for the whole run (Roy, 2026-10-10). It was set per language, so
+  // `refresh all` — four languages — could run 4 x --hours awake. Now the clock
+  // starts here, once, and every language reads it: a language that starts after
+  // it has passed stops at card 0 and is named. Wall-clock on purpose: a PC that
+  // sleeps through the night wakes past the deadline and the run stops at the next
+  // card (2026-10-10: asleep 05:41 -> 13:14, it stopped within a card of waking).
+  const budget = refreshBudget(flags);
   const onSignal = sig => {
     const v = refreshrun.verdict(run);
     console.log('\n  REFRESH INTERRUPTED (' + sig + ')' + (run.current ? ' during ' + run.current : '') + '.');
@@ -5199,7 +5206,7 @@ async function refreshDue(lang, ...flags) {
     for (const L of requested) {
       refreshrun.start(run, L);
       let o;
-      try { o = await refreshOne(L, flags, run); }
+      try { o = await refreshOne(L, flags, run, budget); }
       catch (e) { o = { state: 'error', why: e.message }; console.log('\n  ' + L + ': refresh threw — ' + e.message); }
       refreshrun.finish(run, L, o);
     }
@@ -5212,7 +5219,14 @@ async function refreshDue(lang, ...flags) {
 }
 
 // One language. Returns its outcome for refreshrun: complete | stopped | error.
-async function refreshOne(lang, flags, run) {
+// The --hours budget of one refresh run: its hours and its deadline, made once.
+function refreshBudget(flags, now) {
+  const hoursArg = parseFloat((flags.find(f => String(f).startsWith('--hours=')) || '').replace('--hours=',''));
+  const hours = Number.isFinite(hoursArg) && hoursArg > 0 ? hoursArg : 4;
+  return { hours, deadline: (now || Date.now()) + hours * 3600 * 1000 };
+}
+
+async function refreshOne(lang, flags, run, budget) {
   const dry = flags.includes('--dry');
   if (!dry && !preflightFilter()) return { state: 'error', why: 'the listing filter failed its preflight' };
   const maxArg = (flags.find(f => String(f).startsWith('--max=')) || '').replace('--max=','');
@@ -5226,9 +5240,8 @@ async function refreshOne(lang, flags, run) {
   // hours on Aug 28 (LastTaskResult 267014 = SCHED_S_TASK_TERMINATED: the
   // limit did fire, the process just outlived it). A job that can stop
   // itself does not depend on the scheduler getting that right.
-  const hoursArg = parseFloat((flags.find(f => String(f).startsWith('--hours=')) || '').replace('--hours=','')); 
-  const budgetHours = Number.isFinite(hoursArg) && hoursArg > 0 ? hoursArg : 4;
-  const deadline = Date.now() + budgetHours * 3600 * 1000;
+  // The RUN's budget (refreshDue): one deadline across every language.
+  const { hours: budgetHours, deadline } = budget || refreshBudget(flags);
 
   console.log(`\n${'='.repeat(72)}`);
   console.log(`  REFRESH — ${lang}${setArg ? ' / ' + setArg : ''}${dry ? '   (dry run)' : ''}`);
@@ -5367,7 +5380,7 @@ async function refreshOne(lang, flags, run) {
     if (Date.now() > deadline) {
       ranOut = true; stoppedAt = i;
       console.log(`
-  TIME BUDGET REACHED — ${budgetHours}h. Stopping after ${i} of ${batch.length}.`);
+  TIME BUDGET REACHED — the run's ${budgetHours}h. Stopping after ${i} of ${batch.length}.`);
       console.log('  The rest stays overdue and leads the next run. Use --hours=N to change.');
       break;
     }
@@ -5445,7 +5458,7 @@ async function refreshOne(lang, flags, run) {
 
   // Prices just moved, so this is the moment alerts become true or false.
   if (!dry) await evaluateAlerts(lang);
-  return ranOut ? { state: 'stopped', done: stoppedAt, of: batch.length, why: 'the ' + budgetHours + 'h budget ran out' }
+  return ranOut ? { state: 'stopped', done: stoppedAt, of: batch.length, why: "the run's " + budgetHours + 'h budget ran out' }
                 : { state: 'complete', done: batch.length, of: batch.length };
 }
 

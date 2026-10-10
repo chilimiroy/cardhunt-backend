@@ -64,7 +64,7 @@ ok('auctions are sorted by end time', /saleView === 'auction'[\s\S]{0,400}new Da
 ok('the auction view says a bid is not a price', /current bid<\/strong>, not what the card will sell for/.test(rl));
 ok('an empty Auctions tab points at the Buy It Now count, not "no listing"', /No auction of this exact card/.test(rl));
 const lr = fnText(page, 'liveRow') || '';
-ok('an auction+BIN row shows its bid and when the auction ends', /auction bid ' \+ fmtCurrency/.test(lr) && /auction ' \+ liveEndsIn/.test(lr));
+ok('an auction+BIN row shows its bid (eBay\'s own currency, liveBid) and when the auction ends', /auction bid ' \+ liveBid\(l\)/.test(lr) && /auction ' \+ liveEndsIn/.test(lr));
 ok('tab counts come from the answer, one writer', /function liveTabCounts\(d\)/.test(page) && (page.match(/getElementById\('ltab-bin'\)/g) || []).length === 1);
 
 console.log(`\n  saletype.test.js — ${pass} passed, ${fail} failed\n`);

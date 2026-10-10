@@ -56,7 +56,8 @@ ok('…on the table alias it is given', /p2\.card_api_id NOT IN/.test(printsql.b
 const S = fs.readFileSync(__dirname + '/server.js', 'utf8').replace(/\r/g, '');
 ok('the card endpoint wraps its payload in pricehold.apply', /return res\.json\(\{ data: pricehold\.apply\(\{/.test(S) && /\}, c\.api_card_id\) \}\);/.test(S));
 ok('the set-cards payload wraps each card in pricehold.apply', /return pricehold\.apply\(\{\n\s+id: r\.api_card_id,/.test(S) && /\}, r\.api_card_id\);\n\s+\}\);/.test(S));
-ok('the deals pool refuses a held card by name too', /&& !pricehold\.heldFor\(id\)\)\.slice\(0, n\)/.test(S));
+// Since the rotation (TASK-account-and-bars T5a, 6efc66d) the filter cuts the 400-card POOL; a run takes its 80 from it.
+ok('the deals pool refuses a held card by name too', /&& !pricehold\.heldFor\(id\)\)\.slice\(0, DEALS_SUPPLY\.pool\)/.test(S) && /return deals_\.rotate\(pool, walked, n\);/.test(S));
 
 console.log('\n  refused means refused everywhere a reader can see it (Roy, 2026-10-10)');
 const hist = S.slice(S.indexOf("app.get('/api/history/:cardId'"), S.indexOf('\n});\n', S.indexOf("app.get('/api/history/:cardId'")));

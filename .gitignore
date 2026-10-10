@@ -71,6 +71,8 @@ yahoo.html
 # The nightly's wrapper is tracked (2026-10-08): setyield.test.js checks that
 # node is its last command (its exit code is the task result). No secret in it.
 !refresh-daily.cmd
+# The weekly Yuyu-tei wrapper too (2026-10-10): setyield.test.js pins what it runs.
+!refresh-weekly.cmd
 .task-watch-state
 
 # Notes. CLAUDE.md and PROGRESS.md USED to be here too. CLAUDE.md is the

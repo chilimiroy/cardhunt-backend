@@ -6,7 +6,7 @@
 // once, even with a refusal — is NOT. A report that names every set is as
 // useless as one that names none.
 'use strict';
-const TC = require('./testcount')(42);   // assertions in a plain run — fewer fails the file (testcount.js)
+const TC = require('./testcount')(43);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const sy = require('./setyield');
 let pass = 0, fail = 0;
@@ -136,6 +136,12 @@ if (!fs.existsSync(__dirname + '/ingest.js')) {
     const cmd = fs.readFileSync(__dirname + '/refresh-daily.cmd', 'utf8').trim().split(/\r?\n/).filter(l => l.trim() && !/^\s*(REM|@echo)/i.test(l));
     ok('refresh-daily.cmd ends on the node line (its exit code is the task result)', /^node ingest\.js refresh/.test(cmd[cmd.length - 1]), cmd[cmd.length - 1]);
   } else ok('refresh-daily.cmd is present (tracked since 2026-10-08)', false);
+  // The weekly Yuyu-tei run (Roy, 2026-10-10): weekly, after the yen fix, its default scope.
+  if (fs.existsSync(__dirname + '/refresh-weekly.cmd')) {
+    const w = fs.readFileSync(__dirname + '/refresh-weekly.cmd', 'utf8').trim().split(/\r?\n/).filter(l => l.trim() && !/^\s*(REM|@echo)/i.test(l));
+    ok('refresh-weekly.cmd ends on `node ingest.js yuyutei` alone — no --all, no --force (its exit code is the task result)',
+      /^node ingest\.js yuyutei >> yuyutei-weekly\.log 2>&1$/.test(w[w.length - 1]), w[w.length - 1]);
+  } else ok('refresh-weekly.cmd is present (tracked since 2026-10-10)', false);
 }
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');

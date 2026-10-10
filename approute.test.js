@@ -17,7 +17,7 @@
 // .bak files; express.static(__dirname) would publish every one, so the
 // exposure check requests them rather than reading the route table.
 
-require('./testcount')(81);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(83);   // assertions in a plain run — fewer fails the file (testcount.js)
 const { spawn } = require('child_process');
 const path = require('path');
 const vm = require('vm');
@@ -152,7 +152,7 @@ async function waitForBoot(server, ms = 20000) {
       // T7: preserved, disabled, and never to reach a browser.
       '/checkout-disabled.js', '/login-disabled.js', '/compare-disabled.js',
       // Tracked 2026-10-08 so their tests run on a clean checkout; never served.
-      '/ebayprobe.js', '/refresh-daily.cmd', '/refreshrun.js', '/testcount.js',
+      '/ebayprobe.js', '/refresh-daily.cmd', '/refresh-weekly.cmd', '/refreshrun.js', '/testcount.js',
       '/pricehold-collisions.json', '/collisionscan.js', '/cardnumber.js',
       // estimator.js was served here until 2026-10-09; deleted with every estimate.
       '/estimator.js',

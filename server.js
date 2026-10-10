@@ -2303,6 +2303,8 @@ function normaliseListing(o) {
     // price: outlier.isCurrentBid keeps it out of cheapest and every median.
     saleType: o.priceKind === 'current-bid' ? 'auction' : 'buy-it-now',
     currentBid: Number.isFinite(o.currentBid) ? +o.currentBid.toFixed(2) : null,
+    currentBidOriginal: Number.isFinite(o.currentBidOriginal) ? o.currentBidOriginal : null,
+    currentBidCurrency: o.currentBidCurrency || null,
     // ── Labels, carried through ──
     // sourceEbay works these out from the seller's title and they were being
     // dropped right here: this function returns a fixed shape, and edition
@@ -3236,6 +3238,11 @@ async function sourceEbay(card, grade, limit, opts = {}) {
       currentBid: isAuction && it.price && it.price.value != null && it.currentBidPrice
         && String(it.currentBidPrice.currency || cur).toUpperCase() === cur
         ? parseFloat(it.currentBidPrice.value) * (price / priceNative) : null,
+      // ...and eBay's own figure for it, in its own currency (Roy, 2026-10-10):
+      // the row shows this, and calls the USD figure converted when it shows one.
+      currentBidOriginal: isAuction && it.price && it.price.value != null && it.currentBidPrice
+        && String(it.currentBidPrice.currency || cur).toUpperCase() === cur ? parseFloat(it.currentBidPrice.value) : null,
+      currentBidCurrency: isAuction && it.currentBidPrice ? String(it.currentBidPrice.currency || cur).toUpperCase() : null,
       endsAt: it.itemEndDate || null,
       bids: Number.isFinite(it.bidCount) ? it.bidCount : null,
       live: true,

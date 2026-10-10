@@ -9,7 +9,7 @@
 //   §8.1(d) derived statistics need written permission -> the per-view
 //           outlier medians stay inside the server, never in a payload
 'use strict';
-require('./testcount')(19);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(20);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), path = require('path');
 let pass = 0, fail = 0;
 const ok = (what, cond, got) => { if (cond) { pass++; console.log('  ok    ' + what); } else { fail++; console.log('  FAIL  ' + what + (got ? '   ' + got : '')); } };
@@ -42,6 +42,16 @@ console.log('\n  §8.1(d) — per-card medians stay inside the server');
      /usCapped, outliers: publicOutliers\(judged\.stats\),/.test(S) && /floorStats = \{ item: publicOutliers\(byItem\.stats\), delivered: publicOutliers\(byDelivered\.stats\), live: o \}/.test(S)
      && !/usCapped, outliers: judged\.stats|item: byItem\.stats|usMaxExaminedUsd/.test(S));
   const sp = S.slice(S.indexOf("app.get('/api/ebay/setprobe/:cardId'"), S.indexOf("app.get('/api/ebay/setprobe/:cardId'") + 9000);
+  // Exemption #9 (Roy, 2026-10-10): the converted current bid sits in eBay's zone and shows its own currency.
+  const lb = P.slice(P.indexOf('function liveBid(l){'), P.indexOf('\n}\n', P.indexOf('function liveBid(l){')) + 2);
+  const vm = require('vm'), ctx = { CUR_SIGN: { GBP: '£', EUR: '€' }, currentCurrency: 'USD', fmtCurrency: u => '$' + Number(u).toFixed(2) };
+  vm.createContext(ctx); vm.runInContext(lb, ctx);
+  const gb = ctx.liveBid({ currentBid: 12.7, currentBidOriginal: 10, currentBidCurrency: 'GBP' });
+  const us = ctx.liveBid({ currentBid: 12.7, currentBidOriginal: 12.7, currentBidCurrency: 'USD' });
+  ok('an auction row\'s current bid: eBay\'s own figure in its own currency, any USD figure called converted, inside eBay\'s section',
+     gb === '£10.00 ≈ $12.70 converted' && us === '$12.70'
+     && /\(auction bid ' \+ liveBid\(l\) \+ '\)'/.test(P) && /currentBidOriginal: Number\.isFinite\(o\.currentBidOriginal\)/.test(S)
+     && /return l\.source === 'ebay'; \}\),/.test(P) && /<section class="src-panel src-ebay" style="border:1px solid var\(--bd\)/.test(P), [gb, us]);
   ok('/api/ebay/setprobe keeps its counts, kept and titles per epid — and no median, low or high of eBay\'s prices',
      /epids\[k\] = \{ count: 0, kept: 0, titles: \[\] \}/.test(sp) && !/e\.median|e\.low|e\.high|e\.prices/.test(sp));
 }

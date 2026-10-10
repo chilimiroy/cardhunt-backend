@@ -3972,6 +3972,15 @@ function liveOrigPrice(l){
   var c = l.currencyOriginal, n = Number(l.priceOriginal);
   return (CUR_SIGN[c] || c + ' ') + n.toLocaleString(undefined, c === 'JPY' ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+// An auction row's current bid (2026-10-10): eBay's own figure in its own
+// currency, inside eBay's section; where the page also shows a figure in the
+// visitor's currency, that one says it is converted.
+function liveBid(l){
+  var c = l.currentBidCurrency || 'USD', n = Number(l.currentBidOriginal);
+  if (!(n > 0)) return fmtCurrency(Number(l.currentBid)) + ' converted';
+  var own = (c === 'USD' ? '$' : (CUR_SIGN[c] || c + ' ')) + n.toLocaleString(undefined, c === 'JPY' ? {} : { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (c === 'USD' && currentCurrency === 'USD') ? own : own + ' \u2248 ' + fmtCurrency(Number(l.currentBid)) + ' converted';
+}
 // Shipping is shown, never filtered on (T1). Where the quote is for a buyer
 // in another country, the row says which - a GB listing's postage is to a
 // UK address, and presenting it bare would imply it is to yours.
@@ -3989,7 +3998,7 @@ function liveRow(l){
   var when = !l.live ? 'ended'
     : l.saleType === 'auction' ? liveEndsIn(l.endsAt)
     : l.listingType === 'auction'
-      ? 'buy it now' + (l.currentBid != null ? ' (auction bid ' + fmtCurrency(Number(l.currentBid)) + ')' : '')
+      ? 'buy it now' + (l.currentBid != null ? ' (auction bid ' + liveBid(l) + ')' : '')
         + (l.endsAt ? ' · auction ' + liveEndsIn(l.endsAt) : '')
       : 'buy it now';
   var bids = (l.bids != null && l.bids > 0) ? ' \u00b7 ' + l.bids + ' bid' + (l.bids === 1 ? '' : 's') : '';
@@ -8086,6 +8095,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-b1102a2-nomedian &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-89765c5-bidcur &middot; click to hide</div>
 </body>
 </html>

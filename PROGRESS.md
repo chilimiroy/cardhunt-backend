@@ -1,5 +1,19 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 (task file corrected) — TASK-account-and-bars.md had two errors (Roy's)
+
+- **Report state history.** T4 said "the state history stays". There is no report
+  state-history table, and none is needed (Roy, 2026-10-10): a report keeps its
+  latest state and who set it when (state_changed_by, state_changed_at); a report
+  moves between Open and Closed by that state. Nothing to build.
+- **Two price boxes, not three.** T6c named "market value, lowest listing and last
+  sold boxes". The card page has two — Market value and Last sold; the
+  lowest-listing box left on 2026-10-08 (70b2058, licence §8.1(b)(2)). T6c was
+  done on the two.
+
+Both were the task file's, not the code's; the report back had listed them as
+contradictions of the file.
+
 ## 2026-10-10 (harness) — the local server wrote a test account into user_access; removed
 
 Verifying the page on `PORT=3001 node server.js` with the real `DATABASE_URL` and an
@@ -91,8 +105,8 @@ TCGdex-path pairs at either window. Chosen: $10, 3 readings. After: 472 / 472 by
 
 ### T4 — the masters-only refusals (access.test.js, approved non-master token)
 `?view=open` and `?view=closed`: 403 {"error":"masters only","state":"approved"}.
-There is no state-history table: a report keeps its LAST change (state_changed_by,
-_at); earlier changes are not recorded anywhere.
+There is no state-history table, and none is needed (Roy; see "(task file
+corrected)"): a report keeps its latest change (state_changed_by, _at).
 
 ### T6 — the card page
 - The lowest-listing box: removed on purpose in 70b2058 (2026-10-08), API licence

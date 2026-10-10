@@ -10,7 +10,7 @@
 //   node movers.test.js          offline
 //   node movers.test.js --db     + the real query: no ranked row from another source
 'use strict';
-require('./testcount')(23);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(27);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const tr = require('./trending.js');
 let pass = 0, fail = 0;
@@ -59,10 +59,15 @@ ok(/coverage: trending\.coverage\(p, eligible, current\)/.test(route) && /trendi
 const page = fs.readFileSync(__dirname + '/cardhunt_preview.html', 'utf8');
 const home = page.slice(page.indexOf('async function loadHome()'), page.indexOf('async function loadSearchTrending'));
 ok(/loadHomeMovers\(\)/.test(home) && !/notYet\('gainers'|\/api\/movers/.test(page), 'the home tiles call /api/trending — no "needs /api/movers" left');
-const mv = page.slice(page.indexOf('async function moverList'), page.indexOf('// ── LATEST SEARCHES'));
+const mv = page.slice(page.indexOf('var MOVER_LISTS'), page.indexOf('// ── LATEST SEARCHES'));
 ok(/'gain-pct', 'fall-pct', 'gain-usd', 'fall-usd'/.test(page) && /\/api\/trending\?lang=/.test(mv), 'four lists, each from /api/trending');
-ok(/windowLabel/.test(mv) && ['gain-pct', 'fall-pct', 'gain-usd', 'fall-usd'].every(s => page.includes('id="mv-' + s + '-w"')), 'each list states its window');
-ok(/so the lists show 24 hours/.test(mv), 'a fall back from 7 days to 24 hours announces itself');
+ok(/windowLabel/.test(mv) && page.includes('id="mv-w"'), 'the list states its window');
+ok(/so the list shows 24 hours/.test(mv), 'a fall back from 7 days to 24 hours announces itself');
+// ONE table, two switches (TASK-account-and-bars T3, 2026-10-10)
+ok((page.match(/id="mv-list"/g) || []).length === 1 && !/id="mv-(gain|fall)-(pct|usd)"/.test(page), 'one table — the four stacked boxes are gone');
+ok(['data-dir="gain"', 'data-dir="fall"', 'data-by="pct"', 'data-by="usd"'].every(x => page.includes(x)), 'two switches: gainers / fallers, by % / by price');
+ok(/sort = MOVERS\.dir \+ '-' \+ MOVERS\.by/.test(mv) && /MOVER_CACHE\[key\]/.test(mv), 'the switches pick one of the four lists, each fetched once a visit');
+ok(/sessionStorage\.setItem\(MOVERS_KEY, JSON\.stringify\(MOVERS\)\)/.test(mv) && /sessionStorage\.getItem\(MOVERS_KEY\)/.test(mv), 'the open view is restored (per tab, choices only)');
 ok(/coverage\.note/.test(mv) && page.includes('id="movers-note"'), 'a thin list says it is not the whole market');
 
 if (process.argv.includes('--db')) {

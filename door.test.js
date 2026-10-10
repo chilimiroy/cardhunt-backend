@@ -76,12 +76,12 @@ ok('home: best deals is its own .price-only section, hidden until /api/deals say
 }
 ok('home: movers then alerts inside one .price-only, a note before it',
    /<div class="price-door"[^>]*><\/div>\s*<div class="price-only">\s*<div class="sec-h"><div><div class="sec-t">📊 Biggest movers/.test(home)
-   && home.indexOf('id="alerts-bar-items"') > home.indexOf('id="mv-gain-pct"')
+   && home.indexOf('id="alerts-bar-items"') > home.indexOf('id="mv-list"')
    && home.indexOf('<!-- /.price-only (movers, alerts) -->') > home.indexOf('id="alerts-bar-items"'));
 const at = s => home.indexOf(s);
 ok('home order: search, deals, browse by game, movers, alerts',
    at('id="hero-q"') > 0 && at('id="hero-q"') < at('id="home-deals-sec"') && at('id="home-deals-sec"') < at('id="game-grid"')
-   && at('id="game-grid"') < at('id="mv-gain-pct"') && at('id="mv-gain-pct"') < at('id="alerts-bar-items"'));
+   && at('id="game-grid"') < at('id="mv-list"') && at('id="mv-list"') < at('id="alerts-bar-items"'));
 const pk = H.slice(H.indexOf('<div id="screen-pokemon"'), H.indexOf('<div id="screen-search"'));
 ok('trending: inside .price-only, a note before it', /<div class="price-door"[^>]*><\/div>\s*<div class="price-only">\s*<div class="sec-h"/.test(pk) && pk.indexOf('/.price-only (trending)') > pk.indexOf('id="home-trending"'));
 // The results screen's sort called sortResults(), which was never defined; it

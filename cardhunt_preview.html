@@ -379,6 +379,21 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 .cs{font-size:11px;color:var(--mu);margin-bottom:8px}.cr{display:flex;align-items:center;justify-content:space-between}
 .cp{color:var(--money);font-size:16px;font-weight:800;letter-spacing:-.4px}.cc{font-size:11px;font-weight:700}.up{color:var(--gr)}.dn{color:var(--re)}
 .movers{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+/* Movers (T3, 2026-10-10): one table, two switches, bigger rows. */
+.mv-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px}
+.mv-sw{display:inline-flex;border:1px solid var(--bd);border-radius:999px;overflow:hidden;background:var(--w)}
+.mv-b{padding:8px 16px;border:0;background:transparent;color:var(--mu);font-size:13px;font-weight:700;cursor:pointer}
+.mv-b+.mv-b{border-left:1px solid var(--bd)}
+.mv-b[aria-pressed="true"]{background:var(--tl);color:var(--t)}
+.mv-ctl .mwin{font-size:12px;color:var(--mu)}
+.mbig .mrow{padding:14px 22px;gap:16px}
+.mbig .mrank{width:28px;font-size:15px}
+.mbig .mimg{width:52px;height:72px}
+.mbig .mname{font-size:15px}
+.mbig .mset{font-size:12px}
+.mbig .mp{font-size:18px}
+.mbig .mc2{font-size:14px}
+@media(max-width:640px){.mbig .mrow{padding:12px 14px;gap:10px}.mbig .mimg{width:40px;height:56px}.mbig .mp{font-size:16px}}
 .mwin{margin-left:auto;font-size:11px;font-weight:600;color:var(--mu)}.mnote{font-size:12px;color:var(--mu);line-height:1.6;margin:10px 2px 0}
 .tdeal{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;color:var(--t)}
 /* The shelf's switch (T5b): four bars, one pressed. */
@@ -820,12 +835,20 @@ html:not(.ch-noprice) .price-door { display: none !important; }
     <div class="price-door" role="note" style="margin-top:38px"></div>
     <div class="price-only">
     <div class="sec-h"><div><div class="sec-t">📊 Biggest movers</div><div class="sec-s" id="movers-sub">TCGdex market prices, the same printing and product at both ends</div></div><button class="sec-a" onclick="SS('search')">See all →</button></div>
-    <div class="movers">
-      <div class="mbox"><div class="mhdr">🚀 Gainers — % <span class="mwin" id="mv-gain-pct-w"></span></div><div id="mv-gain-pct"></div></div>
-      <div class="mbox"><div class="mhdr">📉 Fallers — % <span class="mwin" id="mv-fall-pct-w"></span></div><div id="mv-fall-pct"></div></div>
-      <div class="mbox"><div class="mhdr">🚀 Gainers — value <span class="mwin" id="mv-gain-usd-w"></span></div><div id="mv-gain-usd"></div></div>
-      <div class="mbox"><div class="mhdr">📉 Fallers — value <span class="mwin" id="mv-fall-usd-w"></span></div><div id="mv-fall-usd"></div></div>
+    <!-- ONE table, two switches (TASK-account-and-bars T3, 2026-10-10):
+         gainers / fallers x by % / by price = the four lists, one at a time. -->
+    <div class="mv-ctl">
+      <div class="mv-sw" role="group" aria-label="Gainers or fallers">
+        <button class="mv-b" data-dir="gain" aria-pressed="true" onclick="setMovers('gain', null)">🚀 Gainers</button>
+        <button class="mv-b" data-dir="fall" aria-pressed="false" onclick="setMovers('fall', null)">📉 Fallers</button>
+      </div>
+      <div class="mv-sw" role="group" aria-label="By percentage or by price">
+        <button class="mv-b" data-by="pct" aria-pressed="true" onclick="setMovers(null, 'pct')">By %</button>
+        <button class="mv-b" data-by="usd" aria-pressed="false" onclick="setMovers(null, 'usd')">By price</button>
+      </div>
+      <span class="mwin" id="mv-w"></span>
     </div>
+    <div class="mbox mbig"><div id="mv-list"></div></div>
     <div class="mnote" id="movers-note"></div>
     <!-- ══ MY ALERTS — kept as it was ══ -->
     <div class="sec-h" style="margin-top:38px;margin-bottom:14px">
@@ -5986,13 +6009,20 @@ async function openBarPick(bar, cardId) {
 // compared on TCGdex prices only, same printing and product at both ends,
 // marked prices (old / thin / unsettled) left out (trending.js). Each list
 // asks for 7 days first; where there are no 7-day pairs yet it asks for
-// 24 hours and SAYS so on the list. A thin list says it is not the whole
-// market (coverage.note) rather than passing for one.
+// 24 hours and SAYS so. A thin list says it is not the whole market
+// (coverage.note) rather than passing for one.
+// ONE table, two switches (TASK-account-and-bars T3, 2026-10-10): gainers /
+// fallers and by % / by price pick which of the four lists it shows; each
+// list is fetched once a visit, on first view. The pick is restored like the
+// card page's view (sessionStorage ch_movers, per tab, choices only).
 var MOVER_LISTS = ['gain-pct', 'fall-pct', 'gain-usd', 'fall-usd'];
+var MOVERS_KEY = 'ch_movers', MOVERS = { dir: 'gain', by: 'pct' }, MOVER_CACHE = {};
+try { var _mv = JSON.parse(sessionStorage.getItem(MOVERS_KEY) || 'null');
+  if (_mv && (_mv.dir === 'gain' || _mv.dir === 'fall') && (_mv.by === 'pct' || _mv.by === 'usd')) MOVERS = { dir: _mv.dir, by: _mv.by }; } catch (e) {}
 async function moverList(sort, lang) {
   var tried = [];
   for (var w of ['7d', '24h']) {
-    var r = await fetch(BACKEND + '/api/trending?lang=' + encodeURIComponent(lang) + '&sort=' + sort + '&window=' + w + '&limit=5');
+    var r = await fetch(BACKEND + '/api/trending?lang=' + encodeURIComponent(lang) + '&sort=' + sort + '&window=' + w + '&limit=10');
     var d = await r.json();
     if (!r.ok) throw new Error(d && d.error ? d.error : 'HTTP ' + r.status);
     tried.push(d);
@@ -6000,39 +6030,48 @@ async function moverList(sort, lang) {
   }
   return { d: tried[tried.length - 1], fellBack: true, first: tried[0], empty: true };
 }
+function setMovers(dir, by) {
+  if (dir) MOVERS.dir = dir;
+  if (by) MOVERS.by = by;
+  try { sessionStorage.setItem(MOVERS_KEY, JSON.stringify(MOVERS)); } catch (e) {}
+  loadHomeMovers();
+}
 async function loadHomeMovers() {
   var _a = arguments; if (!whenPrices(function () { loadHomeMovers.apply(null, _a); })) return;   // the door: prices only
-  var lang = S.lang || 'en';
-  var notes = [];
-  await Promise.all(MOVER_LISTS.map(async function (sort) {
-    var host = document.getElementById('mv-' + sort), wEl = document.getElementById('mv-' + sort + '-w');
-    if (!host) return;
+  var lang = S.lang || 'en', sort = MOVERS.dir + '-' + MOVERS.by;
+  document.querySelectorAll('.mv-b').forEach(function (b) {
+    var on = b.getAttribute('data-dir') ? b.getAttribute('data-dir') === MOVERS.dir : b.getAttribute('data-by') === MOVERS.by;
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  var host = document.getElementById('mv-list'), wEl = document.getElementById('mv-w'), noteEl = document.getElementById('movers-note');
+  if (!host) return;
+  var key = lang + '|' + sort, res = MOVER_CACHE[key];
+  if (!res) {
     host.innerHTML = '<div class="mempty">Loading…</div>';
-    var res;
-    try { res = await moverList(sort, lang); }
+    try { res = await moverList(sort, lang); MOVER_CACHE[key] = res; }
     catch (e) { host.innerHTML = '<div class="mempty">Could not load movers — ' + liveEsc(e.message) + '</div>'; return; }
-    var d = res.d, pct = /pct$/.test(sort);
-    if (wEl) wEl.textContent = d.windowLabel ? 'over ' + d.windowLabel : '';
-    if (res.fellBack && res.first && res.first.windowLabel && !res.empty)
-      notes.push('No card has a TCGdex price ' + res.first.windowLabel + ' apart yet, so the lists show 24 hours.');
-    if (d.coverage && d.coverage.thin && d.coverage.note) notes.push(d.coverage.note);
-    if (res.empty) { host.innerHTML = '<div class="mempty">Nothing to rank yet — no card has two TCGdex prices that far apart. This is missing data, not a quiet market.</div>'; return; }
-    host.innerHTML = d.cards.map(function (c, i) {
-      var up = c.change > 0;
-      return '<div class="mrow" onclick="openCard(' + JSON.stringify(c.id).replace(/"/g, '&quot;') + ')">'
-        + '<div class="mrank">' + (i + 1) + '</div>'
-        + (c.image ? '<img class="mimg" src="' + liveEsc(c.image) + '" alt="" onerror="this.style.visibility=\'hidden\'">' : '<div class="mimg"></div>')
-        + '<div class="minfo"><div class="mname">' + liveEsc(c.name) + '</div><div class="mset">'
-        + liveEsc((c.set && (c.set.nameEn || c.set.name)) || '') + (c.number ? ' · #' + liveEsc(c.number) : '') + '</div></div>'
-        + '<div class="mpr"><div class="mp">' + fmtCurrency(c.price) + '</div><div class="mc2 ' + (up ? 'up' : 'dn') + '">'
-        + (pct ? (up ? '+' : '') + c.changePct + '%' : (up ? '+' : '−') + fmtCurrency(Math.abs(c.change)))
-        + '</div><div class="mset">from ' + fmtCurrency(c.prevPrice) + '</div>'
-        + (c.suspect ? '<div class="mset" title="Moved more than 5x in the window — more often a printing mix-up than a market">check: &gt;5x</div>' : '')
-        + '</div></div>';
-    }).join('');
-  }));
-  var noteEl = document.getElementById('movers-note');
-  if (noteEl) noteEl.textContent = notes.filter(function (n, i) { return notes.indexOf(n) === i; }).join(' ');
+    if (MOVERS.dir + '-' + MOVERS.by !== sort) return;   // switched again while this was loading
+  }
+  var d = res.d, pct = MOVERS.by === 'pct', notes = [];
+  if (wEl) wEl.textContent = d.windowLabel ? 'over ' + d.windowLabel : '';
+  if (res.fellBack && res.first && res.first.windowLabel && !res.empty)
+    notes.push('No card has a TCGdex price ' + res.first.windowLabel + ' apart yet, so the list shows 24 hours.');
+  if (d.coverage && d.coverage.thin && d.coverage.note) notes.push(d.coverage.note);
+  if (noteEl) noteEl.textContent = notes.join(' ');
+  if (res.empty) { host.innerHTML = '<div class="mempty">Nothing to rank yet — no card has two TCGdex prices that far apart. This is missing data, not a quiet market.</div>'; return; }
+  host.innerHTML = d.cards.map(function (c, i) {
+    var up = c.change > 0;
+    return '<div class="mrow" onclick="openCard(' + JSON.stringify(c.id).replace(/"/g, '&quot;') + ')">'
+      + '<div class="mrank">' + (i + 1) + '</div>'
+      + (c.image ? '<img class="mimg" src="' + liveEsc(c.image) + '" alt="" onerror="this.style.visibility=\'hidden\'">' : '<div class="mimg"></div>')
+      + '<div class="minfo"><div class="mname">' + liveEsc(c.name) + '</div><div class="mset">'
+      + liveEsc((c.set && (c.set.nameEn || c.set.name)) || '') + (c.number ? ' · #' + liveEsc(c.number) : '') + '</div></div>'
+      + '<div class="mpr"><div class="mp">' + fmtCurrency(c.price) + '</div><div class="mc2 ' + (up ? 'up' : 'dn') + '">'
+      + (pct ? (up ? '+' : '') + c.changePct + '%' : (up ? '+' : '−') + fmtCurrency(Math.abs(c.change)))
+      + '</div><div class="mset">from ' + fmtCurrency(c.prevPrice) + '</div>'
+      + (c.suspect ? '<div class="mset" title="Moved more than 5x in the window — more often a printing mix-up than a market">check: &gt;5x</div>' : '')
+      + '</div></div>';
+  }).join('');
 }
 
 // ── LATEST SEARCHES ───────────────────────────────────────────
@@ -6823,8 +6862,8 @@ var LANG_JA = {
   '🔔 My card alerts': '🔔 マイカードアラート', 'Live price tracking — click any card to view listings': 'リアルタイム価格追跡 — カードをクリックして出品を表示',
   'Manage alerts →': 'アラートを管理 →', 'Add alert': 'アラートを追加', 'Track any card price': 'どのカードの価格も追跡',
   '📊 Biggest movers': '📊 値動きの大きいカード', 'TCGdex market prices, the same printing and product at both ends': 'TCGdexの相場価格（両時点とも同じ仕様・同じ商品）',
-  'See all →': 'すべて見る →', '🚀 Gainers — %': '🚀 上昇 — %', '📉 Fallers — %': '📉 下落 — %',
-  '🚀 Gainers — value': '🚀 上昇 — 金額', '📉 Fallers — value': '📉 下落 — 金額',
+  'See all →': 'すべて見る →', '🚀 Gainers': '🚀 上昇', '📉 Fallers': '📉 下落',
+  'By %': '%で', 'By price': '金額で',
   '💎 Best deals right now': '💎 現在のお買い得',
   'Cheapest trusted Buy It Now below the measured price — cards opened in the last 15 minutes': '実測価格を下回る、信頼できる最安の即決出品 — 直近15分に開かれたカード',
   '← Back': '← 戻る', 'Choose language': '言語を選択', '🇹🇼 Chinese Traditional': '🇹🇼 中国語（繁体字）', '🇨🇳 Chinese Simplified': '🇨🇳 中国語（簡体字）',
@@ -6934,8 +6973,8 @@ var LANG_ZH_TW = {
   '🔔 My card alerts': '🔔 我的卡牌提醒', 'Live price tracking — click any card to view listings': '即時價格追蹤 — 點擊任一卡牌查看刊登',
   'Manage alerts →': '管理提醒 →', 'Add alert': '新增提醒', 'Track any card price': '追蹤任何卡牌的價格',
   '📊 Biggest movers': '📊 漲跌幅最大', 'TCGdex market prices, the same printing and product at both ends': 'TCGdex 市場價格（前後皆為同一版本、同一商品）',
-  'See all →': '查看全部 →', '🚀 Gainers — %': '🚀 上漲 — %', '📉 Fallers — %': '📉 下跌 — %',
-  '🚀 Gainers — value': '🚀 上漲 — 金額', '📉 Fallers — value': '📉 下跌 — 金額',
+  'See all →': '查看全部 →', '🚀 Gainers': '🚀 上漲', '📉 Fallers': '📉 下跌',
+  'By %': '按 %', 'By price': '按金額',
   '💎 Best deals right now': '💎 目前最划算',
   'Cheapest trusted Buy It Now below the measured price — cards opened in the last 15 minutes': '低於實測價格、最便宜的可信直購刊登 — 最近 15 分鐘內開啟的卡牌',
   '← Back': '← 返回', 'Choose language': '選擇語言', '🇹🇼 Chinese Traditional': '🇹🇼 繁體中文', '🇨🇳 Chinese Simplified': '🇨🇳 簡體中文',
@@ -7043,8 +7082,8 @@ var LANG_ZH_CN = {
   '🔔 My card alerts': '🔔 我的卡牌提醒', 'Live price tracking — click any card to view listings': '实时价格追踪 — 点击任一卡牌查看在售',
   'Manage alerts →': '管理提醒 →', 'Add alert': '添加提醒', 'Track any card price': '追踪任何卡牌的价格',
   '📊 Biggest movers': '📊 涨跌幅最大', 'TCGdex market prices, the same printing and product at both ends': 'TCGdex 市场价格（前后均为同一版本、同一商品）',
-  'See all →': '查看全部 →', '🚀 Gainers — %': '🚀 上涨 — %', '📉 Fallers — %': '📉 下跌 — %',
-  '🚀 Gainers — value': '🚀 上涨 — 金额', '📉 Fallers — value': '📉 下跌 — 金额',
+  'See all →': '查看全部 →', '🚀 Gainers': '🚀 上涨', '📉 Fallers': '📉 下跌',
+  'By %': '按 %', 'By price': '按金额',
   '💎 Best deals right now': '💎 当前最划算',
   'Cheapest trusted Buy It Now below the measured price — cards opened in the last 15 minutes': '低于实测价格、最便宜的可信一口价在售 — 最近 15 分钟内打开的卡牌',
   '← Back': '← 返回', 'Choose language': '选择语言', '🇹🇼 Chinese Traditional': '🇹🇼 繁体中文', '🇨🇳 Chinese Simplified': '🇨🇳 简体中文',
@@ -8202,6 +8241,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-7de1ade-bars &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-6dec1cb-movers &middot; click to hide</div>
 </body>
 </html>

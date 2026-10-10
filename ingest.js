@@ -1615,7 +1615,7 @@ async function jpPurge(...flags) {
 // prices every card in the set.
 // ══════════════════════════════════════════════════════════════
 async function yuyuteiIngest(...flags) {
-  if (!db) { console.log('  DATABASE_URL required'); return; }
+  if (!db) { console.log('  DATABASE_URL required'); process.exitCode = 1; return; }
   const yt = require('./yuyutei');
 
   const dry    = flags.includes('--dry');
@@ -1644,6 +1644,7 @@ async function yuyuteiIngest(...flags) {
     + (jpy.stale ? '  — NOT LIVE' : ''));
   if (jpy.stale && !dry && !flags.includes('--compare')) {
     console.log('  FATAL: no live yen rate (fx.js answered its pinned fallback). Nothing written.\n');
+    process.exitCode = 1;   // a scheduled run that wrote nothing never exits 0 (2026-10-10)
     return;
   }
   const toUsd = yen => +(yen * jpy.rate).toFixed(2);
@@ -1656,6 +1657,7 @@ async function yuyuteiIngest(...flags) {
     console.log(`  Set index: ${index.size} sets published by yuyu-tei\n`);
   } catch (e) {
     console.log(`  FATAL: could not read the set index — ${e.message}\n`);
+    process.exitCode = 1;
     return;
   }
 
@@ -5500,14 +5502,22 @@ async function main() {
   // take ONE lock and never run at once (joblock.js, 2026-10-10). A dry run
   // writes nothing and takes none.
   if ((cmd === 'refresh' || cmd === 'yuyutei') && !process.argv.includes('--dry')) {
-    const lock = require('./joblock').acquire(cmd + ' ' + process.argv.slice(3).join(' '));
+    const jl = require('./joblock');
+    // --wait-lock=N (the weekly passes 6): locked, it tries again every hour for
+    // N hours instead of losing its week; a final refusal is written down and
+    // printed at the top of every later scheduled run (joblock.noteSkipped).
+    const waitH = parseInt((process.argv.find(a => String(a).startsWith('--wait-lock=')) || '').replace('--wait-lock=', ''), 10) || 0;
+    const lock = await jl.acquireWaiting(cmd + ' ' + process.argv.slice(3).join(' '), { tries: waitH + 1, intervalMs: 3600e3 });
     if (!lock.ok) {
-      console.log('\n  JOB LOCKED — NOT STARTED: ' + lock.why + '\n');
-      process.exitCode = require('./joblock').EXIT_LOCKED;
+      console.log('\n  JOB LOCKED — NOT STARTED' + (waitH ? ' after ' + lock.attempts + ' attempts, hourly' : '') + ': ' + lock.why + '\n');
+      jl.noteSkipped(cmd, 'not started at ' + new Date().toISOString() + ' after ' + lock.attempts + ' attempt(s): ' + lock.why);
+      process.exitCode = jl.EXIT_LOCKED;
       if (db) await db.end();
       return;
     }
     if (lock.took) console.log('\n  ' + lock.took + '\n');
+    if (lock.attempts > 1) console.log('  Started on attempt ' + lock.attempts + ' (the job lock was held before).');
+    jl.skippedLines().forEach(l => console.log('\n' + l));
     // A scheduled job on a connection that cannot write would price, store
     // nothing and report success (localdb.js, 2026-10-10). It refuses, loudly,
     // exit 5 — before a single request is made.
@@ -5549,7 +5559,11 @@ async function main() {
   else if (cmd === 'ytest')      { await yahooTest(process.argv[3], process.argv[4]); }
   else if (cmd === 'jpcheck')    { await jpCheck(process.argv[3], ...process.argv.slice(4)); }
   else if (cmd === 'jppurge')    { await jpPurge(...process.argv.slice(3)); }
-  else if (cmd === 'yuyutei')    { await yuyuteiIngest(...process.argv.slice(3)); }
+  else if (cmd === 'yuyutei')    {
+    await yuyuteiIngest(...process.argv.slice(3));
+    // Ran to the end (no FATAL, not a dry run): a skip noted earlier is answered.
+    if (!process.exitCode && !process.argv.includes('--dry')) require('./joblock').clearSkipped('yuyutei');
+  }
   else if (cmd === 'rarityfill') { await rarityFill(process.argv[3], ...process.argv.slice(4)); }
   else if (cmd === 'alerts')     { await evaluateAlerts(process.argv[3], ...process.argv.slice(4)); }
   else if (cmd === 'manifest')   { await buildManifest(process.argv[3], process.argv[4], process.argv[5]); }

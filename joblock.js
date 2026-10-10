@@ -66,4 +66,45 @@ function release(file) {
   if (h && h.pid === process.pid) { try { fs.unlinkSync(f); } catch (e) { /* gone already */ } }
 }
 
-module.exports = { FILE, STALE_HOURS, EXIT_LOCKED, acquire, release, alive };
+// ── A locked job WAITS, and a skip is never silent (Roy, 2026-10-10) ──
+// The weekly runs once a week: refused at 08:00 because the nightly still held
+// the lock, it lost the week and the only trace was exit code 4. Now it retries
+// every intervalMs for `tries` attempts (the weekly: hourly, 7 attempts, 08:00 to
+// 14:00), saying when it will try again. If it still cannot run, the skip is
+// written to SKIPPED_FILE, and every later nightly and weekly prints it at its
+// top until that job completes — the next run reports what was lost.
+const SKIPPED_FILE = path.join(__dirname, 'ingest-skipped.json');
+const sleepMs = ms => new Promise(r => setTimeout(r, ms));
+async function acquireWaiting(job, opts) {
+  const tries = Math.max(1, (opts && opts.tries) || 1), interval = (opts && opts.intervalMs) || 3600e3;
+  const log = (opts && opts.log) || console.log, sleep = (opts && opts.sleep) || sleepMs;
+  let r;
+  for (let n = 1; n <= tries; n++) {
+    r = acquire(job, opts);
+    if (r.ok) return Object.assign(r, { attempts: n });
+    if (n < tries) {
+      log('  JOB LOCKED — waiting (attempt ' + n + ' of ' + tries + '): ' + r.why + ' Next try at '
+        + new Date(Date.now() + interval).toISOString().slice(11, 16) + ' UTC.');
+      await sleep(interval);
+    }
+  }
+  return Object.assign(r, { attempts: tries });
+}
+function noteSkipped(job, why, file) {
+  const f = file || SKIPPED_FILE, all = read(f) || {};
+  all[job] = { at: new Date().toISOString(), why };
+  fs.writeFileSync(f, JSON.stringify(all, null, 1));
+}
+// Lines to print at the top of a run: every scheduled job skipped and not run since.
+function skippedLines(file) {
+  const all = read(file || SKIPPED_FILE) || {};
+  return Object.keys(all).map(j => '  A SCHEDULED JOB WAS SKIPPED and has not run since: "' + j + '" at ' + all[j].at + ' — ' + all[j].why);
+}
+function clearSkipped(job, file) {
+  const f = file || SKIPPED_FILE, all = read(f);
+  if (!all || !all[job]) return;
+  delete all[job];
+  if (Object.keys(all).length) fs.writeFileSync(f, JSON.stringify(all, null, 1)); else { try { fs.unlinkSync(f); } catch (e) {} }
+}
+
+module.exports = { FILE, SKIPPED_FILE, STALE_HOURS, EXIT_LOCKED, acquire, acquireWaiting, release, alive, noteSkipped, skippedLines, clearSkipped };

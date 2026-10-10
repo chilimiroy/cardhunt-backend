@@ -30,4 +30,8 @@ echo ==== %DATE% %TIME% ==== >> yuyutei-weekly.log
 if defined CARDHUNT_WRITE_DATABASE_URL (echo   database: CARDHUNT_WRITE_DATABASE_URL >> yuyutei-weekly.log) else (echo   database: DATABASE_URL - CARDHUNT_WRITE_DATABASE_URL is not set >> yuyutei-weekly.log)
 REM Default scope: every card whose only price is a Yuyu-tei row (the ~9,000
 REM the single 2026-08-28 run wrote), re-asked; a card priced by Yahoo is left.
-node ingest.js yuyutei >> yuyutei-weekly.log 2>&1
+REM --wait-lock=6: if the nightly holds the job lock, try again every hour for
+REM 6 hours (08:00 to 14:00) instead of losing the week (joblock.js). A final
+REM refusal exits 4 and is printed at the top of every later scheduled run.
+REM NOTE: this task's ExecutionTimeLimit is PT2H (Roy's to change).
+node ingest.js yuyutei --wait-lock=6 >> yuyutei-weekly.log 2>&1

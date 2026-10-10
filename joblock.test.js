@@ -5,7 +5,7 @@
 //
 //   node joblock.test.js
 'use strict';
-require('./testcount')(15);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(23);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), os = require('os'), path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const J = require('./joblock');
@@ -52,12 +52,47 @@ const tmp = name => path.join(os.tmpdir(), 'joblock-test-' + process.pid + '-' +
   ok('afterwards the weekly starts', t2.status === 0 && /^STARTED$/.test(t2.stdout.trim()), t2.stdout.trim());
   try { fs.unlinkSync(f2); } catch (e) {}
 
+  console.log('\n  a locked job waits, and a skip is never silent (2026-10-10)');
+  {
+    const f3 = tmp('c'), sk = tmp('skipped');
+    fs.writeFileSync(f3, JSON.stringify({ pid: 999999, job: 'refresh all', startedAt: new Date().toISOString() }));
+    let liveFor = 2;                                   // the holder is alive for the first two tries
+    const logs = [], slept = [];
+    const w = await J.acquireWaiting('yuyutei --wait-lock=6', { file: f3, noRelease: true, tries: 7, intervalMs: 3600e3,
+      alive: () => liveFor-- > 0, log: m => logs.push(m), sleep: async ms => { slept.push(ms); } });
+    ok('KEPT: the holder finishes during the wait — the weekly starts on attempt 3, having waited an hour twice',
+       w.ok && w.attempts === 3 && slept.join() === '3600000,3600000' && /JOB LOCKED — waiting \(attempt 1 of 7\)/.test(logs[0]) && /Next try at \d\d:\d\d UTC/.test(logs[0]));
+    fs.writeFileSync(f3, JSON.stringify({ pid: 999999, job: 'refresh all', startedAt: new Date().toISOString() }));
+    const slept2 = [];
+    const x = await J.acquireWaiting('yuyutei', { file: f3, noRelease: true, tries: 7, intervalMs: 3600e3, alive: () => true, log: () => {}, sleep: async ms => { slept2.push(ms); } });
+    ok('REFUSED: held for all seven tries (08:00 to 14:00) — refused after 7 attempts and six hourly waits', !x.ok && x.attempts === 7 && slept2.length === 6);
+    fs.unlinkSync(f3);
+    J.noteSkipped('yuyutei', 'not started after 7 attempt(s): held', sk);
+    const lines = J.skippedLines(sk);
+    ok('the skip is written down and every later run prints it', lines.length === 1 && /A SCHEDULED JOB WAS SKIPPED and has not run since: "yuyutei"/.test(lines[0]));
+    J.clearSkipped('refresh', sk);
+    ok('another job completing does not clear it', J.skippedLines(sk).length === 1);
+    J.clearSkipped('yuyutei', sk);
+    ok('the job itself completing clears it', J.skippedLines(sk).length === 0 && !fs.existsSync(sk));
+  }
+
   console.log('\n  wiring');
+  {
+    const I0 = fs.readFileSync(path.join(__dirname, 'ingest.js'), 'utf8').replace(/\r/g, '');
+    ok('ingest.js: --wait-lock=N tries N+1 times hourly; a final refusal is noted; every run prints outstanding skips',
+       /jl\.acquireWaiting\(cmd \+ ' ' \+ process\.argv\.slice\(3\)\.join\(' '\), \{ tries: waitH \+ 1, intervalMs: 3600e3 \}\)/.test(I0)
+       && /jl\.noteSkipped\(cmd, /.test(I0) && /jl\.skippedLines\(\)\.forEach/.test(I0));
+    ok('a yuyutei run that completed (no FATAL, not dry) clears its skip; its FATALs exit 1, never 0',
+       /if \(!process\.exitCode && !process\.argv\.includes\('--dry'\)\) require\('\.\/joblock'\)\.clearSkipped\('yuyutei'\);/.test(I0)
+       && (I0.slice(I0.indexOf('async function yuyuteiIngest('), I0.indexOf('async function yuyuteiIngest(') + 3000).match(/process\.exitCode = 1;/g) || []).length === 3);
+    const W = fs.readFileSync(path.join(__dirname, 'refresh-weekly.cmd'), 'utf8');
+    ok('the weekly task passes --wait-lock=6', /node ingest\.js yuyutei --wait-lock=6 >> yuyutei-weekly\.log 2>&1/.test(W));
+  }
   const I = fs.readFileSync(path.join(__dirname, 'ingest.js'), 'utf8').replace(/\r/g, '');
   ok('ingest.js takes the lock for refresh and yuyutei, before dispatching (not for --dry)',
-    /if \(\(cmd === 'refresh' \|\| cmd === 'yuyutei'\) && !process\.argv\.includes\('--dry'\)\) \{\s*const lock = require\('\.\/joblock'\)\.acquire/.test(I)
-    && I.indexOf("require('./joblock').acquire") < I.indexOf("if (cmd === 'status')"));
-  ok('a refusal prints JOB LOCKED and exits with the lock code', /JOB LOCKED — NOT STARTED: ' \+ lock\.why/.test(I) && /process\.exitCode = require\('\.\/joblock'\)\.EXIT_LOCKED;/.test(I));
+    /if \(\(cmd === 'refresh' \|\| cmd === 'yuyutei'\) && !process\.argv\.includes\('--dry'\)\) \{\s*const jl = require\('\.\/joblock'\);/.test(I)
+    && I.indexOf('jl.acquireWaiting(') > 0 && I.indexOf('jl.acquireWaiting(') < I.indexOf("if (cmd === 'status')"));
+  ok('a refusal prints JOB LOCKED and exits with the lock code', /JOB LOCKED — NOT STARTED' \+ \(waitH/.test(I) && /process\.exitCode = jl\.EXIT_LOCKED;/.test(I));
 
   console.log(`\n  joblock.test.js — ${pass} passed, ${fail} failed\n`);
   process.exitCode = fail ? 1 : 0;

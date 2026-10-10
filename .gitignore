@@ -112,3 +112,4 @@ refresh-run.json
 
 # joblock.js: the scheduled jobs' one lock (local state)
 ingest-job.lock
+ingest-skipped.json

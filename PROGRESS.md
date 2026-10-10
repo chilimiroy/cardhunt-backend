@@ -1,5 +1,25 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 (corrections owed)
+
+### Parking Yahoo's live search saved about 0 minutes, not ~13
+Commit 59bcf0e (04:02 local, the session before this one) said making the live search
+unreachable returned "~13 minutes of the nightly's 4-hour budget" (636 requests x 1.22 s).
+Roy, 2026-10-10: it saved about 0 minutes. The ~13-minute figure is withdrawn. (Also
+true, from the log: tonight's nightly started at 03:00, before 59bcf0e, so it still ran
+with the live search enabled; its counter reads 848 x "200, no __NEXT_DATA__" and does not
+say which page those were.)
+
+### The three commits just before this session (around 04:00-04:10 local)
+59bcf0e (04:02:56, Yahoo's live search parked), 2b98e35 (04:04:58, /api/graded parked)
+and 71b5b2c (04:10:09, a nofabricated.test.js slicer fix) were made by the session
+that worked from 0aaff72 (02:17) — the "what runs" / Yahoo / PriceCharting work
+(f4cbd1e onwards). Not this session: its first command ran at 04:15:51 and its own
+first commit is 6efc66d (04:23:41); 6efc66d .. 6dec1cb (04:23-04:33) are this
+session's. All sessions commit as the same identity, so the author line cannot tell
+them apart; git's reflog shows one HEAD moving through both in turn — no interleaved
+commits — but not whether the other session was still open.
+
 ## 2026-10-10 (lifetime) — page height, Chinese, the bar, the cheapest, pick lifetime, the shelf
 
 ### The two page heights — both right, different pages

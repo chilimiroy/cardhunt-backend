@@ -4,7 +4,7 @@
 //
 //   node localdb.test.js
 'use strict';
-require('./testcount')(14);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(19);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const L = require('./localdb');
 let pass = 0, fail = 0;
@@ -31,6 +31,24 @@ const RW = { who: 'postgres', can_insert: true, can_create: true, read_only: 'of
   ok('a check that cannot run refuses (fail closed)', !broken.ok && /could not ask/.test(broken.why));
   ok('an empty answer refuses', !(await L.bootCheck({ query: async () => ({ rows: [] }) }, {})).ok);
   ok('CARDZON_SCHEMA_GUARD must be exactly 1', !(await L.bootCheck(fakeDb(RW), { CARDZON_SCHEMA_GUARD: 'yes' })).ok);
+
+  console.log('\n  the other direction: a scheduled job must be able to write (canWrite)');
+  ok('the write role can write', L.canWrite(RW));
+  ok('the read-only role cannot — nor any read-only transaction, nor a missing answer',
+     !L.canWrite(RO) && !L.canWrite(Object.assign({}, RW, { read_only: 'on' })) && !L.canWrite(null) && !L.canWrite(Object.assign({}, RW, { can_insert: false })));
+  {
+    const I = fs.readFileSync(__dirname + '/ingest.js', 'utf8').replace(/\r/g, '');
+    const blk = I.slice(I.indexOf("require('./joblock').acquire"), I.indexOf("if (cmd === 'status')"));
+    ok('ingest.js refresh / yuyutei ask the database first and refuse, exit 5, on a connection that cannot write',
+       /lw\.CAPABILITY_SQL/.test(blk) && /!lw\.canWrite\(row\)/.test(blk) && /process\.exitCode = lw\.EXIT_READ_ONLY;/.test(blk) && L.EXIT_READ_ONLY === 5);
+    for (const f of ['refresh-daily.cmd', 'refresh-weekly.cmd']) {
+      const c = fs.readFileSync(__dirname + '/' + f, 'utf8');
+      ok(f + ' hands CARDHUNT_WRITE_DATABASE_URL to its own node (setlocal) and logs which it used',
+         /setlocal\r?\nif defined CARDHUNT_WRITE_DATABASE_URL set "DATABASE_URL=%CARDHUNT_WRITE_DATABASE_URL%"/.test(c)
+         && /database: DATABASE_URL - CARDHUNT_WRITE_DATABASE_URL is not set/.test(c)
+         && c.indexOf('CARDHUNT_WRITE_DATABASE_URL') < c.indexOf('node ingest.js'));
+    }
+  }
 
   console.log('\n  wiring');
   const S = fs.readFileSync(__dirname + '/server.js', 'utf8').replace(/\r/g, '');

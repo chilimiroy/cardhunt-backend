@@ -37,6 +37,14 @@ function writable(row) {
   return !!(row.can_insert || row.can_create);
 }
 
+// The other direction (2026-10-10): a scheduled ingest job must be able to WRITE,
+// or it would run, store nothing and exit 0. INSERT on price_history and
+// read-write transactions are what the jobs need.
+const EXIT_READ_ONLY = 5;
+function canWrite(row) {
+  return !!row && String(row.read_only) !== 'on' && !!row.can_insert;
+}
+
 function exemptReason(env, db) {
   if (env.RENDER) return 'on Render';
   if (!db) return 'no database';
@@ -60,4 +68,4 @@ async function bootCheck(db, env) {
   return { ok: true, who: row.who, why: 'read-only connection (' + row.who + ')' };
 }
 
-module.exports = { CAPABILITY_SQL, writable, exemptReason, bootCheck, SETUP };
+module.exports = { CAPABILITY_SQL, writable, canWrite, EXIT_READ_ONLY, exemptReason, bootCheck, SETUP };

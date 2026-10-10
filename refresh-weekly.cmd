@@ -27,6 +27,7 @@ setlocal
 if defined CARDHUNT_WRITE_DATABASE_URL set "DATABASE_URL=%CARDHUNT_WRITE_DATABASE_URL%"
 echo. >> yuyutei-weekly.log
 echo ==== %DATE% %TIME% ==== >> yuyutei-weekly.log
+if defined CARDHUNT_WRITE_DATABASE_URL (echo   database: CARDHUNT_WRITE_DATABASE_URL >> yuyutei-weekly.log) else (echo   database: DATABASE_URL - CARDHUNT_WRITE_DATABASE_URL is not set >> yuyutei-weekly.log)
 REM Default scope: every card whose only price is a Yuyu-tei row (the ~9,000
 REM the single 2026-08-28 run wrote), re-asked; a card priced by Yahoo is left.
 node ingest.js yuyutei >> yuyutei-weekly.log 2>&1

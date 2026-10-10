@@ -5495,6 +5495,22 @@ async function main() {
       return;
     }
     if (lock.took) console.log('\n  ' + lock.took + '\n');
+    // A scheduled job on a connection that cannot write would price, store
+    // nothing and report success (localdb.js, 2026-10-10). It refuses, loudly,
+    // exit 5 — before a single request is made.
+    const lw = require('./localdb');
+    let row = null, err = null;
+    try { row = db ? (await db.query(lw.CAPABILITY_SQL)).rows[0] : null; } catch (e) { err = e.message; }
+    if (!db || err || !lw.canWrite(row)) {
+      console.log('\n  NOT STARTED — ' + (!db ? 'no DATABASE_URL'
+        : err ? 'could not ask the database what this connection may do: ' + err
+        : 'this connection (' + row.who + ') cannot write') + ': ' + cmd + ' would store nothing.'
+        + ' The scheduled jobs write through CARDHUNT_WRITE_DATABASE_URL (refresh-daily.cmd, refresh-weekly.cmd).\n');
+      process.exitCode = lw.EXIT_READ_ONLY;
+      if (db) await db.end();
+      return;
+    }
+    console.log('  DB role: ' + row.who + ' (can write)');
   }
 
   if (cmd === 'status')          { await status(); }

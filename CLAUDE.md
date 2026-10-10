@@ -30,7 +30,7 @@ rather than re-derive. `CLAUDE_ARCHIVE.md` is the full history (frozen
 "MOVED FROM CLAUDE.md, 2026-10-07 (compression)",
 "MOVED FROM CLAUDE.md, 2026-10-07 (budget, second pass)",
 "MOVED FROM CLAUDE.md, 2026-10-09 (budget, third pass)" — with "Windows: replacing ingest.js",
-"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, eighth pass)").
+"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, eighth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, ninth pass)").
 "PROGRESS 2026-10-05: X" means the block headed X in PROGRESS.md's 2026-10-05
 entry — the verbatim measurements this file carried until then. **A bug's
 history may move to the archive; its lesson may not** — `claudesplit.test.js`
@@ -406,10 +406,8 @@ schtasks /Query /TN "CardHunt weekly Yuyu-tei" /V /FO LIST   # Sundays 08:00, re
   cards; the shelf shows OUR data, a click fetches live. Detail: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)".
 
 ## Page language — EN/JA/zh-TW/zh-CN (T5; TASK-ui 2026-10-07)
-Picker between currency and bell; `ch_lang` set before paint. One exact-text table
-per language over ONE key set, whole-node match, **never card data**
-(`i18n.test.js --db`); split sentences in `LANG_GROUPS`: all or none. Coverage is
-counted (`i18n.test.js` prints it). Built sentences, server text: English.
+One exact-text table per language over ONE key set, **never card data**
+(`i18n.test.js --db`); built sentences, server text: English (*Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, ninth pass)").
 
 ## Page layout — rules (TASK-ui, 2026-10-07)
 - A price control is `.price-only`: absent, never disabled. Check signed out AND in.
@@ -422,11 +420,8 @@ counted (`i18n.test.js` prints it). Built sentences, server text: English.
 - CardZon is display only; the CZ mark: `brand.test.js` (*Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, eighth pass)").
 
 ## Accounts — step 1 (sign-in) and step 2 (roles) SHIPPED 2026-10-06 (T6)
-`auth.js` verifies the token (ES256, JWKS); `/api/me` is the ONLY source of signed-in
-state and role (mechanics: archive, third pass).
-- **master** = `CARDZON_MASTER_EMAILS`; approved / pending / rejected in `user_access`.
-- **ONE gate, `access.js`**, on each protected route's line (401 / 403 / 503 fail-closed);
-  `access.test.js` fails on an unclassified route — add every new route there.
+`/api/me` is the ONLY source of signed-in state and role. **ONE gate, `access.js`**, on
+each protected route; `access.test.js` fails on an unclassified route (*Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, ninth pass)").
 - **RLS ON for every public table**; API roles read own rows, write nothing (`rls.test.js
   --db`; `node rlsprobe.js`). **Tests cannot change the schema** (`schemaguard`).
 - **Live suites run SIGNED OUT** (Roy, 2026-10-07); **never** a service_role key or test

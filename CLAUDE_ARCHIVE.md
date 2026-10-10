@@ -4687,3 +4687,23 @@ Checking the frontend: theme:
 
 > Theme: Auto/Light/Dark, `localStorage ch_theme`, set by a head script before
 > paint; colours only through the tokens (`theme.test.js`).
+
+## MOVED FROM CLAUDE.md, 2026-10-10 (budget, ninth pass)
+
+Moved verbatim when CLAUDE.md stood at 58,923 of its 60,000 characters, before
+the 2026-10-10 lines on what runs that was documented as off were written. Each keeps a line in CLAUDE.md.
+
+Page language:
+
+> Picker between currency and bell; `ch_lang` set before paint. One exact-text table
+> per language over ONE key set, whole-node match, **never card data**
+> (`i18n.test.js --db`); split sentences in `LANG_GROUPS`: all or none. Coverage is
+> counted (`i18n.test.js` prints it). Built sentences, server text: English.
+
+Accounts:
+
+> `auth.js` verifies the token (ES256, JWKS); `/api/me` is the ONLY source of signed-in
+> state and role (mechanics: archive, third pass).
+> - **master** = `CARDZON_MASTER_EMAILS`; approved / pending / rejected in `user_access`.
+> - **ONE gate, `access.js`**, on each protected route's line (401 / 403 / 503 fail-closed);
+>   `access.test.js` fails on an unclassified route — add every new route there.

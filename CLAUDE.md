@@ -30,7 +30,7 @@ rather than re-derive. `CLAUDE_ARCHIVE.md` is the full history (frozen
 "MOVED FROM CLAUDE.md, 2026-10-07 (compression)",
 "MOVED FROM CLAUDE.md, 2026-10-07 (budget, second pass)",
 "MOVED FROM CLAUDE.md, 2026-10-09 (budget, third pass)" — with "Windows: replacing ingest.js",
-"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)").
+"MOVED FROM CLAUDE.md, 2026-10-09 (budget, fourth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, fifth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)", "MOVED FROM CLAUDE.md, 2026-10-10 (budget, eighth pass)").
 "PROGRESS 2026-10-05: X" means the block headed X in PROGRESS.md's 2026-10-05
 entry — the verbatim measurements this file carried until then. **A bug's
 history may move to the archive; its lesson may not** — `claudesplit.test.js`
@@ -108,8 +108,7 @@ Gitignored (need a DB URL or residential IP):
 **https://cardhunt-backend.onrender.com/app** — a URL cannot be stale. The
 build stamp bottom-left names the commit (bump it with every page edit). `/app` serves `cardhunt_preview.html` byte for byte; the module
 `<script>` tags stay **absolute** so the `file://` fallback still loads them.
-Theme: Auto/Light/Dark, `localStorage ch_theme`, set by a head script before
-paint; colours only through the tokens (`theme.test.js`).
+Colours only through the theme tokens (`theme.test.js`).
 Serve ONE file by name — **never `express.static(__dirname)`**
 (`node approute.test.js`: what IS served and 26 paths that are NOT).
 
@@ -418,9 +417,7 @@ counted (`i18n.test.js` prints it). Built sentences, server text: English.
 - Back restores scroll; a reopened card restores grade, tab, view, range, scroll
   BEFORE its first listings call, else Raw NM (`restore.test.js`).
 - Home: search, deals (hidden while off), games, movers, alerts (`door.test.js`).
-- CardZon is display only; the CZ mark is ONE inline `<symbol id="cz-mark">` (no
-  image file), 42px nav, 30px at <=900 (`brand.test.js`, which pins the
-  colours sampled from Roy's render and the dark-only hairline; values: PROGRESS 2026-10-08).
+- CardZon is display only; the CZ mark: `brand.test.js` (*Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, eighth pass)").
 
 ## Accounts — step 1 (sign-in) and step 2 (roles) SHIPPED 2026-10-06 (T6)
 `auth.js` verifies the token (ES256, JWKS); `/api/me` is the ONLY source of signed-in

@@ -4671,3 +4671,19 @@ Movers and best deals:
 >   (`.github/workflows/deals-refresh.yml`) runs `deals.pickVouched` on 80 cards
 >   by value; `deal_picks` keeps card, item id, found_at. The shelf shows OUR data;
 >   a click fetches live, deletes a sold pick (PROGRESS 2026-10-08 (deals supply)).
+
+## MOVED FROM CLAUDE.md, 2026-10-10 (budget, eighth pass)
+
+Moved verbatim when CLAUDE.md stood at 58,710 of its 60,000 characters, before
+the 2026-10-10 (yen, probes, weekly Yuyu-tei) lines were written. Each keeps a line in CLAUDE.md.
+
+Page layout: the CZ mark:
+
+> - CardZon is display only; the CZ mark is ONE inline `<symbol id="cz-mark">` (no
+>   image file), 42px nav, 30px at <=900 (`brand.test.js`, which pins the
+>   colours sampled from Roy's render and the dark-only hairline; values: PROGRESS 2026-10-08).
+
+Checking the frontend: theme:
+
+> Theme: Auto/Light/Dark, `localStorage ch_theme`, set by a head script before
+> paint; colours only through the tokens (`theme.test.js`).

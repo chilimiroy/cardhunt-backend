@@ -7162,8 +7162,14 @@ app.get('/ebay/status', async (req, res) => {
 
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`CardHunt API v5.1 on port ${PORT}  (database-first)`);
-  console.log(`DB: ${db ? 'Supabase connected' : 'none'}`);
-  console.log(`Sources: pokemontcg.io + tcgdex.net`);
+// Off Render, a connection that can write to production is refused before
+// the server takes a request — every first-use migration and every write
+// happens on a request (localdb.js; PROGRESS 2026-10-10 (harness)).
+require('./localdb').bootCheck(db, process.env).then(chk => {
+  if (!chk.ok) { console.error('[localdb] NOT STARTED: ' + chk.why); process.exit(2); }
+  app.listen(PORT, () => {
+    console.log(`CardHunt API v5.1 on port ${PORT}  (database-first)`);
+    console.log(`DB: ${db ? 'Supabase connected' : 'none'} (${chk.why})`);
+    console.log(`Sources: pokemontcg.io + tcgdex.net`);
+  });
 });

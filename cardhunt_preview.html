@@ -513,6 +513,11 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 /* ...and the image is smaller (T6c): narrower column, less frame, a lower cap. */
 .cd-imgcell .cview{padding:14px}
 .cd-imgcell .cview img{max-height:360px}
+/* The card picture ends on the filter box's bottom line (Roy, 2026-10-10): the
+   frame already stretches to the row; the picture now sits at its foot, with no
+   padding under it, so both end on the same line wherever they sit side by side
+   (above 860 px; narrower, the image stacks above the column). */
+@media(min-width:861px){.cd-imgcell .cview{align-items:flex-end;padding-bottom:0}}
 /* The history view shares the area with the boxes and sets its height when it
    is the taller of the two (T1's no-jump rule) — at a 150 px chart it held the
    boxes view 114 px open. A tighter frame and a 110 px floor; it still grows
@@ -1124,6 +1129,10 @@ html:not(.ch-noprice) .price-door { display: none !important; }
                   <span style="font-size:10px;color:var(--fa)">Recorded high: <strong id="cd-52high">&#8212;</strong></span>
                 </div>
               </div>
+              <!-- The grading selector (filter listings), directly under the price
+                   position bar (Roy, 2026-10-10). Part of the boxes view: under
+                   History the chart takes the whole area; the selection stays. -->
+              <div id="cd-selector" class="price-only"></div>
             </div>
             <div class="cd-view cd-view-chart" inert aria-hidden="true">
             <div class="chart-box cd-chartcell">
@@ -1145,8 +1154,6 @@ html:not(.ch-noprice) .price-door { display: none !important; }
             </div>
             <button class="cd-vtog" id="cd-vtog" onclick="toggleCardView()" aria-controls="cd-viewwrap" aria-pressed="false" title="Show the price history"><span class="cd-vtog-i" aria-hidden="true">📈</span><span class="cd-vtog-l">History</span></button>
           </div>
-          <!-- The grading selector: status and condition boxes. -->
-          <div id="cd-selector" class="price-only"></div>
           </div><!-- /.price-only (price column) -->
         </div>
       </div><!-- /.cdgrid -->
@@ -8408,6 +8415,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-a0cda56-lastvisit &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-9c60796-filterbar &middot; click to hide</div>
 </body>
 </html>

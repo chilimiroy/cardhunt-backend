@@ -738,8 +738,9 @@ console.log('7d2. THE CARD PAGE IS ROY\'S T4 ARRANGEMENT');
     g0 >= 0 && [pos('cd-img'), pos('cd-mkt'), pos('cd-chart')].every(function (p) { return p > g0; })
     && pos('cd-img') < pos('cd-mkt') && pos('cd-mkt') < pos('cd-chart') && html.indexOf('id="cd-meta"') < 0,
     'image | boxes | graph - in that order');
-  ok('...and the selector and listings come AFTER it',
-    html.indexOf('id="cd-selector"') > pos('cd-chart') && html.indexOf('id="cd-listings"') > html.indexOf('id="cd-selector"'));
+  // Roy, 2026-10-10: the selector moved under the price position bar (inside the grid, before the chart view).
+  ok('...the selector sits after the price boxes, and the listings come AFTER the grid',
+    html.indexOf('id="cd-selector"') > pos('cd-mkt') && html.indexOf('id="cd-listings"') > pos('cd-chart') && html.indexOf('id="cd-listings"') > html.indexOf('id="cd-selector"'));
   ok('the price table is gone, and nothing still writes to it',
     codeOnly.indexOf('cd-gpt') < 0 && codeOnly.indexOf('gpt-r') < 0,
     'raw price x a fixed multiplier, labelled as a market avg');

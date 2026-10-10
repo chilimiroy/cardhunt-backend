@@ -11,7 +11,7 @@
 // CLAUDE.md records why. This pins the rule so a later edit cannot quietly
 // put the shared rows, the second margin or the split column back.
 'use strict';
-require('./testcount')(36);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(37);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const page = fs.readFileSync('cardhunt_preview.html', 'utf8');
 let pass = 0, fail = 0;
@@ -43,10 +43,16 @@ const tog = fnSrc('toggleCardView') + fnSrc('applyCardView');
 ok(tog.length > 200 && !/fetch|apiFetch|initChart|loadHistory|renderListingFinder|selGrade|openCard/.test(tog),
    'switching views fetches and redraws nothing');
 ok(/p\[0\]\.inert = !p\[1\]/.test(fnSrc('applyCardView')), 'the hidden view is inert (no focus, no clicks)');
-const box = page.slice(page.indexOf('id="cd-viewwrap"'), page.indexOf('id="cd-selector"'));
+const box = page.slice(page.indexOf('id="cd-viewwrap"'), page.indexOf('<div class="lbox'));
 ok(box.indexOf('id="cd-sold"') > 0 && box.indexOf('id="cd-vtog"') > box.indexOf('id="cd-chart"'), 'the toggle sits beside the views, after Last sold');
-ok(page.indexOf('id="cd-selector"') > page.indexOf('id="cd-vtog"') && page.indexOf('id="cd-selector"') < page.indexOf('<div class="lbox'),
-   'the selector is below the toggle area, in the price column');
+// Roy, 2026-10-10: the filter box sits directly under the price position bar, inside the boxes view.
+{
+  const bv = page.slice(page.indexOf('<div class="cd-view cd-view-boxes">'), page.indexOf('<div class="cd-view cd-view-chart"'));
+  ok(bv.indexOf('id="cd-52high"') > 0 && bv.indexOf('id="cd-selector"') > bv.indexOf('id="cd-52high"') && (page.match(/id="cd-selector"/g) || []).length === 1,
+     'the selector is in the boxes view, right after the price position bar — one selector');
+  ok(/@media\(min-width:861px\)\{\.cd-imgcell \.cview\{align-items:flex-end;padding-bottom:0\}\}/.test(page),
+     'side by side, the card picture sits at the foot of its frame, so it ends on the filter box line (measured live: 1100 px 745 / 746, 1366 px 732 / 733 — the frame border, 1 px)');
+}
 // TASK-ui T3: the links area directly under the grid, full width, nothing between.
 ok(/<\/div><!-- \/\.cdgrid -->\s*<!-- 2\. the links area[\s\S]*?-->\s*<div class="lbox price-only">/.test(page),
    'the listings panel follows the grid directly, at the grid\'s width');

@@ -1,5 +1,13 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 (future work) — the card page's listings: paginate or collapse (not built)
+
+The desktop card page is about 10,700 px with 37 listings at ~250 px each (Base
+Charizard, live, signed in, 1366 px): seven screens of listings below a 733-px card.
+That is why the cheapest-listing figure was never seen — it sat 889 px down, inside
+the listings. Listings probably need paginating or collapsing the way deals now are
+(ten to a page from one snapshot, "See more" between pages). Recorded only; not built.
+
 ## 2026-10-10 (corrections owed)
 
 ### Parking Yahoo's live search saved about 0 minutes, not ~13

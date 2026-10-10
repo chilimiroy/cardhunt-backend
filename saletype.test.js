@@ -7,7 +7,7 @@
 // printing, edition) apply to both, because the split happens first and the
 // rest of the panel runs unchanged. 19 of these fail on the code before T5.
 
-require('./testcount')(22);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(23);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const vm = require('vm');
 const outlier = require('./outlier.js');
@@ -59,7 +59,12 @@ ok('both tabs draw through the gated panel (one writer)', /if\(tab==='live'\|\|t
 ok('a grade change never sends the Auctions tab to the link lists', /S\.ltab !== 'live' && S\.ltab !== 'auction'\) buildMockListings/.test(page));
 const rl = fnText(page, 'renderLiveListings') || '';
 ok('the split is applied FIRST, before the condition filter', rl.indexOf("var saleView") > 0 && rl.indexOf("var saleView") < rl.indexOf('var condFilter'));
-ok('the auction view draws no cheapest', /if \(saleView === 'auction'\) \{[\s\S]*?ending soonest first[\s\S]*?return;\s*\}\s*if \(d\.cheapestLive != null\)/.test(rl));
+// Since 2026-10-10 the cheapest is the FIRST thing in the eBay section (topFigure, in head), built only off auctions.
+ok('the auction view draws no cheapest', /if \(saleView !== 'auction' && d\.cheapestLive != null\) \{\s*topFigure = /.test(rl)
+   && (rl.match(/cheapest trusted listing, delivered/g) || []).length === 1);
+ok('the cheapest comes before the FOR SALE NOW label, the count line and the buttons',
+   /var head = '<div style="padding:14px 18px;border-bottom:1px solid var\(--bd\)">'\s*\+ topFigure\s*\+ '<div[^']*'\s*\+ 'FOR SALE NOW/.test(rl)
+   && rl.indexOf('+ topFigure') < rl.indexOf('liveProgressLine(d,'));
 ok('auctions are sorted by end time', /saleView === 'auction'[\s\S]{0,400}new Date\(a\.endsAt\)/.test(rl));
 ok('the auction view says a bid is not a price', /current bid<\/strong>, not what the card will sell for/.test(rl));
 ok('an empty Auctions tab points at the Buy It Now count, not "no listing"', /No auction of this exact card/.test(rl));

@@ -1,5 +1,49 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 (yen) — Yahoo's rate, eBay statistics out of tooling, the exemptions, weekly Yuyu-tei
+
+0 eBay calls.
+
+### Yahoo's yen
+jpfilter.js held JPY_PER_USD = 157 and converted every Yahoo listing and every
+Yahoo median the nightly stored. Now fx.js's live rate (ECB, 2026-10-09: 0.00632
+USD/JPY, 158.23 JPY/USD), recorded on every row; a run with only the pinned
+fallback prices nothing. Stored rows that used 157: 7,558 yahoojp rows on 2,552
+cards (2026-08-20 .. 10-09), the yen recorded on 110. At today's rate: 0.78%
+lower; 7,502 move by a cent or more, 726 by $1 or more; total $412,097 ->
+$408,898. 2,433 Japanese headlines are Yahoo rows; the largest moves $27.24 on
+$3,510.19. Not rewritten (append-only). Check C had passed the three ingest
+lines (`medianYen / JPY_PER_USD`, `stats.avgPrice / ...`): a figure is now any
+name containing price, yen, median, usd, market or landed.
+
+### eBay statistics out of tooling (re-verified, not assumed)
+setprobe returned a median, low and high of eBay listing prices per epid —
+removed (counts, kept, titles, reasons, the Set cross-check stay). Re-verifying
+outlier.js's medians found two more: /api/ebay/marketprobe returned its raw
+stats (median, low, high, spread) and usMaxExaminedUsd; /api/ebay/dealsprobe
+?zip&rows=1 returned both runs' raw stats in floorStats. Both now go through
+publicOutliers. Stored: every INSERT carries counts, timings, verdicts or quota;
+75 text/JSON columns outside cards and price_history hold no median, low, high
+or spread; price_history has no median key and no eBay-sourced row.
+
+### Exemptions (nofabricated.test.js check C) — for Roy's review
+REVIEWED_MULTIPLIERS: the alert target default (Roy, 2026-10-09). REVIEWED_ARITHMETIC:
+the same alert line (Roy, 2026-10-09); outlier.js's median (Roy's 2026-10-08
+§8.1(d) ruling — the entry itself is Claude's); 12 proposals by Claude, none
+reviewed: gradeprice median helper (also computed in the browser by byPrintRun,
+never drawn), its comparator line, outlier spread ratio, a server comparator,
+the sibling hide line, reports.js PRICE_KEEP_DAYS (a time), gradeprice premium
+(parked caller), eBay current bid conversion, tcgdexharvest cross-check, the
+refresh log's % delta, the two Yahoo medians. Three reasons were corrected
+before review (the gradeprice median was not "inside the server"; the Yahoo
+pair was swapped).
+
+### Yuyu-tei weekly
+refresh-weekly.cmd (tracked) -> `node ingest.js yuyutei` -> yuyutei-weekly.log.
+Task Scheduler "CardHunt weekly Yuyu-tei": Sundays 08:00, this user, interactive
+only, stopped after 2 h; first run 2026-10-11 08:00 (the nightly starts 03:00,
+stops itself after 4 h).
+
 ## 2026-10-10 (one reader) — pokemontcg.io blocks, check C, the six re-measured, shop asks, the yen
 
 0 eBay calls. 11 pokemontcg.io requests (six cards; it answered 500/502 five times).

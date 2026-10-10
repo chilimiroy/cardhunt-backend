@@ -52,7 +52,7 @@ Render API (server.js v5.6.0)  -- reads Supabase FIRST (45,781 cards)
 | Frontend | `cardhunt_preview.html` | Render at **`/app`**; local file is the fallback |
 | API | `server.js` v5.6.0 | Render |
 | Database | Supabase Postgres | `cards`, `price_history`, `alerts`, `portfolio`, `users`, `listing_photo_verdicts`, `listing_views` |
-| Ingestion | `ingest.js` v5.12.0 | Local only — never deployed; **tracked** in git |
+| Ingestion | `ingest.js` v5.13.0 | Local only — never deployed; **tracked** in git |
 
 ## The module map
 
@@ -127,8 +127,9 @@ PROGRESS 2026-10-09 (no estimates)). **No estimate is shown anywhere.**
 
 - **Yuyu-tei is a shop ask** (8,976 Japanese headlines, marked, feed nothing). Its one
   run (2026-08-28) never repeated — a stopped job; it now converts at the live yen rate,
-  recorded per row. Scheduling `node ingest.js yuyutei` is Roy's decision
-  (PROGRESS 2026-10-10 (Yuyu-tei)). OPEN: jpfilter.js converts Yahoo at a constant 157.
+  recorded per row; it runs WEEKLY, Sundays 08:00 ("CardHunt weekly Yuyu-tei",
+  refresh-weekly.cmd). Yahoo converts at the live yen rate too, recorded per row; no live
+  rate, nothing written (PROGRESS 2026-10-10 (yen)).
 - Alert evaluation still triggers on an unsettled price (open).
 - **Grade picker: no per-grade price for any grade** — no source (multiplier deleted;
   gradeprices parked). It is labelled a listings filter ("Filter listings", badge
@@ -395,6 +396,7 @@ named by the next run (`refreshrun.js`).
 ```powershell
 schtasks /Query /TN "CardHunt nightly refresh" /V /FO LIST
 schtasks /Run   /TN "CardHunt nightly refresh"
+schtasks /Query /TN "CardHunt weekly Yuyu-tei" /V /FO LIST   # Sundays 08:00, refresh-weekly.cmd
 ```
 `task-watch.ps1` logs task state hourly to `task-watch.log`.
 
@@ -742,7 +744,9 @@ licence §8.1(b)(c), read 2026-10-08 — the old "never stored" was stricter).
 §9.5 — no eBay price median shown or stored (grade box, print-run median
 and tile medians removed); no combined number shown — the deal % only CHOOSES.
 §8.1(d) — outlier.js medians and the deal % are per card, per view, never
-shown, never stored: OUTSIDE the clause (`ebayterms.test.js`). Uncertain reading = remove the thing.
+shown, never stored: OUTSIDE the clause (`ebayterms.test.js`). **No statistic of eBay's
+prices leaves the server, tooling included** — re-verified 2026-10-10: setprobe's median
+and two probes' raw outlier stats removed (`publicOutliers` is the only way out). Uncertain reading = remove the thing.
 **Graded prices cannot be derived from eBay under §9.5** — gradeprices is parked
 (`gradeprices-disabled.js`); it returns only reading a graded-price source of its own.
 *Archive:* "A read endpoint must never write", "eBay listings are cached, never stored"

@@ -1,5 +1,41 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 (rotation, lowest listing, budget, retry, layout)
+
+### The deals rotation, measured — one run so far
+Runs grouped from listing_views (background opens), 2026-10-09 .. 10-10 UTC:
+10:50 -> 18:28 shared 78 of 80, 18:28 -> 22:50 80 of 80, 22:50 -> 06:15 74 of 80.
+06:15 (Action run 8) is the ONLY run since rotation shipped (d65ad80), and the first
+rotated run walks the never-walked first in price order — the same dearest 80 by
+design, so 74/80 says nothing about rotation. deal_walks now holds those 80. Computed
+from today's pool (a prediction, not a measurement): the next run walks pool ranks
+81-160, 0 of them in the 06:15 run. Measure again after run 9. The 06:15 run's picks:
+8 deals (Umbreon VMAX 215 among them), 4 best auctions and 4 ending soon
+(en-me02.5-276, en-sv04.5-232, en-sv08.5-161, en-swsh7-218, en-swsh11-186) — the
+auction bars fill on cards other than the one used for the probe.
+
+### The lowest-listing figure on the live page (signed in, master)
+1 eBay search (Base Charizard, en-base1-4, Raw). Inside the bordered "LISTINGS FROM
+EBAY" section, after its header and the "37 listings from eBay US ... Search 7 more
+marketplaces / Load more" line, the first figure: "$385.00 — cheapest trusted listing,
+delivered · 28 listings · 7 cheaper listings flagged below, not counted here · 1
+cheaper listing is not used as the cheapest trusted listing because the seller has
+fewer than 10 feedback ...". It renders. The section starts 889 px down at 1366 px —
+below the first screen (641 px) — which may be why it is not seen.
+
+### Budget, retry, layout (commits 0a786a1, 9c60796, 6ab635c, 4b33238)
+- One --hours budget for the whole run (refreshBudget, made once in refreshDue).
+- The weekly retries hourly for 6 hours; a final refusal is printed by every later
+  run. The weekly task's ExecutionTimeLimit is PT2H — shorter than the wait (Roy's).
+- Card page: filter box under the position bar; picture ends on its line. Live, signed
+  in, Base Charizard, before -> after: 390 px 18,360 -> 18,267; 900 px 12,126 ->
+  12,032; 1100 px 11,511 -> 11,449; 1366 px 10,679 -> 10,618. Bottoms after:
+  900 px 776/777, 1100 px 745/746, 1366 px 732/733.
+- At 900-1100 px the card screen's top bar is 1,189 px wide and scrolls sideways —
+  before and after alike; not fixed here.
+- Portfolio: a page of the account screen; the bar's Portfolio item removed, the
+  account menu carries it, SS('portfolio') still lands on it.
+
 ## 2026-10-10 (nightly) — why the 4-hour budget did not bind; the job lock; the write credentials
 
 ### The cause: the PC slept, and the budget is per language

@@ -414,9 +414,10 @@ One exact-text table per language over ONE key set, **never card data**
 ## Page layout — rules (TASK-ui, 2026-10-07)
 - A price control is `.price-only`: absent, never disabled. Check signed out AND in.
 - Theme, currency, language: the account menu; currency WRITTEN only when prices open.
-- Card: image | ONE view area (boxes+bar OR history: `toggleCardView` fetches
-  nothing; both in one cell, no jump) + selector, level with the image; listings
+- Card: image | ONE view area (boxes+bar+selector OR history: `toggleCardView` fetches
+  nothing; one cell, no jump); the picture ends on the selector's line; listings
   full width below. Artist above the image; no details box (`cdlayout.test.js`).
+- Portfolio is a page of the account screen (`SS('portfolio')` lands there); no bar item.
 - Back restores scroll; a reopened card restores grade, tab, view, range, scroll
   BEFORE its first listings call, else Raw NM (`restore.test.js`).
 - Home: search, deals (hidden while off), games, movers, alerts (`door.test.js`).

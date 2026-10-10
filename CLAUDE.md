@@ -140,8 +140,8 @@ PROGRESS 2026-10-09 (no estimates)). **No estimate is shown anywhere.**
   `listing_photo_verdicts` holds hashed keys only — no title, price, URL, photo.
 - **Japanese is NOT parked**: the nightly prices it from Yahoo (7,558 rows since 08-20) and
   runs out of its 4 h budget in it (10-10: 1,608 of 4,000). The "parked" note was in a task brief.
-- **Chinese is parked**: nothing priced — but the nightly still walks zh-tw/zh-cn (4,877
-  cards, 0 network) and logs them as gaps. No rarity source, TCGdex's Chinese pricing is the
+- **Chinese is parked**: nothing priced, and out of the nightly since 2026-10-10 (`refresh
+  all` = en, ja; `NIGHTLY_LANGS`). No rarity source, TCGdex's Chinese pricing is the
   Japanese card's under a translated name. `pricingAllowedFor()` = en, ja.
 
 - **5,475 Japanese cards (39%) are not on TCGdex** (Limitless-ingested);
@@ -343,7 +343,7 @@ Method, tooling rows: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-07 (TASK-ui, thi
 | back check, automatic | +1 getItem per unchecked row, ≤20 a view, background |
 | stamp / lookalike / sibling / auctions / novelty (material) | 0 |
 | home movers (4 × `/api/trending`) · the deals shelf (`/api/deals`, stored picks) | 0 |
-| deals refresh (GitHub Action, background; fires every 4-9 h, not 3) | ~104 a run (80 of a 400 pool × 1.3); feeds all three bars |
+| deals refresh (GitHub Action, background; fires every 4-9 h, not 3) | ~104 a run (80 of a 400 pool × 1.3) + ≤20 getItem re-checks; feeds all three bars |
 | open a deal · an auction-bar tile | 1 getItem (0 within 15 min; an auction's back check reads the same one) |
 | graded slabs bar | 0 — silent; a supply = 1 search per card per grade |
 | search resolving to one card · ambiguous | 1 per card (+reprints) · 0 |
@@ -404,8 +404,9 @@ schtasks /Query /TN "CardHunt weekly Yuyu-tei" /V /FO LIST   # Sundays 08:00, re
 - **Movers** (`trending.js`): both ends TCGdex rows, same printing and product; a
   marked card never ranks; % lists need $10, every list 3 readings. **Best deals ON
   (Roy, 2026-10-08)**: the shelf shows OUR data, a click fetches live. Detail: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)".
-- One shelf, four bars from ONE supply: 400 cards walked 80 a run; picks shown 6 h
-  (auctions 3 h, found 3+ h from their end); graded silent (PROGRESS 2026-10-10 (bars)).
+- One shelf, four bars from ONE supply: 400 cards walked 80 a run; a deal lives until proven
+  dead (the click, or the run re-checking the 20 oldest-confirmed), shown all, 10 a page, by
+  our band; auctions 3 h; graded silent (PROGRESS 2026-10-10 (bars), (lifetime)).
 
 ## Page language — EN/JA/zh-TW/zh-CN (T5; TASK-ui 2026-10-07)
 One exact-text table per language over ONE key set, **never card data**

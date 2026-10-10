@@ -1,5 +1,46 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 (lifetime) — page height, Chinese, the bar, the cheapest, pick lifetime, the shelf
+
+### The two page heights — both right, different pages
+- 1,629 -> 1,563 px (e8081cf, 04:56 local today, not two days ago): **Umbreon VMAX 215**
+  (en-swsh7-215), on a LOCAL server with eBay OFF — no listings at all. It measured the
+  card page above its listings plus empty listing panels.
+- 10,679 -> 10,618 px (6ab635c, this afternoon): **Base Charizard** (en-base1-4) on the
+  LIVE site, signed in, with its real listings — 37 from eBay US in the "Listings from
+  eBay" section, which ran from 889 px to 10,108 px: 9,219 px for 37 listings, ~249 px
+  a listing (photo, title, price, the photo-check labels, Report).
+- The number to trust for a layout change is the part it moves — the grid above the
+  listings: Base Charizard at 1366 px, 794 -> 733 px (-61, the same -61 as the whole
+  page). The whole page is not a layout number: it is ~250 px x the listings loaded.
+- A finding in its own right: with listings, the desktop card page is ~10,700 px — some
+  42 screens of 250-px rows. Not changed here.
+
+### Chinese in the nightly
+It was still in: refreshrun.LANGS (en, ja, zh-tw, zh-cn) was what `refresh all` walked.
+No request to remove it is in this session's record; removed now (4da32eb): `refresh
+all` = en, ja. In tonight's log the "sets that priced nothing" reports (the exit-2
+path) came from en and ja; Chinese added run time and gap lines only.
+
+### The weekly task's time limit — Roy's steps (PT2H -> PT10H)
+PowerShell, as chili (the task is Interactive only; no password asked):
+    $t = Get-ScheduledTask -TaskName "CardHunt weekly Yuyu-tei"
+    $t.Settings.ExecutionTimeLimit = "PT10H"
+    Set-ScheduledTask -InputObject $t
+    schtasks /Query /TN "CardHunt weekly Yuyu-tei" /XML | findstr ExecutionTimeLimit   # -> PT10H
+Or Task Scheduler: Library -> "CardHunt weekly Yuyu-tei" -> Properties -> Settings ->
+"Stop the task if it runs longer than:" -> type 10 hours -> OK.
+
+### Pick lifetime and the shelf (dccd519, 695f1ef, 9b81e92)
+Deals picks moved into bar_picks (bar 'deals') with OUR band; no timer; each run
+re-checks the 20 picks confirmed longest ago through the click's own verdict; the shelf
+sends every pick, best band first, and the page pages ten at a time from one snapshot.
+NOT YET MEASURED (no deals run since the deploy): the re-check's real cost, picks a day
+under rotation, and how many are live at once. What is measured: one rotated run (06:15
+UTC, run 8) — 8 deals picks, 4 best-auction, 4 ending-soon; before rotation 7 a run.
+The Action fired 7 times in 45 h (~3.7 a day). So the supply estimate is ~7-8 picks a run
+x ~3.7 runs ~ 26-30 new picks a day, minus what the re-check and clicks prove dead.
+
 ## 2026-10-10 (rotation, lowest listing, budget, retry, layout)
 
 ### The deals rotation, measured — one run so far

@@ -313,6 +313,14 @@ function discountBand(q) {
   return q >= 0.45 ? '45-60' : q >= 0.30 ? '30-45' : '15-30';
 }
 
+// The shelf's order (Roy, 2026-10-10): best discount first — by OUR band, never
+// the number — then our price, dearest first, then the card id, so the order is
+// total and the same on every read: a reader paging through it never sees it move.
+function orderShelf(rows) {
+  const rank = b => { const i = DEAL_BANDS.indexOf(b); return i < 0 ? DEAL_BANDS.length : i; };
+  return rows.slice().sort((a, b) => rank(a.band) - rank(b.band) || b.price - a.price || String(a.cardId).localeCompare(String(b.cardId)));
+}
+
 function rankDeals(deals) {
   return deals.slice().sort((a, b) => b.discount - a.discount || a.listing.landed - b.listing.landed);
 }
@@ -328,5 +336,5 @@ function describeRule() {
 
 module.exports = { ENABLED, OFF_REASON, MIN_DISCOUNT, MAX_DISCOUNT, EXCLUDED, DEAL_BACK_MAX, BELOW_NM, basePrintingOf, notADeal,
   VOUCH, vouchFree, vouchPhotos, discountOf, refLabel, hpAmbiguous, pickVouched, rotate, rowMarked, vouchEvidence,
-  AUCTION_END_H, AUCTION_BARS, DEAL_BANDS, discountBand, endHoursOf, endBand, auctionFree, pickAuction, auctionClickRefusal,
+  AUCTION_END_H, AUCTION_BARS, DEAL_BANDS, discountBand, orderShelf, endHoursOf, endBand, auctionFree, pickAuction, auctionClickRefusal,
                    rankDeals, describeRule };

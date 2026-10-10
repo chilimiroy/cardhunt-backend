@@ -5929,7 +5929,7 @@ async function loadHomeDeals() {
   if (!host || !sec) return;
   var d;
   try {
-    var r = await fetch(BACKEND + '/api/deals?limit=8');
+    var r = await fetch(BACKEND + '/api/deals');
     d = await r.json();
     if (!r.ok) throw new Error(d && d.error ? d.error : 'HTTP ' + r.status);
   } catch (e) {
@@ -5953,21 +5953,45 @@ async function loadHomeDeals() {
       + '<span class="deals-how" tabindex="0" title="' + liveEsc(d.rule) + '" style="text-decoration:underline dotted;cursor:help">How deals are chosen</span></div>';
     return;
   }
+  // ALL deals, ten to a page (Roy, 2026-10-10), best band first (the
+  // server's order: our band, then our price — deals.orderShelf). The list is
+  // kept as it arrived: "See more" and "Previous" page through THIS snapshot
+  // and fetch nothing, so nothing reshuffles while someone pages; it is read
+  // again only when the shelf is drawn again (the home page, the switch).
+  DEALS_SHELF.list = d.deals; DEALS_SHELF.page = 0;
+  drawDealsPage();
+}
+var DEALS_SHELF = { list: [], page: 0, size: 10 };
+// "found 14 h ago": minutes under an hour, hours under two days, then days.
+function dealAge(min) {
+  return min < 60 ? 'found ' + Math.max(1, min) + ' min ago' : min < 48 * 60 ? 'found ' + Math.round(min / 60) + ' h ago'
+    : 'found ' + Math.round(min / 1440) + ' d ago';
+}
+function drawDealsPage() {
+  var host = document.getElementById('home-deals'); if (!host) return;
+  var L = DEALS_SHELF.list, n = DEALS_SHELF.size, pages = Math.max(1, Math.ceil(L.length / n));
+  var p = Math.min(Math.max(0, DEALS_SHELF.page), pages - 1); DEALS_SHELF.page = p;
   // A tile is OUR data only (Roy, 2026-10-08): the card, our TCGplayer
   // market price, when the deal was found. Nothing of eBay's appears until
   // someone opens it — openDeal() fetches the listing live, into its own
   // zone (API licence §8.1(b)(2): eBay Content visually separate).
-  host.innerHTML = d.deals.map(function (x) {
-    var ago = x.foundAgoMin >= 60 ? Math.round(x.foundAgoMin / 60) + ' h ago' : Math.max(1, x.foundAgoMin) + ' min ago';
+  var tiles = L.slice(p * n, p * n + n).map(function (x) {
     var extra = '<div class="deal-ours" style="font-size:10px;color:var(--mu);margin-top:2px">'
       + liveEsc(x.priceLabel === 'TCGplayer market price' ? 'TCGplayer market' : (x.priceLabel || 'TCGplayer market'))
-      + ' &middot; ' + 'Deal found ' + ago + '</div>'
+      + ' &middot; ' + dealAge(x.foundAgoMin) + '</div>'
       + '<div class="deal-ebay" id="deal-eb-' + liveEsc(x.cardId) + '" style="margin-top:6px">'
       + '<button class="tdeal" onclick="event.stopPropagation();openDeal(\'' + liveEsc(x.cardId) + '\')">See the eBay listing</button></div>';
     return cardSummaryTile({ cardId: x.cardId, name: x.name,
       setName: (x.set || '') + (x.number ? ' · #' + x.number : ''), img: x.image, market: x.price, marketIsReal: true },
       { extra: extra });
   }).join('');
+  // Fewer than ten: all of them, no pager. More: "Previous" / "See more" between pages.
+  var pager = L.length <= n ? '' : '<div class="deals-pager" style="grid-column:1/-1;display:flex;gap:10px;align-items:center;justify-content:center;margin-top:6px">'
+    + (p > 0 ? '<button class="bar-b" onclick="DEALS_SHELF.page--;drawDealsPage()">&larr; Previous</button>' : '')
+    + '<span style="font-size:12px;color:var(--mu)">' + (p * n + 1) + '&ndash;' + Math.min(L.length, p * n + n) + ' of ' + L.length + '</span>'
+    + (p < pages - 1 ? '<button class="bar-b" onclick="DEALS_SHELF.page++;drawDealsPage()">See more &rarr;</button>' : '')
+    + '</div>';
+  host.innerHTML = tiles + pager;
 }
 
 // Opening a deal: the listing, fetched LIVE (the click is the check). Sold,
@@ -8458,6 +8482,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-fd20c3f-cheapesttop &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-695f1ef-dealpages &middot; click to hide</div>
 </body>
 </html>

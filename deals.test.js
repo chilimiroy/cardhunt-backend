@@ -6,7 +6,7 @@
 //
 //   node deals.test.js
 'use strict';
-require('./testcount')(108);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(113);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const deals = require('./deals.js');
 let pass = 0, fail = 0;
@@ -190,8 +190,16 @@ ok(/app\.post\('\/api\/deals\/refresh', toolingKey\.require/.test(sup) && /app\.
   // LIFETIME (Roy, 2026-10-10): a deals pick lives until proven dead — no timer anywhere.
   ok(!/found_at >/.test(shelf) && !/showHours/.test(src) && /recheck: 20,/.test(src),
      'no timer: the shelf shows every pick until it is proven dead; the run re-checks 20 a run');
-  ok(/const shown = out\.slice\(0, limit\)\.sort\(\(a, b\) => b\.price - a\.price\);/.test(shelf) && /reserve: out\.length - shown\.length/.test(shelf),
-     'the freshest `limit` are shown, ordered by OUR price — never by the internal discount; the rest are the reserve, counted');
+  // ALL deals, best discount first by OUR band (Roy, 2026-10-10)
+  ok(/const shown = deals_\.orderShelf\(out\)\.slice\(0, limit\)\.map\(\(\{ band, \.\.\.x \}\) => x\);/.test(shelf) && /parseInt\(req\.query\.limit, 10\) \|\| 500/.test(shelf),
+     'the shelf sends every pick (up to 500) in the shelf order, and strips the band before sending');
+  {
+    const rows = [{ cardId: 'en-b', band: '15-30', price: 900 }, { cardId: 'en-a', band: '45-60', price: 100 }, { cardId: 'en-c', band: null, price: 5000 },
+                  { cardId: 'en-d', band: '45-60', price: 300 }, { cardId: 'en-e', band: '30-45', price: 50 }, { cardId: 'en-f', band: '45-60', price: 300 }];
+    const o = deals.orderShelf(rows).map(r => r.cardId).join();
+    ok(o === 'en-d,en-f,en-a,en-e,en-b,en-c', 'best band first (45-60, 30-45, 15-30, unbanded last), then our price, then card id: ' + o);
+    ok(deals.orderShelf(rows.slice().reverse()).map(r => r.cardId).join() === o, 'a total order: the same list in any order comes back the same — paging never reshuffles');
+  }
   ok(!/DELETE FROM bar_picks WHERE bar = 'deals' AND found_at/.test(src) && /SELECT item_id FROM bar_picks WHERE bar = 'deals' AND card_id = \$1"/.test(src)
      && /DELETE FROM bar_picks WHERE bar <> 'deals' AND found_at < now\(\) - interval '\$\{deals_\.AUCTION_END_H\.min\} hours'/.test(src),
      'neither the run nor the click expires a deals pick by age; the auction bars keep their 3 h (an auction\'s end is its proof)');
@@ -262,8 +270,19 @@ ok(/No deals right now — checking again shortly\./.test(ld) && /title="' \+ li
    'an empty shelf says one line; the rule is behind a hover (Roy, 2026-10-08)');
 ok(/if \(d\.enabled === false\) \{\s*sec\.hidden = true;\s*console\.info\('\[deals\] Best deals is switched off: '/.test(ld), 'switched off: the section stays hidden and the reason is logged');
 ok(/sec\.hidden = false;\s*\/\/ a failure is shown/.test(ld) && /\n  sec\.hidden = false;/.test(ld), 'a load failure, and an enabled shelf, show the section');
-ok(!/listing\.|landed|discount|% below/.test(ld), 'a shelf tile shows nothing of eBay\'s — no listing, price of eBay\'s, or percentage');
-ok(/'Deal found ' \+ /.test(ld) && /TCGplayer market/.test(ld), 'a tile shows our card, the TCGplayer market price and when the deal was found');
+const dp = page.slice(page.indexOf('function drawDealsPage('), page.indexOf('\n}\n', page.indexOf('function drawDealsPage(')));
+ok(!/listing\.|landed|discount|% below/.test(ld + dp), 'a shelf tile shows nothing of eBay\'s — no listing, price of eBay\'s, or percentage');
+ok(/dealAge\(x\.foundAgoMin\)/.test(dp) && /TCGplayer market/.test(dp), 'a tile shows our card, the TCGplayer market price and its age ("found 14 h ago")');
+{
+  const ageSrc = page.slice(page.indexOf('function dealAge('), page.indexOf('\n}\n', page.indexOf('function dealAge(')) + 2);
+  const dealAge = new Function(ageSrc + '; return dealAge;')();
+  ok(dealAge(0) === 'found 1 min ago' && dealAge(45) === 'found 45 min ago' && dealAge(14 * 60) === 'found 14 h ago' && dealAge(47 * 60) === 'found 47 h ago' && dealAge(5 * 1440) === 'found 5 d ago',
+     'the age: minutes, then hours, then days after two days');
+}
+ok(/fetch\(BACKEND \+ '\/api\/deals'\);/.test(ld) && /DEALS_SHELF\.list = d\.deals; DEALS_SHELF\.page = 0;/.test(ld) && !/fetch\(/.test(dp),
+   'one list per drawing of the shelf; paging (See more / Previous) fetches nothing, so nothing reshuffles');
+ok(/var pager = L\.length <= n \? '' :/.test(dp) && /See more &rarr;/.test(dp) && /&larr; Previous/.test(dp) && /size: 10 \}/.test(page),
+   'ten to a page; fewer than ten: all of them and no pager');
 {
   const ck = page.slice(page.indexOf('async function openDeal('), page.indexOf('\n}\n', page.indexOf('async function openDeal(')));
   ok(/'\/api\/deals\/' \+ encodeURIComponent\(cardId\) \+ '\/live'/.test(ck), 'opening a deal fetches the listing live');

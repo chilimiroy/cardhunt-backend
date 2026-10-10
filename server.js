@@ -1392,25 +1392,27 @@ app.get('/api/deals', access.priced, async (req, res) => {
   // Off (deals.ENABLED) answers that it is off and why — never an empty
   // shelf that reads as "no deals right now".
   if (!deals_.ENABLED) return res.json({ enabled: false, reason: deals_.OFF_REASON, rule: deals_.describeRule(), count: 0, deals: [], ebayCalls: 0 });
-  const limit = Math.min(24, Math.max(1, parseInt(req.query.limit, 10) || 8));
+  // ALL deals (Roy, 2026-10-10): the page shows ten at a time from this one list.
+  const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 500));
   try {
     await dealTable();
-    const picks = (await db.query(`SELECT p.card_id, p.found_at, c.name, c.number, c.set_name, c.set_name_en, c.image_small
+    const picks = (await db.query(`SELECT p.card_id, p.band, p.found_at, c.name, c.number, c.set_name, c.set_name_en, c.image_small
       FROM bar_picks p JOIN cards c ON c.api_card_id = p.card_id
-      WHERE p.bar = 'deals' AND ${digital.visibleSql('c')} ORDER BY p.found_at DESC LIMIT 60`)).rows;
+      WHERE p.bar = 'deals' AND ${digital.visibleSql('c')} ORDER BY p.found_at DESC LIMIT 500`)).rows;
     const out = [];
     for (const p of picks) {
       const ref = await dealRefOf(p.card_id);
       if (!ref || !ref.isReal || !ref.current) continue;     // our price must be current to stand beside
-      out.push({ cardId: p.card_id, name: p.name, number: p.number, set: p.set_name_en || p.set_name, image: p.image_small,
+      out.push({ cardId: p.card_id, band: p.band, name: p.name, number: p.number, set: p.set_name_en || p.set_name, image: p.image_small,
         price: ref.price, priceLabel: deals_.refLabel(ref), priceDate: ref.recordedAt,
         foundAt: p.found_at, foundAgoMin: Math.max(0, Math.round((Date.now() - new Date(p.found_at).getTime()) / 60000)) });
     }
-    // The freshest `limit` are shown (picks come newest first); the rest are
-    // the reserve. Then ordered by OUR price, dearest first — never by the
-    // discount, which is internal.
-    const shown = out.slice(0, limit).sort((a, b) => b.price - a.price);
-    res.json({ enabled: true, rule: deals_.describeRule(), count: shown.length, deals: shown, reserve: out.length - shown.length,
+    // Best discount first, by OUR band — then our price, then the card id
+    // (deals.orderShelf: a total order, the same on every read). The band
+    // orders; it is not sent.
+    const shown = deals_.orderShelf(out).slice(0, limit).map(({ band, ...x }) => x);
+    res.json({ enabled: true, rule: deals_.describeRule(), count: shown.length, total: out.length, deals: shown,
+      order: 'our band, best first, then our price — the gap itself is never sent',
       ebayCalls: 0, refreshedAt: dealJob.last ? dealJob.last.finishedAt : null,
       freshness: { note: 'a deal stays until it is shown to be gone — a scan re-checks the oldest each run, and the listing itself is fetched live when you open it' } });
   } catch (e) { res.status(500).json({ error: e.message }); }

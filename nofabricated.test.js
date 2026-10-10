@@ -295,7 +295,7 @@ function arithmetic(text, file) {
 const PROPOSED = 'proposed 2026-10-10 (Claude) — not yet confirmed by Roy';
 const REVIEWED_ARITHMETIC = [
   { file: 'cardhunt_preview.html', re: /alert-price'\)\.value=\(base\*0\.85\)/, why: 'the alert form\'s target default (REVIEWED_MULTIPLIERS above)', decided: 'Roy, 2026-10-09' },
-  { file: 'gradeprice.js', re: /\(\(s\[mid - 1\] \+ s\[mid\]\) \/ 2\)/, why: 'gradeprice.js\'s median helper. gradeprice.js is ALSO the module the page loads: byPrintRun computes a median of the live listings per print-run group IN THE BROWSER, which the page never draws (livePrintRuns shows "from $low", ebayterms.test.js) and never sends anywhere; aggregate (its other caller) is reached only from the parked gradeprices-disabled.js', decided: PROPOSED },
+  { file: 'gradeprice.js', re: /\(\(s\[mid - 1\] \+ s\[mid\]\) \/ 2\)/, why: 'gradeprice.js\'s median helper. Its browser caller is gone (byPrintRun computed a per-group median in visitors\' browsers that nothing read — removed 2026-10-10, Roy); its only caller now is aggregate, reached only from the parked gradeprices-disabled.js. Nothing in the page or the server calls it', decided: PROPOSED },
   { file: 'gradeprice.js', re: /^b\.median - a\.median\);$/, why: 'the second line of a sort comparator', decided: PROPOSED },
   { file: 'outlier.js', re: /\(s\[m - 1\] \+ s\[m\]\) \/ 2/, why: 'outlier.js\'s median: per card, per view, never shown or stored (§8.1(d), ebayterms.test.js)', decided: 'Roy, 2026-10-08 (the §8.1(d) ruling)' },
   { file: 'outlier.js', re: /stats\.spread = stats\.high && stats\.low/, why: 'a ratio inside the outlier check (how spread a view is), never a price', decided: PROPOSED },

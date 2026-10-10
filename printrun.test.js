@@ -13,11 +13,12 @@
 //   1. which sets get print runs — the ten TCGdex reports first-edition
 //      cards for, and no others (a 2026 set gets none)
 //   2. every row lands in exactly one group, nothing dropped, order kept
-//      (so flagged rows stay last), and each run has its own median
-//   3. a flagged-implausible row never moves a run's median
+//      (so flagged rows stay last), and each run has its own "from" price
+//   3. a flagged-implausible row never sets a run's "from" price
+//   (no group computes a median: removed 2026-10-10, nothing read it)
 //   4. the page calls the grouping, and falls back to one list
 
-require('./testcount')(48);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(49);   // assertions in a plain run — fewer fails the file (testcount.js)
 const gp = require('./gradeprice');
 const fs = require('fs');
 
@@ -66,8 +67,10 @@ ok('groups in order: 1st Edition, Shadowless, Unlimited, other, not stated',
    g.map(x => x.run).join('|'));
 ok('every row lands in exactly one group',
    g.reduce((a, x) => a + x.count, 0) === rows.length);
-ok('Unlimited has its own median ($250)', by['Unlimited'].median === 250, by['Unlimited'].median);
-ok('1st Edition has its own median, 10x+ Unlimited', by['1st Edition'].median === 10000, by['1st Edition'].median);
+ok('Unlimited has its own "from" price ($240)', by['Unlimited'].low === 240, by['Unlimited'].low);
+ok('1st Edition has its own "from" price, 10x+ Unlimited ($9,000)', by['1st Edition'].low === 9000, by['1st Edition'].low);
+ok('no group carries a median (computed in visitors\' browsers, read by nothing — removed 2026-10-10)',
+   g.every(x => !('median' in x)) && !/median\(vals\)/.test(fs.readFileSync(__dirname + '/gradeprice.js', 'utf8').slice(fs.readFileSync(__dirname + '/gradeprice.js', 'utf8').indexOf('function byPrintRun('))));
 ok('the unstated row is kept, in its own group, not folded into Unlimited',
    by[gp.RUN_NOT_STATED].count === 1 && by[gp.RUN_NOT_STATED].unstated === true);
 ok('a print run the list does not name (4th Print) is kept under its own name',
@@ -75,14 +78,14 @@ ok('a print run the list does not name (4th Print) is kept under its own name',
 ok('within a group, input order is kept (flagged row stays last)',
    by['1st Edition'].rows[by['1st Edition'].rows.length - 1].suspect === 'implausible');
 
-console.log('\n3. A FLAGGED ROW DOES NOT MOVE A MEDIAN\n');
+console.log('\n3. A FLAGGED ROW DOES NOT SET A "FROM" PRICE\n');
 ok('the $6.60 implausible 1st Edition row is shown but not priced',
    by['1st Edition'].count === 3 && by['1st Edition'].priced === 2);
 ok('a run with two priced rows says it is thin', by['1st Edition'].thin === true);
 {
   const empty = gp.byPrintRun([L('Charizard 4/102', 100, null)], 'base1', 'en');
-  ok('an empty run is still listed, with no median, rather than vanishing',
-     empty.find(x => x.run === 'Shadowless').count === 0 && empty.find(x => x.run === 'Shadowless').median === null);
+  ok('an empty run is still listed, with no price, rather than vanishing',
+     empty.find(x => x.run === 'Shadowless').count === 0 && empty.find(x => x.run === 'Shadowless').low === null);
 }
 
 console.log('\n4. THE PAGE USES IT\n');
@@ -134,7 +137,7 @@ console.log('\n5. FILTER FIRST, GROUP AFTER (T2, 2026-10-04)\n');
   const g = gp.byPrintRun(p.live, 'base1', 'en');
   const ns = g.find(x => x.unstated);
   ok('"Print run not stated" starts at the first unflagged row ($105), not a replica ($35.99)', ns.low === 105, 'low ' + ns.low);
-  ok('…and its median is of unflagged rows only ($150)', ns.median === 150, 'median ' + ns.median);
+  ok('…and it holds the three unflagged rows only ($105, $150, $200)', ns.count === 3 && ns.priced === 3, 'count ' + ns.count);
   // The old page: every live row went in. Shown so the test is known to fire.
   const old = gp.byPrintRun(rows.filter(l => l.live), 'base1', 'en').find(x => x.unstated);
   ok('(the old arrangement put a $35.99 replica at the head of the group)', old.low === 35.99, 'low ' + old.low);

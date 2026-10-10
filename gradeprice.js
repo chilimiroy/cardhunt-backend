@@ -216,8 +216,12 @@ function printRunsFor(setId, lang) {
 
 const RUN_NOT_STATED = 'Print run not stated';
 
-// Separate markets, each with its own median. null when the set has no
-// print runs, which tells the caller to show one list as before.
+// Separate markets. null when the set has no print runs, which tells the
+// caller to show one list as before. Each group carries its rows, a count and
+// its CHEAPEST usable row's price ("from $Y", a real listing's own price) —
+// and NO median (Roy, 2026-10-10): this runs in visitors' browsers, nothing
+// read the per-group median, and a statistic computed from eBay Content with
+// no reader is liability with no benefit.
 //
 // A row is placed by what the SELLER wrote (listingparse's `edition`); a
 // title saying nothing goes to its own group rather than into Unlimited —
@@ -241,7 +245,6 @@ function byPrintRun(listings, setId, lang) {
     const vals = g.rows.filter(usable).map(landedOf);
     return Object.assign(g, {
       count: g.rows.length,
-      median: vals.length ? median(vals) : null,
       low: vals.length ? Math.min(...vals) : null,
       priced: vals.length,
       thin: vals.length < 3

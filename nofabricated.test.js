@@ -266,12 +266,16 @@ ok('it catches the shape whatever the variable is called or how it is spaced',
 // a number shown or stored as a price) or OPEN (found, listed, not yet fixed:
 // Roy decides) — a new one fails until it is one or the other.
 console.log('\n  C: arithmetic on source figures (every tracked file)');
-const FIG = String.raw`(?:\b(?:[\w$]+\.)*(?:low|high|mid|market|marketPrice|lowPrice|highPrice|midPrice|directLowPrice|averageSellPrice|trendPrice|avg1|avg7|avg30|price|price_usd|_price|priceUsd|landed|base|est|median|yen|usd)\b(?:\(\))?)`;
+// A figure: low/high/mid/base/est/avgN, or ANY name containing price, yen,
+// median, usd, market or landed (2026-10-10: a whole-word list passed
+// `medianYen / JPY_PER_USD` and `stats.avgPrice / JPY_PER_USD` — the very
+// lines that stored every Yahoo median at 157).
+const FIG = String.raw`(?:\b(?:[\w$]+\.)*(?:[\w$]*(?:[Pp]rice|[Yy]en|[Mm]edian|[Uu]sd|[Mm]arket|[Ll]anded)[\w$]*|low|high|mid|base|est|avg1|avg7|avg30|trend)\b(?:\(\))?)`;
 const ARITH = {
   'two figures': new RegExp(FIG + String.raw`\s*[-+*/]\s*` + FIG, 'i'),
   'figure and constant': new RegExp(FIG + String.raw`\s*[-+*/]\s*(\d*\.\d+|\d+)\b`, 'i'),
   // a constant by NAME is a constant too: yen / JPY_PER_USD hid from the literal check
-  'figure and named constant': new RegExp(FIG.replace('|yen|', '|yen|shipYen|') + String.raw`\s*[-+*/]\s*(?:[\w$]+\.)?[A-Z][A-Z0-9]*_[A-Z0-9_]+\b`),
+  'figure and named constant': new RegExp(FIG + String.raw`\s*[-+*/]\s*(?:[\w$]+\.)?[A-Z][A-Z0-9]*_[A-Z0-9_]+\b`),
   'average of two': /\([^()]*\+[^()]*\)\s*\/\s*2\b/,
   'median by index': /\[\s*Math\.floor\(\s*[\w.]+\.length\s*\/\s*2\s*\)\s*\]/,
 };
@@ -297,6 +301,10 @@ const REVIEWED_ARITHMETIC = [
   { file: 'outlier.js', re: /stats\.spread = stats\.high && stats\.low/, why: 'a ratio inside the outlier check (how spread a view is), never a price', decided: PROPOSED },
   { file: 'server.js', re: /\(a\.landed - b\.landed\) \|\| \(a\.price - b\.price\)\);$/, why: 'the last line of a sort comparator', decided: PROPOSED },
   { file: 'server.js', re: /const hideBelow = mref && mref\.current && jpf\.isRawGrade\(grade\) \? mref\.price \* stampcheck\.SIBLING_HIDE_FRACTION/, why: 'the line below which an unchecked sibling row is hidden — a threshold inside the server, never shown as a price (T0)', decided: PROPOSED },
+  { file: 'reports.js', re: /return age > PRICE_KEEP_DAYS \* 86400000;/, why: 'a time (days to milliseconds) whose constant\'s NAME contains "price" — no figure', decided: PROPOSED },
+  { file: 'gradeprice.js', re: /premium: Number\(rawPrice\) > 0 \? \+\(g\.median \/ rawPrice\)/, why: 'gradeprice.priceFor\'s grade premium — priceFor is called only by the parked gradeprices-disabled.js, which refuses to run; nothing in the server calls it', decided: PROPOSED },
+  { file: 'server.js', re: /\? parseFloat\(it\.currentBidPrice\.value\) \* \(price \/ priceNative\) : null,/, why: 'eBay\'s own current bid on an auction row, converted to USD at the ratio eBay itself applied to that row\'s price; shown as the bid, never as a price', decided: PROPOSED },
+  { file: 'tcgdexharvest.js', re: /const r = obs\.price \/ c\.held_price;|if \(\(r < 0\.6 \|\| r > 1\.667\) && Math\.abs\(obs\.price - c\.held_price\) >= 0\.25\)/, why: 'the harvest\'s cross-check of TCGdex against what we hold — a ratio and a difference printed to its log, never stored or shown', decided: PROPOSED },
   { file: 'ingest.js', re: /const delta = card\.price \? \(\(res\.price - card\.price\) \/ card\.price\) \* 100/, why: 'a percentage change printed to the refresh log, never stored or shown', decided: PROPOSED },
   { file: 'ingest.js', re: /medianYen: use\[Math\.floor\(use\.length \/ 2\)\]/, why: 'the Yahoo Auctions median: a median of N real results, stored as yahoojp_N with N in its name (the thin mark reads N) — a measured statistic, labelled', decided: PROPOSED },
   { file: 'ingest.js', re: /const medianYen = use\[Math\.floor\(use\.length \/ 2\)\];/, why: 'the same Yahoo median, for a reverse printing\'s own row', decided: PROPOSED },
@@ -323,6 +331,7 @@ ok('C catches the shapes whatever the names: (x.low + y.high) / 2, lo * 0.65, a 
   arithmetic('return ((q.low + q.high) / 2);', 't').length === 1 && arithmetic('const v = q.low * 0.65;', 't').length === 1
   && arithmetic('const d = a.market - b.market;', 't').length === 1 && arithmetic('m = s[Math.floor(s.length / 2)];', 't').length === 1
   && arithmetic('const usd = +(yen / JPY_PER_USD).toFixed(2);', 't').length === 1 && arithmetic('colour for price-DOWN rows', 't').length === 0
+  && arithmetic('price: +(medianYen / JPY_PER_USD).toFixed(2),', 't').length === 1 && arithmetic('price: +(stats.avgPrice / JPY_PER_USD).toFixed(2),', 't').length === 1
   && arithmetic('const pct = (now - was) / was * 100;', 't').length === 0 && arithmetic('xs.sort((a, b) => a.price - b.price);', 't').length === 0);
 
 ok('the portfolio holds no invented holdings', /var PORT = \[\];/.test(code) && !/paid:\s*\d/.test(code));

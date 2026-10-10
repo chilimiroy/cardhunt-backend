@@ -1212,19 +1212,19 @@ async function dealRefOf(cardId) {
 // ~1.3 calls a card measured = ~104 a run, ~830 a day, BACKGROUND origin (it
 // yields at the 92% soft stop). A click: 1 getItem (0 within 15 minutes).
 // ══════════════════════════════════════════════════════════════
-// DEPTH (T5a, 2026-10-10): a pick is shown for showHours. With rotation a run
-// no longer re-walks the last run's cards, so older picks are a RESERVE of
-// other cards: a click that finds one sold deletes it and the next freshest
-// takes its tile. 10 h since 2026-10-10 (Roy; it was 6 for one night, 3 before):
-// the schedule is the real cause of an empty shelf — GitHub fired the 3-hourly
-// Action 7 times in 45 h, 4.4-9.5 h apart — so a window shorter than the
-// longest gap empties the shelf by construction. What a pick stores is ours
-// (card, item id, found_at, run); its tile shows no eBay data and says
-// "found N h ago"; eBay's listing is fetched live on the click, and deleted
-// there if sold or no longer a deal. (The 6 h figure read in the licence on
-// 2026-10-08 is for stored eBay listing data shown as such — Roy's reading
-// that a pick is not that is what this rests on.)
-const DEALS_SUPPLY = { cards: 80, pool: 400, showHours: 10, maxAgeMs: 10 * 3600 * 1000, waitMs: 90 * 1000, grade: 'Raw NM' };
+// DEPTH (T5a, 2026-10-10): with rotation a run no longer re-walks the last run's
+// cards, so older picks are a RESERVE of other cards. How long a pick lives: below.
+// LIFETIME (Roy, 2026-10-10): a deals pick lives until it is PROVEN dead, not
+// until a timer runs out. What a pick stores is ours (card, item id, our band,
+// found_at, run) and eBay's listing is fetched live on the click, which deletes a
+// dead pick — that is what makes an old pick safe, and it is unchanged. The gap
+// a timer used to close — picks nobody clicks staying forever — is closed by the
+// RE-CHECK: each scheduled run first asks eBay about the DEALS_SUPPLY.recheck picks
+// confirmed longest ago (run_id = the run that found or last confirmed it) and
+// deletes any sold, ended or no longer 15-60% below, with the click's own verdict
+// (dealLiveVerdict). ~20 item lookups a run (0 for one fetched in the last 15
+// minutes). The auction bars keep their 3 h: an auction's end time is its proof.
+const DEALS_SUPPLY = { cards: 80, pool: 400, recheck: 20, waitMs: 90 * 1000, grade: 'Raw NM' };
 let dealTableReady = null;
 // Created by the server on first use, RLS on in the same step: API roles
 // read nothing of it (every read and write goes through this server).
@@ -1295,11 +1295,12 @@ const dealJob = { running: false, runId: null, startedAt: null, finishedAt: null
 const dealPending = p => ((p && p.stampGate && p.stampGate.pendingQueued) || 0) + ((p && p.materialCheck && p.materialCheck.pending) || 0);
 async function runDealRefresh(runId) {
   Object.assign(dealJob, { running: true, runId, startedAt: new Date().toISOString(), finishedAt: null,
-    total: 0, done: 0, picks: 0, barPicks: { auctions: 0, ending: 0 }, backCalls: 0, errors: [], stoppedFor: null });
+    total: 0, done: 0, picks: 0, barPicks: { auctions: 0, ending: 0 }, recheck: null, backCalls: 0, errors: [], stoppedFor: null });
   try {
     await dealTable();
-    await db.query(`DELETE FROM bar_picks WHERE bar = 'deals' AND found_at < now() - interval '${DEALS_SUPPLY.showHours} hours'`);
     await db.query(`DELETE FROM bar_picks WHERE bar <> 'deals' AND found_at < now() - interval '${deals_.AUCTION_END_H.min} hours'`);
+    // Deals picks have no timer: the oldest-confirmed are re-checked live first.
+    dealJob.recheck = await recheckDealPicks(runId);
     const ids = await dealCandidates(DEALS_SUPPLY.cards);
     dealJob.total = ids.length;
     for (const id of ids) {
@@ -1353,7 +1354,7 @@ async function runDealRefresh(runId) {
     dealJob.running = false;
     dealJob.finishedAt = new Date().toISOString();
     dealJob.last = { runId, startedAt: dealJob.startedAt, finishedAt: dealJob.finishedAt, total: dealJob.total,
-      done: dealJob.done, picks: dealJob.picks, barPicks: dealJob.barPicks, backCalls: dealJob.backCalls, errors: dealJob.errors.length, stoppedFor: dealJob.stoppedFor };
+      done: dealJob.done, picks: dealJob.picks, barPicks: dealJob.barPicks, recheck: dealJob.recheck, backCalls: dealJob.backCalls, errors: dealJob.errors.length, stoppedFor: dealJob.stoppedFor };
     console.log('[deals] refresh ' + JSON.stringify(dealJob.last));
   }
 }
@@ -1386,7 +1387,7 @@ app.get('/api/deals/refresh/status', toolingKey.require, (req, res) => {
 });
 
 // The shelf: OUR data only — the card, our TCGplayer market price and when
-// the deal was found. Picks older than DEALS_SUPPLY.showHours (6) are not shown.
+// the deal was found. A pick stays until it is proven dead (LIFETIME, above).
 app.get('/api/deals', access.priced, async (req, res) => {
   // Off (deals.ENABLED) answers that it is off and why — never an empty
   // shelf that reads as "no deals right now".
@@ -1396,7 +1397,7 @@ app.get('/api/deals', access.priced, async (req, res) => {
     await dealTable();
     const picks = (await db.query(`SELECT p.card_id, p.found_at, c.name, c.number, c.set_name, c.set_name_en, c.image_small
       FROM bar_picks p JOIN cards c ON c.api_card_id = p.card_id
-      WHERE p.bar = 'deals' AND p.found_at > now() - interval '${DEALS_SUPPLY.showHours} hours' AND ${digital.visibleSql('c')} ORDER BY p.found_at DESC LIMIT 60`)).rows;
+      WHERE p.bar = 'deals' AND ${digital.visibleSql('c')} ORDER BY p.found_at DESC LIMIT 60`)).rows;
     const out = [];
     for (const p of picks) {
       const ref = await dealRefOf(p.card_id);
@@ -1411,7 +1412,7 @@ app.get('/api/deals', access.priced, async (req, res) => {
     const shown = out.slice(0, limit).sort((a, b) => b.price - a.price);
     res.json({ enabled: true, rule: deals_.describeRule(), count: shown.length, deals: shown, reserve: out.length - shown.length,
       ebayCalls: 0, refreshedAt: dealJob.last ? dealJob.last.finishedAt : null,
-      freshness: { maxAgeHours: DEALS_SUPPLY.showHours, note: 'a deal is found by a scan every 3 hours and shown for up to ' + DEALS_SUPPLY.showHours + '; the listing itself is fetched live when you open it' } });
+      freshness: { note: 'a deal stays until it is shown to be gone — a scan re-checks the oldest each run, and the listing itself is fetched live when you open it' } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1421,14 +1422,14 @@ app.get('/api/deals', access.priced, async (req, res) => {
 // 15-60% rule) — deleted too. Otherwise the listing's own facts, in eBay's
 // own zone of the tile: its price, shipping, link. Never a comparison number.
 const dealLiveCache = new Map();   // itemId -> { at, item } — 15 minutes, memory only
-async function dealItemLive(itemId, cardId) {
+async function dealItemLive(itemId, cardId, purpose) {
   const hit = dealLiveCache.get(itemId);
   if (hit && Date.now() - hit.at < certcheck.EBAY_ITEM_TTL_MS) return { item: hit.item, calls: 0 };
   if (!ebay.ebayEnabled()) return { error: 'EBAY_ENABLED=false', status: 503 };
   const auth = await getEbayTokenDetailed({ background: false });
   if (!auth.token) return { error: auth.reason || auth.error || 'eBay token unavailable', status: 503 };
   const call = await ebay.fetchEbay(db, { url: 'https://api.ebay.com/buy/browse/v1/item/' + encodeURIComponent(itemId),
-    token: auth.token, kind: 'item', background: false, meta: { cardId, probe: 'deal-click' }, countFrom: () => 1 });
+    token: auth.token, kind: 'item', background: false, meta: { cardId, probe: purpose || 'deal-click' }, countFrom: () => 1 });
   if (call.blocked) return { error: call.reason, status: 503 };
   if (!call.ok) return (call.status === 404 || call.status === 410) ? { gone: true, calls: 1 } : { error: call.reason || 'eBay getItem failed', status: 502 };
   const d = call.data || {};
@@ -1443,26 +1444,57 @@ async function dealItemLive(itemId, cardId) {
   dealLiveCache.set(itemId, { at: Date.now(), item });
   return { item, calls: 1 };
 }
+// THE live verdict on a deals pick — the click's, and the run's re-check (one
+// definition). { error, status } = eBay could not be asked (nothing decided);
+// { gone: true, says } = proven dead; { gone: false, item, delivered } = alive
+// and still 15-60% below (INTERNAL: the number is never sent).
+async function dealLiveVerdict(cardId, itemId, purpose) {
+  const got = await dealItemLive(itemId, cardId, purpose);
+  if (got.error) return { error: got.error, status: got.status, calls: got.calls || 0 };
+  if (got.gone) return { gone: true, says: 'This one has sold.', calls: got.calls };
+  const it = got.item;
+  if (it.ended || it.outOfStock) return { gone: true, says: 'This one has sold.', calls: got.calls };
+  if (!it.buyItNow || it.price == null || it.currency !== 'USD') return { gone: true, says: 'This listing has changed — it is no longer a deal.', calls: got.calls };
+  const delivered = +(it.price + (it.shipping || 0)).toFixed(2);
+  const ref = await dealRefOf(cardId);
+  const q = ref && ref.price > 0 ? 1 - delivered / ref.price : null;
+  if (q == null || q < deals_.MIN_DISCOUNT || q > deals_.MAX_DISCOUNT) return { gone: true, says: 'Its price has changed — it is no longer a deal.', calls: got.calls };
+  return { gone: false, item: it, delivered, calls: got.calls };
+}
+// The run's re-check: the picks confirmed longest ago, asked live; the dead deleted,
+// the living stamped with this run (so the next run asks the next ones).
+async function recheckDealPicks(runId) {
+  const out = { asked: 0, kept: 0, deleted: 0, calls: 0, notAsked: 0, why: {} };
+  const rows = (await db.query(`SELECT card_id, item_id FROM bar_picks WHERE bar = 'deals'
+    ORDER BY run_id ASC NULLS FIRST, found_at ASC LIMIT $1`, [DEALS_SUPPLY.recheck])).rows;
+  for (const p of rows) {
+    const v = await dealLiveVerdict(p.card_id, p.item_id, 'deal-recheck');
+    out.calls += v.calls || 0;
+    if (v.error) { out.notAsked++; if (/quota|soft stop|rate|limit/i.test(v.error)) break; continue; }
+    out.asked++;
+    if (v.gone) {
+      await db.query("DELETE FROM bar_picks WHERE bar = 'deals' AND card_id = $1 AND item_id = $2", [p.card_id, p.item_id]);
+      out.deleted++; out.why[v.says] = (out.why[v.says] || 0) + 1;
+    } else {
+      await db.query("UPDATE bar_picks SET run_id = $3 WHERE bar = 'deals' AND card_id = $1 AND item_id = $2", [p.card_id, p.item_id, runId]);
+      out.kept++;
+    }
+  }
+  return out;
+}
 app.get('/api/deals/:cardId/live', access.priced, async (req, res) => {
   const cardId = req.params.cardId;
   try {
     await dealTable();
-    const p = (await db.query(`SELECT item_id FROM bar_picks WHERE bar = 'deals' AND card_id = $1 AND found_at > now() - interval '${DEALS_SUPPLY.showHours} hours'`, [cardId])).rows[0];
-    if (!p) return res.status(404).json({ cardId, gone: true, says: 'This deal has expired.' });
-    const got = await dealItemLive(p.item_id, cardId);
-    if (got.error) return res.status(got.status || 502).json({ cardId, error: got.error, says: 'eBay could not be asked right now — try again shortly.' });
-    const drop = async says => { await db.query("DELETE FROM bar_picks WHERE bar = 'deals' AND card_id = $1", [cardId]); return res.json({ cardId, gone: true, says }); };
-    if (got.gone) return drop('This one has sold.');
-    const it = got.item;
-    if (it.ended || it.outOfStock) return drop('This one has sold.');
-    if (!it.buyItNow || it.price == null || it.currency !== 'USD') return drop('This listing has changed — it is no longer a deal.');
-    const delivered = +(it.price + (it.shipping || 0)).toFixed(2);
-    const ref = await dealRefOf(cardId);
-    // INTERNAL only: does the live price still qualify? The number is never sent.
-    const q = ref && ref.price > 0 ? 1 - delivered / ref.price : null;
-    if (q == null || q < deals_.MIN_DISCOUNT || q > deals_.MAX_DISCOUNT) return drop('Its price has changed — it is no longer a deal.');
-    res.json({ cardId, gone: false, ebay: { price: it.price, shipping: it.shipping, delivered, currency: 'USD',
-      title: it.title, url: it.url, image: it.image, checkedAt: new Date().toISOString(), calls: got.calls },
+    // No timer (2026-10-10): a pick is shown until proven dead — here, or by the run's re-check.
+    const p = (await db.query("SELECT item_id FROM bar_picks WHERE bar = 'deals' AND card_id = $1", [cardId])).rows[0];
+    if (!p) return res.status(404).json({ cardId, gone: true, says: 'This deal has gone.' });
+    const v = await dealLiveVerdict(cardId, p.item_id, 'deal-click');
+    if (v.error) return res.status(v.status || 502).json({ cardId, error: v.error, says: 'eBay could not be asked right now — try again shortly.' });
+    if (v.gone) { await db.query("DELETE FROM bar_picks WHERE bar = 'deals' AND card_id = $1", [cardId]); return res.json({ cardId, gone: true, says: v.says }); }
+    const it = v.item;
+    res.json({ cardId, gone: false, ebay: { price: it.price, shipping: it.shipping, delivered: v.delivered, currency: 'USD',
+      title: it.title, url: it.url, image: it.image, checkedAt: new Date().toISOString(), calls: v.calls },
       attribution: EBAY_ATTRIBUTION });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

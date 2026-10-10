@@ -6,10 +6,11 @@
 //
 //   node deals.test.js
 'use strict';
-require('./testcount')(104);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(108);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const deals = require('./deals.js');
 let pass = 0, fail = 0;
+const pendingTests = [];   // executed checks that are async; the summary waits for them
 function ok(c, m) { if (c) { pass++; console.log('  ok    ' + m); } else { fail++; console.log('  FAIL  ' + m); } }
 console.log('\n  deals.test.js\n');
 
@@ -186,26 +187,53 @@ ok(/app\.post\('\/api\/deals\/refresh', toolingKey\.require/.test(sup) && /app\.
   ok(shelf.length > 500, '/api/deals exists');
   ok(!/(gatherListings|listingsFor|sourceEbay|fetchEbay|ebayItemOnDemand|dealItemLive)\(/.test(shelf) && /ebayCalls: 0/.test(shelf), 'the shelf never asks eBay — 0 calls, and says so');
   ok(!/item_id|title|discount|landed|url/.test(shelf.replace(/\/\/.*$/gm, '')), 'the shelf sends OUR data only — no item id, title, link, price of eBay\'s, or discount');
-  ok(/found_at > now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(shelf) && /showHours: 10, maxAgeMs: 10 \* 3600 \* 1000,/.test(src),
-     'depth (T5a): picks are shown for 10 h — longer than the Action\'s longest measured gap (9.5 h)');
+  // LIFETIME (Roy, 2026-10-10): a deals pick lives until proven dead — no timer anywhere.
+  ok(!/found_at >/.test(shelf) && !/showHours/.test(src) && /recheck: 20,/.test(src),
+     'no timer: the shelf shows every pick until it is proven dead; the run re-checks 20 a run');
   ok(/const shown = out\.slice\(0, limit\)\.sort\(\(a, b\) => b\.price - a\.price\);/.test(shelf) && /reserve: out\.length - shown\.length/.test(shelf),
      'the freshest `limit` are shown, ordered by OUR price — never by the internal discount; the rest are the reserve, counted');
-  ok(/DELETE FROM bar_picks WHERE bar = 'deals' AND found_at < now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(src)
-     && /SELECT item_id FROM bar_picks WHERE bar = 'deals' AND card_id = \$1 AND found_at > now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(src)
+  ok(!/DELETE FROM bar_picks WHERE bar = 'deals' AND found_at/.test(src) && /SELECT item_id FROM bar_picks WHERE bar = 'deals' AND card_id = \$1"/.test(src)
      && /DELETE FROM bar_picks WHERE bar <> 'deals' AND found_at < now\(\) - interval '\$\{deals_\.AUCTION_END_H\.min\} hours'/.test(src),
-     'the run and the click expire picks on the same clock as the shelf');
+     'neither the run nor the click expires a deals pick by age; the auction bars keep their 3 h (an auction\'s end is its proof)');
   ok(/if \(!deals_\.ENABLED\) return res\.json\(\{ enabled: false, reason: deals_\.OFF_REASON/.test(shelf), 'switched off, it answers enabled:false with the reason');
 }
 {
   const click = sup.slice(sup.indexOf("app.get('/api/deals/:cardId/live'"), sup.indexOf('// ── THE OTHER BARS'));
-  ok(/drop\('This one has sold\.'\)/.test(click) && /DELETE FROM bar_picks WHERE bar = 'deals' AND card_id = \$1/.test(click), 'a sold listing deletes the pick and says "This one has sold."');
+  ok(/const v = await dealLiveVerdict\(cardId, p\.item_id, 'deal-click'\);/.test(click) && /if \(v\.gone\) \{ await db\.query\("DELETE FROM bar_picks WHERE bar = 'deals' AND card_id = \$1", \[cardId\]\); return res\.json\(\{ cardId, gone: true, says: v\.says \}\); \}/.test(click),
+     'the click: the shared live verdict; a dead pick is deleted and the tile says why');
   ok(/INSERT INTO bar_picks \(bar, card_id, item_id, band, found_at, run_id\)\s*SELECT 'deals', card_id, item_id, NULL, found_at, run_id FROM deal_picks ON CONFLICT \(bar, card_id\) DO NOTHING/.test(src)
      && /\.then\(\(\) => db\.query\('DELETE FROM deal_picks'\)\)/.test(src), 'picks still in deal_picks move to bar_picks once, and deal_picks is emptied (no pick returns from it)');
   ok(deals.discountBand(0.15) === '15-30' && deals.discountBand(0.2999) === '15-30' && deals.discountBand(0.30) === '30-45' && deals.discountBand(0.45) === '45-60'
      && deals.discountBand(0.60) === '45-60' && deals.discountBand(0.61) === null && deals.discountBand(0.1) === null && deals.DEAL_BANDS.join() === '45-60,30-45,15-30',
      'the band: three over the 15-60% window, best first; outside the window, none');
-  ok(/q < deals_\.MIN_DISCOUNT \|\| q > deals_\.MAX_DISCOUNT/.test(click) && !/discount:|q,|percent/.test(click.slice(click.indexOf('res.json({ cardId, gone: false'))),
+  const verdictSrc = src.slice(src.indexOf('async function dealLiveVerdict('), src.indexOf('async function recheckDealPicks('));
+  ok(/q < deals_\.MIN_DISCOUNT \|\| q > deals_\.MAX_DISCOUNT/.test(verdictSrc) && !/discount:|q,|percent/.test(click.slice(click.indexOf('res.json({ cardId, gone: false'))),
      'the live price is re-judged INTERNALLY; no comparison number is sent');
+  // Executed: the real dealLiveVerdict + recheckDealPicks, on a fake database and fake eBay answers.
+  const recheckSrc = src.slice(src.indexOf('async function recheckDealPicks('), src.indexOf("app.get('/api/deals/:cardId/live'"));
+  const queries = [];
+  const picks = [{ card_id: 'en-a', item_id: 'v1|1|0' }, { card_id: 'en-b', item_id: 'v1|2|0' }, { card_id: 'en-c', item_id: 'v1|3|0' }, { card_id: 'en-d', item_id: 'v1|4|0' }];
+  const live = { 'v1|1|0': { gone: true, calls: 1 },                                                                     // sold (404)
+                 'v1|2|0': { item: { price: 70, shipping: 0, currency: 'USD', buyItNow: true }, calls: 1 },             // 30% below: alive
+                 'v1|3|0': { item: { price: 97, shipping: 0, currency: 'USD', buyItNow: true }, calls: 0 },             // 3% below: no longer a deal
+                 'v1|4|0': { error: 'eBay token unavailable', status: 503 } };                                           // not asked
+  const sandbox = new Function('db', 'dealItemLive', 'dealRefOf', 'deals_', 'DEALS_SUPPLY',
+    verdictSrc + recheckSrc + '; return recheckDealPicks;')(
+    { query: async (sql, args) => { queries.push([sql.replace(/\s+/g, ' ').trim(), args]); return { rows: /SELECT card_id, item_id FROM bar_picks/.test(sql) ? picks : [] }; } },
+    async (itemId) => Object.assign({}, live[itemId]),
+    async () => ({ price: 100 }), deals, { recheck: 20 });
+  pendingTests.push((async () => {
+  const rc = await sandbox('20261010120000');
+  const sel = queries[0];
+  ok(/WHERE bar = 'deals' ORDER BY run_id ASC NULLS FIRST, found_at ASC LIMIT \$1/.test(sel[0]) && sel[1][0] === 20, 'the re-check asks the 20 picks confirmed longest ago');
+  ok(rc.asked === 3 && rc.deleted === 2 && rc.kept === 1 && rc.notAsked === 1 && rc.calls === 2,
+     'KEPT the live one in band; DELETED the sold one and the one now 3% below; a pick eBay could not be asked about is left alone', JSON.stringify(rc));
+  const dels = queries.filter(q => /^DELETE/.test(q[0])).map(q => q[1][0]).join(), ups = queries.filter(q => /^UPDATE/.test(q[0]));
+  ok(dels === 'en-a,en-c' && ups.length === 1 && ups[0][1][0] === 'en-b' && ups[0][1][2] === '20261010120000',
+     'the dead are deleted by card AND item; the living one is stamped with this run, so the next run asks the next 20');
+  })());
+  ok(/dealJob\.recheck = await recheckDealPicks\(runId\);/.test(src) && src.indexOf('dealJob.recheck = await recheckDealPicks(runId);') < src.indexOf('const ids = await dealCandidates(DEALS_SUPPLY.cards);'),
+     'each scheduled run re-checks first, before walking its 80 cards');
 }
 {
   const bo = src.slice(src.indexOf('function dealBackOf('), src.indexOf('async function dealRefOf('));
@@ -243,5 +271,7 @@ ok(/'Deal found ' \+ /.test(ld) && /TCGplayer market/.test(ld), 'a tile shows ou
   ok(!/% below|discount|percent/.test(ck), 'no comparison number on screen — the reader sees the two figures and the gap');
   ok(/d\.gone/.test(ck) && /d\.says/.test(ck), 'gone: the tile says why (sold, expired, no longer a deal)');
 }
-console.log(`\n  ${pass} passed, ${fail} failed\n`);
-process.exit(fail ? 1 : 0);
+Promise.all(pendingTests).catch(e => ok(false, 'an executed check threw: ' + e.message)).then(() => {
+  console.log(`\n  ${pass} passed, ${fail} failed\n`);
+  process.exit(fail ? 1 : 0);
+});

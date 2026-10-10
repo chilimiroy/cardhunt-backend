@@ -10,7 +10,7 @@
 //     claimed by two cards is trusted for neither (tcgdexprice.productConflicts).
 // Each half asserts what it KEEPS as well as what it refuses.
 'use strict';
-require('./testcount')(62);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(63);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const S = require('./tcgsetname.js');
 const T = require('./tcgdexprice.js');
@@ -143,8 +143,13 @@ if (fs.existsSync(__dirname + '/ingest.js')) {
      /const jpy = await yahooRate\(\);\s*if \(!jpy\) \{ yahooSaw\('no live yen rate'\); return null; \}/.test(ys)
      && /if \(jpy\.stale\) \{/.test(I.slice(I.indexOf('async function yahooRate('))) && !/JPY_PER_USD/.test(I));
   ok('every Yahoo row records the yen, the count, the rate and its date (base, avg and mirror rows)',
-     (ys.match(/fxMetaOf\(jpy\)/g) || []).length === 3 && /meta: Object\.assign\(\{ priceYen: medianYen, count: use\.length \}, fxMetaOf\(jpy\)\)/.test(ys)
+     (ys.match(/fxMetaOf\(jpy\)/g) || []).length === 3 && /meta: Object\.assign\(\{ priceYen: medianYen, count: use\.length \}, fxMetaOf\(jpy\), feed\)/.test(ys)
      && /JSON\.stringify\(Object\.assign\(\{ priceYen: v\.priceYen, count: v\.count \}, v\.fx\)\)/.test(I));
+  // Which feed (Roy, 2026-10-10): completed sales are a market price; active listings are an ask.
+  ok('every Yahoo row says which feed its median is of — closed (completed sales) or live (an ask, marked)',
+     /const feed = \/closedsearch\/\.test\(url\) \? \{ feed: 'closed' \} : \{ feed: 'live', basis: 'ask' \};/.test(ys)
+     && /fxMetaOf\(jpy\), feed\),/.test(ys) && /fx: Object\.assign\(fxMetaOf\(jpy\), feed\)/.test(ys)
+     && ys.indexOf("closedsearch/closedsearch") < ys.indexOf("search/search?p="));
 } else console.log('  SKIP  ingest.js wiring — not in this checkout');
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');

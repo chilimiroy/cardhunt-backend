@@ -43,7 +43,7 @@ const DELAY_TCGDEX = 350;    // ~2.8 req/s   (TCGdex is generous, this is polite
 const DELAY_PTCG   = 1200;   // ~0.8 req/s   (pokemontcg.io soft-limits ~20k/day)
 const DELAY_SET    = 2000;   // pause between sets
 
-const VERSION = '5.13.0';   // bump when this file changes
+const VERSION = '5.13.1';   // bump when this file changes
 const PROGRESS_FILE = path.join(__dirname, 'ingest-progress.json');
 
 // Each language gets its own progress file so two runs in two terminals
@@ -1065,7 +1065,14 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
     'https://auctions.yahoo.co.jp/search/search?p=' + encodeURIComponent(q) + '&n=50'
   ];
 
+  // Which feed a median is of, on every row (Roy, 2026-10-10): CLOSED = ended
+  // auctions with a winning bid — completed sales, the market price; LIVE =
+  // active listings — current bids and buy-now asks, an ASKING price (basis
+  // 'ask': marked, fed to nothing). The live page has carried no __NEXT_DATA__
+  // since at least 2026-08-26 (re-checked 2026-10-10), so the live branch
+  // prices nothing today; if it ever answers again its rows say what they are.
   for (const url of urls) {
+    const feed = /closedsearch/.test(url) ? { feed: 'closed' } : { feed: 'live', basis: 'ask' };
     try {
       const r = await fetch(url, {
         headers: {
@@ -1127,7 +1134,7 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
       const yen = priced.map(x => x.yen);
       const variantPrices = Object.entries(otherGroups).map(([variant, ys]) => {
         const m = yahooMedianYen(ys);
-        return m ? { variant, price: usdOfYen(m.medianYen, jpy), priceYen: m.medianYen, fx: fxMetaOf(jpy),
+        return m ? { variant, price: usdOfYen(m.medianYen, jpy), priceYen: m.medianYen, fx: Object.assign(fxMetaOf(jpy), feed),
                      count: m.use.length, source: `yahoojp_${m.use.length}` } : null;
       }).filter(Boolean);
 
@@ -1163,7 +1170,7 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
           price: usdOfYen(medianYen, jpy),
           priceYen: medianYen,
           // written to source_meta by the writers: the yen, the count and the rate
-          meta: Object.assign({ priceYen: medianYen, count: use.length }, fxMetaOf(jpy)),
+          meta: Object.assign({ priceYen: medianYen, count: use.length }, fxMetaOf(jpy), feed),
           count: use.length,
           rejected: rejected,
           source: `yahoojp_${use.length}`,
@@ -1201,7 +1208,7 @@ async function yahooJapanSearch(cardName, cardNumber, opts = {}) {
         return {
           price: usdOfYen(stats.avgPrice, jpy),
           priceYen: stats.avgPrice,
-          meta: Object.assign({ priceYen: stats.avgPrice, count: avail }, fxMetaOf(jpy)),
+          meta: Object.assign({ priceYen: stats.avgPrice, count: avail }, fxMetaOf(jpy), feed),
           count: avail,
           source: `yahoojp_avg_${avail}`,
           currency: 'JPY->USD'

@@ -295,7 +295,7 @@ function arithmetic(text, file) {
 const PROPOSED = 'proposed 2026-10-10 (Claude) — not yet confirmed by Roy';
 const REVIEWED_ARITHMETIC = [
   { file: 'cardhunt_preview.html', re: /alert-price'\)\.value=\(base\*0\.85\)/, why: 'the alert form\'s target default (REVIEWED_MULTIPLIERS above)', decided: 'Roy, 2026-10-09' },
-  { file: 'gradeprice.js', re: /\(\(s\[mid - 1\] \+ s\[mid\]\) \/ 2\)/, why: 'a median of live listing prices, used only inside the server to choose; never shown or stored (§9.5, ebayterms.test.js)', decided: PROPOSED },
+  { file: 'gradeprice.js', re: /\(\(s\[mid - 1\] \+ s\[mid\]\) \/ 2\)/, why: 'gradeprice.js\'s median helper. gradeprice.js is ALSO the module the page loads: byPrintRun computes a median of the live listings per print-run group IN THE BROWSER, which the page never draws (livePrintRuns shows "from $low", ebayterms.test.js) and never sends anywhere; aggregate (its other caller) is reached only from the parked gradeprices-disabled.js', decided: PROPOSED },
   { file: 'gradeprice.js', re: /^b\.median - a\.median\);$/, why: 'the second line of a sort comparator', decided: PROPOSED },
   { file: 'outlier.js', re: /\(s\[m - 1\] \+ s\[m\]\) \/ 2/, why: 'outlier.js\'s median: per card, per view, never shown or stored (§8.1(d), ebayterms.test.js)', decided: 'Roy, 2026-10-08 (the §8.1(d) ruling)' },
   { file: 'outlier.js', re: /stats\.spread = stats\.high && stats\.low/, why: 'a ratio inside the outlier check (how spread a view is), never a price', decided: PROPOSED },
@@ -306,8 +306,8 @@ const REVIEWED_ARITHMETIC = [
   { file: 'server.js', re: /\? parseFloat\(it\.currentBidPrice\.value\) \* \(price \/ priceNative\) : null,/, why: 'eBay\'s own current bid on an auction row, converted to USD at the ratio eBay itself applied to that row\'s price; shown as the bid, never as a price', decided: PROPOSED },
   { file: 'tcgdexharvest.js', re: /const r = obs\.price \/ c\.held_price;|if \(\(r < 0\.6 \|\| r > 1\.667\) && Math\.abs\(obs\.price - c\.held_price\) >= 0\.25\)/, why: 'the harvest\'s cross-check of TCGdex against what we hold — a ratio and a difference printed to its log, never stored or shown', decided: PROPOSED },
   { file: 'ingest.js', re: /const delta = card\.price \? \(\(res\.price - card\.price\) \/ card\.price\) \* 100/, why: 'a percentage change printed to the refresh log, never stored or shown', decided: PROPOSED },
-  { file: 'ingest.js', re: /medianYen: use\[Math\.floor\(use\.length \/ 2\)\]/, why: 'the Yahoo Auctions median: a median of N real results, stored as yahoojp_N with N in its name (the thin mark reads N) — a measured statistic, labelled', decided: PROPOSED },
-  { file: 'ingest.js', re: /const medianYen = use\[Math\.floor\(use\.length \/ 2\)\];/, why: 'the same Yahoo median, for a reverse printing\'s own row', decided: PROPOSED },
+  { file: 'ingest.js', re: /medianYen: use\[Math\.floor\(use\.length \/ 2\)\]/, why: 'yahooMedianYen, the Yahoo median for a mirror or reverse printing\'s own row: a median of N real results, stored as yahoojp_N (N in its name), with the yen and the rate in source_meta', decided: PROPOSED },
+  { file: 'ingest.js', re: /const medianYen = use\[Math\.floor\(use\.length \/ 2\)\];/, why: 'the Yahoo median for the card\'s base price: a median of N real results, stored as yahoojp_N (N in its name, the thin mark reads it), with the yen and the rate in source_meta — a measured statistic, labelled', decided: PROPOSED },
 ];
 const OPEN_ARITHMETIC = [
 ];

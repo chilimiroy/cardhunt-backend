@@ -139,8 +139,9 @@ if (!fs.existsSync(__dirname + '/ingest.js')) {
   // The weekly Yuyu-tei run (Roy, 2026-10-10): weekly, after the yen fix, its default scope.
   if (fs.existsSync(__dirname + '/refresh-weekly.cmd')) {
     const w = fs.readFileSync(__dirname + '/refresh-weekly.cmd', 'utf8').trim().split(/\r?\n/).filter(l => l.trim() && !/^\s*(REM|@echo)/i.test(l));
-    ok('refresh-weekly.cmd ends on `node ingest.js yuyutei` alone — no --all, no --force (its exit code is the task result)',
-      /^node ingest\.js yuyutei >> yuyutei-weekly\.log 2>&1$/.test(w[w.length - 1]), w[w.length - 1]);
+    // --wait-lock=6 (2026-10-10, joblock.js) is the only flag allowed: it retries a locked start, it does not widen the scope.
+    ok('refresh-weekly.cmd ends on `node ingest.js yuyutei` — no --all, no --force, only --wait-lock (its exit code is the task result)',
+      /^node ingest\.js yuyutei --wait-lock=6 >> yuyutei-weekly\.log 2>&1$/.test(w[w.length - 1]), w[w.length - 1]);
   } else ok('refresh-weekly.cmd is present (tracked since 2026-10-10)', false);
 }
 

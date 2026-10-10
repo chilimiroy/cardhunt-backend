@@ -38,7 +38,8 @@ const RW = { who: 'postgres', can_insert: true, can_create: true, read_only: 'of
      !L.canWrite(RO) && !L.canWrite(Object.assign({}, RW, { read_only: 'on' })) && !L.canWrite(null) && !L.canWrite(Object.assign({}, RW, { can_insert: false })));
   {
     const I = fs.readFileSync(__dirname + '/ingest.js', 'utf8').replace(/\r/g, '');
-    const blk = I.slice(I.indexOf("require('./joblock').acquire"), I.indexOf("if (cmd === 'status')"));
+    const at = I.indexOf("const jl = require('./joblock');");
+    const blk = at > 0 ? I.slice(at, I.indexOf("if (cmd === 'status')")) : '';
     ok('ingest.js refresh / yuyutei ask the database first and refuse, exit 5, on a connection that cannot write',
        /lw\.CAPABILITY_SQL/.test(blk) && /!lw\.canWrite\(row\)/.test(blk) && /process\.exitCode = lw\.EXIT_READ_ONLY;/.test(blk) && L.EXIT_READ_ONLY === 5);
     for (const f of ['refresh-daily.cmd', 'refresh-weekly.cmd']) {

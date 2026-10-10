@@ -47,16 +47,16 @@ ok(/@media \(prefers-color-scheme: dark\)\{\s*:root:not\(\[data-theme="light"\]\
 ok(/:root\[data-theme="dark"\]\{\s*color-scheme:dark;/.test(H), 'an explicit Dark choice wins over a light device');
 
 // ── the toggle ──
-const nav = H.slice(H.indexOf('id="theme-btn"') - 200, H.indexOf('id="currency-btn"') + 20);
-ok(H.indexOf('id="theme-btn"') > 0 && H.indexOf('id="theme-btn"') < H.indexOf('id="currency-btn"') && nav.length < 400,
-   'the toggle sits immediately before the currency control');
+// TASK-account-and-bars T1 (2026-10-10): the theme is chosen in the account menu, for everyone.
+ok(!/id="theme-btn"/.test(H) && /h \+= '<div class="npick-h">Theme<\/div>' \+ pickItems\('theme'\);/.test(H),
+   'the theme is a section of the account menu (no bar button), written for every caller');
 const fn = name => { const i = H.indexOf('function ' + name + '('); return i < 0 ? '' : H.slice(i, H.indexOf('\n}', i) + 2); };
 const store = {}; const el = { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, removeAttribute(k) { delete this.attrs[k]; }, getAttribute(k) { return this.attrs[k] || null; } };
 const btn = { textContent: '', title: '' };
 const ctx = { document: { documentElement: el, getElementById: () => btn },
               localStorage: { setItem: (k, v) => { store[k] = v; }, removeItem: k => { delete store[k]; } } };
 vm.createContext(ctx);
-{ const a = H.indexOf('var THEMES = '); vm.runInContext(H.slice(a, H.indexOf('document.addEventListener', a)), ctx); }
+{ const a = H.indexOf('var THEMES = '), c = H.indexOf('function cycleTheme(', a); vm.runInContext(H.slice(a, H.indexOf('\n', c)), ctx); }
 const seq = [];
 for (let i = 0; i < 3; i++) { ctx.cycleTheme(); seq.push(ctx.currentTheme() + ':' + (store.ch_theme || '-')); }
 ok(seq.join(' ') === 'light:light dark:dark auto:-', 'Auto -> Light -> Dark -> Auto, Auto removing the stored choice: ' + seq.join(' '));

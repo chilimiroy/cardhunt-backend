@@ -681,6 +681,12 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
   background:none;color:var(--tx);font-size:13px;text-align:left;cursor:pointer}
 .npick-o:hover,.npick-o:focus-visible{background:var(--surface-2);outline:none}
 .npick-o.on{color:var(--t);font-weight:600}
+/* The account menu (TASK-account-and-bars T1): sections in one dropdown. */
+.acct-m{min-width:230px;max-height:min(75vh,560px);overflow:auto}
+.npick-h{padding:8px 10px 4px;font-size:10px;font-weight:700;color:var(--mu);text-transform:uppercase;letter-spacing:.06em}
+.npick-who{padding:8px 10px;font-size:12px;font-weight:700;color:var(--tx);overflow-wrap:anywhere;border-bottom:1px solid var(--bd);margin-bottom:4px}
+.npick-sep{height:1px;background:var(--bd);margin:6px 4px}
+@media(max-width:640px){.acct-m{position:fixed;top:60px;right:8px;left:auto;max-width:calc(100vw - 16px)}}
 .npick-n{font-size:11px;color:var(--fa);font-variant-numeric:tabular-nums}
 /* ══ THE DOOR (T1, 2026-10-07) ══ the catalogue is public; prices, listings
    and links are for approved accounts. The SERVER withholds them
@@ -730,7 +736,7 @@ html:not(.ch-noprice) .price-door { display: none !important; }
     <button class="btn price-only" id="watch-btn" data-on="card" hidden onclick="toggleWatch()">🤍 Watch</button>
     <input class="tbq" data-on="sets" hidden id="sets-q" style="width:210px;padding:8px 14px" placeholder="Search sets…" oninput="filterSets(this.value)">
     <div class="nsearch" id="nav-search"><span class="nsearch-i">🔍</span><input id="nav-q" placeholder="Search any card…" onkeydown="if(event.key==='Enter')doSearch(this.value)"></div>
-    <button class="btn" onclick="cycleTheme()" id="theme-btn" title="Theme: follows your device">◐ Auto</button><div class="npick price-only" id="cur-pick"><button class="btn npick-b" id="currency-btn" onclick="pickOpen('cur-pick',event)" aria-haspopup="menu" aria-expanded="false" title="Currency"><svg class="npick-i coin" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg><span class="npick-v">USD</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m" role="menu" hidden></div></div><div class="npick" id="lang-pick"><button class="btn npick-b" id="lang-btn" onclick="pickOpen('lang-pick',event)" aria-haspopup="menu" aria-expanded="false" title="Page language"><span class="npick-v">EN</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m" role="menu" hidden></div></div><button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--accent);color:var(--accent-ink);font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button><button class="btn auth-btn" onclick="authOpen()" id="auth-btn" style="display:none" title="Sign in with Google or an emailed link">Sign in</button>
+    <button class="btn notif-bell" onclick="SS('alerts')" style="position:relative">🔔<span id="notif-count" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--accent);color:var(--accent-ink);font-size:9px;font-weight:700;padding:1px 4px;border-radius:10px;min-width:14px;text-align:center"></span></button><div class="npick" id="acct-pick"><button class="btn npick-b auth-btn" id="auth-btn" onclick="pickOpen('acct-pick',event)" aria-haspopup="menu" aria-expanded="false" title="Account and settings"><span class="npick-v">Settings</span><span class="npick-c" aria-hidden="true">▾</span></button><div class="npick-m acct-m" role="menu" aria-label="Account and settings" hidden></div></div>
   </div>
 </nav>
 <!-- ══ HOME ══ -->
@@ -6808,8 +6814,7 @@ var currentCurrency = 'USD';
 function setCurrency(code){
   if (CURRENCIES.indexOf(code) < 0 || code === currentCurrency) return;
   currentCurrency = code;
-  document.querySelectorAll('#currency-btn .npick-v').forEach(function (v) { v.textContent = code; });
-  pickRender('cur');
+  pickRender();
   // Re-render current screen with new currency
   var active = document.querySelector('.screen.on');
   if(active){
@@ -6834,16 +6839,11 @@ function applyTheme(t){
   if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
   else document.documentElement.removeAttribute('data-theme');
   try { if (t === 'auto') localStorage.removeItem('ch_theme'); else localStorage.setItem('ch_theme', t); } catch (e) {}
-  var b = document.getElementById('theme-btn');
-  if (b) { b.textContent = THEME_LABEL[t]; b.title = THEME_TITLE[t]; }
+  if (typeof pickRender === 'function') pickRender();   // the menu's Theme section shows the new choice
   // The chart's line is drawn from the accent token once; redraw it in the new theme.
   if (typeof S !== 'undefined' && S.chart && typeof initChart === 'function') initChart(S.activeGradeBase, S.activeRange || '3M');
 }
 function cycleTheme(){ applyTheme(THEMES[(THEMES.indexOf(currentTheme()) + 1) % THEMES.length]); }
-document.addEventListener('DOMContentLoaded', function(){
-  var t = currentTheme(), b = document.getElementById('theme-btn');
-  if (b) { b.textContent = THEME_LABEL[t]; b.title = THEME_TITLE[t]; }
-});
 
 // ══ PAGE LANGUAGE (T5, 2026-10-06; Chinese added TASK-ui T5, 2026-10-07): UI strings only ══
 // NEVER card data. Search, the gates and every matcher work on the English
@@ -7249,12 +7249,7 @@ function langWalk(root){
   }
 }
 function langButtons(){
-  var cur = LANGS.filter(function (x) { return x.code === currentLang(); })[0] || LANGS[0];
-  // The button names the language it shows; written raw, never through the table.
-  ['lang-btn', 'lang-btn2'].forEach(function (id) {
-    var v = document.querySelector('#' + id + ' .npick-v'); if (v) v.textContent = cur.short;
-  });
-  pickRender('lang');
+  pickRender();
 }
 function applyLang(l){
   if (!LANG_TABLES[l]) l = 'en';
@@ -7282,30 +7277,62 @@ function applyLang(l){
   }
   langButtons();
 }
-document.addEventListener('DOMContentLoaded', function(){ if (currentLang() !== 'en') applyLang(currentLang()); else langButtons(); pickRender('cur'); });
+document.addEventListener('DOMContentLoaded', function(){ if (currentLang() !== 'en') applyLang(currentLang()); else langButtons(); });
 
-// ── The two pickers: language and currency (TASK-ui T5) ─────────────
-// One component, so the currency control matches the language control.
-// The menu lists each language with its coverage, so a language that is
-// mostly English does not look the same as one that is complete.
-var PICKS = { lang: ['lang-pick'], cur: ['cur-pick'] };
-function pickRender(kind){
-  PICKS[kind].forEach(function (id) {
-    var m = document.querySelector('#' + id + ' .npick-m'); if (!m) return;
-    var h = '';
-    if (kind === 'lang') LANGS.forEach(function (x) {
-      var on = x.code === currentLang(), c = langCoverage(x.code);
-      h += '<button role="menuitemradio" aria-checked="' + on + '" class="npick-o' + (on ? ' on' : '') + '" onclick="pickClose();applyLang(&quot;' + x.code + '&quot;)">'
-        + '<span>' + x.name + '</span><span class="npick-n" title="' + c.translated + ' of ' + c.total + ' page strings translated; the rest show in English">'
-        + (x.code === 'en' ? '' : c.pct + '%') + '</span></button>';
-    });
-    else CURRENCIES.forEach(function (k) {
-      var on = k === currentCurrency;
-      h += '<button role="menuitemradio" aria-checked="' + on + '" class="npick-o' + (on ? ' on' : '') + '" onclick="pickClose();setCurrency(&quot;' + k + '&quot;)">'
-        + '<span>' + k + '</span><span class="npick-n">' + CURRENCY_SYMBOLS[k] + '</span></button>';
-    });
-    m.innerHTML = h;
+// ── The account menu (TASK-account-and-bars T1, 2026-10-10) ─────────────
+// Theme, currency and language live in ONE dropdown opened from the account
+// control on the shared top bar (TASK-ui T7) — not a second bar, not a copy
+// per screen. Theme and language are public, currency is not:
+//  - the menu exists for everyone. Signed out it carries Sign in, Theme and
+//    Language; where sign-in is not offered (a file:// page) the control
+//    reads "Settings" and carries Theme and Language only.
+//  - Currency reveals prices: it is BUILT into the menu only when
+//    pricesOpen(). For anyone else its markup is never written — not hidden
+//    by CSS, absent from the DOM. (Prices opening or closing reloads the
+//    page, authCheck, so the menu is never left holding the other level.)
+// The language list keeps its coverage figures (TASK-ui T5).
+var PICKS = { lang: ['acct-pick'], cur: ['acct-pick'] };
+function pickItems(kind){
+  var h = '';
+  if (kind === 'lang') LANGS.forEach(function (x) {
+    var on = x.code === currentLang(), c = langCoverage(x.code);
+    h += '<button role="menuitemradio" aria-checked="' + on + '" class="npick-o' + (on ? ' on' : '') + '" onclick="pickClose();applyLang(&quot;' + x.code + '&quot;)">'
+      + '<span>' + x.name + '</span><span class="npick-n" title="' + c.translated + ' of ' + c.total + ' page strings translated; the rest show in English">'
+      + (x.code === 'en' ? '' : c.pct + '%') + '</span></button>';
   });
+  else if (kind === 'cur') CURRENCIES.forEach(function (k) {
+    var on = k === currentCurrency;
+    h += '<button role="menuitemradio" aria-checked="' + on + '" class="npick-o' + (on ? ' on' : '') + '" onclick="pickClose();setCurrency(&quot;' + k + '&quot;)">'
+      + '<span>' + k + '</span><span class="npick-n">' + CURRENCY_SYMBOLS[k] + '</span></button>';
+  });
+  else if (kind === 'theme') THEMES.forEach(function (t) {
+    var on = t === currentTheme();
+    h += '<button role="menuitemradio" aria-checked="' + on + '" class="npick-o' + (on ? ' on' : '') + '" onclick="applyTheme(&quot;' + t + '&quot;)">'
+      + '<span>' + THEME_LABEL[t] + '</span></button>';
+  });
+  return h;
+}
+function acctItem(label, act){ return '<button role="menuitem" class="npick-o" onclick="pickClose();' + act + '"><span>' + label + '</span></button>'; }
+function pickRender(){
+  var m = document.querySelector('#acct-pick .npick-m'); if (!m) return;
+  var h = '', door = DOOR.kind && DOOR.kind !== 'checking';
+  if (AUTH.user) {
+    // The person's own address, as the server returned it.
+    h += '<div class="npick-who">' + liveEsc(AUTH.user.email || 'Signed in') + '</div>'
+      + acctItem('Account', 'authOpen()')
+      + (AUTH.role === 'master' ? acctItem('Approve accounts', 'adminOpen()') + acctItem('Listing reports', 'reportsOpen()') : '');
+  } else if (door) {
+    h += '<div class="npick-who">' + liveEsc(DOOR.email || DOOR_TEXT[DOOR.kind][0]) + '</div>'
+      + acctItem(DOOR.kind === 'unconfirmed' ? 'Why no prices?' : 'Account', 'authOpen()');
+  } else if (AUTH.sb) {
+    h += acctItem('Sign in', 'authOpen()');
+  }
+  h += '<div class="npick-h">Theme</div>' + pickItems('theme');
+  if (pricesOpen()) h += '<div class="npick-h">Currency</div>' + pickItems('cur');   // approved only: never written otherwise
+  h += '<div class="npick-h">Language</div>' + pickItems('lang');
+  if (AUTH.user) h += '<div class="npick-sep"></div>' + acctItem('Sign out', 'authSignOut()');
+  else if (door) h += '<div class="npick-sep"></div>' + acctItem('Sign out', 'doorSignOut()');
+  m.innerHTML = h;
 }
 function pickOpen(id, ev){
   if (ev) ev.stopPropagation();
@@ -7415,14 +7442,13 @@ function authLoadLib(){
 }
 function authRedirect(){ return location.origin + location.pathname; }
 function authButtons(){
-  ['auth-btn'].forEach(function (id) {
-    var b = document.getElementById(id); if (!b) return;
-    b.style.display = AUTH.sb ? '' : 'none';
-    // The person's own address, as the server returned it — card data rules do not apply.
-    b.textContent = AUTH.user ? (AUTH.user.email || 'Signed in')
-      : DOOR.kind === 'pending' ? 'Awaiting approval' : DOOR.kind === 'rejected' ? 'Not approved'
-      : DOOR.kind === 'unconfirmed' ? 'Account' : 'Sign in';
-  });
+  // Always shown (T1): theme and language live in its menu, and they are public.
+  var v = document.querySelector('#auth-btn .npick-v'); if (!v) return;
+  // The person's own address, as the server returned it — card data rules do not apply.
+  v.textContent = AUTH.user ? (AUTH.user.email || 'Signed in')
+    : DOOR.kind === 'pending' ? 'Awaiting approval' : DOOR.kind === 'rejected' ? 'Not approved'
+    : DOOR.kind === 'unconfirmed' ? 'Account' : AUTH.sb ? 'Sign in' : 'Settings';
+  pickRender();
 }
 function authRender(){
   var el = document.getElementById('auth-body'); if (!el) return;
@@ -8261,6 +8287,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-ef1c4a0-reports &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-212ea23-menu &middot; click to hide</div>
 </body>
 </html>

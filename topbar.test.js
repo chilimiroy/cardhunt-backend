@@ -8,7 +8,7 @@
 //
 //   node topbar.test.js
 'use strict';
-require('./testcount')(36);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(35);   // 36 -> 35 2026-10-10: theme / currency / language 'once' checks became one menu check (T1). Assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs'), vm = require('vm');
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => { cond ? pass++ : fail++; console.log((cond ? '  ok    ' : '  FAIL  ') + name + (extra ? '   ' + extra : '')); };
@@ -28,12 +28,12 @@ ok('no screen carries a nav of its own', !screens.some(s => { const i = markup.i
 console.log('\n  the shared controls, once each, in the one bar');
 const once = (re, what) => { const n = (markup.match(re) || []).length; ok(what + ': exactly one, in the bar', n === 1 && re.test(bar), n); };
 once(/<use href="#cz-mark"\/><\/svg><span class="wm">Card<em>Zon<\/em><\/span>/g, 'logo + wordmark');
-once(/id="theme-btn"/g, 'light / dark');
-once(/id="cur-pick"/g, 'currency');
-once(/id="lang-pick"/g, 'language');
+once(/id="acct-pick"/g, 'the account menu (theme, currency, language — TASK-account-and-bars T1)');
 once(/id="auth-btn"/g, 'account / sign in');
 once(/class="btn notif-bell"/g, 'alerts bell');
-ok('currency stays .price-only (the door)', /<div class="npick price-only" id="cur-pick">/.test(bar));
+ok('theme, currency and language are no longer bar controls of their own', !/id="(theme-btn|cur-pick|lang-pick|currency-btn|lang-btn)"/.test(markup));
+ok('currency is written into the menu only when prices are open — not .price-only CSS, not in the markup at all',
+   /if \(pricesOpen\(\)\) h \+= '<div class="npick-h">Currency<\/div>' \+ pickItems\('cur'\);/.test(H) && !/Currency<\/div>/.test(markup.replace(/<script[\s\S]*?<\/script>/g, '')));
 ok('nav items in order: Home, Search, Sets, Portfolio — Search between Home and Sets',
   /data-nav="home"[^]*?data-nav="search"[^]*?data-nav="sets"[^]*?data-nav="portfolio"/.test(bar));
 ok('no second copy of any control (…2 ids)', !/id="(cur-pick2|lang-pick2|currency-btn2|lang-btn2|auth-btn2)"/.test(markup));

@@ -10,7 +10,7 @@
 //   node i18n.test.js --db     also: no key is any card name, set name or
 //                              rarity in the catalogue (needs DATABASE_URL)
 
-require('./testcount')(50);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(51);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const cm = require('./cardmatch.js');
 let pass = 0, fail = 0;
@@ -66,7 +66,6 @@ ok('a table holding part of a split sentence loses all of it at load (English, n
    /if \(!g\.every\(function \(k\) \{ return k in T; \}\)\) g\.forEach\(function \(k\) \{ delete T\[k\]; \}\);/.test(H));
 ok('switching language starts from English every time (no table over another)',
    fn('applyLang').indexOf('LANG_ORIG.forEach') < fn('applyLang').indexOf('LANG_T = LANG_TABLES[l]'));
-ok('coverage is counted from the tables, and the menu shows it', /function langCoverage\(l\)/.test(H) && /c\.pct \+ '%'/.test(fn('pickRender')));
 ok('an <option> without a value gets its English pinned first (select.value stays English)',
    /p\.tagName === 'OPTION' && !p\.hasAttribute\('value'\)\) p\.setAttribute\('value', key\)/.test(fn('langNode')));
 ok('switching back restores only nodes still showing what was written', /n\.nodeValue === v\[1\]\) n\.nodeValue = v\[0\]/.test(fn('applyLang')));
@@ -75,17 +74,37 @@ ok('scripts and styles are never walked', /SCRIPT\|STYLE/.test(fn('langWalk')));
 
 console.log('\n  the control: top bar, between the currency tool and the alert bell');
 // TASK-ui T5: both are the same picker; currency carries a coin (no blue globe) and is .price-only.
-const nav1 = H.slice(H.indexOf('id="cur-pick"') - 60, H.indexOf('id="cur-pick"') + 1600);
-ok('main nav: currency, then language, then the bell', /id="currency-btn"[^]*?id="lang-btn"[^]*?notif-bell/.test(nav1));
-// One top bar (T7, 2026-10-08): the portfolio's second copy of each picker is gone.
-ok('one copy of each picker: no cur-pick2 / lang-pick2', !/id="(cur|lang)-pick2"/.test(H));
-ok('one component: both pickers are .npick with an .npick-b button and a menu',
-   ['cur-pick', 'lang-pick'].every(id => new RegExp('<div class="npick[^"]*" id="' + id + '"><button class="btn npick-b"').test(H)));
-ok('currency: a coin icon, no globe, and absent without prices (.price-only)',
-   /<div class="npick price-only" id="cur-pick"><button[^>]*><svg class="npick-i coin"/.test(H)
-   && !/🌐|&#127760;/.test(H.slice(H.indexOf('<body')).replace(/<!--[\s\S]*?-->/g, '')));
+// TASK-account-and-bars T1 (2026-10-10): theme, currency and language are sections of ONE menu,
+// opened from the account control on the one top bar. Run the page's own pickRender for each caller.
+ok('one menu on the bar, after the bell; no separate pickers', /notif-bell[^]*?<div class="npick" id="acct-pick"><button class="btn npick-b auth-btn" id="auth-btn"/.test(H)
+   && !/id="(cur|lang)-pick2?"|id="theme-btn"/.test(H));
 ok('the old cycling controls are gone, not left dormant', !/function toggleCurrency|function cycleLang/.test(H));
-ok('the theme toggle is untouched, before currency', H.indexOf('id="theme-btn"') < H.indexOf('id="currency-btn"'));
+{
+  const vm = require('vm');
+  const menu = { innerHTML: '' };
+  const mk = (who) => {
+    const c = { document: { querySelector: s => (s === '#acct-pick .npick-m' ? menu : null), documentElement: { getAttribute: () => 'en' } },
+      LANGS: [{ code: 'en', name: 'English' }, { code: 'ja', name: '日本語' }], CURRENCIES: ['USD', 'EUR'], CURRENCY_SYMBOLS: { USD: '$', EUR: '€' },
+      currentCurrency: 'USD', THEMES: ['auto', 'light', 'dark'], THEME_LABEL: { auto: '◐ Auto', light: '☀ Light', dark: '☾ Dark' },
+      currentTheme: () => 'auto', currentLang: () => 'en', langCoverage: () => ({ translated: 1, total: 2, pct: 50 }),
+      liveEsc: x => String(x), DOOR_TEXT: { pending: ['Awaiting approval', ''] } };
+    Object.assign(c, who);
+    c.pricesOpen = () => c.AUTH.role === 'master' || c.AUTH.role === 'approved';
+    vm.createContext(c);
+    vm.runInContext(['pickItems', 'acctItem', 'pickRender'].map(fn).join('\n') + '\npickRender();', c);
+    return menu.innerHTML;
+  };
+  const out = mk({ AUTH: { sb: {}, user: null, role: null }, DOOR: { kind: null } });
+  ok('signed out: the menu carries Sign in, Theme and Language', /Sign in/.test(out) && /Theme/.test(out) && /☾ Dark/.test(out) && /Language/.test(out) && /日本語/.test(out));
+  ok('signed out: currency is ABSENT — no section, no item, nothing to hide', !/Currency|setCurrency|USD|EUR/.test(out));
+  const nosb = mk({ AUTH: { sb: null, user: null, role: null }, DOOR: { kind: null } });
+  ok('no sign-in offered (file://): theme and language still reachable, no Sign in item', /Theme/.test(nosb) && /Language/.test(nosb) && !/Sign in/.test(nosb) && !/Currency/.test(nosb));
+  const pend = mk({ AUTH: { sb: {}, user: null, role: null }, DOOR: { kind: 'pending', email: 'p@example.com' } });
+  ok('pending: theme, language, sign out — no currency', /Theme/.test(pend) && /Language/.test(pend) && /Sign out/.test(pend) && !/Currency|setCurrency/.test(pend));
+  const appr = mk({ AUTH: { sb: {}, user: { email: 'a@example.com' }, role: 'approved' }, DOOR: { kind: null } });
+  ok('approved: Theme, Currency (with the coin list) and Language, then Sign out', /Theme[^]*Currency[^]*setCurrency[^]*USD[^]*Language[^]*Sign out/.test(appr));
+  ok('coverage is counted from the tables, and the menu shows it', /function langCoverage\(l\)/.test(H) && /c\.pct \+ '%'/.test(fn('pickItems')) && /50%/.test(appr));
+}
 
 (async () => {
   if (process.argv.includes('--db')) {

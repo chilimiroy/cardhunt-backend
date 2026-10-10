@@ -92,7 +92,11 @@ function hs256(payload, secret) {
   ok('the sign-in library is pinned by version and integrity hash', /supabase-js@2\.\d+\.\d+\/dist\/umd\/supabase\.js/.test(H) && /integrity: 'sha384-[A-Za-z0-9+/=]{64}'/.test(H)
      && /s\.integrity = SUPABASE_JS\.integrity/.test(fn('authLoadLib')));
   ok('offered only over http(s), never on the file:// fallback', /if \(!\/\^https\?:\$\/\.test\(location\.protocol\)\) return;/.test(fn('authInit')));
-  ok('the button is hidden until sign-in is configured', /b\.style\.display = AUTH\.sb \? '' : 'none'/.test(fn('authButtons')) && /id="auth-btn" style="display:none"/.test(H) && !/id="auth-btn2"/.test(H));   // one bar (T7, 2026-10-08): one button
+  // TASK-account-and-bars T1 (2026-10-10): the control is always there — its menu carries theme and language,
+  // which are public — and offers Sign in only when sign-in is configured ("Settings" otherwise).
+  ok('the account control is always shown; "Sign in" only when sign-in is configured', !/style\.display/.test(fn('authButtons'))
+     && /AUTH\.sb \? 'Sign in' : 'Settings'/.test(fn('authButtons')) && /\} else if \(AUTH\.sb\) \{\s*h \+= acctItem\('Sign in', 'authOpen\(\)'\);/.test(fn('pickRender'))
+     && (H.match(/id="auth-btn"/g) || []).length === 1 && !/id="auth-btn2"/.test(H));   // one bar (T7, 2026-10-08): one button
   // Step 2 (roles, gate, door, approval, RLS, alerts) is tested in roles / access / door / rls .test.js.
   ok('the env name is CARDZON_MASTER_EMAILS, never CARDHUNT_', !/CARDHUNT_MASTER_EMAILS/.test(S + H));
 

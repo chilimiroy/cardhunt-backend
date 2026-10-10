@@ -6,7 +6,7 @@
 //
 //   node deals.test.js
 'use strict';
-require('./testcount')(75);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(76);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const deals = require('./deals.js');
 let pass = 0, fail = 0;
@@ -125,8 +125,13 @@ ok(/app\.post\('\/api\/deals\/refresh', toolingKey\.require/.test(sup) && /app\.
   ok(shelf.length > 500, '/api/deals exists');
   ok(!/(gatherListings|listingsFor|sourceEbay|fetchEbay|ebayItemOnDemand|dealItemLive)\(/.test(shelf) && /ebayCalls: 0/.test(shelf), 'the shelf never asks eBay — 0 calls, and says so');
   ok(!/item_id|title|discount|landed|url/.test(shelf.replace(/\/\/.*$/gm, '')), 'the shelf sends OUR data only — no item id, title, link, price of eBay\'s, or discount');
-  ok(/found_at > now\(\) - interval '3 hours'/.test(shelf), 'picks older than the 3-hour refresh are not shown');
-  ok(/out\.sort\(\(a, b\) => b\.price - a\.price\)/.test(shelf), 'ordered by OUR price — never by the internal discount');
+  ok(/found_at > now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(shelf) && /showHours: 6, maxAgeMs: 6 \* 3600 \* 1000,/.test(src),
+     'depth (T5a): picks are shown for 6 h — the licence ceiling — two runs of different cards');
+  ok(/const shown = out\.slice\(0, limit\)\.sort\(\(a, b\) => b\.price - a\.price\);/.test(shelf) && /reserve: out\.length - shown\.length/.test(shelf),
+     'the freshest `limit` are shown, ordered by OUR price — never by the internal discount; the rest are the reserve, counted');
+  ok(/DELETE FROM deal_picks WHERE found_at < now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(src)
+     && /SELECT item_id FROM deal_picks WHERE card_id = \$1 AND found_at > now\(\) - interval '\$\{DEALS_SUPPLY\.showHours\} hours'/.test(src),
+     'the run and the click expire picks on the same clock as the shelf');
   ok(/if \(!deals_\.ENABLED\) return res\.json\(\{ enabled: false, reason: deals_\.OFF_REASON/.test(shelf), 'switched off, it answers enabled:false with the reason');
 }
 {

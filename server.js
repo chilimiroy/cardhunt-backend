@@ -1212,7 +1212,15 @@ async function dealRefOf(cardId) {
 // ~1.3 calls a card measured = ~104 a run, ~830 a day, BACKGROUND origin (it
 // yields at the 92% soft stop). A click: 1 getItem (0 within 15 minutes).
 // ══════════════════════════════════════════════════════════════
-const DEALS_SUPPLY = { cards: 80, pool: 400, maxAgeMs: 3 * 3600 * 1000, waitMs: 90 * 1000, grade: 'Raw NM' };
+// DEPTH (T5a, 2026-10-10): a pick is shown for showHours, 6 — two runs'
+// picks at once. With rotation a run no longer re-walks the last run's cards,
+// so the older picks are a RESERVE of other cards: a click that finds one
+// sold deletes it and the next freshest takes its tile. 6 h is the licence's
+// ceiling for keeping eBay data to display it, with its age shown (§8.1,
+// read 2026-10-08) — a pick stores no eBay data, and its tile says "found N h
+// ago". Measured before: 7 picks a run for an 8-tile shelf, and picks shown
+// 3 h while the Action fired every 4.4-9.5 h (7 runs in 45 h, not 15).
+const DEALS_SUPPLY = { cards: 80, pool: 400, showHours: 6, maxAgeMs: 6 * 3600 * 1000, waitMs: 90 * 1000, grade: 'Raw NM' };
 let dealTableReady = null;
 // Created by the server on first use, RLS on in the same step: API roles
 // read nothing of it (every read and write goes through this server).
@@ -1274,7 +1282,7 @@ async function runDealRefresh(runId) {
     total: 0, done: 0, picks: 0, backCalls: 0, errors: [], stoppedFor: null });
   try {
     await dealTable();
-    await db.query(`DELETE FROM deal_picks WHERE found_at < now() - interval '3 hours'`);
+    await db.query(`DELETE FROM deal_picks WHERE found_at < now() - interval '${DEALS_SUPPLY.showHours} hours'`);
     const ids = await dealCandidates(DEALS_SUPPLY.cards);
     dealJob.total = ids.length;
     for (const id of ids) {
@@ -1351,7 +1359,7 @@ app.get('/api/deals/refresh/status', toolingKey.require, (req, res) => {
 });
 
 // The shelf: OUR data only — the card, our TCGplayer market price and when
-// the deal was found. Picks older than the refresh interval are not shown.
+// the deal was found. Picks older than DEALS_SUPPLY.showHours (6) are not shown.
 app.get('/api/deals', access.priced, async (req, res) => {
   // Off (deals.ENABLED) answers that it is off and why — never an empty
   // shelf that reads as "no deals right now".
@@ -1361,7 +1369,7 @@ app.get('/api/deals', access.priced, async (req, res) => {
     await dealTable();
     const picks = (await db.query(`SELECT p.card_id, p.found_at, c.name, c.number, c.set_name, c.set_name_en, c.image_small
       FROM deal_picks p JOIN cards c ON c.api_card_id = p.card_id
-      WHERE p.found_at > now() - interval '3 hours' AND ${digital.visibleSql('c')} ORDER BY p.found_at DESC LIMIT 60`)).rows;
+      WHERE p.found_at > now() - interval '${DEALS_SUPPLY.showHours} hours' AND ${digital.visibleSql('c')} ORDER BY p.found_at DESC LIMIT 60`)).rows;
     const out = [];
     for (const p of picks) {
       const ref = await dealRefOf(p.card_id);
@@ -1370,11 +1378,13 @@ app.get('/api/deals', access.priced, async (req, res) => {
         price: ref.price, priceLabel: deals_.refLabel(ref), priceDate: ref.recordedAt,
         foundAt: p.found_at, foundAgoMin: Math.max(0, Math.round((Date.now() - new Date(p.found_at).getTime()) / 60000)) });
     }
-    // Ordered by OUR price, dearest first — never by the discount, which is internal.
-    out.sort((a, b) => b.price - a.price);
-    res.json({ enabled: true, rule: deals_.describeRule(), count: Math.min(out.length, limit), deals: out.slice(0, limit),
+    // The freshest `limit` are shown (picks come newest first); the rest are
+    // the reserve. Then ordered by OUR price, dearest first — never by the
+    // discount, which is internal.
+    const shown = out.slice(0, limit).sort((a, b) => b.price - a.price);
+    res.json({ enabled: true, rule: deals_.describeRule(), count: shown.length, deals: shown, reserve: out.length - shown.length,
       ebayCalls: 0, refreshedAt: dealJob.last ? dealJob.last.finishedAt : null,
-      freshness: { maxAgeHours: 3, note: 'a deal is found by a scan every 3 hours; the listing itself is fetched live when you open it' } });
+      freshness: { maxAgeHours: DEALS_SUPPLY.showHours, note: 'a deal is found by a scan every 3 hours and shown for up to ' + DEALS_SUPPLY.showHours + '; the listing itself is fetched live when you open it' } });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -1410,7 +1420,7 @@ app.get('/api/deals/:cardId/live', access.priced, async (req, res) => {
   const cardId = req.params.cardId;
   try {
     await dealTable();
-    const p = (await db.query(`SELECT item_id FROM deal_picks WHERE card_id = $1 AND found_at > now() - interval '3 hours'`, [cardId])).rows[0];
+    const p = (await db.query(`SELECT item_id FROM deal_picks WHERE card_id = $1 AND found_at > now() - interval '${DEALS_SUPPLY.showHours} hours'`, [cardId])).rows[0];
     if (!p) return res.status(404).json({ cardId, gone: true, says: 'This deal has expired.' });
     const got = await dealItemLive(p.item_id, cardId);
     if (got.error) return res.status(got.status || 502).json({ cardId, error: got.error, says: 'eBay could not be asked right now — try again shortly.' });

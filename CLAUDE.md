@@ -75,7 +75,7 @@ Shared, never copied — every duplicated implementation here has drifted.
 | `refscans.js` | sibling references, built ahead by `refbuild.js`: a request never waits on a third-party host; missing = `notRun`, never a pass |
 | `backcheck.js` | card BACK: other family's back refuses, own back labels, nothing found claims nothing |
 | `stampcheck.js` (material) | gold/black NOVELTY card? (`materialJudge`; rules in PHOTO CHECKS) |
-| `deals.js` | best deals: cheapest trusted Buy It Now vs a current measured price, from cached views only |
+| `deals.js` | the home shelf's bars: deals (Buy It Now vs a current measured price), best / ending auctions, the pool's rotation |
 | `pricequality.js` | is a headline current and measured? old (>45 d) / thin / unsettled / ask; the MARKER's reasons (`markOf`); drawn by `priceMarksHtml` |
 | `setyield.js` | a refresh that priced nothing for a set or 200+ cards in a row: named, exit 2 |
 | `printsql.js` | `basePrintingSql` — the headline rule every reader uses; `markedSql` — a headline that feeds nothing |
@@ -343,8 +343,9 @@ Method, tooling rows: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-07 (TASK-ui, thi
 | back check, automatic | +1 getItem per unchecked row, ≤20 a view, background |
 | stamp / lookalike / sibling / auctions / novelty (material) | 0 |
 | home movers (4 × `/api/trending`) · the deals shelf (`/api/deals`, stored picks) | 0 |
-| deals refresh (GitHub Action, every 3 h, background origin) | ~104 a run (80 cards × 1.3), ~830/day |
-| open a deal (`/api/deals/:id/live`) | 1 getItem (0 within 15 min) |
+| deals refresh (GitHub Action, background; fires every 4-9 h, not 3) | ~104 a run (80 of a 400 pool × 1.3); feeds all three bars |
+| open a deal · an auction-bar tile | 1 getItem (0 within 15 min; an auction's back check reads the same one) |
+| graded slabs bar | 0 — silent; a supply = 1 search per card per grade |
 | search resolving to one card · ambiguous | 1 per card (+reprints) · 0 |
 | tooling probes and audits | tooling origin, 300/day — rows in the archive |
 | every `node ingest.js` command, the test suite | 0 |
@@ -398,8 +399,10 @@ schtasks /Query /TN "CardHunt weekly Yuyu-tei" /V /FO LIST   # Sundays 08:00, re
 
 ## Movers and best deals — BUILT 2026-10-05
 - **Movers** (`trending.js`): both ends TCGdex rows, same printing and product; a
-  marked card never ranks. **Best deals ON (Roy, 2026-10-08)**: a 3-hourly job, 80
-  cards; the shelf shows OUR data, a click fetches live. Detail: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)".
+  marked card never ranks; % lists need $10, every list 3 readings. **Best deals ON
+  (Roy, 2026-10-08)**: the shelf shows OUR data, a click fetches live. Detail: *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, seventh pass)".
+- One shelf, four bars from ONE supply: 400 cards walked 80 a run; picks shown 6 h
+  (auctions 3 h, found 3+ h from their end); graded silent (PROGRESS 2026-10-10 (bars)).
 
 ## Page language — EN/JA/zh-TW/zh-CN (T5; TASK-ui 2026-10-07)
 One exact-text table per language over ONE key set, **never card data**
@@ -407,6 +410,7 @@ One exact-text table per language over ONE key set, **never card data**
 
 ## Page layout — rules (TASK-ui, 2026-10-07)
 - A price control is `.price-only`: absent, never disabled. Check signed out AND in.
+- Theme, currency, language: the account menu; currency WRITTEN only when prices open.
 - Card: image | ONE view area (boxes+bar OR history: `toggleCardView` fetches
   nothing; both in one cell, no jump) + selector, level with the image; listings
   full width below. Artist above the image; no details box (`cdlayout.test.js`).
@@ -422,6 +426,7 @@ each protected route; `access.test.js` fails on an unclassified route (*Archive:
   --db`; `node rlsprobe.js`). **Tests cannot change the schema** (`schemaguard`).
 - **Live suites run SIGNED OUT** (Roy, 2026-10-07); **never** a service_role key or test
   account on a dev machine. (PROGRESS 2026-10-06 (night).)
+- Account page: `/api/account`, `access.self` (any state, own row); deletion is a request.
 
 ## Not built, and why
 Near you, PSA certs (429 before the key), sold data (no licensed source), checkout and login: each in *Archive:* "MOVED FROM CLAUDE.md, 2026-10-10 (budget, sixth pass)" and "MOVED FROM CLAUDE.md, 2026-10-10 (budget, tenth pass)" — "Near you (local card shops) — PLANNED, needs a real data source", "Sold data — NO SOURCE, and the page says so", "Checkout and login — DISABLED, preserved outside the page".
@@ -811,6 +816,8 @@ PriceCharting route "not built"; a dead Yahoo fallback asked 636 times a night (
 
 **Verify unreleased server code in the browser**: `PORT=3001 node server.js`,
 `http://localhost:3001/app` (`?api=render` for eBay). *Archive:* "Verifying an unreleased endpoint"
+**With the real `DATABASE_URL` it WRITES** (`/api/me` creates a `user_access` row): pin a
+read-only pool first (PROGRESS 2026-10-10 (harness)).
 
 ## 5 · Code, tooling, tests
 

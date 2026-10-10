@@ -1,5 +1,101 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 (harness) — the local server wrote a test account into user_access; removed
+
+Verifying the page on `PORT=3001 node server.js` with the real `DATABASE_URL` and an
+HS256 test token (the access.test.js pattern), the memory approval store given by
+`-r` preload was REPLACED by the server's own `roles.setStore(pgStore)` (server.js
+line 134). `/api/me` then touched the real table: one row, user
+`44444444-4444-4444-8444-444444444444`, `master@example.com`, state pending, created
+01:42 UTC. In production that is a pending account in Roy's Waiting list. Found
+reading the account page's dates (they were the table's, not the stub's), six
+minutes after. Checked: no alerts, portfolio, reports or deletion request for any
+test id. Deleted exactly that row (id + email + pending + created after 01:40).
+`user_access` rows with an `@example.com` email afterwards: 0.
+
+The harness after: a static preload that (1) makes every pooled INSERT / UPDATE /
+DELETE / DDL a logged no-op and (2) pins the memory store (`setStore` replaced
+before the server calls it). The first attempt at (1) was generated through a JS
+template literal, which ate the regex's backslashes (`^s*` for `^\s*`) — the
+escape lesson again; the static file was written with the editor.
+
+Also created on the real database, by the local server's first use, before the
+pool was read-only: `bar_picks`, `deal_walks`, `account_deletion_requests` — empty,
+RLS on; the deployed server creates the same on first use.
+
+## 2026-10-10 (bars) — TASK-account-and-bars: measurements behind the commits
+
+Counts taken while the nightly was writing (it ran 03:00 -> ~07:00 JST): snapshots.
+
+### T5a — the deals shelf, measured before changing it (0 eBay calls)
+- **Runs.** GitHub's API lists 7 runs of deals-refresh.yml ever: 10-08 01:37
+  (manual), 10:51, 18:58; 10-09 01:20, 10:50, 18:28, 22:50 UTC. The cron asks for
+  every 3 h; GitHub fired the schedule 6 times in ~45 h (gaps 4.4-9.5 h). Each run
+  2-8 min of Action time.
+- **Picks.** deal_picks at 01:17 UTC: 7, all from run 20261009225048. Earlier runs'
+  picks are overwritten or expired — not recoverable from the database; the job's
+  own `last` lives in Render's memory and its status route is tooling-key only
+  (`toolingkey.js` drives /api/ebay/* probes only). The Action logs need a GitHub
+  token: not read.
+- **Empty shelf, why.** Picks were shown 3 h; runs came every 4.4-9.5 h. Every gap
+  past 3 h was an empty shelf by construction — at least ~26 of the 45 h, before
+  any click. Clicks that delete a pick (sold / no longer a deal) are logged nowhere:
+  that share is not measured.
+- **Same 80.** listing_views (caller background, action open) per run: 80 cards
+  each; consecutive runs shared 80/80, 73/73, 80/80, 78/80, 80/80. By construction:
+  the top 80 by TCGplayer price. 71-74 of each run's 80 are in today's top 80.
+- **Excluded.** English headlines priced at or above the 80th pick ($716.67): 91;
+  11 left out — 6 marked, 4 headline older than 30 days, 1 Cardmarket headline.
+  Of the 80 walked, 7 had a reference the bar refuses anyway (4 thin, 2 thin +
+  unsettled, 1 unsettled): 7 searches a run that can never pick.
+- **Fixes.** Rotation: the top 400 (floor $239.98) walked 80 a run, longest-walked
+  first (`deal_walks`) — 0 more calls, each card every fifth run. All 400 every run
+  would be ~520 searches a run, ~4,160 a day at 8 runs — against the 5,000 cap with
+  user traffic; not done. Depth: picks shown 6 h (the licence's display ceiling),
+  so two runs of DIFFERENT cards stand at once and a deleted pick's tile goes to
+  the next — 0 calls. Producing 16 picks in ONE run at the measured yield (7 of
+  80) needs ~180 cards a run, +100 searches a run.
+
+### T5b — the auction bars
+- One search returns both sale types: Umbreon VMAX 215 Raw NM, 1 search (user
+  origin, signed in on /app, 01:2x UTC): 44 eBay rows, 42 Buy It Now + 2 auctions.
+  Auction rows carry `priceKind: current-bid` (price = the bid), bids 0 and 37,
+  endsAt 95.2 h and 6.2 h out, seller feedback, condition; shipping unstated on both.
+- Sort by end time: eBay's filter page documents `itemEndDate:[a..b]`; the search
+  method page (sort values) answered 403 to fetch, so `endingSoonest` is
+  unconfirmed. Either way it is a second query per card; we sort the shared
+  response ourselves.
+- Cost: best auctions and ending soon 0 calls a run (same payloads); click 1
+  getItem, read by the back check too (certcheck keeps the live facts). Route 2
+  (live when the bar opens): 1 getItem per tile shown, ≤8, cached 15 min — at most
+  8 calls per 15 minutes however many view it, ≤768 a day if watched constantly
+  (getItems, the multi-item call, is closed to our keys). Graded slabs: 1 search
+  per card per grade — 80 × PSA 10 + PSA 9 = 160 a run, ~1,280 a day at 8 runs.
+
+### T3 — movers
+English 7-day % lists (4,297 pairs), qualifying at $5 / $10 / $25 / $50: gainers
+858 / 713 / 461 / 269, fallers 932 / 729 / 419 / 246; under 3 readings 361 / 240 /
+63 / 20 gainers, under 4: 629 / 489 / 257 / 105. Top 8 gainers at $10 vs $25 differ
+by two cards (2016 Pikachu, Ho-Oh POP5); top 8 fallers identical. Japanese: 0
+TCGdex-path pairs at either window. Chosen: $10, 3 readings. After: 472 / 472 by %,
+495 / 485 by value; marked pairs that day 3, ranked on none. The readings count adds
+~60 ms to moverSql (644 vs 587 ms warm).
+
+### T4 — the masters-only refusals (access.test.js, approved non-master token)
+`?view=open` and `?view=closed`: 403 {"error":"masters only","state":"approved"}.
+There is no state-history table: a report keeps its LAST change (state_changed_by,
+_at); earlier changes are not recorded anywhere.
+
+### T6 — the card page
+- The lowest-listing box: removed on purpose in 70b2058 (2026-10-08), API licence
+  §8.1(b)(2) — eBay's cheapest listing left our price row and heads the "Listings
+  from eBay" section. Not restored.
+- More: 19 graders under Other (not 18 / 15 as bc820bb's message says): SGC, TAG,
+  ACE shown, 16 behind More.
+- Heights (local server, en-swsh7-215, signed in, eBay off): 1366 px 1629 -> 1563;
+  390 px 2644 -> 2553. The column is now bounded by the grade selector (267 px); the
+  history view holds ~60 px under the position bar at desktop.
+
 ## 2026-10-10 (what runs) — the Yahoo median, the browser median, the bid, docs vs code
 
 0 eBay calls. Yahoo probed from home (2 requests).

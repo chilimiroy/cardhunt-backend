@@ -483,7 +483,7 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
    it the column (view area, then the selector). The row stretches, so the
    column ends level with the image: the view area takes up any slack, and a
    taller column stretches the image cell instead. */
-.cdgrid{--cd-gap:16px;display:grid;grid-template-columns:minmax(300px,380px) 1fr;
+.cdgrid{--cd-gap:16px;display:grid;grid-template-columns:minmax(220px,280px) 1fr;
   grid-template-areas:"img top";
   gap:var(--cd-gap) 28px;align-items:stretch;margin-bottom:20px}
 /* Inside the grid, the gap is the ONLY spacing: every cell and every child
@@ -500,10 +500,27 @@ a{text-decoration:none;color:inherit}button,input,select{font-family:inherit;cur
 /* The view area: both views in ONE grid cell, the toggle beside them. */
 .cd-viewwrap{flex:1;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px}
 .cd-view{grid-row:1;grid-column:1;min-width:0;display:flex;flex-direction:column;gap:var(--cd-gap)}
-.cd-view-boxes .pboxes{flex:1}
-.cd-view-boxes .pbox{display:flex;flex-direction:column;justify-content:center}
+/* TASK-account-and-bars T6c (2026-10-10): the boxes no longer stretch to the
+   image's height (they were mostly empty background, the figure sat at the
+   left); each box is its content, centred — label, the figure a little larger
+   than the detail, the detail inside the same box. Card page only: the
+   portfolio and alerts boxes keep .pbox's own rule. */
+.cd-view-boxes .pboxes{flex:0 0 auto}
+.cd-view-boxes .pbox{display:flex;flex-direction:column;justify-content:flex-start;align-items:center;text-align:center;padding:10px 14px}
+.cd-view-boxes .pbl{margin-bottom:3px}
+.cd-view-boxes .pbv{font-size:21px;line-height:1.15}
+.cd-view-boxes .pbs{font-size:11.5px;margin-top:2px}
+/* ...and the image is smaller (T6c): narrower column, less frame, a lower cap. */
+.cd-imgcell .cview{padding:14px}
+.cd-imgcell .cview img{max-height:360px}
+/* The history view shares the area with the boxes and sets its height when it
+   is the taller of the two (T1's no-jump rule) — at a 150 px chart it held the
+   boxes view 114 px open. A tighter frame and a 110 px floor; it still grows
+   with the area. */
+.cd-view-chart .chart-box{padding:14px 16px}
 .cd-view-chart .chart-box{flex:1;display:flex;flex-direction:column}
-.cd-view-chart .cwrap{flex:1;min-height:150px}
+.cd-view-chart .cwrap{flex:1;min-height:110px}
+.cd-view-chart .cwrap canvas{position:absolute;inset:0}
 .cd-viewwrap[data-view="boxes"] .cd-view-chart,.cd-viewwrap[data-view="chart"] .cd-view-boxes{visibility:hidden}
 .cd-vtog{grid-row:1;grid-column:2;align-self:start;display:flex;flex-direction:column;align-items:center;gap:4px;
   width:76px;padding:12px 6px;border:1px solid var(--bd);border-radius:var(--r);background:var(--w);color:var(--mu);
@@ -8389,6 +8406,6 @@ function cleanSeries(name) {
      is either this commit or this commit plus the stamp bump. What is never
      fine is a stamp older than the content. -->
 <div id="ebay-quota" class="eq" hidden role="status" aria-live="polite" onclick="QUOTA_OPEN=!QUOTA_OPEN;renderQuota()" title="eBay calls today — click for detail"></div>
-<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-a6f1df8-more &middot; click to hide</div>
+<div id="build-banner" style="position:fixed;bottom:10px;left:10px;z-index:9999;background:#0F0F14;color:#00B8A0;font:600 10px ui-monospace,monospace;padding:5px 10px;border-radius:6px;border:1px solid #00B8A0;opacity:.85;cursor:pointer" onclick="this.style.display='none'" title="Click to hide">BUILD 20261010-bc820bb-cardpage &middot; click to hide</div>
 </body>
 </html>

@@ -11,7 +11,7 @@
 // CLAUDE.md records why. This pins the rule so a later edit cannot quietly
 // put the shared rows, the second margin or the split column back.
 'use strict';
-require('./testcount')(31);   // assertions in a plain run — fewer fails the file (testcount.js)
+require('./testcount')(36);   // assertions in a plain run — fewer fails the file (testcount.js)
 const fs = require('fs');
 const page = fs.readFileSync('cardhunt_preview.html', 'utf8');
 let pass = 0, fail = 0;
@@ -68,6 +68,16 @@ ok(/\.ltabs\{flex-wrap:wrap\}/.test(phone), 'phone: language tabs wrap');
 ok(/\.ptable \.pth,\.ptable \.ptr\{grid-template-columns:minmax\(0,1\.7fr\)/.test(phone),
    'phone: the portfolio grid rule is .ptable-scoped (unscoped, the later .pth rule won)');
 ok(!/class="sgg"/.test(page), 'the search page has no game picker (T6, 2026-10-08)');
+// TASK-account-and-bars T6c (2026-10-10): measured on en-swsh7-215 signed in, 1366 px 1629 -> 1563, 390 px 2644 -> 2553.
+ok(/\.cd-view-boxes \.pboxes\{flex:0 0 auto\}/.test(page) && /\.cd-view-boxes \.pbox\{[^}]*align-items:center;text-align:center;padding:10px 14px\}/.test(page),
+   'card page: the boxes hold their content (no stretching to the image), centred');
+ok(/\.cd-view-boxes \.pbv\{font-size:21px/.test(page) && /\.cd-view-boxes \.pbs\{font-size:11\.5px/.test(page) && /\.pbv\{font-size:26px/.test(page),
+   '...the figure a little larger than the detail, card page only (portfolio and alerts boxes keep 26 px)');
+ok(/\.cdgrid\{--cd-gap:16px;display:grid;grid-template-columns:minmax\(220px,280px\) 1fr;/.test(page) && /\.cd-imgcell \.cview img\{max-height:360px\}/.test(page),
+   'card page: the image is smaller (280 px column, 360 px cap)');
+ok(/\.cd-view-chart \.cwrap\{flex:1;min-height:110px\}/.test(page) && /\.cd-view-chart \.cwrap canvas\{position:absolute;inset:0\}/.test(page),
+   '...and the hidden history view no longer holds the area open with its 150 px canvas');
+ok(!/id="cd-low"/.test(page), 'no lowest-listing box in our price row — eBay\'s figure heads the eBay section (§8.1(b)(2), 70b2058)');
 
 console.log(`\ncdlayout.test.js — ${pass} passed, ${fail} failed`);
 process.exitCode = fail ? 1 : 0;

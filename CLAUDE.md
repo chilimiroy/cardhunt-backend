@@ -382,11 +382,11 @@ language's nightly refresh from `price_history` (0 network); a trigger records
 ## T4 · Scheduled refresh — running nightly
 `node ingest.js refresh <lang>` prices whatever is overdue, in five tiers from
 hot 24h to dormant 30d (thresholds: archive, third pass). **Price beats rarity.** Ordered by overdue-ness weighted by value. "Due" is
-judged on the headline row only. **`--max` is per language** (`all` = 4
-caps); **so is `--hours`** (`all` = up to 16 h awake), and it is wall-clock: a PC
-asleep mid-run resumes it hours later (PROGRESS 2026-10-10 (nightly)). The nightly and
-the weekly share ONE lock (`joblock.js`, exit 4) and refuse a connection that cannot
-write (exit 5); they write through `CARDHUNT_WRITE_DATABASE_URL`. An empty set or 200-card gap is
+judged on the headline row only. `all` = en, ja. **`--max` is per language; `--hours` is
+ONE wall-clock budget for the run** — a sleep is logged `!!! RUN ASLEEP` (PROGRESS
+2026-10-10 (nightly)). Nightly and weekly share ONE lock (`joblock.js`, exit 4; the
+weekly retries hourly 6 h), refuse a read-only connection (exit 5), and write through
+`CARDHUNT_WRITE_DATABASE_URL`. An empty set or 200-card gap is
 named and exits 2 (`setyield.js`, `refresh-empty-sets.log`). A language not run
 or not finished exits 3 and is named; an interrupt exits 130; a hard kill is
 named by the next run (`refreshrun.js`).

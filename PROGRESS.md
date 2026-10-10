@@ -1,5 +1,77 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 (local writes) — first-use tables, a local server that cannot write, the second deals trigger costed
+
+### Every table the code creates on first use
+Read from every tracked runtime file (`CREATE TABLE IF NOT EXISTS` / `ALTER TABLE`):
+
+| table | created by | migration-*.sql record |
+|---|---|---|
+| user_access (+ email, + previous_visit_at) | roles.js, server's first use | migration-user-access.sql |
+| ebay_quota, ebay_quota_hour | ebayquota.js, first eBay call | migration-rls.sql (RLS only) |
+| listing_photo_verdicts | server.js | migration-photo-verdicts.sql |
+| listing_views | server.js, first card view | migration-rls.sql (RLS only) |
+| yuyutei_index | server.js, first Yuyu-tei index load | migration-rls.sql (RLS only) |
+| card_reference_scans, card_colour_refs | refscans.js (server AND refbuild.js, local) | their own files |
+| tcgdex_product_conflicts | tcgdexprice.js — required by ingest.js (local) | migration-rls.sql (RLS only) |
+| deal_picks, deal_walks, bar_picks | server.js dealTable | migration-deals.sql (new, d65ad80) |
+| account_deletion_requests | server.js | migration-deletion-requests.sql |
+
+So "migrations are a SQL file Roy runs" has never covered these: thirteen tables are
+created by code on first use, wherever that code runs — including local tools
+(refbuild.js, ingest.js through tcgdexprice.js) and, until e8a50b2, a hand-started
+local server. schemaguard.js refuses DDL only on connections a TEST opens (or a
+server a test boots with CARDZON_SCHEMA_GUARD=1); it was never on the server's own
+pool. Five of them (ebay_quota, ebay_quota_hour, listing_views, yuyutei_index,
+tcgdex_product_conflicts) are recorded only by their RLS statement, not the CREATE.
+
+### A local run cannot write: separate credentials (chosen)
+A separate database was the other option: a Supabase branch or second project,
+seeded with a copy — it diverges from production the day it is made, and the
+nightly still needs production. Separate credentials keep one database and let
+Postgres refuse:
+- `migration-local-readonly.sql`: role `cardhunt_local_ro`, SELECT on every table,
+  sequence and future table, `default_transaction_read_only = on`, BYPASSRLS (most
+  tables have RLS and no policy). Whether Supabase lets `postgres` grant BYPASSRLS
+  is NOT verified; step 1b in the file is the fallback (one SELECT policy per table).
+- This machine's `DATABASE_URL` becomes that role's pooler URL
+  (`cardhunt_local_ro.<project-ref>` @ aws-0-eu-west-3.pooler.supabase.com:6543).
+  The current write URL moves to `CARDHUNT_WRITE_DATABASE_URL`; refresh-weekly.cmd
+  (e8a50b2) and refresh-daily.cmd (after tonight's run ends) map it onto
+  DATABASE_URL for their own node only.
+- localdb.js: off Render, server.js refuses to listen on a connection that can write
+  (exit 2). Live: refused here, on `postgres`. On Render it starts (verified after the
+  d65ad80 deploy: /api/bars/graded answers 401, the new route).
+
+What it takes (Roy, ~15 minutes): run the SQL in the editor with a password chosen
+there; run the check at its foot as the new role; set two user env vars
+(`setx DATABASE_URL <read-only URL>`, `setx CARDHUNT_WRITE_DATABASE_URL <the current
+URL>`); open a new terminal. Then a session that must write (a one-off `ingest.js`
+command, a --db suite) names the write URL for that one command — on purpose.
+Until then a local server with a database does not start.
+
+### A second deals trigger from this machine — costed, not built
+- **What**: after `node ingest.js refresh` in refresh-daily.cmd, a small script POSTs
+  /api/deals/refresh with the tooling key already in this machine's environment
+  (CARDZON_TOOLING_KEY), then polls /status every 2 minutes until the run ends — the
+  poll is what keeps Render's free instance awake, as the Action's does.
+  toolingkey.js only drives GET /api/ebay/* probes, so it is a new ~40-line script.
+- **Dedupe**: the server refuses only while a run is RUNNING (409). A second source
+  needs "not if the last run finished under N hours ago" — from the database
+  (max(deal_walks.walked_at)), since dealJob.last is lost on every Render sleep.
+  ~10 lines and tests.
+- **eBay**: a run measured 86-103 background calls (6 runs, ebay_quota_hour), ~93.
+  Once a day: +~93 a day (days now 674-692 of 5,000). Two runs cannot overlap.
+- **What it buys**: the nightly fires once a day (03:00 local = 00:00 UTC), so it
+  fills one gap a day. With the 10 h window and gaps measured up to 9.5 h, the
+  shelf should already rarely be empty. A real second clock would be its own Task
+  Scheduler entry every 3 h — awake hours of this PC only — +~93 per extra run, up
+  to ~8 a day (~750/day) without the dedupe, near nothing extra with it.
+- **Build**: ~1 hour (script, dedupe, tests, one .cmd line).
+
+Correction: the (bars) entry says the nightly ran "03:00 -> ~07:00 JST". This
+machine is on Israel time (UTC+3): 03:00 -> ~07:00 local, 00:00 -> 04:00 UTC.
+
 ## 2026-10-10 (task file corrected) — TASK-account-and-bars.md had two errors (Roy's)
 
 - **Report state history.** T4 said "the state history stays". There is no report
@@ -47,7 +119,7 @@ deployed server creates the same on first use.
 
 ## 2026-10-10 (bars) — TASK-account-and-bars: measurements behind the commits
 
-Counts taken while the nightly was writing (it ran 03:00 -> ~07:00 JST): snapshots.
+Counts taken while the nightly was writing (it ran 03:00 -> ~07:00 local, UTC+3): snapshots.
 
 ### T5a — the deals shelf, measured before changing it (0 eBay calls)
 - **Runs.** GitHub's API lists 7 runs of deals-refresh.yml ever: 10-08 01:37

@@ -816,8 +816,8 @@ PriceCharting route "not built"; a dead Yahoo fallback asked 636 times a night (
 
 **Verify unreleased server code in the browser**: `PORT=3001 node server.js`,
 `http://localhost:3001/app` (`?api=render` for eBay). *Archive:* "Verifying an unreleased endpoint"
-**With the real `DATABASE_URL` it WRITES** (`/api/me` creates a `user_access` row): pin a
-read-only pool first (PROGRESS 2026-10-10 (harness)).
+**Off Render it refuses a connection that can write** (`localdb.js`): run it on the read-only
+role (`migration-local-readonly.sql`; PROGRESS 2026-10-10 (local writes), (harness)).
 
 ## 5 · Code, tooling, tests
 

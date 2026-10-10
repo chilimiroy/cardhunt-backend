@@ -1,5 +1,79 @@
 # CardHunt — Progress Log
 
+## 2026-10-10 (nightly) — why the 4-hour budget did not bind; the job lock; the write credentials
+
+### The cause: the PC slept, and the budget is per language
+Asked to stop the run at 13:55 local: it had already ended at 13:15:51 (task Ready,
+Last Result 3, no ingest process). Nothing was stopped.
+- refresh-run.json (the run's own marker): started 00:00:03 UTC; en finished 00:53:59;
+  ja finished 10:15:51 "the 4h budget ran out" at 2,131 of 4,000; zh-tw 10:15:55,
+  zh-cn 10:15:56.
+- Windows System log (Kernel-Power 42 / 107, Kernel-General 1): sleep at 05:41:46
+  local, time jump 02:41 -> 05:41 UTC on resume at 08:41:47, sleep again at 08:41:56,
+  resume at 13:14:50 (time jump 05:42 -> 10:14 UTC). task-watch.log has no line
+  between 05:01 and 13:17 — the watcher slept too.
+- So ja ran 00:54 -> 02:41 UTC awake (~1 h 47 m), was suspended ~7 h 33 m, and on
+  waking `Date.now()` was past its deadline: it stopped at the next card and the
+  zh languages (0 network) took 5 seconds. It was not on Yahoo for 10 hours; the log
+  tail read at 13:15 was the last line written before 05:41.
+- Last night's run did not sleep: ja reached its deadline awake, at 4 h.
+- The defect underneath: the deadline is computed in refreshOne — per LANGUAGE.
+  `refresh all` is four languages, so up to 16 h awake. CLAUDE.md said "--hours=4 is
+  the bound that holds"; it never held for `all` (corrected there).
+- Not changed (a schedule decision, Roy's): a run-wide deadline, and whether time
+  asleep should count. The tasks are "Interactive only" and do not wake the PC.
+
+### Overlap with the weekly Yuyu-tei job — made impossible by construction
+What overlap would do: the weekly never asks Yahoo (it fetches yuyu-tei.jp and
+reads stored Yahoo prices only for --compare) — so not two jobs on Yahoo. It would
+be two writers of Japanese price_history at once (the nightly picks what is due at
+its start and would not see Yuyu-tei asks written mid-run), two jobs' connections on
+the pooler, and both on this PC's memory, already short tonight. Now joblock.js
+(b12c845): one lock file, the second job refuses — exit 4, "JOB LOCKED — NOT
+STARTED: <holder> holds the job lock". Seen to fail: two real processes in
+joblock.test.js, and `node ingest.js yuyutei` against a live holder printed the
+refusal and exited 4 before any network call. A refused weekly does not retry: that
+week's Yuyu-tei run is skipped, and Task Scheduler's Last Result says 4.
+
+### The write credentials, before Roy sets the read-only DATABASE_URL
+Both .cmd files hand CARDHUNT_WRITE_DATABASE_URL to their own node (refresh-daily
+edited after tonight's run ended), and log which variable they used. `ingest.js
+refresh|yuyutei` refuse, exit 5, on a connection that cannot write (7676472; seen:
+stubbed read-only -> "NOT STARTED — this connection (stub_readonly) cannot write",
+exit 5; control -> "DB role: postgres (can write)", exit 0).
+
+Order to set the variables (the tasks are Interactive only, as user chili, and read
+the user environment of the logon session — a changed variable reaches them after
+signing out and in):
+1. Run migration-local-readonly.sql; run its step-3 check as the new role.
+2. `setx CARDHUNT_WRITE_DATABASE_URL "<the current DATABASE_URL>"` — additive:
+   nothing changes yet, DATABASE_URL still writes. Sign out and in.
+3. After the next nightly (03:00) read refresh.log: "database:
+   CARDHUNT_WRITE_DATABASE_URL" and "DB role: postgres (can write)". If it says
+   "is not set", the task did not see the variable — stop here.
+4. Only then `setx DATABASE_URL "<cardhunt_local_ro pooler URL>"`. Sign out and in.
+5. New terminal: `node localdb.js --prove` must print REFUSED 25006 and PROVEN, exit 0.
+Reversed (DATABASE_URL read-only before the jobs see the write variable), the jobs
+now fail loudly — exit 5, Last Result 5 — instead of storing nothing as a success.
+
+### The read-only refusal, seen (8cc0b3a)
+`node localdb.js --prove`: on the current write URL -> NOT REFUSED (rolled back), 0
+rows, NOT PROVEN, exit 1; with --txn-read-only -> REFUSED 25006 "cannot execute
+INSERT in a read-only transaction", 0 rows, PROVEN, exit 0. The role itself is not
+proven until it exists. A startup option (`?options=-c
+default_transaction_read_only=on`) is dropped by Supabase's pooler on 6543 and 5432:
+only the role setting makes every transaction read-only.
+
+### previous_visit_at (96e8595)
+Render added the column at the c1e2372 deploy (first-use migration, mine); 3 of 6
+rows hold values. Not dropped. The code now ignores it until
+migration-previous-visit.sql has put its COMMENT on the column; production answers
+note null — the page says "none recorded before this one".
+
+### Not built
+The nightly as a second deals trigger (Roy: one filled gap a day for ~93 calls is not
+worth it).
+
 ## 2026-10-10 (local writes) — first-use tables, a local server that cannot write, the second deals trigger costed
 
 ### Every table the code creates on first use

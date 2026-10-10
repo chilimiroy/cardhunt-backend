@@ -6517,7 +6517,9 @@ app.get('/api/ebay/marketprobe/:cardId', toolingKey.require, async (req, res) =>
                    query: Object.fromEntries(sites.map(mp => [mp, per[mp] && per[mp].query])),
                    queryExclusion: Object.fromEntries(sites.map(mp => [mp, per[mp] && per[mp].queryExclusion])),
                    langUnion: Object.fromEntries(sites.map(mp => [mp, per[mp] && per[mp].langUnion])), union: allIds.size, usKept: usIds.size,
-                   usCapped, usMaxExaminedUsd: usMax, outliers: judged.stats,
+                   // the outlier check's counts and reasons only — never its median, low, high
+                   // or the dearest US price examined (eBay-derived statistics, §8.1(d); 2026-10-10)
+                   usCapped, outliers: publicOutliers(judged.stats),
                    quotaSpentSearch: calls, stored: false, at: new Date().toISOString() };
     marketProbeCache.set(key, { at: Date.now(), body });
     res.json(body);
@@ -6638,7 +6640,8 @@ async function probeZipView(card, id, mode, waitMs, wantRows) {
       suspect: l.suspect || null, floorItem: byItem.listings[i].suspect || null, floorDelivered: byDelivered.listings[i].suspect || null,
       seller: l.seller || null, sellerFeedback: l.sellerFeedback || null, source: l.source,
       stamp: l.stamp ? l.stamp.state : null, zipOnly: !!l.zipOnly }));
-    rows.floorStats = { item: byItem.stats, delivered: byDelivered.stats, live: o };
+    // counts and reasons only: outlier.js's median, low and high never leave the server (§8.1(d))
+    rows.floorStats = { item: publicOutliers(byItem.stats), delivered: publicOutliers(byDelivered.stats), live: o };
   }
   return { payload, headline, rows, floorStats: rows && rows.floorStats, cheapestLive: payload.cheapestLive, zipUnion: st.zipUnion || null,
     calls: st.calls, pages: Object.fromEntries(Object.entries(st.sites).map(([m, x]) => [m, x.pagesFetched || 0])),

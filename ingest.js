@@ -5483,6 +5483,20 @@ async function main() {
     return;
   }
 
+  // The two scheduled jobs — the nightly refresh and the weekly Yuyu-tei run —
+  // take ONE lock and never run at once (joblock.js, 2026-10-10). A dry run
+  // writes nothing and takes none.
+  if ((cmd === 'refresh' || cmd === 'yuyutei') && !process.argv.includes('--dry')) {
+    const lock = require('./joblock').acquire(cmd + ' ' + process.argv.slice(3).join(' '));
+    if (!lock.ok) {
+      console.log('\n  JOB LOCKED — NOT STARTED: ' + lock.why + '\n');
+      process.exitCode = require('./joblock').EXIT_LOCKED;
+      if (db) await db.end();
+      return;
+    }
+    if (lock.took) console.log('\n  ' + lock.took + '\n');
+  }
+
   if (cmd === 'status')          { await status(); }
   else if (cmd === 'prices')     { await refreshPrices(); }
   else if (cmd === 'scrape')     { console.log('  scrape was DELETED (2026-10-01) — banned since T8; use safeprices or refresh.'); process.exitCode = 1; }

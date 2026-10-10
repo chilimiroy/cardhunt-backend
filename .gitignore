@@ -109,3 +109,6 @@ logo.jpg
 
 # refreshrun.js: the nightly's own run marker (local state)
 refresh-run.json
+
+# joblock.js: the scheduled jobs' one lock (local state)
+ingest-job.lock

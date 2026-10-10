@@ -114,7 +114,7 @@ console.log('\n  /api/graded (PriceCharting) — parked, refuses, reads no token
   let tracked = false;
   try { execSync('git ls-files --error-unmatch ' + f, { stdio: 'ignore' }); tracked = true; } catch (e) {}
   ok(f + ' is tracked in git', tracked, 'git add ' + f);
-  const sv = fs.readFileSync('server.js', 'utf8');
+  const sv = fs.readFileSync('server.js', 'utf8').replace(/\r/g, '');   // a clean checkout is CRLF
   const rt = sv.slice(sv.indexOf("app.get('/api/graded/:cardName'"), sv.indexOf('\n});\n', sv.indexOf("app.get('/api/graded/:cardName'")));
   ok('the route answers 410 with the reason, reads no token and fetches nothing; server.js never names the parked file',
     /res\.status\(410\)\.json\(\{ parked: true, reason: PRICECHARTING_PARKED \}\)/.test(rt) && !/fetch\(|await/.test(rt)
